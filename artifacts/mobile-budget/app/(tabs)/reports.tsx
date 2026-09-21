@@ -278,6 +278,14 @@ export default function ReportsScreen() {
 
   const totalBudget  = summary?.totalBudget  ?? 0;
   const totalSpent   = summary?.totalSpent   ?? 0;
+  // Money that moved without being earned or spent. Every other figure on this
+  // page leaves all three out, correctly — a loan is not income and lending is
+  // not spending — but leaving them out everywhere meant the balance could
+  // move for reasons the report never mentioned.
+  const borrowedTotal   = summary?.borrowedTotal   ?? 0;
+  const repaidToUsTotal = summary?.repaidToUsTotal ?? 0;
+  const lentTotal       = summary?.lentTotal       ?? 0;
+  const movedWithoutEarning = borrowedTotal + repaidToUsTotal + lentTotal;
   const memberContribs = useMemo(() => {
     const raw = ((summary as any)?.memberContributions ?? []) as {
       userId: string; name: string;
@@ -631,6 +639,37 @@ export default function ReportsScreen() {
               </View>
             )}
           </View>
+
+          {/* Neither income nor spending, and all of it moves the balance.
+              Shown only when there is some: a household that neither borrows
+              nor lends never sees it. */}
+          {movedWithoutEarning > 0 ? (
+            <View
+              testID="reports-not-income-not-spending"
+              style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, marginHorizontal: 16, marginTop: 12, alignItems: 'flex-start' }]}
+            >
+              <Text style={[styles.cardLabel, { color: colors.mutedForeground }]}>NEITHER INCOME NOR SPENDING</Text>
+              {borrowedTotal > 0 ? (
+                <Text style={{ color: colors.foreground, marginTop: 6 }} testID="reports-borrowed">
+                  Borrowed: <Text style={{ fontFamily: 'Inter_700Bold' }}>{formatKES(borrowedTotal)}</Text>
+                </Text>
+              ) : null}
+              {repaidToUsTotal > 0 ? (
+                <Text style={{ color: colors.foreground, marginTop: 2 }} testID="reports-repaid">
+                  Paid back to you: <Text style={{ fontFamily: 'Inter_700Bold' }}>{formatKES(repaidToUsTotal)}</Text>
+                </Text>
+              ) : null}
+              {lentTotal > 0 ? (
+                <Text style={{ color: colors.foreground, marginTop: 2 }} testID="reports-lent">
+                  Lent out: <Text style={{ fontFamily: 'Inter_700Bold' }}>{formatKES(lentTotal)}</Text>
+                </Text>
+              ) : null}
+              <Text style={{ color: colors.mutedForeground, fontSize: 12, marginTop: 8, lineHeight: 18 }}>
+                This money moved through the account without being earned or spent, so it is in none of the figures
+                above. It is here because otherwise the balance changes for reasons this page never mentions.
+              </Text>
+            </View>
+          ) : null}
 
           {/* ── Summary cards ── */}
           <View style={styles.cardsRow}>

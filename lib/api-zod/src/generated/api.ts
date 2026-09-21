@@ -643,6 +643,9 @@ export const GetDashboardSummaryResponse = zod.object({
   "month": zod.number(),
   "year": zod.number(),
   "totalBudget": zod.number(),
+  "borrowedTotal": zod.number().optional().describe('Money borrowed this month. Not income — you will pay it back — so it is in none of the other figures, and reported so the balance does not move for reasons the page never mentions.'),
+  "repaidToUsTotal": zod.number().optional().describe('Money paid back to you this month. Not income either: you had it once already, when you lent it.'),
+  "lentTotal": zod.number().optional().describe('Money lent out this month. Not spending — you expect it back.'),
   "totalSpent": zod.number(),
   "remaining": zod.number(),
   "chegeContributed": zod.number(),
@@ -888,7 +891,10 @@ export const GetDashboardPeriodTotalsResponse = zod.object({
   "expenseCount": zod.number(),
   "bankDepositCount": zod.number(),
   "bankDisbursementCount": zod.number(),
-  "savingsCount": zod.number()
+  "savingsCount": zod.number(),
+  "borrowedTotal": zod.number().describe('Money borrowed in the period. Not income — you will pay it back — so it is in none of the figures above, and reported here so the balance does not move for reasons the page never mentions.'),
+  "repaidToUsTotal": zod.number().describe('Money paid back to you in the period. Not income either: you had it once already, when you lent it.'),
+  "lentTotal": zod.number().describe('Money lent out in the period. Not spending — you expect it back — so it is in none of the spending figures above.')
 })
 
 

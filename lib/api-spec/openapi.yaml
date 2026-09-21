@@ -2490,6 +2490,21 @@ components:
           type: number
         totalBudget:
           type: number
+        borrowedTotal:
+          type: number
+          description: >-
+            Money borrowed this month. Not income — you will pay it back — so
+            it is in none of the other figures, and reported so the balance
+            does not move for reasons the page never mentions.
+        repaidToUsTotal:
+          type: number
+          description: >-
+            Money paid back to you this month. Not income either: you had it
+            once already, when you lent it.
+        lentTotal:
+          type: number
+          description: >-
+            Money lent out this month. Not spending — you expect it back.
         totalSpent:
           type: number
         remaining:
@@ -2919,6 +2934,22 @@ components:
           type: number
         savingsCount:
           type: number
+        borrowedTotal:
+          type: number
+          description: >-
+            Money borrowed in the period. Not income — you will pay it back —
+            so it is in none of the figures above, and reported here so the
+            balance does not move for reasons the page never mentions.
+        repaidToUsTotal:
+          type: number
+          description: >-
+            Money paid back to you in the period. Not income either: you had it
+            once already, when you lent it.
+        lentTotal:
+          type: number
+          description: >-
+            Money lent out in the period. Not spending — you expect it back —
+            so it is in none of the spending figures above.
       required:
         - startDate
         - endDate
@@ -2933,6 +2964,9 @@ components:
         - bankDepositCount
         - bankDisbursementCount
         - savingsCount
+        - borrowedTotal
+        - repaidToUsTotal
+        - lentTotal
 
     MonthTrend:
       type: object
