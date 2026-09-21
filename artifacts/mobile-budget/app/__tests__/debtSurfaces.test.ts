@@ -11,14 +11,21 @@ const card = readFileSync('components/DebtSummaryCard.tsx', 'utf8');
 // loan.
 describe('debt has a home screen presence', () => {
   it('renders a debt card on Home', () => {
-    expect(home).toContain('<DebtSummaryCard />');
+    expect(home).toContain('<DebtSummaryCard canTrackDebt={canManageBudget} />');
     expect(home).toContain("import { DebtSummaryCard } from '@/components/DebtSummaryCard';");
   });
 
-  it('shows nothing when no debt is tracked', () => {
+  it('shows no summary when no debt is tracked', () => {
     // An empty debt card on every household's home screen would be the
-    // opposite of making debt significant.
-    expect(card).toContain('if (isLoading || debts.length === 0) return null;');
+    // opposite of making debt significant. What that branch may show instead
+    // is a one-time invitation to track a first debt, covered by
+    // lib/__tests__/debtPrompt.test.ts.
+    const emptyBranch = card.slice(
+      card.indexOf('if (debts.length === 0) {'),
+      card.indexOf('const view = summariseDebts'),
+    );
+    expect(emptyBranch).not.toContain('home-debt-card');
+    expect(emptyBranch).toContain('if (!worthAsking) return null;');
   });
 
   it('leads with the end date, not the balance alone', () => {
