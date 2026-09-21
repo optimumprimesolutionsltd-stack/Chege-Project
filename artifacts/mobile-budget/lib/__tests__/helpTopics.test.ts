@@ -30,16 +30,21 @@ describe('the guide covers the app', () => {
     }
   });
 
-  it('says where the phone cannot help rather than leaving somebody hunting', () => {
-    const debt = allHelpTopics().find((topic) => topic.question.includes('debt'));
-    expect(debt?.steps.join(' ')).toContain('laptop');
-    // And it does not offer to take you somewhere that cannot do the job.
-    expect(debt?.route).toBeUndefined();
+  it('sends debt work to the Debt tab, which can do it', () => {
+    // An earlier version of this guide said debts could only be managed on a
+    // laptop. The phone has had a full editor all along, in a component the
+    // Debt tab renders — so the guide was sending people away for no reason.
+    const debts = allHelpTopics().filter((topic) => (topic.keywords ?? []).includes('debt'));
+    expect(debts.length).toBeGreaterThan(0);
+    for (const topic of debts) {
+      expect(topic.steps.join(' ')).not.toContain('laptop');
+      expect(topic.route).toBeTruthy();
+    }
   });
 
-  it('warns that paying a creditor does not move the balance', () => {
-    const debt = allHelpTopics().find((topic) => topic.question.includes('debt'));
-    expect(debt?.steps.join(' ')).toContain('does not reduce the balance by itself');
+  it('explains that a debt payment is offered rather than applied', () => {
+    const paying = allHelpTopics().find((topic) => topic.question.includes('Pay a debt'));
+    expect(paying?.steps.join(' ')).toContain('asks whether to take that much off');
   });
 
   it('gives every topic somewhere to go, or a reason it has nowhere', () => {
