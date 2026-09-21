@@ -21,6 +21,7 @@ import { useAuth } from "@workspace/replit-auth-web";
 import { canManageBankAccount, resolveBankAccountSelection } from "@/lib/bank-access";
 import { getProjectedBalanceAfterPosting } from "@/lib/bank-balance-utils";
 import { buildCategoryTree, type CategoryRow } from "@workspace/category-tree";
+import { evaluateAmountExpression, isAmountExpression } from "@/lib/amount-expression";
 import { workspaceLabel } from "@/lib/workspace-identity";
 import { useListEditor } from "@/hooks/use-list-editor";
 import { EditableName, ListEditButton, ListEditorFooter, RemoveRowButton } from "@/components/list-editor";
@@ -79,6 +80,15 @@ function parseBalanceFigure(value: string): number | null {
   if (!/^-?\d+(?:\.\d{1,2})?$/.test(normalized)) return null;
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+/**
+ * What the person meant by what they typed: a number, or the arithmetic that
+ * works one out. A day's spending arrives as several receipts that make one
+ * posting, and leaving for a calculator loses the sitting.
+ */
+function readAmount(value: string): number | null {
+  return parseBankAmount(value) ?? evaluateAmountExpression(value);
 }
 
 function toCents(value: number): number {
@@ -142,7 +152,15 @@ export default function Bank() {
   // Default: Joint bank
   const [withdrawerId, setWithdrawerId] = useState<string | null>(JOINT_BANK_ID);
   const [expenseCategory, setExpenseCategory] = useState("");
-  const [withdrawalDestinationKind, setWithdrawalDestinationKind] = useState<"category" | "other">("category");
+  const [withdrawalDestinationKind, setWithdrawalDestinationKind] = useState<"category" | "other" | "party">("category");
+  // Paying somebody you owe: Mwangi, or KCB. And somebody paying you back,
+  // which is not income — you had that money once already, when you lent it.
+  const [withdrawPartyId, setWithdrawPartyId] = useState<string>("none");
+  const [repayingPartyId, setRepayingPartyId] = useState<string>("none");
+  const [newPartyName, setNewPartyName] = useState("");
+  const [newPartyOwed, setNewPartyOwed] = useState("");
+  const [newPartyIsInstitution, setNewPartyIsInstitution] = useState(false);
+  const [addingParty, setAddingParty] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [showCategoryCreator, setShowCategoryCreator] = useState(false);
   // Which group a category added here joins, or null for a new top-level one.
@@ -491,6 +509,8 @@ export default function Bank() {
     setBankTransferDestinationId(null);
     setNewCategoryName("");
     setShowCategoryCreator(false);
+    setWithdrawPartyId("none");
+    setRepayingPartyId("none");
   };
 
   const resetForm = () => {
@@ -650,7 +670,7 @@ export default function Bank() {
     // that happened, and deleting the row loses the reconciliation with it.
     // On a new posting an empty field stays an empty field: saving one
     // silently as zero would be a way to create rows by accident.
-    const total = amount.trim() === "" && editingTransaction ? 0 : parseBankAmount(amount);
+    const total = amount.trim() === "" && editingTransaction ? 0 : readAmount(amount);
     if (total === null || total < 0) {
       toast({
         variant: "destructive",
@@ -783,9 +803,10 @@ export default function Bank() {
               ? (contributorSplits.length > 0 ? undefined : !isSharedWorkspace ? user?.id : depositorIds[0] ?? null)
               : (!isSharedWorkspace ? user?.id : withdrawerId),
             ...(mode === "deposit" ? { contributorSplits } : {}),
-            ...(mode === "deposit" && contributorSplits.length === 0 ? { incomeSourceId } : {}),
+            ...(mode === "deposit" && repayingParty ? { settlesContributorId: repayingParty.id } : {}),
+            ...(mode === "deposit" && !repayingParty && contributorSplits.length === 0 ? { incomeSourceId } : {}),
             ...(mode === "deposit" && depositSourceKind ? { sourceKind: depositSourceKind } : {}),
-            ...(mode === "disbursement" ? { expenseCategory, destinationKind: withdrawalDestinationKind } : {}),
+            ...(mode === "disbursement" ? { expenseCategory, destinationKind: sentDestinationKind } : {}),
             accountId: editingTransaction.accountId ?? selectedAccountId ?? undefined,
           },
         });
@@ -830,13 +851,20 @@ export default function Bank() {
             date,
             expenseCategory,
             madeById: !isSharedWorkspace ? user?.id : withdrawerId,
-            destinationKind: withdrawalDestinationKind,
+            destinationKind: sentDestinationKind,
             accountId: selectedAccountId ?? undefined,
           },
         });
         toast({ title: "Disbursement recorded" });
       }
+      // Read before finishEntry, which clears the form. Asking after an edit
+      // would move the balance a second time for one payment.
+      const wasNew = !editingTransaction;
+      const paidParty = mode === "disbursement" && withdrawalDestinationKind === "party" ? selectedParty : null;
+      const repaidBy = mode === "deposit" ? repayingParty : null;
       finishEntry(keepOpen, { amount: total, direction: mode === "deposit" ? "in" : "out" });
+      if (wasNew && repaidBy) offerBalanceChange(repaidBy, total, "owedToUs");
+      else if (wasNew && paidParty) offerBalanceChange(paidParty, total, "owedByUs");
       invalidate();
     } catch {
       toast({ variant: "destructive", title: "Error", description: "Could not save transaction." });
@@ -875,7 +903,7 @@ export default function Bank() {
 
   const isPending = createDeposit.isPending || createDisbursement.isPending || updateTx.isPending ||
     transferToSavings.isPending || transferFromSavings.isPending || transferBankToBank.isPending || addingCategory;
-  const outgoingAmount = parseBankAmount(amount);
+  const outgoingAmount = readAmount(amount);
   const isOutgoingTransaction = mode === "disbursement" ||
     mode === "bank_transfer" || (mode === "transfer" && transferDirection === "to_savings");
   // The balance the account will hold once this posting is saved, shown while
@@ -898,6 +926,100 @@ export default function Bank() {
   // Spending lands on a category that holds no subcategories: a category with
   // children is a heading, and its spending is theirs added up, so neither
   // picker offers one.
+  /**
+   * Everybody money passes between you and: people and institutions alike.
+   * The contributor routes predate the spec and are still read directly.
+   */
+  type Party = { id: number; name: string; owedToUs?: number | null; owedByUs?: number | null };
+  const { data: parties = [] } = useQuery<Party[]>({
+    queryKey: ["parties"],
+    queryFn: async () => {
+      const response = await fetch("/api/contributors", { credentials: "include" });
+      if (!response.ok) throw new Error("Could not load who you owe.");
+      return response.json() as Promise<Party[]>;
+    },
+    staleTime: 30_000,
+  });
+  const owedParties = useMemo(() => parties.filter((party) => typeof party.owedByUs === "number"), [parties]);
+  const owingParties = useMemo(() => parties.filter((party) => typeof party.owedToUs === "number"), [parties]);
+  const selectedParty = owedParties.find((party) => String(party.id) === withdrawPartyId) ?? null;
+  const repayingParty = owingParties.find((party) => String(party.id) === repayingPartyId) ?? null;
+
+  // The API knows two destinations. Paying a party is still a categorised
+  // withdrawal — the money left and belongs to a category; who received it is
+  // held beside that, not instead of it.
+  const sentDestinationKind = withdrawalDestinationKind === "party" ? "category" : withdrawalDestinationKind;
+
+  const createParty = async ({ owing }: { owing: boolean }) => {
+    const name = newPartyName.trim();
+    if (!name) {
+      toast({ variant: "destructive", title: "Who is it?", description: "Give the person or institution a name." });
+      return;
+    }
+    const owed = readAmount(newPartyOwed || "0");
+    if (owed === null || owed < 0) {
+      toast({ variant: "destructive", title: "What is owed?", description: "Enter zero or more." });
+      return;
+    }
+    setAddingParty(true);
+    try {
+      const response = await fetch("/api/contributors", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          kind: newPartyIsInstitution ? "institution" : "person",
+          // Which way it stands between you is the only difference.
+          ...(owing ? { owedToUs: Math.round(owed) } : { owedByUs: Math.round(owed) }),
+        }),
+      });
+      const created = (await response.json().catch(() => ({}))) as { id?: number; error?: string };
+      if (!response.ok || !created.id) throw new Error(created.error ?? "Could not add them.");
+      // Awaited: the picker and the settlement prompt both read this list.
+      await queryClient.invalidateQueries({ queryKey: ["parties"] });
+      if (owing) setRepayingPartyId(String(created.id));
+      else setWithdrawPartyId(String(created.id));
+      setNewPartyName("");
+      setNewPartyOwed("");
+      setNewPartyIsInstitution(false);
+    } catch (error) {
+      toast({ variant: "destructive", title: "Could not add them", description: error instanceof Error ? error.message : "Please try again." });
+    } finally {
+      setAddingParty(false);
+    }
+  };
+
+  /**
+   * Offer to move a balance after the money has moved. Asked rather than
+   * applied: the posting can be edited or deleted afterwards, and a balance
+   * moved by itself would have to be moved back on every one of those paths.
+   */
+  const offerBalanceChange = (party: Party, amount: number, direction: "owedByUs" | "owedToUs") => {
+    const owed = direction === "owedByUs" ? party.owedByUs : party.owedToUs;
+    if (typeof owed !== "number" || owed <= 0 || amount <= 0) return;
+    const paid = Math.round(amount);
+    const remaining = Math.max(0, owed - paid);
+    const question = direction === "owedByUs"
+      ? `Take ${formatKes(paid)} off what you owe ${party.name}? That leaves ${formatKes(remaining)}.`
+      : `Take ${formatKes(paid)} off what ${party.name} owes you? That leaves ${formatKes(remaining)}.`;
+    if (!window.confirm(question)) return;
+    void (async () => {
+      try {
+        const response = await fetch(`/api/contributors/${party.id}`, {
+          method: "PATCH",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ [direction]: remaining }),
+        });
+        if (!response.ok) throw new Error("Could not update the balance.");
+        await queryClient.invalidateQueries({ queryKey: ["parties"] });
+      } catch (error) {
+        toast({ variant: "destructive", title: "Could not update the balance", description: error instanceof Error ? error.message : "Please try again." });
+      }
+    })();
+  };
+
   const categoryTree = useMemo(
     () => buildCategoryTree((categories ?? []) as unknown as CategoryRow[]),
     [categories],
@@ -1369,15 +1491,19 @@ export default function Bank() {
                   <label className="text-sm font-semibold text-foreground">Amount (KES)</label>
                   <Input
                     data-testid="input-amount"
-                    type="number"
-                    placeholder="e.g. 20000"
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="e.g. 20000, or 1200+800+450"
                     value={amount}
                     onChange={e => setAmount(e.target.value)}
                     required
-                    min="0"
-                    step="0.01"
                     className="h-12 text-lg bg-card"
                   />
+                  {isAmountExpression(amount) && outgoingAmount !== null ? (
+                    <p className="text-sm font-semibold text-primary" data-testid="amount-resolved">
+                      = {formatKes(outgoingAmount)}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="space-y-2">
                    <label className="text-sm font-semibold text-foreground">{mode === "deposit" ? "Deposit date" : "Date"}</label>
@@ -1414,6 +1540,59 @@ export default function Bank() {
                     </p>
                   </div>
                 )}
+                {mode === "disbursement" && withdrawalDestinationKind === "party" ? (
+                  <div className="space-y-2 sm:col-span-2" data-testid="party-picker">
+                    <label className="text-sm font-semibold text-foreground">Who are you paying?</label>
+                    <select
+                      className="flex h-12 w-full rounded-md border border-input bg-card px-3 py-2 text-base"
+                      value={withdrawPartyId}
+                      onChange={(e) => setWithdrawPartyId(e.target.value)}
+                      data-testid="select-party"
+                    >
+                      <option value="none">Choose somebody</option>
+                      {owedParties.map((party) => (
+                        <option key={party.id} value={String(party.id)}>
+                          {party.name} — owe {formatKes(party.owedByUs ?? 0)}
+                        </option>
+                      ))}
+                    </select>
+                    {/* The only place to say somebody is owed. Offered whether
+                        or not anybody is recorded: a way in hidden behind the
+                        thing it creates is no way in at all. */}
+                    <div className="flex flex-col gap-2 rounded-lg border border-primary/20 bg-primary/5 p-3 sm:flex-row" data-testid="add-party-form">
+                      <Input
+                        placeholder="e.g. Mwangi, or KCB"
+                        value={newPartyName}
+                        onChange={(e) => setNewPartyName(e.target.value)}
+                        className="h-10 bg-card"
+                        data-testid="input-new-party-name"
+                      />
+                      <Input
+                        placeholder="Owed"
+                        value={newPartyOwed}
+                        onChange={(e) => setNewPartyOwed(e.target.value)}
+                        className="h-10 w-full bg-card sm:w-32"
+                        data-testid="input-new-party-owed"
+                      />
+                      <Button type="button" disabled={addingParty} onClick={() => void createParty({ owing: false })} className="h-10 shrink-0" data-testid="button-add-party">
+                        {addingParty ? <Loader2 className="w-4 h-4 animate-spin" /> : "Add"}
+                      </Button>
+                    </div>
+                    <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <input
+                        type="checkbox"
+                        checked={newPartyIsInstitution}
+                        onChange={(e) => setNewPartyIsInstitution(e.target.checked)}
+                        data-testid="checkbox-party-institution"
+                      />
+                      A bank or business, not a person
+                    </label>
+                    <p className="text-xs text-muted-foreground">
+                      The category below still says what kind of cost this was. Once it saves, Jamvi offers to take the
+                      payment off what you owe.
+                    </p>
+                  </div>
+                ) : null}
                 {mode === "disbursement" && (
                   <div className="space-y-2 sm:col-span-2">
                     <label className="text-sm font-semibold text-foreground">
@@ -1591,8 +1770,55 @@ export default function Bank() {
                   )}
                 </div>}
 
+                {/* Somebody paying back what they owe. Asked before who
+                    deposited it, because the answer changes what the money
+                    means: a repayment is not income. */}
+                {mode === "deposit" ? (
+                  <div className="space-y-2 sm:col-span-2" data-testid="repayment-picker">
+                    <label className="text-sm font-semibold text-foreground">Is this somebody paying you back?</label>
+                    <select
+                      className="flex h-12 w-full rounded-md border border-input bg-card px-3 py-2 text-base"
+                      value={repayingPartyId}
+                      onChange={(e) => setRepayingPartyId(e.target.value)}
+                      data-testid="select-repayment"
+                    >
+                      <option value="none">No — this is ordinary money in</option>
+                      {owingParties.map((party) => (
+                        <option key={party.id} value={String(party.id)}>
+                          {party.name} — owes you {formatKes(party.owedToUs ?? 0)}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="flex flex-col gap-2 rounded-lg border border-primary/20 bg-primary/5 p-3 sm:flex-row" data-testid="add-debtor-form">
+                      <Input
+                        placeholder="e.g. Kamau"
+                        value={newPartyName}
+                        onChange={(e) => setNewPartyName(e.target.value)}
+                        className="h-10 bg-card"
+                        data-testid="input-new-debtor-name"
+                      />
+                      <Input
+                        placeholder="Owes you"
+                        value={newPartyOwed}
+                        onChange={(e) => setNewPartyOwed(e.target.value)}
+                        className="h-10 w-full bg-card sm:w-32"
+                        data-testid="input-new-debtor-owed"
+                      />
+                      <Button type="button" disabled={addingParty} onClick={() => void createParty({ owing: true })} className="h-10 shrink-0" data-testid="button-add-debtor">
+                        {addingParty ? <Loader2 className="w-4 h-4 animate-spin" /> : "Add"}
+                      </Button>
+                    </div>
+                    {repayingParty ? (
+                      <p className="text-xs text-muted-foreground">
+                        This will not count as income — you had the money once already, when you lent it. It still
+                        shows in the account and the ledger.
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
+
                 {/* ── DEPOSIT: who is depositing ── */}
-                {mode === "deposit" && (
+                {mode === "deposit" && !repayingParty && (
                   <>
                     <div className="space-y-2 sm:col-span-2">
                       <label className="text-sm font-semibold text-foreground">
@@ -1759,8 +1985,16 @@ export default function Bank() {
 
                     <div className="space-y-2 sm:col-span-2">
                       <label className="text-sm font-semibold text-foreground">Where is the money going?</label>
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="grid grid-cols-3 gap-2">
                         <Button type="button" variant={withdrawalDestinationKind === "category" ? "default" : "outline"} onClick={() => setWithdrawalDestinationKind("category")}>Budget category</Button>
+                        <Button
+                          type="button"
+                          variant={withdrawalDestinationKind === "party" ? "default" : "outline"}
+                          onClick={() => setWithdrawalDestinationKind("party")}
+                          data-testid="button-dest-party"
+                        >
+                          Someone I owe
+                        </Button>
                         <Button type="button" variant={withdrawalDestinationKind === "other" ? "default" : "outline"} onClick={() => setWithdrawalDestinationKind("other")}>Other</Button>
                       </div>
                       {withdrawalDestinationKind === "other" && (

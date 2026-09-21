@@ -57,7 +57,9 @@ describe("clearing the field on an edit means zero", () => {
     // Saving a blank new form silently as zero would be a way to create rows
     // by accident.
     expect(mobileBank).toContain("const parsed = amount.trim() === '' && editingTransactionId !== null ? 0 : readAmount(amount);");
-    expect(webBank).toContain('const total = amount.trim() === "" && editingTransaction ? 0 : parseBankAmount(amount);');
+    // readAmount rather than parseBankAmount since the web field gained
+    // arithmetic: it resolves a sum, or reads a plain number as itself.
+    expect(webBank).toContain('const total = amount.trim() === "" && editingTransaction ? 0 : readAmount(amount);');
   });
 
   it("no longer deletes the expense when its amount is cleared", () => {
