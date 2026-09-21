@@ -2005,6 +2005,19 @@ export default function BankScreen() {
                         <Text style={styles.editOpeningBalanceText}>Check against statement</Text>
                       </TouchableOpacity>
                     )}
+                    {/* Money that only passed through: somebody who owes
+                        you settling with somebody you owe. */}
+                    {hasBankAccounts && canManageAccount && (
+                      <TouchableOpacity
+                        style={styles.editOpeningBalanceBtn}
+                        onPress={() => router.push('/pass-through')}
+                        activeOpacity={0.8}
+                        testID="bank-pass-through-action"
+                      >
+                        <Feather name="repeat" size={14} color="#d1fae5" />
+                        <Text style={styles.editOpeningBalanceText}>Paid through your account</Text>
+                      </TouchableOpacity>
+                    )}
                     {/* A whole day at once, for somebody working off a
                         statement rather than recording as they go. */}
                     {hasBankAccounts && canManageAccount && (
