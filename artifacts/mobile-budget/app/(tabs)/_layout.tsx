@@ -247,7 +247,18 @@ export default function TabLayout() {
     queryFn: () => customFetch<Array<{ debtBalance: number | null; budgetAmount?: number | null }>>('/api/budget-categories'),
     staleTime: 60_000,
   });
-  const showDebt = debtCategories.some((row) => row.debtBalance !== null && row.debtBalance !== undefined);
+  // Somebody you owe is a debt whether or not a category was ever marked as
+  // one. Creditors could be recorded all day — a lender named while borrowing,
+  // a party given an opening balance — and the tab stayed away, because it
+  // only ever looked at categories.
+  const { data: debtParties = [] } = useQuery<Array<{ owedByUs?: number | null }>>({
+    queryKey: ['parties'],
+    queryFn: () => customFetch<Array<{ owedByUs?: number | null }>>('/api/contributors'),
+    staleTime: 60_000,
+  });
+  const showDebt =
+    debtCategories.some((row) => row.debtBalance !== null && row.debtBalance !== undefined) ||
+    debtParties.some((party) => typeof party.owedByUs === 'number');
   // Budgeting is off for a budget whose purpose is saving or clearing a debt,
   // because a budget of zeros reads as "KES 0 of KES 0 (0%)" everywhere and
   // makes the app look broken. It is not off forever: the moment any category
