@@ -264,8 +264,12 @@ export default function BankScreen() {
   // ── Withdrawal destination state ───────────────────────────────────────────
   // 'source' = an income stream they defined, 'savings' = a savings goal,
   // 'other' = free-text description
-  type WithdrawDestType = 'source' | 'savings' | 'other';
+  type WithdrawDestType = 'source' | 'savings' | 'party' | 'other';
   const [withdrawDest, setWithdrawDest] = useState<WithdrawDestType | null>(null);
+  // Paying somebody you owe: Mwangi, or KCB. The party is who it went to; the
+  // category is still what kind of cost it was, because the money did leave.
+  const [withdrawPartyId, setWithdrawPartyId] = useState<number | null>(null);
+  const [showPartyPicker, setShowPartyPicker] = useState(false);
   const [withdrawSourceName, setWithdrawSourceName] = useState<string | null>(null);
   const [withdrawGoalId, setWithdrawGoalId] = useState<number | null>(null);
   const [showGoalPicker, setShowGoalPicker] = useState(false);
@@ -361,6 +365,29 @@ export default function BankScreen() {
   // Savings goals for the "Savings" destination option
   const { data: savingsGoals = [] } = useGetSavingsGoals();
 
+  /**
+   * Everybody money passes between you and: people and institutions alike.
+   * Not in the generated client — the contributor routes predate the spec and
+   * are still read directly.
+   */
+  type Party = {
+    id: number;
+    name: string;
+    kind?: string | null;
+    owedToUs?: number | null;
+    owedByUs?: number | null;
+  };
+  const { data: parties = [] } = useQuery<Party[]>({
+    queryKey: ['parties'],
+    queryFn: () => customFetch<Party[]>('/api/contributors'),
+    staleTime: 30_000,
+  });
+  const owedParties = useMemo(
+    () => parties.filter((party) => typeof party.owedByUs === 'number'),
+    [parties],
+  );
+  const selectedParty = owedParties.find((party) => party.id === withdrawPartyId) ?? null;
+
   // The savings goal matching the current withdrawGoalId selection
   const selectedGoal = savingsGoals.find(g => g.id === withdrawGoalId) ?? null;
 
@@ -388,6 +415,8 @@ export default function BankScreen() {
     setWithdrawSourceName(null);
     setWithdrawGoalId(null);
     setShowGoalPicker(false);
+    setWithdrawPartyId(null);
+    setShowPartyPicker(false);
     setTransferDirection('to_savings');
     setBankTransferDestinationId(accounts.find((candidate) => candidate.id !== selectedAccountId)?.id ?? null);
     setModalVisible(true);
@@ -421,6 +450,8 @@ export default function BankScreen() {
     setWithdrawSourceName(null);
     setWithdrawGoalId(null);
     setShowGoalPicker(false);
+    setWithdrawPartyId(null);
+    setShowPartyPicker(false);
     setDepositorAmounts({});
   };
 
@@ -812,6 +843,45 @@ export default function BankScreen() {
     );
   };
 
+  /**
+   * Offer to take a payment off what you owe a party.
+   *
+   * Asked, not applied, for the same reason the debt prompt asks: the balance
+   * is a stored number and the posting can be edited or deleted afterwards. If
+   * paying moved it by itself, every one of those paths would have to move it
+   * back, and the first that did not would send it quietly wrong.
+   */
+  const offerPartySettlement = (party: { id: number; name: string; owedByUs?: number | null }, amount: number) => {
+    const owed = party.owedByUs;
+    if (typeof owed !== 'number' || owed <= 0 || amount <= 0) return;
+    const paid = Math.round(amount);
+    const remaining = Math.max(0, owed - paid);
+    Alert.alert(
+      `Take this off what you owe ${party.name}?`,
+      paid >= owed
+        ? `You owed KES ${formatKES(owed)}. This settles it.`
+        : `You owed KES ${formatKES(owed)}. Taking KES ${formatKES(paid)} off leaves KES ${formatKES(remaining)}.`,
+      [
+        { text: 'Not now', style: 'cancel' },
+        {
+          text: remaining === 0 ? 'Settle it' : 'Reduce',
+          onPress: async () => {
+            try {
+              await customFetch(`/api/contributors/${party.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ owedByUs: remaining }),
+              });
+              await queryClient.invalidateQueries({ queryKey: ['parties'] });
+            } catch (error: unknown) {
+              Alert.alert('Could not update the balance', error instanceof Error ? error.message : 'Please try again.');
+            }
+          },
+        },
+      ],
+    );
+  };
+
   const selectJointBank = () => {
     if (!canManageShared) {
       Alert.alert('Admin access required', 'Ask a group owner or admin to use Joint bank for this shared transaction.');
@@ -1042,6 +1112,12 @@ export default function BankScreen() {
           return;
         }
         finalDescription = description.trim() || withdrawSourceName;
+      } else if (withdrawDest === 'party') {
+        if (!selectedParty) {
+          Alert.alert('Who are you paying?', 'Choose the person or institution this is going to.');
+          return;
+        }
+        finalDescription = description.trim() || selectedParty.name;
       } else if (withdrawDest === 'savings') {
         if (!selectedGoal) {
           Alert.alert('Select a goal', 'Please choose which savings goal this is for.');
@@ -1183,9 +1259,15 @@ export default function BankScreen() {
       // take the money off a second time.
       const wasNewWithdrawal = txType === 'disbursement' && editingTransactionId === null;
       const paidCategory = expenseCategory.trim();
+      const paidParty = withdrawDest === 'party' ? selectedParty : null;
       finishEntry(keepOpen, { amount: parsed, direction: txType === 'deposit' ? 'in' : 'out' });
       await invalidateBalance();
-      if (wasNewWithdrawal && paidCategory) {
+      if (wasNewWithdrawal && paidParty) {
+        // Who was paid outranks what it was spent on: a category that happens
+        // to be a tracked debt as well would otherwise ask twice about one
+        // payment.
+        offerPartySettlement(paidParty, parsed);
+      } else if (wasNewWithdrawal && paidCategory) {
         offerDebtReduction(paidCategory, parsed);
       }
     } catch (err: unknown) {
@@ -2662,6 +2744,36 @@ export default function BankScreen() {
                       );
                     })()}
 
+                    {/* Somebody you owe: a person or an institution. Offered
+                        only when there is one, so a household that has never
+                        recorded a debt sees nothing extra. */}
+                    {owedParties.length > 0 ? (() => {
+                      const selected = withdrawDest === 'party';
+                      return (
+                        <TouchableOpacity
+                          testID="bank-withdraw-dest-party"
+                          style={[
+                            styles.memberPill,
+                            {
+                              backgroundColor: selected ? '#7c3aed' : colors.muted,
+                              borderColor: selected ? '#7c3aed' : colors.border,
+                            },
+                          ]}
+                          onPress={() => {
+                            setWithdrawDest('party');
+                            setWithdrawSourceName(null);
+                            setShowPartyPicker(true);
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <Feather name="user-check" size={12} color={selected ? '#fff' : colors.mutedForeground} />
+                          <Text style={[styles.memberPillText, { color: selected ? '#fff' : colors.foreground }]}>
+                            Someone I owe
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })() : null}
+
                     {/* Other chip */}
                     {(() => {
                       const selected = withdrawDest === 'other';
@@ -2691,6 +2803,45 @@ export default function BankScreen() {
                       );
                     })()}
                   </View>
+
+                  {/* Who is being paid, and what still stands between you. */}
+                  {withdrawDest === 'party' ? (
+                    <>
+                      <TouchableOpacity
+                        style={[styles.input, styles.pickerButton, { borderColor: colors.border, backgroundColor: colors.muted }]}
+                        onPress={() => setShowPartyPicker((open) => !open)}
+                        testID="bank-withdraw-party"
+                      >
+                        <Text style={{ flex: 1, color: selectedParty ? colors.foreground : colors.mutedForeground, fontFamily: 'Inter_400Regular' }}>
+                          {selectedParty ? selectedParty.name : 'Who are you paying?'}
+                        </Text>
+                        <Feather name={showPartyPicker ? 'chevron-up' : 'chevron-down'} size={16} color={colors.mutedForeground} />
+                      </TouchableOpacity>
+                      {showPartyPicker && (
+                        <View style={[styles.categoryDropdown, { borderColor: colors.dropdownBorder, backgroundColor: colors.dropdownBackground }]}>
+                          {owedParties.map((party) => (
+                            <TouchableOpacity
+                              key={`owed-party-${party.id}`}
+                              style={[styles.categoryOption, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }]}
+                              onPress={() => { setWithdrawPartyId(party.id); setShowPartyPicker(false); }}
+                              testID={`bank-withdraw-party-${party.id}`}
+                            >
+                              <Text style={{ color: colors.dropdownForeground, fontFamily: 'Inter_400Regular', flexShrink: 1 }}>
+                                {party.name}
+                              </Text>
+                              <Text style={{ color: colors.dropdownMutedForeground, fontFamily: 'Inter_400Regular', fontSize: 12 }}>
+                                owe KES {formatKES(party.owedByUs ?? 0)}
+                              </Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      )}
+                      <Text style={{ color: colors.mutedForeground, fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 4 }}>
+                        The category below says what kind of cost this was. Once it saves, Jamvi offers to take the
+                        payment off what you owe.
+                      </Text>
+                    </>
+                  ) : null}
 
                   {/* Savings goal dropdown */}
                   {withdrawDest === 'savings' && showGoalPicker && savingsGoals.length > 0 && (

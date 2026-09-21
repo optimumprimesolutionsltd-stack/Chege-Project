@@ -291,6 +291,17 @@ export const HELP_SECTIONS: HelpSection[] = [
         keywords: ['pay', 'repay', 'loan', 'creditor', 'reduce'],
       },
       {
+        question: 'Pay someone you owe, or an institution',
+        steps: [
+          'Banking tab, then Withdraw.',
+          'Under where the money is going, choose Someone I owe, and pick them.',
+          'Give it a category as usual — the money did leave.',
+          'Once it saves, Jamvi offers to take the payment off what you owe them.',
+        ],
+        route: '/(tabs)/bank',
+        keywords: ['mwangi', 'kcb', 'creditor', 'repay', 'loan', 'party', 'institution'],
+      },
+      {
         question: 'Stop tracking a debt',
         steps: [
           'Debt tab, then Stop tracking on that debt.',
