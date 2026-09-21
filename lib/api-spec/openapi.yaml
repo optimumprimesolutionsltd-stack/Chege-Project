@@ -3615,6 +3615,12 @@ components:
             ID of the household member responsible for this disbursement. Omit
             or pass null for Joint bank. Must be a valid household member ID
             when non-null.
+        isLending:
+          type: boolean
+          description: >-
+            Money lent, leaving the account. Not spending — you expect it back
+            and it is now owed to you — so it carries no category, which is
+            what keeps it out of every spending total.
         expenseCategory:
           type: string
           description: Required budget category this disbursement is paying for
@@ -3628,7 +3634,6 @@ components:
       required:
         - amount
         - date
-        - expenseCategory
 
     UpdateJointAccountTransactionInput:
       type: object

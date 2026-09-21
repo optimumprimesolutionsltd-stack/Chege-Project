@@ -246,7 +246,12 @@ export default function BankScreen() {
   // ── Withdrawal destination state ───────────────────────────────────────────
   // 'source' = an income stream they defined, 'savings' = a savings goal,
   // 'other' = free-text description
-  type WithdrawDestType = 'source' | 'savings' | 'party' | 'other';
+  /**
+   * 'lend' is money out that is not spending: you expect it back, and it
+   * becomes owed to you. It carries no category for that reason — a loan is
+   * not a cost — and every spending total filters on a category being there.
+   */
+  type WithdrawDestType = 'source' | 'savings' | 'party' | 'other' | 'lend';
   const [withdrawDest, setWithdrawDest] = useState<WithdrawDestType | null>(null);
   // Paying somebody you owe: Mwangi, or KCB. The party is who it went to; the
   // category is still what kind of cost it was, because the money did leave.
@@ -441,6 +446,10 @@ export default function BankScreen() {
     [parties],
   );
   const repayingParty = owingParties.find((party) => party.id === repayingPartyId) ?? null;
+  const lentToParty =
+    withdrawDest === 'lend' && withdrawPartyId !== null
+      ? parties.find((party) => party.id === withdrawPartyId) ?? null
+      : null;
   const borrowedFromParty =
     borrowTarget?.kind === 'party' ? parties.find((party) => party.id === borrowTarget.id) ?? null : null;
   // Only tracked debts: a category with no balance has nothing to add to.
@@ -968,6 +977,43 @@ export default function BankScreen() {
     );
   };
 
+  /**
+   * Offer to add what was lent to what somebody owes you.
+   *
+   * The mirror of offerPartySettlement, and asked rather than applied for the
+   * same reason. Somebody with nothing tracked on this side starts from zero
+   * rather than from nowhere: a first loan is exactly when nothing is tracked.
+   */
+  const offerLendingIncrease = (party: { id: number; name: string; owedToUs?: number | null }, amount: number) => {
+    if (amount <= 0) return;
+    const owed = typeof party.owedToUs === 'number' ? party.owedToUs : 0;
+    const lent = toMoney(amount);
+    Alert.alert(
+      `Add this to what ${party.name} owes you?`,
+      owed === 0
+        ? `They owed you nothing. This would make it KES ${formatKES(lent)}.`
+        : `They owe KES ${formatKES(owed)}. Adding KES ${formatKES(lent)} makes it KES ${formatKES(owed + lent)}.`,
+      [
+        { text: 'Not now', style: 'cancel' },
+        {
+          text: 'Add it',
+          onPress: async () => {
+            try {
+              await customFetch(`/api/contributors/${party.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ owedToUs: owed + lent }),
+              });
+              await queryClient.invalidateQueries({ queryKey: ['parties'] });
+            } catch (error: unknown) {
+              Alert.alert('Could not update the balance', error instanceof Error ? error.message : 'Please try again.');
+            }
+          },
+        },
+      ],
+    );
+  };
+
   /** Offer to add what was borrowed to what you owe a party. */
   const offerPartyBorrowing = (party: { id: number; name: string; owedByUs?: number | null }, amount: number) => {
     if (amount <= 0) return;
@@ -1048,7 +1094,7 @@ export default function BankScreen() {
    * last two both write a balance the first does not, and a way in hidden
    * behind the thing it creates is no way in at all.
    */
-  const handleCreateParty = async ({ owing = false, asLender = false }: { owing?: boolean; asLender?: boolean } = {}) => {
+  const handleCreateParty = async ({ owing = false, asLender = false, forLending = false }: { owing?: boolean; asLender?: boolean; forLending?: boolean } = {}) => {
     const name = newPartyName.trim();
     if (!name) {
       Alert.alert('Who is it?', 'Give the person or institution a name, such as Mwangi or KCB.');
@@ -1077,7 +1123,11 @@ export default function BankScreen() {
       // Awaited: the picker and the settlement prompt both read this list, and
       // a party created moments ago has to be in it by the time they do.
       await queryClient.invalidateQueries({ queryKey: ['parties'] });
-      if (asLender) {
+      if (forLending) {
+        // Lending selects on the withdrawal side even though the balance
+        // written is the one they owe us.
+        setWithdrawPartyId(party.id);
+      } else if (asLender) {
         setRepayingPartyId(null);
         setBorrowTarget({ kind: 'party', id: party.id });
       } else if (owing) setRepayingPartyId(party.id);
@@ -1284,8 +1334,12 @@ export default function BankScreen() {
       }
       return;
     }
-    if (txType === 'disbursement' && withdrawDest !== 'savings' && !expenseCategory.trim()) {
+    if (txType === 'disbursement' && withdrawDest !== 'savings' && withdrawDest !== 'lend' && !expenseCategory.trim()) {
       Alert.alert('Category required', 'Choose or add a category for this withdrawal.');
+      return;
+    }
+    if (txType === 'disbursement' && withdrawDest === 'lend' && !lentToParty) {
+      Alert.alert('Who are you lending to?', 'Pick the person, or add them, so it can be recorded as owed to you.');
       return;
     }
     if (txType === 'disbursement' && withdrawDest === 'other' && !description.trim()) {
@@ -1428,7 +1482,11 @@ export default function BankScreen() {
             ...(txType === 'deposit' && contributorSplits.length === 0 ? { incomeSourceId } : {}),
             ...(txType === 'deposit' && depositSourceKind ? { sourceKind: depositSourceKind } : {}),
             ...(txType === 'deposit' && appliesTo ? { appliesToMonth: appliesTo.month, appliesToYear: appliesTo.year } : {}),
-            ...(txType === 'disbursement' ? { expenseCategory, destinationKind: withdrawDest === 'other' ? 'other' : 'category' } : {}),
+            ...(txType === 'disbursement'
+              ? withdrawDest === 'lend'
+                ? { isLending: true as const }
+                : { expenseCategory, destinationKind: withdrawDest === 'other' ? 'other' : 'category' }
+              : {}),
             accountId: selectedAccountId ?? undefined,
           },
         });
@@ -1515,10 +1573,14 @@ export default function BankScreen() {
             amount: parsed,
             description: finalDescription,
             date,
-            expenseCategory,
             madeById: !isSharedWorkspace ? user?.id : withdrawerId ?? null,
-            destinationKind: withdrawDest === 'other' ? 'other' : 'category',
             accountId: selectedAccountId ?? undefined,
+            // A loan out has no category, because it is not a cost. That is
+            // what keeps it out of every spending total, all of which filter
+            // on a category being present.
+            ...(withdrawDest === 'lend'
+              ? { isLending: true }
+              : { expenseCategory, destinationKind: withdrawDest === 'other' ? 'other' : 'category' }),
           },
         });
       }
@@ -1548,6 +1610,7 @@ export default function BankScreen() {
       const wasNewWithdrawal = txType === 'disbursement' && editingTransactionId === null;
       const paidCategory = expenseCategory.trim();
       const paidParty = withdrawDest === 'party' ? selectedParty : null;
+      const lentTo = txType === 'disbursement' && editingTransactionId === null ? lentToParty : null;
       const repaidBy = txType === 'deposit' && editingTransactionId === null ? repayingParty : null;
       const borrowedAgainst = txType === 'deposit' && editingTransactionId === null ? borrowTarget : null;
       const borrowedFrom = borrowedFromParty;
@@ -1559,6 +1622,8 @@ export default function BankScreen() {
         offerDebtIncrease(borrowedAgainst.name, parsed);
       } else if (borrowedAgainst?.kind === 'party' && borrowedFrom) {
         offerPartyBorrowing(borrowedFrom, parsed);
+      } else if (lentTo) {
+        offerLendingIncrease(lentTo, parsed);
       } else if (wasNewWithdrawal && paidParty) {
         // Who was paid outranks what it was spent on: a category that happens
         // to be a tracked debt as well would otherwise ask twice about one
@@ -2737,6 +2802,15 @@ export default function BankScreen() {
                 </>
               )}
 
+              {isWithdrawal && withdrawDest === 'lend' ? (
+                <View style={{ marginBottom: 14 }} testID="bank-lending-note">
+                  <Text style={{ color: colors.mutedForeground, fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 18 }}>
+                    No category: lending is not spending. You expect it back, so it will not count against any budget —
+                    it leaves the account and becomes owed to you. Once it saves, Jamvi offers to add it to what they owe.
+                  </Text>
+                </View>
+              ) : null}
+
               {/* The bank's fee on this withdrawal, entered with it and
                   posted separately. Two postings rather than one: folded into
                   the amount, a repayment of 5,000 with a 50 charge would offer
@@ -3422,6 +3496,37 @@ export default function BankScreen() {
                       );
                     })()}
 
+                    {/* Money lent. Not spending: it comes back, and until
+                        it does it is owed to you. So it takes no category,
+                        which is what keeps it out of the spending totals. */}
+                    {(() => {
+                      const selected = withdrawDest === 'lend';
+                      return (
+                        <TouchableOpacity
+                          testID="bank-withdraw-dest-lend"
+                          style={[
+                            styles.memberPill,
+                            {
+                              backgroundColor: selected ? '#0ea5e9' : colors.muted,
+                              borderColor: selected ? '#0ea5e9' : colors.border,
+                            },
+                          ]}
+                          onPress={() => {
+                            setWithdrawDest('lend');
+                            setWithdrawSourceName(null);
+                            setExpenseCategory('');
+                            setShowPartyPicker(true);
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <Feather name="corner-up-right" size={12} color={selected ? '#fff' : colors.mutedForeground} />
+                          <Text style={[styles.memberPillText, { color: selected ? '#fff' : colors.foreground }]}>
+                            Lending it out
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })()}
+
                     {/* Other chip */}
                     {(() => {
                       const selected = withdrawDest === 'other';
@@ -3453,7 +3558,7 @@ export default function BankScreen() {
                   </View>
 
                   {/* Who is being paid, and what still stands between you. */}
-                  {withdrawDest === 'party' ? (
+                  {withdrawDest === 'party' || withdrawDest === 'lend' ? (
                     <>
                       <TouchableOpacity
                         style={[styles.input, styles.pickerButton, { borderColor: colors.border, backgroundColor: colors.muted }]}
@@ -3461,13 +3566,15 @@ export default function BankScreen() {
                         testID="bank-withdraw-party"
                       >
                         <Text style={{ flex: 1, color: selectedParty ? colors.foreground : colors.mutedForeground, fontFamily: 'Inter_400Regular' }}>
-                          {selectedParty ? selectedParty.name : 'Who are you paying?'}
+                          {withdrawDest === 'lend'
+                            ? lentToParty ? lentToParty.name : 'Who are you lending to?'
+                            : selectedParty ? selectedParty.name : 'Who are you paying?'}
                         </Text>
                         <Feather name={showPartyPicker ? 'chevron-up' : 'chevron-down'} size={16} color={colors.mutedForeground} />
                       </TouchableOpacity>
                       {showPartyPicker && (
                         <View style={[styles.categoryDropdown, { borderColor: colors.dropdownBorder, backgroundColor: colors.dropdownBackground }]}>
-                          {owedParties.map((party) => (
+                          {(withdrawDest === 'lend' ? parties : owedParties).map((party) => (
                             <TouchableOpacity
                               key={`owed-party-${party.id}`}
                               style={[styles.categoryOption, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }]}
@@ -3478,7 +3585,9 @@ export default function BankScreen() {
                                 {party.name}
                               </Text>
                               <Text style={{ color: colors.dropdownMutedForeground, fontFamily: 'Inter_400Regular', fontSize: 12 }}>
-                                owe KES {formatKES(party.owedByUs ?? 0)}
+                                {withdrawDest === 'lend'
+                                  ? `owes you KES ${formatKES(party.owedToUs ?? 0)}`
+                                  : `owe KES ${formatKES(party.owedByUs ?? 0)}`}
                               </Text>
                             </TouchableOpacity>
                           ))}
@@ -3487,7 +3596,9 @@ export default function BankScreen() {
                               never shows. */}
                           <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, padding: 10, gap: 8 }} testID="bank-add-party-form">
                             <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold', fontSize: 12 }}>
-                              {owedParties.length === 0 ? 'NOBODY YET — ADD WHO YOU OWE' : "CAN'T FIND THEM? ADD SOMEBODY"}
+                              {withdrawDest === 'lend'
+                                ? 'LENDING TO SOMEBODY NEW? ADD THEM'
+                                : owedParties.length === 0 ? 'NOBODY YET — ADD WHO YOU OWE' : "CAN'T FIND THEM? ADD SOMEBODY"}
                             </Text>
                             <View style={{ flexDirection: 'row', gap: 8 }}>
                               <TextInput
@@ -3519,7 +3630,7 @@ export default function BankScreen() {
                               />
                               <TouchableOpacity
                                 disabled={addingParty}
-                                onPress={() => handleCreateParty()}
+                                onPress={() => handleCreateParty(withdrawDest === 'lend' ? { owing: true, forLending: true } : {})}
                                 style={{ minWidth: 58, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary, opacity: addingParty ? 0.55 : 1 }}
                                 testID="bank-add-party"
                               >
@@ -3648,7 +3759,7 @@ export default function BankScreen() {
               )}
 
               {/* Expense category (disbursements only) */}
-              {isWithdrawal && withdrawDest !== 'savings' && (
+              {isWithdrawal && withdrawDest !== 'savings' && withdrawDest !== 'lend' && (
                 <>
                   <Text style={[styles.label, { color: colors.mutedForeground }]}>
                     Category <Text style={{ fontWeight: '400', color: '#f87171' }}>* required</Text>

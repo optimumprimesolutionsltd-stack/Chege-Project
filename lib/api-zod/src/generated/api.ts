@@ -1155,7 +1155,8 @@ export const CreateDisbursementBody = zod.object({
   "description": zod.string().optional(),
   "date": zod.coerce.date(),
   "madeById": zod.string().nullish().describe('ID of the household member responsible for this disbursement. Omit or pass null for Joint bank. Must be a valid household member ID when non-null.\n'),
-  "expenseCategory": zod.string().describe('Required budget category this disbursement is paying for'),
+  "isLending": zod.boolean().optional().describe('Money lent, leaving the account. Not spending — you expect it back and it is now owed to you — so it carries no category, which is what keeps it out of every spending total.'),
+  "expenseCategory": zod.string().optional().describe('Required budget category this disbursement is paying for'),
   "destinationKind": zod.enum(['category', 'other']).optional().describe('Choose other only when the required description is a narration.'),
   "accountId": zod.number().min(1).optional()
 })

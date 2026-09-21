@@ -23,7 +23,9 @@ describe("both doors refuse a heading", () => {
   });
 
   it("refuses a bank disbursement aimed at a heading", () => {
-    expect(bank).toContain("const disbursementHeading = await headingAmong(groupId, [expenseCategory]);");
+    // Lending has no category, so there is no heading to check — and the
+    // guard is written so that is the only way past it.
+    expect(bank).toContain("const disbursementHeading = expenseCategory === null ? null : await headingAmong(groupId, [expenseCategory]);");
     expect(bank).toContain("res.status(400).json({ error: postingToHeadingError(disbursementHeading) });");
   });
 

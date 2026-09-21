@@ -76,9 +76,9 @@ describe('adding it to what you owe', () => {
   it('offers rather than applies, like every other balance change', () => {
     expect(bank).toContain('const offerDebtIncrease = (categoryName: string, amount: number) => {');
     expect(bank).toContain('const offerPartyBorrowing = (party:');
-    // Five offers: repayment, debt reduction, party settlement, and the two
-    // that add what was borrowed.
-    expect((bank.match(/\{ text: 'Not now', style: 'cancel' \},/g) ?? []).length).toBe(5);
+    // Six offers now: repayment, debt reduction, party settlement, the two
+    // that add what was borrowed, and the one that adds what was lent.
+    expect((bank.match(/\{ text: 'Not now', style: 'cancel' \},/g) ?? []).length).toBe(6);
   });
 
   it('works on a debt that starts at nothing outstanding', () => {
@@ -134,5 +134,50 @@ describe('naming the lender', () => {
 
   it('takes nothing already owed, this loan being the whole of it', () => {
     expect(bank).toContain('Leave the amount blank if this loan is the whole of it.');
+  });
+});
+
+// If there is borrowing there has to be lending: the same movement, the other
+// way. Money lent leaves the account like any withdrawal, but it is not spent
+// — you expect it back — so counting it as spending makes a month of helping
+// somebody read as a month of overspending.
+describe('lending is the mirror of borrowing', () => {
+  it('is offered where the money leaves', () => {
+    expect(bank).toContain('testID="bank-withdraw-dest-lend"');
+    expect(bank).toContain('Lending it out');
+  });
+
+  it('takes no category, because it is not a cost', () => {
+    expect(bank).toContain("{ isLending: true }");
+    expect(bank).toContain('testID="bank-lending-note"');
+    expect(bank).toContain('No category: lending is not spending.');
+  });
+
+  it('insists on knowing who it went to', () => {
+    expect(bank).toContain("Alert.alert('Who are you lending to?'");
+  });
+
+  it('lends to anybody, not only somebody already owed', () => {
+    // A first loan is exactly the case where nothing is tracked yet.
+    expect(bank).toContain("{(withdrawDest === 'lend' ? parties : owedParties).map((party) => (");
+  });
+
+  it('can record somebody new from inside the picker', () => {
+    expect(bank).toContain("onPress={() => handleCreateParty(withdrawDest === 'lend' ? { owing: true, forLending: true } : {})}");
+    expect(bank).toContain('LENDING TO SOMEBODY NEW? ADD THEM');
+  });
+
+  it('adds it to what they owe, offered not applied', () => {
+    expect(bank).toContain('const offerLendingIncrease = (party:');
+    expect(bank).toContain("body: JSON.stringify({ owedToUs: owed + lent }),");
+  });
+
+  it('starts from nothing when nothing is tracked', () => {
+    expect(bank).toContain("const owed = typeof party.owedToUs === 'number' ? party.owedToUs : 0;");
+    expect(bank).toContain('They owed you nothing.');
+  });
+
+  it('offers only on a new posting, never on an edit', () => {
+    expect(bank).toContain("const lentTo = txType === 'disbursement' && editingTransactionId === null ? lentToParty : null;");
   });
 });
