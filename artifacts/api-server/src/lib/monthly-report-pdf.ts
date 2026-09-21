@@ -37,7 +37,6 @@ export type MonthlyReportPdfData = {
   incomeStreams: IncomeStreamRow[];
   /** Bank fees for the month. Kept out of totalSpent - a fee is not spending
    *  on the group's purposes - but shown as its own line. */
-  bankChargesTotal?: number;
 };
 
 const PAGE_WIDTH = 595.28;
@@ -184,17 +183,6 @@ export function createMonthlyReportPdf(data: MonthlyReportPdfData): Promise<Buff
       });
     }
     y += 16;
-
-    if ((data.bankChargesTotal ?? 0) > 0) {
-      ensureRoom(22);
-      document.font("Helvetica").fontSize(8.5).fillColor("#60736C").text(
-        `Bank charges this month: ${formatKes(data.bankChargesTotal ?? 0)} — the cost of running the account, not counted in the spending above.`,
-        SIDE_MARGIN,
-        y,
-        { width: CONTENT_WIDTH },
-      );
-      y += 24;
-    }
 
     sectionTitle("Income-stream funding", "Personal expense portions, shared-bank deposits, and personal savings additions. Joint-bank expense portions are excluded.");
     ensureRoom(53);

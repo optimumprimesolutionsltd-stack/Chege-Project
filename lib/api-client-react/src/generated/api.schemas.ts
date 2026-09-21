@@ -463,9 +463,6 @@ export interface ContributionInput {
 }
 
 export interface DashboardSummary {
-  /** Bank fees in this period. Outside totalSpent: a charge is money gone, but it is not household spending and belongs to no category. */
-  bankChargesTotal?: number;
-  bankChargesCount?: number;
   month: number;
   year: number;
   totalBudget: number;
@@ -1244,8 +1241,6 @@ export interface JointAccountTransaction {
      * @nullable
      */
   expenseCategory?: string | null;
-  /** True when this disbursement is a bank fee excluded from household spending reports */
-  bankCharge: boolean;
   /**
      * Linked savings goal for a bank transfer
      * @nullable
@@ -1401,20 +1396,6 @@ export interface DisbursementInput {
   accountId?: number;
 }
 
-export interface BankChargeInput {
-  /** @minimum 0 */
-  amount: number;
-  /**
-     * Required explanation from the bank statement, for example monthly account fee
-     * @minLength 1
-     * @maxLength 200
-     */
-  narration: string;
-  date: string;
-  /** @minimum 1 */
-  accountId?: number;
-}
-
 export type UpdateJointAccountTransactionInputSourceKind = typeof UpdateJointAccountTransactionInputSourceKind[keyof typeof UpdateJointAccountTransactionInputSourceKind];
 
 
@@ -1457,8 +1438,6 @@ export interface UpdateJointAccountTransactionInput {
   incomeSourceId?: number | null;
   /** Required for withdrawals; deposits ignore this field */
   expenseCategory?: string;
-  /** True only while editing an existing bank-charge transaction */
-  bankCharge?: boolean;
   sourceKind?: UpdateJointAccountTransactionInputSourceKind;
   destinationKind?: UpdateJointAccountTransactionInputDestinationKind;
   /** Replacement contributor portions for a deposit. Send an empty array to remove existing splits. */

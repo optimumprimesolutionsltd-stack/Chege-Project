@@ -640,8 +640,6 @@ export const GetDashboardSummaryQueryParams = zod.object({
 })
 
 export const GetDashboardSummaryResponse = zod.object({
-  "bankChargesTotal": zod.number().optional().describe('Bank fees in this period. Outside totalSpent: a charge is money gone, but it is not household spending and belongs to no category.'),
-  "bankChargesCount": zod.number().optional(),
   "month": zod.number(),
   "year": zod.number(),
   "totalBudget": zod.number(),
@@ -1010,7 +1008,6 @@ export const GetJointAccountResponse = zod.object({
   "madeByName": zod.string().nullish(),
   "incomeSourceId": zod.number().nullish().describe('Income source attached to a single-depositor deposit'),
   "expenseCategory": zod.string().nullish().describe('Expense category this disbursement covers (optional)'),
-  "bankCharge": zod.boolean().describe('True when this disbursement is a bank fee excluded from household spending reports'),
   "savingsGoalId": zod.number().nullish().describe('Linked savings goal for a bank transfer'),
   "savingsGoalName": zod.string().nullish(),
   "transferDirection": zod.string().nullish().describe('to_savings or from_savings for linked transfers'),
@@ -1115,7 +1112,6 @@ export const CreateDepositResponse = zod.object({
   "madeByName": zod.string().nullish(),
   "incomeSourceId": zod.number().nullish().describe('Income source attached to a single-depositor deposit'),
   "expenseCategory": zod.string().nullish().describe('Expense category this disbursement covers (optional)'),
-  "bankCharge": zod.boolean().describe('True when this disbursement is a bank fee excluded from household spending reports'),
   "savingsGoalId": zod.number().nullish().describe('Linked savings goal for a bank transfer'),
   "savingsGoalName": zod.string().nullish(),
   "transferDirection": zod.string().nullish().describe('to_savings or from_savings for linked transfers'),
@@ -1173,7 +1169,6 @@ export const CreateDisbursementResponse = zod.object({
   "madeByName": zod.string().nullish(),
   "incomeSourceId": zod.number().nullish().describe('Income source attached to a single-depositor deposit'),
   "expenseCategory": zod.string().nullish().describe('Expense category this disbursement covers (optional)'),
-  "bankCharge": zod.boolean().describe('True when this disbursement is a bank fee excluded from household spending reports'),
   "savingsGoalId": zod.number().nullish().describe('Linked savings goal for a bank transfer'),
   "savingsGoalName": zod.string().nullish(),
   "transferDirection": zod.string().nullish().describe('to_savings or from_savings for linked transfers'),
@@ -1185,63 +1180,6 @@ export const CreateDisbursementResponse = zod.object({
   "userId": zod.string().optional().describe('Member who supplied this deposit portion, when they have an account.'),
   "contributorId": zod.number().min(1).optional().describe('Contributor who supplied this portion, when they have no account.'),
   "amount": zod.number().min(createDisbursementResponseContributorSplitsItemAmountMin).multipleOf(createDisbursementResponseContributorSplitsItemAmountMultipleOf),
-  "incomeSourceId": zod.number().min(1).optional()
-}).describe('One person\'s share of a deposit. Give either userId, for somebody with a Jamvi account, or contributorId, for somebody recorded by name who does not use the app - a church member, or a chama member without a smartphone. Exactly one of the two.\n')).optional(),
-  "date": zod.coerce.date(),
-  "createdAt": zod.string()
-})
-
-
-/**
- * @summary Record a bank fee or charge against the selected account
- */
-export const createBankChargeBodyAmountMin = 0;
-export const createBankChargeBodyAmountMultipleOf = 0.01;
-
-export const createBankChargeBodyNarrationMax = 200;
-
-
-
-
-export const CreateBankChargeBody = zod.object({
-  "amount": zod.number().min(createBankChargeBodyAmountMin).multipleOf(createBankChargeBodyAmountMultipleOf),
-  "narration": zod.string().min(1).max(createBankChargeBodyNarrationMax).describe('Required explanation from the bank statement, for example monthly account fee'),
-  "date": zod.coerce.date(),
-  "accountId": zod.number().min(1).optional()
-})
-
-
-export const createBankChargeResponseContributorSplitsItemAmountMin = 0;
-export const createBankChargeResponseContributorSplitsItemAmountMultipleOf = 0.01;
-
-
-
-
-export const CreateBankChargeResponse = zod.object({
-  "appliesToMonth": zod.number().nullish().describe('The month a deposit was for, when that differs from the month it arrived. Null means the month it arrived in.'),
-  "appliesToYear": zod.number().nullish(),
-  "id": zod.number(),
-  "accountId": zod.number().nullish(),
-  "type": zod.string().describe('deposit or disbursement'),
-  "amount": zod.number(),
-  "runningBalance": zod.number().nullish().describe('Balance in this specific bank account immediately after this transaction; null for an all-accounts view'),
-  "description": zod.string(),
-  "madeById": zod.string().nullish(),
-  "madeByName": zod.string().nullish(),
-  "incomeSourceId": zod.number().nullish().describe('Income source attached to a single-depositor deposit'),
-  "expenseCategory": zod.string().nullish().describe('Expense category this disbursement covers (optional)'),
-  "bankCharge": zod.boolean().describe('True when this disbursement is a bank fee excluded from household spending reports'),
-  "savingsGoalId": zod.number().nullish().describe('Linked savings goal for a bank transfer'),
-  "savingsGoalName": zod.string().nullish(),
-  "transferDirection": zod.string().nullish().describe('to_savings or from_savings for linked transfers'),
-  "bankTransferId": zod.string().nullish().describe('Shared identifier for the two sides of an internal bank-to-bank transfer'),
-  "bankTransferAccountId": zod.number().nullish().describe('Counterparty bank account for an internal transfer'),
-  "bankTransferAccountName": zod.string().nullish(),
-  "expenseId": zod.number().nullish().describe('Expense that owns this linked Joint-bank funding disbursement.'),
-  "contributorSplits": zod.array(zod.object({
-  "userId": zod.string().optional().describe('Member who supplied this deposit portion, when they have an account.'),
-  "contributorId": zod.number().min(1).optional().describe('Contributor who supplied this portion, when they have no account.'),
-  "amount": zod.number().min(createBankChargeResponseContributorSplitsItemAmountMin).multipleOf(createBankChargeResponseContributorSplitsItemAmountMultipleOf),
   "incomeSourceId": zod.number().min(1).optional()
 }).describe('One person\'s share of a deposit. Give either userId, for somebody with a Jamvi account, or contributorId, for somebody recorded by name who does not use the app - a church member, or a chama member without a smartphone. Exactly one of the two.\n')).optional(),
   "date": zod.coerce.date(),
@@ -1290,7 +1228,6 @@ export const TransferBankToSavingsResponse = zod.object({
   "madeByName": zod.string().nullish(),
   "incomeSourceId": zod.number().nullish().describe('Income source attached to a single-depositor deposit'),
   "expenseCategory": zod.string().nullish().describe('Expense category this disbursement covers (optional)'),
-  "bankCharge": zod.boolean().describe('True when this disbursement is a bank fee excluded from household spending reports'),
   "savingsGoalId": zod.number().nullish().describe('Linked savings goal for a bank transfer'),
   "savingsGoalName": zod.string().nullish(),
   "transferDirection": zod.string().nullish().describe('to_savings or from_savings for linked transfers'),
@@ -1350,7 +1287,6 @@ export const TransferSavingsToBankResponse = zod.object({
   "madeByName": zod.string().nullish(),
   "incomeSourceId": zod.number().nullish().describe('Income source attached to a single-depositor deposit'),
   "expenseCategory": zod.string().nullish().describe('Expense category this disbursement covers (optional)'),
-  "bankCharge": zod.boolean().describe('True when this disbursement is a bank fee excluded from household spending reports'),
   "savingsGoalId": zod.number().nullish().describe('Linked savings goal for a bank transfer'),
   "savingsGoalName": zod.string().nullish(),
   "transferDirection": zod.string().nullish().describe('to_savings or from_savings for linked transfers'),
@@ -1416,7 +1352,6 @@ export const TransferBankToBankResponse = zod.object({
   "madeByName": zod.string().nullish(),
   "incomeSourceId": zod.number().nullish().describe('Income source attached to a single-depositor deposit'),
   "expenseCategory": zod.string().nullish().describe('Expense category this disbursement covers (optional)'),
-  "bankCharge": zod.boolean().describe('True when this disbursement is a bank fee excluded from household spending reports'),
   "savingsGoalId": zod.number().nullish().describe('Linked savings goal for a bank transfer'),
   "savingsGoalName": zod.string().nullish(),
   "transferDirection": zod.string().nullish().describe('to_savings or from_savings for linked transfers'),
@@ -1446,7 +1381,6 @@ export const TransferBankToBankResponse = zod.object({
   "madeByName": zod.string().nullish(),
   "incomeSourceId": zod.number().nullish().describe('Income source attached to a single-depositor deposit'),
   "expenseCategory": zod.string().nullish().describe('Expense category this disbursement covers (optional)'),
-  "bankCharge": zod.boolean().describe('True when this disbursement is a bank fee excluded from household spending reports'),
   "savingsGoalId": zod.number().nullish().describe('Linked savings goal for a bank transfer'),
   "savingsGoalName": zod.string().nullish(),
   "transferDirection": zod.string().nullish().describe('to_savings or from_savings for linked transfers'),
@@ -1494,7 +1428,6 @@ export const UpdateJointAccountTransactionBody = zod.object({
   "madeById": zod.string().nullish(),
   "incomeSourceId": zod.number().nullish().describe('Preserved for deposits unless explicitly changed'),
   "expenseCategory": zod.string().optional().describe('Required for withdrawals; deposits ignore this field'),
-  "bankCharge": zod.boolean().optional().describe('True only while editing an existing bank-charge transaction'),
   "sourceKind": zod.enum(['income_source', 'other']).optional(),
   "destinationKind": zod.enum(['category', 'other']).optional(),
   "contributorSplits": zod.array(zod.object({
@@ -1529,7 +1462,6 @@ export const UpdateJointAccountTransactionResponse = zod.object({
   "madeByName": zod.string().nullish(),
   "incomeSourceId": zod.number().nullish().describe('Income source attached to a single-depositor deposit'),
   "expenseCategory": zod.string().nullish().describe('Expense category this disbursement covers (optional)'),
-  "bankCharge": zod.boolean().describe('True when this disbursement is a bank fee excluded from household spending reports'),
   "savingsGoalId": zod.number().nullish().describe('Linked savings goal for a bank transfer'),
   "savingsGoalName": zod.string().nullish(),
   "transferDirection": zod.string().nullish().describe('to_savings or from_savings for linked transfers'),

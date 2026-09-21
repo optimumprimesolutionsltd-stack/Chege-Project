@@ -1007,37 +1007,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/JointAccountTransaction"
 
-  /joint-account/bank-charge:
-    post:
-      operationId: createBankCharge
-      tags: [joint-account]
-      summary: Record a bank fee or charge against the selected account
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/BankChargeInput"
-      responses:
-        "201":
-          description: Created bank-charge transaction
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/JointAccountTransaction"
-        "400":
-          description: Invalid bank charge
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "403":
-          description: Only a group owner or admin can record a shared bank charge
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
   /joint-account/transfers/to-savings:
     post:
       operationId: transferBankToSavings
@@ -2515,13 +2484,6 @@ components:
     DashboardSummary:
       type: object
       properties:
-        bankChargesTotal:
-          type: number
-          description: >-
-            Bank fees in this period. Outside totalSpent: a charge is money
-            gone, but it is not household spending and belongs to no category.
-        bankChargesCount:
-          type: number
         month:
           type: number
         year:
@@ -3415,9 +3377,6 @@ components:
           type: ["string", "null"]
           nullable: true
           description: Expense category this disbursement covers (optional)
-        bankCharge:
-          type: boolean
-          description: True when this disbursement is a bank fee excluded from household spending reports
         savingsGoalId:
           type: ["number", "null"]
           description: Linked savings goal for a bank transfer
@@ -3451,7 +3410,6 @@ components:
         - type
         - amount
         - description
-        - bankCharge
         - date
         - createdAt
 
@@ -3641,29 +3599,6 @@ components:
         - date
         - expenseCategory
 
-    BankChargeInput:
-      type: object
-      properties:
-        amount:
-          type: number
-          minimum: 0
-          multipleOf: 0.01
-        narration:
-          type: string
-          minLength: 1
-          maxLength: 200
-          description: Required explanation from the bank statement, for example monthly account fee
-        date:
-          type: string
-          format: date
-        accountId:
-          type: number
-          minimum: 1
-      required:
-        - amount
-        - narration
-        - date
-
     UpdateJointAccountTransactionInput:
       type: object
       properties:
@@ -3685,9 +3620,6 @@ components:
         expenseCategory:
           type: string
           description: Required for withdrawals; deposits ignore this field
-        bankCharge:
-          type: boolean
-          description: True only while editing an existing bank-charge transaction
         sourceKind:
           type: string
           enum: [income_source, other]

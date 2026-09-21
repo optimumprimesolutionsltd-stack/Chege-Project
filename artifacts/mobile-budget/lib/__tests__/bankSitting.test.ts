@@ -99,12 +99,12 @@ describe('checking the account against the statement', () => {
     expect(bank).toContain('Math.round((data.balance - parsedStatementBalance) * 100) / 100');
   });
 
-  it('offers the charge without asserting it', () => {
-    // A shortfall is usually a fee on a Kenyan statement. Usually is not
-    // always, so the app proposes and the narration stays editable.
+  it('records the shortfall as spending, against a category', () => {
+    // Fees are ordinary spending now, so there is no second kind of thing for
+    // a shortfall to be.
     expect(bank).toContain('testID="bank-reconcile-record-charge"');
     expect(bank).toContain('testID="bank-reconcile-narration"');
-    expect(bank).toContain('so Jamvi will not decide which for you.');
+    expect(bank).toContain('Either way it is spending, so give it a category.');
   });
 
   it('refuses to call a surplus a charge', () => {
@@ -127,12 +127,12 @@ describe('checking the account against the statement', () => {
     expect(bank).toContain(String.raw`if (!/^-?\d+(?:\.\d{1,2})?$/.test(normalized)) return null;`);
   });
 
-  it('says the charge will not touch a budget', () => {
-    expect(bank).toContain('A charge is kept out of household spending, so this will not touch any budget.');
+  it('says which budget it will touch', () => {
+    expect(bank).toContain("This will count against {reconcileCategory || 'the category you pick'} like any other withdrawal.");
   });
 
-  it('defaults the narration rather than saving an empty one', () => {
-    expect(bank).toContain("narration: reconcileNarration.trim() || 'Bank charges',");
+  it('falls back to the category when no narration is given', () => {
+    expect(bank).toContain('description: reconcileNarration.trim() || reconcileCategory,');
   });
 });
 
@@ -167,48 +167,31 @@ describe('the sitting holds up in use', () => {
   });
 });
 
-// A shortfall is not always a fee. Often it is a posting somebody forgot, and
-// that money was genuinely spent on something.
-describe("the shortfall can be recorded either way", () => {
-  it("asks what it was instead of assuming a fee", () => {
-    expect(bank).toContain('testID={`bank-reconcile-as-${option.key}`}');
-    expect(bank).toContain("{ key: 'charge' as const, label: 'A bank charge' },");
-    expect(bank).toContain("{ key: 'category' as const, label: 'Spending I missed' },");
-    expect(bank).toContain("so Jamvi will not decide which for you.");
-  });
-
-  it("posts spending as an ordinary withdrawal, not as a charge", () => {
-    // A charge is excluded from household spending. Recording missed spending
-    // as one would keep it out of the budget it actually belongs to.
-    expect(bank).toContain("if (reconcileAs === 'category') {");
+// Bank fees are ordinary spending now, recorded against a category like any
+// other cost, so a shortfall has only one kind of answer to be.
+describe("the shortfall becomes spending", () => {
+  it("posts an ordinary withdrawal", () => {
     expect(bank).toContain("await createDisbursement({");
     expect(bank).toContain("destinationKind: 'category',");
   });
 
-  it("still keeps a real fee out of spending", () => {
-    expect(bank).toContain("await createBankCharge({");
-    expect(bank).toContain("A charge is kept out of household spending, so this will not touch any budget.");
+  it("has no separate kind of posting left to be", () => {
+    expect(bank).not.toContain("createBankCharge");
+    expect(bank).not.toContain("reconcileAs");
   });
 
   it("refuses to post spending with no category", () => {
-    expect(bank).toContain("if (reconcileAs === 'category' && !reconcileCategory.trim()) {");
+    expect(bank).toContain("if (!reconcileCategory.trim()) {");
   });
 
   it("offers only categories that can hold spending", () => {
     // A category with children is a heading and its spending is theirs added
-    // up. The withdraw picker lists everything flat and lets the server refuse
-    // a heading; this one does not offer what cannot be chosen.
+    // up, so it is not offered.
     expect(bank).toContain("const reconcileTree = useMemo(");
     expect(bank).toContain("{group.children.length > 0 ? (");
-    expect(bank).toContain("onPress={() => { setReconcileCategory(child); setShowReconcileCategoryPicker(false); }}");
   });
 
-  it("says which way it will count, before the button is pressed", () => {
-    expect(bank).toContain("'This counts as spending against the category you pick, the same as any withdrawal.'");
-    expect(bank).toContain("`Record KES ${formatKES(reconcileDifference)} as spending`");
-  });
-
-  it("starts on the charge, which is still the commoner answer", () => {
-    expect(bank).toContain("setReconcileAs('charge');");
+  it("says so on the button", () => {
+    expect(bank).toContain("Record KES {formatKES(reconcileDifference)} as spending");
   });
 });

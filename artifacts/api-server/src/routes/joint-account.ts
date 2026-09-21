@@ -110,13 +110,6 @@ const DisbursementInput = z.object({
   accountId: z.number().int().positive().optional(),
 });
 
-const BankChargeInput = z.object({
-  amount: NonNegativeBankAmount,
-  narration: z.string().trim().min(1).max(200),
-  date: z.string().min(1),
-  accountId: z.number().int().positive().optional(),
-});
-
 const UpdateJointAccountInput = z.object({
   amount: NonNegativeBankAmount,
   description: z.string().trim().max(200).optional(),
@@ -135,7 +128,6 @@ const UpdateJointAccountInput = z.object({
   goalId: z.number().int().positive().optional(),
   narration: z.string().trim().min(1).max(200).optional(),
   accountId: z.number().int().positive().optional(),
-  bankCharge: z.boolean().optional(),
 }).superRefine((value, ctx) => {
   if (value.transferDirection && !Number.isInteger(value.amount)) {
     ctx.addIssue({
@@ -296,7 +288,6 @@ async function enrichTx(
     // null madeById = Joint bank (shared household); name resolves to null so UI can show "Joint bank"
     madeByName,
     expenseCategory: tx.expenseCategory ?? null,
-    bankCharge: tx.bankCharge ?? false,
     savingsGoalId: tx.savingsGoalId ?? null,
     savingsGoalName: savingsGoal?.name ?? null,
     transferDirection: tx.transferDirection ?? null,
@@ -712,37 +703,6 @@ router.post("/joint-account/disbursement", async (req, res): Promise<void> => {
   res.status(201).json(await enrichTx(tx, groupId));
 });
 
-// POST /joint-account/bank-charge — record a bank fee without classifying it as household spending.
-router.post("/joint-account/bank-charge", async (req, res): Promise<void> => {
-  const groupId = getActiveGroupId(req, res);
-  if (groupId === null) return;
-  if (!requireGroupManager(req, res)) return;
-  if (!await requireTransactionEligibility(req, res)) return;
-
-  const parsed = BankChargeInput.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: "Enter a positive amount, date, and bank-charge narration." });
-    return;
-  }
-  const accountId = await requireAccountId(parsed.data.accountId, groupId, res);
-  if (accountId === null) return;
-
-  const [tx] = await db.insert(jointAccountTxTable).values({
-    groupId,
-    accountId,
-    type: "disbursement",
-    amount: parsed.data.amount,
-    description: parsed.data.narration,
-    date: parsed.data.date,
-    madeById: null,
-    incomeSourceId: null,
-    expenseCategory: null,
-    bankCharge: true,
-  }).returning();
-
-  res.status(201).json(await enrichTx(tx, groupId));
-});
-
 async function createSavingsTransfer(
   req: Request,
   res: Response,
@@ -919,34 +879,6 @@ router.put("/joint-account/:id", async (req, res): Promise<void> => {
   const requestedAccountId = parsed.data.accountId === undefined ? existing.accountId : parsed.data.accountId;
   const accountId = await requireAccountId(requestedAccountId ?? undefined, groupId, res);
   if (accountId === null) return;
-  if (existing.bankCharge) {
-    if (!requireGroupManager(req, res)) return;
-    const narration = parsed.data.description?.trim();
-    if (!narration) {
-      res.status(400).json({ error: "Bank-charge narration is required." });
-      return;
-    }
-    const [updated] = await db.update(jointAccountTxTable)
-      .set({
-        type: "disbursement",
-        amount: parsed.data.amount,
-        description: narration,
-        date: parsed.data.date,
-        madeById: null,
-        incomeSourceId: null,
-        expenseCategory: null,
-        bankCharge: true,
-        accountId,
-      })
-      .where(and(eq(jointAccountTxTable.id, existing.id), eq(jointAccountTxTable.groupId, groupId)))
-      .returning();
-    res.json(await enrichTx(updated, groupId));
-    return;
-  }
-  if (parsed.data.bankCharge) {
-    res.status(400).json({ error: "Only an existing bank charge can be edited as a bank charge." });
-    return;
-  }
   const requestedMadeById = parsed.data.madeById === undefined
     ? existing.madeById
     : parsed.data.madeById;

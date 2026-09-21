@@ -7,9 +7,6 @@
  */
 
 export interface DashboardSummary {
-  /** Bank fees in this period. Outside totalSpent: a charge is money gone, but it is not household spending and belongs to no category. */
-  bankChargesTotal?: number;
-  bankChargesCount?: number;
   month: number;
   year: number;
   totalBudget: number;
