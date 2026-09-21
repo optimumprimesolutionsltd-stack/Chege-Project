@@ -187,7 +187,7 @@ describe("the shortfall becomes spending", () => {
   it("offers only categories that can hold spending", () => {
     // A category with children is a heading and its spending is theirs added
     // up, so it is not offered.
-    expect(bank).toContain("const reconcileTree = useMemo(");
+    expect(bank).toContain("const categoryTree = useMemo(");
     expect(bank).toContain("{group.children.length > 0 ? (");
   });
 

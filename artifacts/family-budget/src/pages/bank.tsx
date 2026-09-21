@@ -145,6 +145,10 @@ export default function Bank() {
   const [withdrawalDestinationKind, setWithdrawalDestinationKind] = useState<"category" | "other">("category");
   const [newCategoryName, setNewCategoryName] = useState("");
   const [showCategoryCreator, setShowCategoryCreator] = useState(false);
+  // Which group a category added here joins, or null for a new top-level one.
+  // It used to have no say: everything landed at the top level, which is how a
+  // budget acquires a flat list of strays beside the groups it was given.
+  const [newCategoryParentId, setNewCategoryParentId] = useState<number | null>(null);
   const [addingCategory, setAddingCategory] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<EditableTransaction | null>(null);
   const [transferDirection, setTransferDirection] = useState<"to_savings" | "from_savings">("to_savings");
@@ -437,16 +441,31 @@ export default function Bank() {
 
     setAddingCategory(true);
     try {
+      const parent = newCategoryParentId === null
+        ? null
+        : categories?.find((row) => row.id === newCategoryParentId) ?? null;
       const response = await fetch("/api/budget-categories", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, budgetAmount: 0, priority: 1, color: "#6B7280" }),
+        body: JSON.stringify({
+          name,
+          budgetAmount: 0,
+          // A child takes its group's tier: the ranking is what the group is
+          // worth against other groups, and asking again per ledger invites
+          // two answers to one question. A new group starts in the middle
+          // rather than at 1 — everything added in passing was being declared
+          // must-pay, which is a claim nobody made.
+          priority: parent?.priority ?? 3,
+          color: parent?.color ?? "#6B7280",
+          ...(parent ? { parentId: parent.id } : {}),
+        }),
       });
       if (!response.ok) throw new Error("Could not create category");
       const category = await response.json();
       setExpenseCategory(category.name);
       setNewCategoryName("");
+      setNewCategoryParentId(null);
       setShowCategoryCreator(false);
       queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
       toast({ title: "Category added", description: `${category.name} is ready to use.` });
@@ -877,8 +896,9 @@ export default function Bank() {
     : null;
 
   // Spending lands on a category that holds no subcategories: a category with
-  // children is a heading, and its spending is theirs added up.
-  const reconcileTree = useMemo(
+  // children is a heading, and its spending is theirs added up, so neither
+  // picker offers one.
+  const categoryTree = useMemo(
     () => buildCategoryTree((categories ?? []) as unknown as CategoryRow[]),
     [categories],
   );
@@ -1093,7 +1113,7 @@ export default function Bank() {
                     <option value="">Choose a category</option>
                     {/* A category holding subcategories is a heading and its
                         spending is theirs added up, so it is not offered. */}
-                    {reconcileTree.map((group) => (
+                    {categoryTree.map((group) => (
                       group.children.length > 0 ? (
                         <optgroup key={group.name} label={group.name}>
                           {group.children.map((child) => (
@@ -1414,7 +1434,17 @@ export default function Bank() {
                       }}
                     >
                       <option value="" disabled>Choose a category...</option>
-                      {categories?.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                      {categoryTree.map((group) => (
+                        group.children.length > 0 ? (
+                          <optgroup key={group.name} label={group.name}>
+                            {group.children.map((child) => (
+                              <option key={child} value={child}>{child}</option>
+                            ))}
+                          </optgroup>
+                        ) : (
+                          <option key={group.name} value={group.name}>{group.name}</option>
+                        )
+                      ))}
                       <option value="__add_category__">+ Add new category</option>
                     </select>
                     <Button
@@ -1429,7 +1459,35 @@ export default function Bank() {
                       {showCategoryCreator ? "Close category creator" : "Add category"}
                     </Button>
                     {showCategoryCreator && (
-                      <div className="flex flex-col gap-2 rounded-lg border border-primary/20 bg-primary/5 p-3 sm:flex-row">
+                      <div className="space-y-2 rounded-lg border border-primary/20 bg-primary/5 p-3">
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={newCategoryParentId === null ? "default" : "outline"}
+                            onClick={() => setNewCategoryParentId(null)}
+                            data-testid="button-new-category-parent-top-level"
+                          >
+                            Its own group
+                          </Button>
+                          {categoryTree.map((group) => {
+                            const parent = categories?.find((row) => row.name === group.name);
+                            if (!parent) return null;
+                            return (
+                              <Button
+                                key={parent.id}
+                                type="button"
+                                size="sm"
+                                variant={newCategoryParentId === parent.id ? "default" : "outline"}
+                                onClick={() => setNewCategoryParentId(parent.id)}
+                                data-testid={`button-new-category-parent-${group.name}`}
+                              >
+                                Under {group.name}
+                              </Button>
+                            );
+                          })}
+                        </div>
+                        <div className="flex flex-col gap-2 sm:flex-row">
                         <Input
                           data-testid="input-new-expense-category"
                           value={newCategoryName}
@@ -1453,6 +1511,7 @@ export default function Bank() {
                         >
                           {addingCategory ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save category"}
                         </Button>
+                        </div>
                       </div>
                     )}
                     <p className="text-xs text-muted-foreground">

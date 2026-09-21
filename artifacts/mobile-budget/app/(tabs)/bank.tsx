@@ -205,6 +205,10 @@ export default function BankScreen() {
   }, []);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
+  // Which group a category added here joins, or null for a new top-level one.
+  // It used to have no say: everything landed at the top level, which is how a
+  // budget acquires a flat list of strays beside the groups it was given.
+  const [newCategoryParentId, setNewCategoryParentId] = useState<number | null>(null);
   const [addingCategory, setAddingCategory] = useState(false);
   const [date, setDate] = useState(todayIso());
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -715,13 +719,28 @@ export default function BankScreen() {
 
     setAddingCategory(true);
     try {
+      const parent = newCategoryParentId === null
+        ? null
+        : categories.find((row) => row.id === newCategoryParentId) ?? null;
       const category = await customFetch<{ id: number; name: string }>('/api/budget-categories', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, budgetAmount: 0, priority: 1, color: '#6B7280' }),
+        body: JSON.stringify({
+          name,
+          budgetAmount: 0,
+          // A child takes its group's tier: the ranking is what the group is
+          // worth against other groups, and asking again per ledger invites
+          // two answers to one question. A new group starts in the middle
+          // rather than at 1 — everything added in passing was being declared
+          // must-pay, which is a claim nobody made.
+          priority: parent?.priority ?? 3,
+          color: parent?.color ?? '#6B7280',
+          ...(parent ? { parentId: parent.id } : {}),
+        }),
       });
       setExpenseCategory(category.name);
       setNewCategoryName('');
+      setNewCategoryParentId(null);
       setShowCategoryPicker(false);
       queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
     } catch {
@@ -1073,10 +1092,9 @@ export default function BankScreen() {
   const canRemoveTx = (tx: Tx) => canManageAccount || canEditTransaction(tx);
 
   // Spending lands on a category that holds no subcategories: a category with
-  // children is a heading, and its spending is theirs added up. The withdraw
-  // picker below still lists everything flat and lets the server refuse a
-  // heading; this one does not offer what cannot be chosen.
-  const reconcileTree = useMemo(
+  // children is a heading, and its spending is theirs added up, so neither
+  // picker offers one.
+  const categoryTree = useMemo(
     () => buildCategoryTree(categories as unknown as CategoryRow[]),
     [categories],
   );
@@ -2547,19 +2565,76 @@ export default function BankScreen() {
                   </TouchableOpacity>
                   {showCategoryPicker && (
                     <View style={[styles.categoryDropdown, { borderColor: colors.dropdownBorder, backgroundColor: colors.dropdownBackground }]}>
-                      {categories.map(c => (
-                        <TouchableOpacity
-                          key={c.id}
-                          style={styles.categoryOption}
-                          onPress={() => { setExpenseCategory(c.name); setShowCategoryPicker(false); }}
-                        >
-                          <Text style={{ color: colors.dropdownForeground, fontFamily: 'Inter_400Regular' }}>{c.name}</Text>
-                        </TouchableOpacity>
+                      {categoryTree.map((group) => (
+                        <View key={`withdraw-group-${group.name}`}>
+                          {group.children.length > 0 ? (
+                            <>
+                              <Text style={{ color: colors.dropdownMutedForeground, fontFamily: 'Inter_600SemiBold', fontSize: 11, paddingHorizontal: 14, paddingTop: 10 }}>
+                                {group.name.toUpperCase()}
+                              </Text>
+                              {group.children.map((child) => (
+                                <TouchableOpacity
+                                  key={`withdraw-child-${child}`}
+                                  style={styles.categoryOption}
+                                  onPress={() => { setExpenseCategory(child); setShowCategoryPicker(false); }}
+                                >
+                                  <Text style={{ color: colors.dropdownForeground, fontFamily: 'Inter_400Regular' }}>{child}</Text>
+                                </TouchableOpacity>
+                              ))}
+                            </>
+                          ) : (
+                            <TouchableOpacity
+                              style={styles.categoryOption}
+                              onPress={() => { setExpenseCategory(group.name); setShowCategoryPicker(false); }}
+                            >
+                              <Text style={{ color: colors.dropdownForeground, fontFamily: 'Inter_400Regular' }}>{group.name}</Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
                       ))}
                       <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, padding: 10, gap: 8 }}>
                         <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold', fontSize: 12 }}>
                           CAN'T FIND IT? ADD A CATEGORY
                         </Text>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                          <Pressable
+                            onPress={() => setNewCategoryParentId(null)}
+                            accessibilityRole="radio"
+                            accessibilityState={{ selected: newCategoryParentId === null }}
+                            testID="bank-new-category-parent-top-level"
+                            style={[styles.parentChoiceChip, {
+                              borderColor: newCategoryParentId === null ? colors.primary : colors.dropdownBorder,
+                              backgroundColor: newCategoryParentId === null ? colors.primary + '1F' : 'transparent',
+                            }]}
+                          >
+                            <Text style={{ color: newCategoryParentId === null ? colors.primary : colors.dropdownForeground, fontSize: 12, fontFamily: 'Inter_600SemiBold' }}>
+                              Its own group
+                            </Text>
+                          </Pressable>
+                          {categoryTree.map((group) => {
+                            const parent = categories.find((row) => row.name === group.name);
+                            if (!parent) return null;
+                            const picked = newCategoryParentId === parent.id;
+                            return (
+                              <Pressable
+                                key={`new-parent-${parent.id}`}
+                                onPress={() => setNewCategoryParentId(parent.id)}
+                                accessibilityRole="radio"
+                                accessibilityState={{ selected: picked }}
+                                accessibilityLabel={`Add this category under ${group.name}`}
+                                testID={`bank-new-category-parent-${group.name}`}
+                                style={[styles.parentChoiceChip, {
+                                  borderColor: picked ? colors.primary : colors.dropdownBorder,
+                                  backgroundColor: picked ? colors.primary + '1F' : 'transparent',
+                                }]}
+                              >
+                                <Text style={{ color: picked ? colors.primary : colors.dropdownForeground, fontSize: 12, fontFamily: 'Inter_400Regular' }}>
+                                  Under {group.name}
+                                </Text>
+                              </Pressable>
+                            );
+                          })}
+                        </View>
                         <View style={{ flexDirection: 'row', gap: 8 }}>
                           <TextInput
                             value={newCategoryName}
@@ -2751,7 +2826,7 @@ export default function BankScreen() {
                       </TouchableOpacity>
                       {showReconcileCategoryPicker && (
                         <View style={[styles.categoryDropdown, { borderColor: colors.dropdownBorder, backgroundColor: colors.dropdownBackground }]}>
-                          {reconcileTree.map((group) => (
+                          {categoryTree.map((group) => (
                             <View key={`reconcile-group-${group.name}`}>
                               {group.children.length > 0 ? (
                                 <>
@@ -3389,6 +3464,12 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_600SemiBold',
     marginTop: 2,
     marginBottom: 6,
+  },
+  parentChoiceChip: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
   },
   saveAndAddBtn: {
     borderRadius: 14,
