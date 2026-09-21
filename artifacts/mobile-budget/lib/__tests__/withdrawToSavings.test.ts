@@ -51,3 +51,36 @@ describe('a withdrawal into savings is a transfer', () => {
     expect(handler).toContain("finishEntry(keepOpen, { amount: parsed, direction: 'out' });");
   });
 });
+
+// Four options in one row gave each about eighty points, so "To savings" and
+// "Between accounts" ran into each other and broke mid-word. They are also the
+// same idea — money moved rather than spent — so they belong behind one answer.
+describe('one Transfer, then which kind', () => {
+  it('leaves three options in the row, not four', () => {
+    expect(bank).toContain('testID="bank-toggle-transfer"');
+    expect(bank).not.toContain('testID="bank-toggle-bank-transfer"');
+  });
+
+  it('shows the choice only once Transfer is chosen', () => {
+    expect(bank).toContain('testID="bank-transfer-kind"');
+    expect(bank).toContain('{editingTransactionId === null && isMovingMoney ? (');
+  });
+
+  it('offers both kinds, each as its own control', () => {
+    expect(bank).toContain('testID="bank-transfer-kind-savings"');
+    expect(bank).toContain('testID="bank-transfer-kind-accounts"');
+  });
+
+  it('treats both as the one Transfer answer', () => {
+    expect(bank).toContain('const isMovingMoney = isTransfer || isBankTransfer;');
+  });
+
+  it('gives each its own line rather than sharing one', () => {
+    // flex: 1 on each, so neither has to wrap to fit the other in.
+    expect(bank).toContain('transferKindOption: {');
+  });
+
+  it('stays hidden while editing, type being fixed then', () => {
+    expect(bank).toContain('{editingTransactionId === null && isMovingMoney ? (');
+  });
+});

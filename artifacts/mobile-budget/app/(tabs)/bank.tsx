@@ -1750,6 +1750,8 @@ export default function BankScreen() {
   const editingTransaction = editingTransactionId === null
     ? null
     : transactions.find((transaction) => transaction.id === editingTransactionId) ?? null;
+  // Both kinds of transfer, for the one toggle that now covers them.
+  const isMovingMoney = isTransfer || isBankTransfer;
   const isOutgoingTransaction = isWithdrawal || isBankTransfer || (isTransfer && transferDirection === 'to_savings');
   // The balance the account will hold once this posting is saved, shown while
   // the amount is still being typed. Incoming money is projected too: somebody
@@ -2355,21 +2357,50 @@ export default function BankScreen() {
                     Withdraw
                   </Text>
                 </TouchableOpacity>
+                {/* One Transfer, then which kind. Four options in one row gave
+                    each about eighty points, so "To savings" and "Between
+                    accounts" ran into each other and broke mid-word. They are
+                    also the same idea — money moved rather than spent — so
+                    they belong behind one answer. */}
                 <TouchableOpacity
-                  style={[styles.toggleOption, txType === 'transfer' && styles.toggleActiveDisburse]}
+                  style={[styles.toggleOption, isMovingMoney && styles.toggleActiveDisburse]}
                   onPress={() => setTxType('transfer')}
                   testID="bank-toggle-transfer"
                 >
-                  <Text style={[styles.toggleText, { color: txType === 'transfer' ? '#fff' : colors.mutedForeground }]}>To savings</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.toggleOption, txType === 'bank_transfer' && styles.toggleActiveDisburse]}
-                  onPress={() => setTxType('bank_transfer')}
-                  testID="bank-toggle-bank-transfer"
-                >
-                  <Text style={[styles.toggleText, { color: txType === 'bank_transfer' ? '#fff' : colors.mutedForeground }]}>Between accounts</Text>
+                  <Text style={[styles.toggleText, { color: isMovingMoney ? '#fff' : colors.mutedForeground }]}>Transfer</Text>
                 </TouchableOpacity>
               </View>
+              ) : null}
+
+              {editingTransactionId === null && isMovingMoney ? (
+                <View style={[styles.transferKindRow, { borderColor: colors.border }]} testID="bank-transfer-kind">
+                  <TouchableOpacity
+                    style={[
+                      styles.transferKindOption,
+                      { borderColor: txType === 'transfer' ? colors.primary : colors.border, backgroundColor: txType === 'transfer' ? `${colors.primary}18` : 'transparent' },
+                    ]}
+                    onPress={() => setTxType('transfer')}
+                    testID="bank-transfer-kind-savings"
+                  >
+                    <Feather name="target" size={14} color={txType === 'transfer' ? colors.primary : colors.mutedForeground} />
+                    <Text style={{ color: txType === 'transfer' ? colors.primary : colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>
+                      To savings
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.transferKindOption,
+                      { borderColor: txType === 'bank_transfer' ? colors.primary : colors.border, backgroundColor: txType === 'bank_transfer' ? `${colors.primary}18` : 'transparent' },
+                    ]}
+                    onPress={() => setTxType('bank_transfer')}
+                    testID="bank-transfer-kind-accounts"
+                  >
+                    <Feather name="repeat" size={14} color={txType === 'bank_transfer' ? colors.primary : colors.mutedForeground} />
+                    <Text style={{ color: txType === 'bank_transfer' ? colors.primary : colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>
+                      Between accounts
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               ) : null}
 
               <Text style={[styles.sheetTitle, { color: colors.foreground }]}>
@@ -4455,6 +4486,22 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     borderRadius: 14,
     backgroundColor: 'rgba(255,255,255,0.07)',
+  },
+  transferKindRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 14,
+  },
+  transferKindOption: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingVertical: 11,
+    paddingHorizontal: 8,
   },
   balanceActionRow: {
     flexDirection: 'row',
