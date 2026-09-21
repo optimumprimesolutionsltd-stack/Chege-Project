@@ -1614,10 +1614,10 @@ export default function BankScreen() {
         await createDisbursement({
           data: {
             amount: chargeToPost,
-            description: `Bank charge — ${description.trim() || (txType === 'deposit' ? 'deposit' : 'withdrawal')}`,
+            description: `Bank charge — ${description.trim() || (txType === 'deposit' ? 'deposit' : isMovingMoney ? 'transfer' : 'withdrawal')}`,
             date,
             expenseCategory: chargeCategory.trim(),
-            madeById: !isSharedWorkspace ? user?.id : txType === 'deposit' ? null : withdrawerId ?? null,
+            madeById: !isSharedWorkspace ? user?.id : txType === 'disbursement' ? withdrawerId ?? null : null,
             destinationKind: 'category',
             accountId: selectedAccountId ?? undefined,
           },
@@ -1742,16 +1742,16 @@ export default function BankScreen() {
   const isWithdrawal = txType === 'disbursement';
   const isTransfer = txType === 'transfer';
   const isBankTransfer = txType === 'bank_transfer';
+  // Both kinds of transfer, for the one toggle that now covers them.
+  const isMovingMoney = isTransfer || isBankTransfer;
   const parsedOutgoingAmount = readAmount(amount);
   // Blank means no charge. Anything unreadable is caught on submit.
   const parsedCharge = chargeAmount.trim() === '' ? 0 : readAmount(chargeAmount);
-  const chargeCanApply = isWithdrawal || isDeposit;
+  const chargeCanApply = isWithdrawal || isDeposit || isMovingMoney;
   const chargeToPost = chargeCanApply && parsedCharge !== null && parsedCharge > 0 ? parsedCharge : 0;
   const editingTransaction = editingTransactionId === null
     ? null
     : transactions.find((transaction) => transaction.id === editingTransactionId) ?? null;
-  // Both kinds of transfer, for the one toggle that now covers them.
-  const isMovingMoney = isTransfer || isBankTransfer;
   const isOutgoingTransaction = isWithdrawal || isBankTransfer || (isTransfer && transferDirection === 'to_savings');
   // The balance the account will hold once this posting is saved, shown while
   // the amount is still being typed. Incoming money is projected too: somebody

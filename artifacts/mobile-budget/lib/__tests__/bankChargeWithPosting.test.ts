@@ -13,13 +13,15 @@ describe('a withdrawal can carry its bank charge', () => {
     expect(bank).toContain('testID="bank-charge-amount"');
   });
 
-  it('is offered on deposits too — a fee on money in is still a fee', () => {
-    expect(bank).toContain('const chargeCanApply = isWithdrawal || isDeposit;');
+  it('is offered wherever the bank can take one', () => {
+    // A fee on money in is still a fee, and banks charge for moving your own
+    // money between accounts as readily as for taking it out.
+    expect(bank).toContain('const chargeCanApply = isWithdrawal || isDeposit || isMovingMoney;');
     expect(bank).toContain('{chargeCanApply ? (');
   });
 
-  it('is not offered on transfers, which move money rather than spend it', () => {
-    expect(bank).not.toContain('isWithdrawal || isDeposit || isTransfer');
+  it('names a transfer as a transfer when it does', () => {
+    expect(bank).toContain("isMovingMoney ? 'transfer' : 'withdrawal'");
   });
 
   it('is optional, and blank means none', () => {
