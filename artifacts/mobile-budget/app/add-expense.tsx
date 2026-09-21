@@ -404,7 +404,13 @@ export default function AddExpenseSheet() {
   // Making a subcategory meant leaving the expense and going to Settings on
   // the web, which is a poor thing to discover mid-expense. When a parent is
   // already chosen, a new category can be nested under it here.
-  const [newCategoryNestUnderParent, setNewCategoryNestUnderParent] = useState(true);
+  // Which group the new category joins, or null for a new top-level group.
+  // This used to be inferred from whatever was selected, which meant the one
+  // case people actually want — adding a ledger to an existing group — was
+  // impossible: a group with children is a heading, headings are drawn as
+  // labels rather than chips because money cannot land on them, so a heading
+  // could never be the selection and could never be offered as a parent.
+  const [newCategoryParentId, setNewCategoryParentId] = useState<number | null>(null);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newCategoryBudget, setNewCategoryBudget] = useState('');
   const [newCategoryRecurring, setNewCategoryRecurring] = useState(true);
@@ -912,10 +918,12 @@ export default function AddExpenseSheet() {
       return;
     }
 
-    // Captured before the awaits: the selection can move while the request is
-    // in flight, and a child must not land under whatever happens to be
-    // selected by the time it returns.
-    const nestUnder = newCategoryNestUnderParent && nestingParent ? nestingParent : null;
+    // Captured before the awaits: this can move while the request is in
+    // flight, and a child must not land under whatever happens to be chosen by
+    // the time it returns.
+    const nestUnder = newCategoryParentId === null
+      ? null
+      : categories.find((row) => row.id === newCategoryParentId) ?? null;
     const budgetAmount = Number(newCategoryBudget);
     const priority = Number(newCategoryPriority);
     const [expenseYear, expenseMonth] = date.split('-').map(Number);
@@ -937,8 +945,8 @@ export default function AddExpenseSheet() {
           isRecurring: newCategoryRecurring,
           activeMonth: newCategoryRecurring ? null : expenseMonth,
           activeYear: newCategoryRecurring ? null : expenseYear,
-          // Only ever nested under a top-level category, and only when one is
-          // actually selected — the server refuses a second level anyway.
+          // Only ever nested under a top-level category; the server refuses a
+          // second level anyway.
           ...(nestUnder ? { parentId: nestUnder.id } : {}),
         },
       });
@@ -959,11 +967,11 @@ export default function AddExpenseSheet() {
         queryClient.invalidateQueries({ queryKey: getGetDashboardCategoryBreakdownQueryKey() }),
         queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() }),
       ]);
-       setNewCategoryNestUnderParent(true);
+       setNewCategoryParentId(null);
        Alert.alert(
          'Category added',
          nestUnder
-           ? `${created.name} was added under ${nestingParentName} and selected for this expense.`
+           ? `${created.name} was added under ${nestUnder.name} and selected for this expense.`
            : `${created.name} was added to this expense.`,
        );
     } catch (error) {
@@ -975,7 +983,7 @@ export default function AddExpenseSheet() {
           : error instanceof Error ? error.message : 'Check the category details and try again.',
       );
     }
-  }, [canManageCategories, categories, createCategory, date, newCategoryAddToBudget, newCategoryBudget, newCategoryName, newCategoryNestUnderParent, newCategoryPriority, newCategoryRecurring, nestingParent, nestingParentName, queryClient]);
+  }, [canManageCategories, categories, createCategory, date, newCategoryAddToBudget, newCategoryBudget, newCategoryName, newCategoryParentId, newCategoryPriority, newCategoryRecurring, nestingParent, nestingParentName, queryClient]);
 
   const handleCreateBankAccount = useCallback(async () => {
     const name = newBankAccountName.trim();
@@ -1702,19 +1710,19 @@ export default function AddExpenseSheet() {
           <Pressable
             onPress={() => {
               setIsCreatingCategory(true);
-              setNewCategoryNestUnderParent(Boolean(nestingParent));
+              // Opens on the group the current selection belongs to, which is
+              // usually the one meant; any other group is one tap away.
+              setNewCategoryParentId(nestingParent?.id ?? null);
             }}
             accessibilityRole="button"
-            accessibilityLabel={nestingParent
-              ? `Create a new subcategory under ${nestingParentName}`
-              : 'Create a new category'}
+            accessibilityLabel="Create a new category or subcategory"
             testID="open-create-category"
             style={styles.addSourceLink}
             hitSlop={6}
           >
             <Feather name="plus-circle" size={15} color={colors.primary} />
             <Text style={[styles.addSourceLinkText, { color: colors.primary }]}>
-              {nestingParent ? `New subcategory under ${nestingParentName}` : 'New category'}
+              New category or subcategory
             </Text>
           </Pressable>
         )}
@@ -1852,29 +1860,59 @@ export default function AddExpenseSheet() {
               editable={!createCategory.isPending}
               style={[styles.categoryCreateInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.background }]}
             />
-            {/* Only offered when a parent is already chosen. With nothing
-                selected this creates a top-level category exactly as before,
-                and subcategories only go one level deep, so a child of a
-                child is never on the table. */}
-            {nestingParent && nestingParentName.trim() ? (
+            {/* Where it goes. Every top-level category is offered, headings
+                included: adding a ledger to an existing group is the whole
+                point, and a heading could never be the selection. A second
+                level is never on the table, so a child is not offered as a
+                parent. */}
+            <Text style={[styles.categoryCreateHint, { color: colors.mutedForeground, marginTop: 4 }]}>
+              Where does it go?
+            </Text>
+            <View style={styles.parentChoiceRow}>
               <Pressable
-                onPress={() => setNewCategoryNestUnderParent((on) => !on)}
-                accessibilityRole="checkbox"
-                accessibilityState={{ checked: newCategoryNestUnderParent }}
-                accessibilityLabel={`Add this category under ${nestingParentName}`}
-                testID="create-category-nest-under-parent"
-                style={styles.nestRow}
+                onPress={() => setNewCategoryParentId(null)}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: newCategoryParentId === null }}
+                testID="create-category-parent-top-level"
+                style={[
+                  styles.parentChoiceChip,
+                  {
+                    borderColor: newCategoryParentId === null ? colors.primary : colors.border,
+                    backgroundColor: newCategoryParentId === null ? colors.primary + '1F' : colors.background,
+                  },
+                ]}
               >
-                <Feather
-                  name={newCategoryNestUnderParent ? 'check-square' : 'square'}
-                  size={16}
-                  color={newCategoryNestUnderParent ? colors.primary : colors.mutedForeground}
-                />
-                <Text style={[styles.nestLabel, { color: colors.foreground }]}>
-                  Add under <Text style={{ fontFamily: 'Inter_700Bold' }}>{nestingParentName}</Text>
+                <Text style={{ color: newCategoryParentId === null ? colors.primary : colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>
+                  Its own group
                 </Text>
               </Pressable>
-            ) : null}
+              {categoryTree.map((group) => {
+                const parent = categories.find((row) => row.name === group.name);
+                if (!parent) return null;
+                const picked = newCategoryParentId === parent.id;
+                return (
+                  <Pressable
+                    key={`parent-${parent.id}`}
+                    onPress={() => setNewCategoryParentId(parent.id)}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: picked }}
+                    accessibilityLabel={`Add this category under ${group.name}`}
+                    testID={`create-category-parent-${group.name}`}
+                    style={[
+                      styles.parentChoiceChip,
+                      {
+                        borderColor: picked ? colors.primary : colors.border,
+                        backgroundColor: picked ? colors.primary + '1F' : colors.background,
+                      },
+                    ]}
+                  >
+                    <Text style={{ color: picked ? colors.primary : colors.foreground, fontFamily: 'Inter_400Regular', fontSize: 13 }}>
+                      Under {group.name}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
             {canManageCategories ? (
               <View style={[styles.categoryRecurringRow, { borderColor: colors.border, backgroundColor: colors.background }]}>
                 <View style={{ flex: 1 }}>
@@ -2858,6 +2896,18 @@ const styles = StyleSheet.create({
   },
   content: { paddingHorizontal: 20, paddingTop: 20, gap: 6 },
   subcategoryBadge: { flexDirection: 'row', alignItems: 'center', gap: 1, borderRadius: 999, paddingHorizontal: 5, paddingVertical: 1, marginLeft: 2 },
+  parentChoiceRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 2,
+  },
+  parentChoiceChip: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
   nestRow: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 36 },
   nestLabel: { fontSize: 13, fontFamily: 'Inter_400Regular', flexShrink: 1 },
   subcategoryBadgeText: { fontSize: 10, fontFamily: 'Inter_700Bold' },

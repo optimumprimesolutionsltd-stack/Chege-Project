@@ -198,40 +198,50 @@ describe('subcategories belong to Detailed mode', () => {
     expect(source).toContain('testID="open-create-category"');
   });
 
-  it('names the subcategory it would create, when a parent is chosen', () => {
-    expect(source).toContain('`New subcategory under ${nestingParentName}`');
-    expect(source).toContain("'New category'");
+  it('offers every group as a parent, headings included', () => {
+    // This is the whole point and it used to be impossible. A group with
+    // children is a heading, headings are drawn as labels rather than chips
+    // because money cannot land on them, so a heading could never be the
+    // selection — and the parent was read off the selection.
+    expect(source).toContain('testID={`create-category-parent-${group.name}`}');
+    expect(source).toContain('{categoryTree.map((group) => {');
   });
 
-  it('arrives with nesting already ticked when a parent is selected', () => {
-    expect(source).toContain('setNewCategoryNestUnderParent(Boolean(nestingParent));');
+  it('lets it be its own group instead', () => {
+    expect(source).toContain('testID="create-category-parent-top-level"');
+    expect(source).toContain('Its own group');
   });
 
-  // Making a subcategory meant leaving the expense for Settings on the web —
-  // a poor thing to discover mid-expense.
-  it('can nest a new category under the one already chosen', () => {
-    expect(source).toContain('testID="create-category-nest-under-parent"');
+  it('opens on the group the selection belongs to, without being bound to it', () => {
+    // A sensible default, not a constraint: any other group is one tap away.
+    expect(source).toContain('setNewCategoryParentId(nestingParent?.id ?? null);');
+  });
+
+  it('no longer promises a parent before asking for one', () => {
+    // The old label named a subcategory the form could not create, and said
+    // "New category" when it could.
+    expect(source).toContain('New category or subcategory');
+    expect(source).not.toContain('`New subcategory under ${nestingParentName}`');
+    expect(source).not.toContain('testID="create-category-nest-under-parent"');
+  });
+
+  it('sends the chosen parent, one level only', () => {
     expect(source).toContain('...(nestUnder ? { parentId: nestUnder.id } : {})');
-    expect(source).toContain('Add under');
-  });
-
-  it('only offers nesting when a parent is actually selected', () => {
-    expect(source).toContain('{nestingParent && nestingParentName.trim() ? (');
-    // One level deep: a child of a child is never on the table, because the
-    // parent resolves through parentOf first.
+    // A child is never offered as a parent: categoryTree's top level is all
+    // that is listed, and the server refuses a second level anyway.
     expect(source).toContain('const nestingParentName = parentOf(categoryTree, category) ?? category;');
   });
 
   it('captures the parent before the request, not after it', () => {
-    // The selection can move while the create is in flight; a child must not
-    // land under whatever happens to be selected by the time it returns.
-    expect(source).toContain('const nestUnder = newCategoryNestUnderParent && nestingParent ? nestingParent : null;');
+    // The choice can move while the create is in flight; a child must not land
+    // under whatever happens to be chosen by the time it returns.
+    expect(source).toContain('const nestUnder = newCategoryParentId === null');
     const handler = source.slice(source.indexOf('const handleCreateCategory'), source.indexOf('await createCategory.mutateAsync'));
     expect(handler).toContain('const nestUnder =');
   });
 
   it('says where the category landed', () => {
-    expect(source).toContain('was added under ${nestingParentName} and selected for this expense.');
+    expect(source).toContain('was added under ${nestUnder.name} and selected for this expense.');
   });
 
   // Focusing the amount on mount scrolled a 0.85-detent formSheet past its own
