@@ -1393,7 +1393,7 @@ export default function Bank() {
             disabled={!canManageAccount}
             aria-describedby={!canManageAccount ? "bank-manager-guidance" : undefined}
           >
-            Transfer
+            To savings
           </Button>
           <Button
             data-testid="button-bank-transfer"
@@ -1402,7 +1402,7 @@ export default function Bank() {
             className="h-12 px-4 rounded-xl"
             disabled={!canManageAccount || accounts.length < 2}
           >
-            Bank → Bank
+            Between accounts
           </Button>
         </div>
       ) : (
@@ -1411,7 +1411,7 @@ export default function Bank() {
             <CardTitle className="text-xl font-display">
               {editingTransaction
                 ? `Edit ${mode === "deposit" ? "Deposit" : mode === "transfer" ? "Transfer" : "Withdrawal"}`
-                : mode === "deposit" ? "Add Money to Account" : mode === "transfer" ? "Move Between Bank & Savings" : mode === "bank_transfer" ? "Move Money Between Bank Accounts" : "Take Money Out"}
+                : mode === "deposit" ? "Add Money to Account" : mode === "transfer" ? "Move Money To or From Savings" : mode === "bank_transfer" ? "Move Money Between Your Accounts" : "Take Money Out"}
             </CardTitle>
             <CardDescription>
               {mode === "deposit"

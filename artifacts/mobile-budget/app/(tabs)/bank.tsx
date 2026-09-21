@@ -1775,7 +1775,7 @@ export default function BankScreen() {
                   testID="bank-transfer-action"
                 >
                   <Feather name="repeat" size={16} color="#67e8f9" />
-                  <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82} style={[styles.actionBtnText, { color: '#67e8f9' }]}>Transfer</Text>
+                  <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82} style={[styles.actionBtnText, { color: '#67e8f9' }]}>To savings</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.actionBtn, { backgroundColor: '#164e63' }, (!canManageAccount || accounts.length < 2) && styles.actionBtnDisabled]}
@@ -1784,7 +1784,7 @@ export default function BankScreen() {
                   testID="bank-to-bank-action"
                 >
                   <Feather name="shuffle" size={16} color="#67e8f9" />
-                  <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82} style={[styles.actionBtnText, { color: '#67e8f9' }]}>Bank → Bank</Text>
+                  <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82} style={[styles.actionBtnText, { color: '#67e8f9' }]}>Between accounts</Text>
                 </TouchableOpacity>
               </View>
             </>
@@ -2051,22 +2051,22 @@ export default function BankScreen() {
                   onPress={() => setTxType('transfer')}
                   testID="bank-toggle-transfer"
                 >
-                  <Text style={[styles.toggleText, { color: txType === 'transfer' ? '#fff' : colors.mutedForeground }]}>Transfer</Text>
+                  <Text style={[styles.toggleText, { color: txType === 'transfer' ? '#fff' : colors.mutedForeground }]}>To savings</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.toggleOption, txType === 'bank_transfer' && styles.toggleActiveDisburse]}
                   onPress={() => setTxType('bank_transfer')}
                   testID="bank-toggle-bank-transfer"
                 >
-                  <Text style={[styles.toggleText, { color: txType === 'bank_transfer' ? '#fff' : colors.mutedForeground }]}>Bank</Text>
+                  <Text style={[styles.toggleText, { color: txType === 'bank_transfer' ? '#fff' : colors.mutedForeground }]}>Between accounts</Text>
                 </TouchableOpacity>
               </View>
               ) : null}
 
               <Text style={[styles.sheetTitle, { color: colors.foreground }]}>
                 {editingTransactionId !== null
-                  ? `Edit ${isDeposit ? 'Deposit' : isTransfer ? 'Transfer' : 'Withdrawal'}`
-                  : isDeposit ? 'Add Money to Account' : isTransfer ? 'Move Bank & Savings Funds' : isBankTransfer ? 'Move Between Bank Accounts' : 'Take Money Out'}
+                  ? `Edit ${isDeposit ? 'Deposit' : isTransfer ? 'Savings Transfer' : 'Withdrawal'}`
+                  : isDeposit ? 'Add Money to Account' : isTransfer ? 'Move Money To or From Savings' : isBankTransfer ? 'Move Money Between Your Accounts' : 'Take Money Out'}
               </Text>
 
               {(isDeposit || isWithdrawal) && (

@@ -40,7 +40,7 @@ describe('the five bank actions fit their labels', () => {
   });
 
   it('keeps each label on one line, shrinking it rather than breaking it', () => {
-    for (const label of ['Deposit', 'Withdraw', 'Transfer', 'Bank → Bank']) {
+    for (const label of ['Deposit', 'Withdraw', 'To savings', 'Between accounts']) {
       expect(bank).toContain(`>${label}</Text>`);
     }
     expect((bank.match(/adjustsFontSizeToFit minimumFontScale=\{0\.82\}/g) ?? []).length).toBe(4);
