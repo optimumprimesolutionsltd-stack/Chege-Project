@@ -82,3 +82,22 @@ describe("adding it to what you owe", () => {
     expect(bank).toContain('else if (wasNew && borrowedAgainst?.kind === "party" && borrowedFrom) offerBorrowedFromParty(borrowedFrom, total);');
   });
 });
+
+describe("naming the lender", () => {
+  it("can be done where the borrowing is recorded", () => {
+    expect(bank).toContain('data-testid="add-lender-form"');
+    expect(bank).toContain('data-testid="button-add-lender"');
+  });
+
+  it("writes what you owe them, not what they owe you", () => {
+    expect(bank).toContain('void createParty({ owing: false, asLender: true })');
+  });
+
+  it("selects them for the deposit in hand", () => {
+    expect(bank).toContain("setRepayingPartyId(`borrow:party:${created.id}`);");
+  });
+
+  it("is offered only while borrowing", () => {
+    expect(bank).toContain('{isBorrowing ? (');
+  });
+});

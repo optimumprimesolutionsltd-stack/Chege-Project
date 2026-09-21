@@ -1015,7 +1015,15 @@ export default function BankScreen() {
     );
   };
 
-  const handleCreateParty = async ({ owing = false }: { owing?: boolean } = {}) => {
+  /**
+   * Record somebody money passes between you and.
+   *
+   * Three callers, because there are three moments somebody is named: paying
+   * one you owe, being paid by one who owes you, and borrowing from one. The
+   * last two both write a balance the first does not, and a way in hidden
+   * behind the thing it creates is no way in at all.
+   */
+  const handleCreateParty = async ({ owing = false, asLender = false }: { owing?: boolean; asLender?: boolean } = {}) => {
     const name = newPartyName.trim();
     if (!name) {
       Alert.alert('Who is it?', 'Give the person or institution a name, such as Mwangi or KCB.');
@@ -1036,13 +1044,18 @@ export default function BankScreen() {
           kind: newPartyIsInstitution ? 'institution' : 'person',
           // Which way it stands between you is the only difference between
           // somebody you owe and somebody who owes you.
+          // Which way it stands between you is the only difference. A lender
+          // is somebody you owe, so it is the same column as paying one.
           ...(owing ? { owedToUs: Math.round(owed) } : { owedByUs: Math.round(owed) }),
         }),
       });
       // Awaited: the picker and the settlement prompt both read this list, and
       // a party created moments ago has to be in it by the time they do.
       await queryClient.invalidateQueries({ queryKey: ['parties'] });
-      if (owing) setRepayingPartyId(party.id);
+      if (asLender) {
+        setRepayingPartyId(null);
+        setBorrowTarget({ kind: 'party', id: party.id });
+      } else if (owing) setRepayingPartyId(party.id);
       else setWithdrawPartyId(party.id);
       setNewPartyName('');
       setNewPartyOwed('');
@@ -2732,6 +2745,70 @@ export default function BankScreen() {
                             </Text>
                           </TouchableOpacity>
                         ))}
+                        {/* Naming the lender has to be possible here: this
+                            is the only place borrowing is recorded, and a
+                            lender nobody can add is a lender nobody has. */}
+                        <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, padding: 10, gap: 8 }} testID="bank-add-lender-form">
+                          <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold', fontSize: 12 }}>
+                            WHO LENT IT TO YOU? ADD THEM
+                          </Text>
+                          <View style={{ flexDirection: 'row', gap: 8 }}>
+                            <TextInput
+                              value={newPartyName}
+                              onChangeText={setNewPartyName}
+                              editable={!addingParty}
+                              placeholder="e.g. Mwangi or KCB"
+                              placeholderTextColor={colors.mutedForeground}
+                              style={{
+                                flex: 1, height: 40, borderWidth: 1, borderColor: colors.dropdownBorder,
+                                borderRadius: 8, color: colors.foreground, paddingHorizontal: 10,
+                                fontFamily: 'Inter_400Regular', backgroundColor: colors.dropdownBackground,
+                              }}
+                              testID="bank-new-lender-name"
+                            />
+                            <TextInput
+                              value={newPartyOwed}
+                              onChangeText={setNewPartyOwed}
+                              editable={!addingParty}
+                              placeholder="Already owed"
+                              placeholderTextColor={colors.mutedForeground}
+                              keyboardType="decimal-pad"
+                              style={{
+                                width: 110, height: 40, borderWidth: 1, borderColor: colors.dropdownBorder,
+                                borderRadius: 8, color: colors.foreground, paddingHorizontal: 10,
+                                fontFamily: 'Inter_400Regular', backgroundColor: colors.dropdownBackground,
+                              }}
+                              testID="bank-new-lender-owed"
+                            />
+                            <TouchableOpacity
+                              disabled={addingParty}
+                              onPress={() => handleCreateParty({ asLender: true })}
+                              style={{ minWidth: 58, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary, opacity: addingParty ? 0.55 : 1 }}
+                              testID="bank-add-lender"
+                            >
+                              {addingParty ? <ActivityIndicator size="small" color="#fff" /> : <Text style={{ color: '#fff', fontFamily: 'Inter_600SemiBold' }}>Add</Text>}
+                            </TouchableOpacity>
+                          </View>
+                          <Text style={{ color: colors.mutedForeground, fontSize: 11, fontFamily: 'Inter_400Regular' }}>
+                            Leave the amount blank if this loan is the whole of it. Naming them makes them a creditor.
+                          </Text>
+                          <Pressable
+                            onPress={() => setNewPartyIsInstitution((on) => !on)}
+                            accessibilityRole="checkbox"
+                            accessibilityState={{ checked: newPartyIsInstitution }}
+                            testID="bank-new-lender-institution"
+                            style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}
+                          >
+                            <Feather
+                              name={newPartyIsInstitution ? 'check-square' : 'square'}
+                              size={15}
+                              color={newPartyIsInstitution ? colors.primary : colors.mutedForeground}
+                            />
+                            <Text style={{ color: colors.dropdownForeground, fontSize: 13, fontFamily: 'Inter_400Regular' }}>
+                              A bank or business, not a person
+                            </Text>
+                          </Pressable>
+                        </View>
                         <TouchableOpacity
                           style={styles.categoryOption}
                           onPress={() => { setRepayingPartyId(null); setBorrowTarget({ kind: 'none' }); setShowRepayPicker(false); }}
