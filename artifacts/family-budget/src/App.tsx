@@ -22,6 +22,7 @@ import SavingsGoals from '@/pages/savings-goals';
 import Bank from '@/pages/bank';
 import Parties from '@/pages/parties';
 import Statement from '@/pages/statement';
+import PassThrough from '@/pages/pass-through';
 import Parity from '@/pages/parity';
 import IncomeStreamsReport from '@/pages/income-streams-report';
 import SearchPage from '@/pages/search';
@@ -123,6 +124,7 @@ function AuthenticatedApp() {
         <Route path="/bank" component={Bank} />
         <Route path="/parties" component={Parties} />
         <Route path="/statement" component={Statement} />
+        <Route path="/pass-through" component={PassThrough} />
         <Route path="/reports" component={IncomeStreamsReport} />
         <Route path="/search" component={SearchPage} />
         <Route path="/subscription" component={Subscription} />
