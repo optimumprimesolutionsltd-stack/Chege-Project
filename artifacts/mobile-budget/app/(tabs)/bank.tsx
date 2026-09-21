@@ -1753,7 +1753,7 @@ export default function BankScreen() {
                   testID="bank-deposit-action"
                 >
                   <Feather name="arrow-down-left" size={16} color="#0a1a10" />
-                  <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82} style={styles.actionBtnText}>Deposit</Text>
+                  <Text numberOfLines={2} style={styles.actionBtnText}>Deposit</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.actionBtn, styles.actionBtnDisburse, (!canManageAccount || !hasBankAccounts) && styles.actionBtnDisabled]}
@@ -1764,7 +1764,7 @@ export default function BankScreen() {
                   testID="bank-withdraw-action"
                 >
                   <Feather name="arrow-up-right" size={16} color="#f87171" />
-                  <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82} style={[styles.actionBtnText, styles.actionBtnTextDisburse]}>Withdraw</Text>
+                  <Text numberOfLines={2} style={[styles.actionBtnText, styles.actionBtnTextDisburse]}>Withdraw</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.actionBtn, { backgroundColor: '#164e63' }, (!canManageAccount || !hasBankAccounts) && styles.actionBtnDisabled]}
@@ -1775,7 +1775,7 @@ export default function BankScreen() {
                   testID="bank-transfer-action"
                 >
                   <Feather name="repeat" size={16} color="#67e8f9" />
-                  <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82} style={[styles.actionBtnText, { color: '#67e8f9' }]}>To savings</Text>
+                  <Text numberOfLines={2} style={[styles.actionBtnText, { color: '#67e8f9' }]}>To savings</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.actionBtn, { backgroundColor: '#164e63' }, (!canManageAccount || accounts.length < 2) && styles.actionBtnDisabled]}
@@ -1784,7 +1784,7 @@ export default function BankScreen() {
                   testID="bank-to-bank-action"
                 >
                   <Feather name="shuffle" size={16} color="#67e8f9" />
-                  <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82} style={[styles.actionBtnText, { color: '#67e8f9' }]}>Between accounts</Text>
+                  <Text numberOfLines={2} style={[styles.actionBtnText, { color: '#67e8f9' }]}>Between accounts</Text>
                 </TouchableOpacity>
               </View>
             </>
@@ -3935,6 +3935,7 @@ const styles = StyleSheet.create({
   },
   actionBtnText: {
     fontSize: 14,
+    textAlign: 'center',
     fontWeight: '600' as const,
     fontFamily: 'Inter_600SemiBold',
     color: '#0a1a10',

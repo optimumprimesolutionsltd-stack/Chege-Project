@@ -39,11 +39,14 @@ describe('the five bank actions fit their labels', () => {
     expect(style).not.toContain('flex: 1,');
   });
 
-  it('keeps each label on one line, shrinking it rather than breaking it', () => {
+  it('wraps a two-word label between its words rather than shrinking it', () => {
+    // Shrinking to fit made "Between accounts" tiny beside one-word labels.
+    // Two lines is fine; it was breaking mid-word that looked wrong.
     for (const label of ['Deposit', 'Withdraw', 'To savings', 'Between accounts']) {
       expect(bank).toContain(`>${label}</Text>`);
     }
-    expect((bank.match(/adjustsFontSizeToFit minimumFontScale=\{0\.82\}/g) ?? []).length).toBe(4);
+    expect((bank.match(/numberOfLines=\{2\} style=\{\[?styles\.actionBtnText/g) ?? []).length).toBe(4);
+    expect(bank).not.toContain('adjustsFontSizeToFit minimumFontScale={0.82}');
   });
 });
 
