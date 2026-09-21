@@ -77,8 +77,17 @@ async function validateIncomeSourceOwner(
     : "The selected income source belongs to a different member.";
 }
 
+/**
+ * The M-Pesa receipt code a posting came from, when it came from one.
+ *
+ * Twelve or so characters, letters and digits, as printed on the message.
+ * Upper-cased on the way in so the same code typed two ways is one code.
+ */
+const MpesaReceipt = z.string().trim().min(6).max(20).regex(/^[A-Za-z0-9]+$/).transform((code) => code.toUpperCase());
+
 const DepositInput = z.object({
   amount: NonNegativeBankAmount,
+  mpesaReceipt: MpesaReceipt.optional(),
   /**
    * The party this repays, when it repays one. Money you lent coming back is
    * not income — you had it once already — so every figure that counts money
@@ -109,6 +118,7 @@ const DepositInput = z.object({
 
 const DisbursementInput = z.object({
   amount: NonNegativeBankAmount,
+  mpesaReceipt: MpesaReceipt.optional(),
   description: z.string().trim().max(200).optional().default(""),
   date: z.string().min(1),
   madeById: z.string().nullable().optional(),
@@ -144,6 +154,31 @@ const UpdateJointAccountInput = z.object({
     });
   }
 });
+
+/**
+ * Whether this receipt has already been recorded in this budget.
+ *
+ * Refused rather than ignored, and the answer says when and for how much, so
+ * somebody pasting a message a second time is told what they are looking at
+ * instead of being told "no".
+ */
+async function alreadyRecorded(
+  groupId: number,
+  receipt: string | undefined,
+): Promise<{ error: string; recordedOn: string; amount: number } | null> {
+  if (!receipt) return null;
+  const [existing] = await db
+    .select({ date: jointAccountTxTable.date, amount: jointAccountTxTable.amount, description: jointAccountTxTable.description })
+    .from(jointAccountTxTable)
+    .where(and(eq(jointAccountTxTable.groupId, groupId), eq(jointAccountTxTable.mpesaReceipt, receipt)))
+    .limit(1);
+  if (!existing) return null;
+  return {
+    error: `${receipt} is already recorded, on ${existing.date} as "${existing.description}".`,
+    recordedOn: existing.date,
+    amount: existing.amount,
+  };
+}
 
 const IdParam = z.object({ id: z.coerce.number().int().positive() });
 const OpeningBalanceInput = z.object({
@@ -497,6 +532,8 @@ router.post("/joint-account/deposit", async (req, res): Promise<void> => {
   }
 
   const { amount, description, date, incomeSourceId, sourceKind, contributorSplits, settlesContributorId } = parsed.data;
+  const receiptClash = await alreadyRecorded(groupId, parsed.data.mpesaReceipt);
+  if (receiptClash) { res.status(409).json(receiptClash); return; }
   // Scoped to this group: an id from another group must not be reachable by
   // guessing, and a settlement pointing outside the group would exclude money
   // from income on the word of a stranger.
@@ -577,6 +614,7 @@ router.post("/joint-account/deposit", async (req, res): Promise<void> => {
         groupId,
         accountId,
         type: "deposit", amount, description, date,
+        mpesaReceipt: parsed.data.mpesaReceipt ?? null,
         // The date stays authoritative for the balance: money moves when it
         // moves. Only the obligation follows the period below.
         appliesToMonth,
@@ -675,6 +713,8 @@ router.post("/joint-account/disbursement", async (req, res): Promise<void> => {
   if (!requireMemberSelfAttribution(req, res, [parsed.data.madeById])) return;
 
   const { amount, description, date, destinationKind } = parsed.data;
+  const disbursementClash = await alreadyRecorded(groupId, parsed.data.mpesaReceipt);
+  if (disbursementClash) { res.status(409).json(disbursementClash); return; }
   const expenseCategory = canonicalExpenseCategoryName(parsed.data.expenseCategory);
   if (destinationKind === "other" && !description.trim()) {
     res.status(400).json({ error: "Add a narration for an Other destination." });
@@ -715,6 +755,7 @@ router.post("/joint-account/disbursement", async (req, res): Promise<void> => {
       accountId,
       type: "disbursement",
       amount,
+      mpesaReceipt: parsed.data.mpesaReceipt ?? null,
       // Description is a supporting note. When omitted, retain a meaningful
       // non-null value while reports remain anchored on expenseCategory.
       description: description || expenseCategory,

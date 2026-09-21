@@ -1057,6 +1057,9 @@ export const UpdateJointAccountOpeningBalanceResponse = zod.object({
 /**
  * @summary Deposit money into a bank account
  */
+export const createDepositBodyMpesaReceiptMin = 6;
+export const createDepositBodyMpesaReceiptMax = 20;
+
 
 export const createDepositBodyAmountMin = 0;
 export const createDepositBodyAmountMultipleOf = 0.01;
@@ -1076,6 +1079,7 @@ export const createDepositBodyContributorSplitsItemAmountMultipleOf = 0.01;
 
 
 export const CreateDepositBody = zod.object({
+  "mpesaReceipt": zod.string().min(createDepositBodyMpesaReceiptMin).max(createDepositBodyMpesaReceiptMax).optional().describe('The M-Pesa receipt code this posting came from. Unique per budget: recording the same code twice is refused with 409, so a message pasted again cannot be counted again.'),
   "settlesContributorId": zod.number().min(1).optional().describe('The party this repays, when it repays one. Money lent coming back is not income, so every figure counting money in leaves these out. The transaction stays in the ledger.'),
   "amount": zod.number().min(createDepositBodyAmountMin).multipleOf(createDepositBodyAmountMultipleOf).describe('KES amount with up to two decimal places. Zero is allowed, so an existing posting can be cleared to nothing rather than deleted.'),
   "description": zod.string(),
@@ -1135,6 +1139,9 @@ export const CreateDepositResponse = zod.object({
 /**
  * @summary Withdraw money from a bank account
  */
+export const createDisbursementBodyMpesaReceiptMin = 6;
+export const createDisbursementBodyMpesaReceiptMax = 20;
+
 export const createDisbursementBodyAmountMin = 0;
 export const createDisbursementBodyAmountMultipleOf = 0.01;
 
@@ -1142,6 +1149,7 @@ export const createDisbursementBodyAmountMultipleOf = 0.01;
 
 
 export const CreateDisbursementBody = zod.object({
+  "mpesaReceipt": zod.string().min(createDisbursementBodyMpesaReceiptMin).max(createDisbursementBodyMpesaReceiptMax).optional().describe('The M-Pesa receipt code this posting came from. Unique per budget: recording the same code twice is refused with 409, so a message pasted again cannot be counted again.'),
   "amount": zod.number().min(createDisbursementBodyAmountMin).multipleOf(createDisbursementBodyAmountMultipleOf).describe('KES amount with up to two decimal places. Zero is allowed, so an existing posting can be cleared to nothing rather than deleted.'),
   "description": zod.string().optional(),
   "date": zod.coerce.date(),

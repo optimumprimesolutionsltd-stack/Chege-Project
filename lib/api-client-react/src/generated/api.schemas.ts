@@ -1327,6 +1327,12 @@ export const DepositInputSourceKind = {
 
 export interface DepositInput {
   /**
+     * The M-Pesa receipt code this posting came from. Unique per budget: recording the same code twice is refused with 409, so a message pasted again cannot be counted again.
+     * @minLength 6
+     * @maxLength 20
+     */
+  mpesaReceipt?: string;
+  /**
      * The party this repays, when it repays one. Money lent coming back is not income, so every figure counting money in leaves these out. The transaction stays in the ledger.
      * @minimum 1
      */
@@ -1381,6 +1387,12 @@ export const DisbursementInputDestinationKind = {
 } as const;
 
 export interface DisbursementInput {
+  /**
+     * The M-Pesa receipt code this posting came from. Unique per budget: recording the same code twice is refused with 409, so a message pasted again cannot be counted again.
+     * @minLength 6
+     * @maxLength 20
+     */
+  mpesaReceipt?: string;
   /**
      * KES amount with up to two decimal places. Zero is allowed, so an existing posting can be cleared to nothing rather than deleted.
      * @minimum 0

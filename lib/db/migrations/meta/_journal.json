@@ -274,6 +274,13 @@
       "when": 1790001348533,
       "tag": "0038_settlement_is_not_income",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1790011112121,
+      "tag": "0039_mpesa_receipt",
+      "breakpoints": true
     }
   ]
 }

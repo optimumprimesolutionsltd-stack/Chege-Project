@@ -3490,6 +3490,14 @@ components:
     DepositInput:
       type: object
       properties:
+        mpesaReceipt:
+          type: string
+          minLength: 6
+          maxLength: 20
+          description: >-
+            The M-Pesa receipt code this posting came from. Unique per budget:
+            recording the same code twice is refused with 409, so a message
+            pasted again cannot be counted again.
         settlesContributorId:
           type: number
           minimum: 1
@@ -3575,6 +3583,14 @@ components:
     DisbursementInput:
       type: object
       properties:
+        mpesaReceipt:
+          type: string
+          minLength: 6
+          maxLength: 20
+          description: >-
+            The M-Pesa receipt code this posting came from. Unique per budget:
+            recording the same code twice is refused with 409, so a message
+            pasted again cannot be counted again.
         amount:
           type: number
           minimum: 0
