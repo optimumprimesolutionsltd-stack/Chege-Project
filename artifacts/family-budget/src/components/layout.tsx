@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@workspace/replit-auth-web';
-import { LayoutDashboard, Receipt, PieChart, Activity, LogOut, Menu, X, Settings, Target, Landmark, BarChart3, Plus, Search, CreditCard, HandCoins, UsersRound } from 'lucide-react';
+import { LayoutDashboard, Receipt, PieChart, Activity, LogOut, Menu, X, Settings, Target, Landmark, BarChart3, Plus, Search, CreditCard, HandCoins, UsersRound, FileText } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -177,6 +177,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     // Beside the bank, since paying a creditor and being paid by a debtor both
     // happen there and the balances they move live here.
     ...(uses('bank') ? [{ href: '/parties', label: 'Creditors & debtors', icon: HandCoins }] : []),
+    ...(uses('bank') ? [{ href: '/statement', label: 'Statement', icon: FileText }] : []),
     ...(uses('reports') ? [{ href: '/reports', label: isSharedWorkspace ? 'Group Reports' : 'My Reports', icon: BarChart3 }] : []),
     // Search, Subscription and Settings are never hideable: Settings is how a
     // section gets switched back on, and Subscription is how the app keeps
