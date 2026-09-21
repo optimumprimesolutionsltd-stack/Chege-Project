@@ -385,6 +385,18 @@ export const HELP_SECTIONS: HelpSection[] = [
         keywords: ['kamau', 'debtor', 'owes me', 'repaid', 'paid me back', 'lent'],
       },
       {
+        question: 'Somebody who owes you paying somebody you owe',
+        steps: [
+          'Banking tab, then Paid through your account.',
+          'Pick who is paying and who is being paid, and the amount.',
+          'Two postings are saved: the money in, then the money out. Your balance ends where it started.',
+          'Neither counts as income or spending — the money was never yours.',
+          'Jamvi then offers to take the amount off both balances at once.',
+        ],
+        route: '/pass-through',
+        keywords: ['through', 'pass', 'on behalf', 'settle', 'between', 'kamau', 'mwangi', 'both'],
+      },
+      {
         question: 'Stop tracking a debt',
         steps: [
           'Debt tab, then Stop tracking on that debt.',
