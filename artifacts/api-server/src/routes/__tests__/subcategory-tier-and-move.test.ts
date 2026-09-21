@@ -53,8 +53,9 @@ describe("a subcategory can be moved to a different parent", () => {
   });
 
   it("sends the parent on every save, so it can be cleared as well as set", () => {
-    // Omitting it when empty would leave a category stuck where it was.
-    expect(mobile).toContain("parentId: formParentId,");
+    // Omitting it when empty would leave a category stuck where it was. A
+    // group sends null regardless: it is top-level by definition.
+    expect(mobile).toContain("parentId: formIsGroup ? null : formParentId,");
     expect(mobile).toContain("setFormParentId(cat.parentId ?? null);");
   });
 
