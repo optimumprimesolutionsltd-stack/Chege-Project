@@ -976,7 +976,7 @@ export default function Bank() {
   // held beside that, not instead of it.
   const sentDestinationKind = withdrawalDestinationKind === "party" ? "category" : withdrawalDestinationKind;
 
-  const createParty = async ({ owing }: { owing: boolean }) => {
+  const createParty = async ({ owing, asLender = false }: { owing: boolean; asLender?: boolean }) => {
     const name = newPartyName.trim();
     if (!name) {
       toast({ variant: "destructive", title: "Who is it?", description: "Give the person or institution a name." });
@@ -1004,7 +1004,10 @@ export default function Bank() {
       if (!response.ok || !created.id) throw new Error(created.error ?? "Could not add them.");
       // Awaited: the picker and the settlement prompt both read this list.
       await queryClient.invalidateQueries({ queryKey: ["parties"] });
-      if (owing) setRepayingPartyId(String(created.id));
+      // A lender is somebody you owe, so it writes the same column as
+      // paying one — it is only the selection afterwards that differs.
+      if (asLender) setRepayingPartyId(`borrow:party:${created.id}`);
+      else if (owing) setRepayingPartyId(String(created.id));
       else setWithdrawPartyId(String(created.id));
       setNewPartyName("");
       setNewPartyOwed("");
@@ -1906,6 +1909,27 @@ export default function Bank() {
                         {addingParty ? <Loader2 className="w-4 h-4 animate-spin" /> : "Add"}
                       </Button>
                     </div>
+                    {isBorrowing ? (
+                      <div className="flex flex-col gap-2 rounded-lg border border-primary/20 bg-primary/5 p-3 sm:flex-row" data-testid="add-lender-form">
+                        <Input
+                          placeholder="Who lent it? e.g. Mwangi or KCB"
+                          value={newPartyName}
+                          onChange={(e) => setNewPartyName(e.target.value)}
+                          className="h-10 bg-card"
+                          data-testid="input-new-lender-name"
+                        />
+                        <Input
+                          placeholder="Already owed"
+                          value={newPartyOwed}
+                          onChange={(e) => setNewPartyOwed(e.target.value)}
+                          className="h-10 w-full bg-card sm:w-32"
+                          data-testid="input-new-lender-owed"
+                        />
+                        <Button type="button" disabled={addingParty} onClick={() => void createParty({ owing: false, asLender: true })} className="h-10 shrink-0" data-testid="button-add-lender">
+                          {addingParty ? <Loader2 className="w-4 h-4 animate-spin" /> : "Add"}
+                        </Button>
+                      </div>
+                    ) : null}
                     {repayingParty ? (
                       <p className="text-xs text-muted-foreground">
                         This will not count as income — you had the money once already, when you lent it. It still

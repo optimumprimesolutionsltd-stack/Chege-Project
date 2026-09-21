@@ -102,3 +102,37 @@ describe('adding it to what you owe', () => {
     expect(bank).toContain("} else if (borrowedAgainst?.kind === 'party' && borrowedFrom) {");
   });
 });
+
+// Shipped without this: the picker listed lenders already recorded, and the
+// only inline creator in that dropdown wrote the other direction. Somebody
+// borrowing from Mwangi for the first time had nowhere to say so.
+describe('naming the lender', () => {
+  it('can be done where the borrowing is recorded', () => {
+    expect(bank).toContain('testID="bank-add-lender-form"');
+    expect(bank).toContain('testID="bank-new-lender-name"');
+    expect(bank).toContain('testID="bank-add-lender"');
+  });
+
+  it('writes what you owe them, not what they owe you', () => {
+    expect(bank).toContain('onPress={() => handleCreateParty({ asLender: true })}');
+    expect(bank).toContain('asLender = false');
+  });
+
+  it('selects them for the deposit in hand', () => {
+    expect(bank).toContain("setBorrowTarget({ kind: 'party', id: party.id });");
+  });
+
+  it('does not read the press event as options', () => {
+    // onPress hands a synthetic event, which would arrive as the options
+    // object and quietly take the wrong branch.
+    expect(bank).not.toContain('onPress={handleCreateParty}');
+  });
+
+  it('can say it is a bank rather than a person', () => {
+    expect(bank).toContain('testID="bank-new-lender-institution"');
+  });
+
+  it('takes nothing already owed, this loan being the whole of it', () => {
+    expect(bank).toContain('Leave the amount blank if this loan is the whole of it.');
+  });
+});
