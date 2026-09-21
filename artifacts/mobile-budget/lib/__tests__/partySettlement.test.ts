@@ -106,3 +106,37 @@ describe('settling the balance afterwards', () => {
     expect(bank).toContain('setWithdrawPartyId(null);');
   });
 });
+
+// The deposit side shipped with the same fault the withdrawal side had: the
+// picker appeared only once somebody already owed you, and the only place to
+// say somebody owed you was inside that picker.
+describe("recording that somebody owes you", () => {
+  it("offers the question before anybody is recorded", () => {
+    expect(bank).toContain("{isDeposit ? (");
+    expect(bank).not.toContain("{isDeposit && owingParties.length > 0 ? (");
+  });
+
+  it("carries a form for saying who, and how much", () => {
+    expect(bank).toContain('testID="bank-add-debtor-form"');
+    expect(bank).toContain('testID="bank-new-debtor-name"');
+    expect(bank).toContain('testID="bank-add-debtor"');
+  });
+
+  it("writes the balance the other way round", () => {
+    // One creator, two directions: which way it stands between you is the only
+    // difference between somebody you owe and somebody who owes you.
+    expect(bank).toContain("...(owing ? { owedToUs: Math.round(owed) } : { owedByUs: Math.round(owed) }),");
+    expect(bank).toContain("onPress={() => handleCreateParty({ owing: true })}");
+  });
+
+  it("selects them for the deposit in hand, not the withdrawal", () => {
+    expect(bank).toContain("if (owing) setRepayingPartyId(party.id);");
+    expect(bank).toContain("else setWithdrawPartyId(party.id);");
+  });
+
+  it("does not read the press event as options", () => {
+    // onPress hands the handler a synthetic event, which would arrive as
+    // { owing } and quietly write the balance the wrong way round.
+    expect(bank).toContain("onPress={() => handleCreateParty()}");
+  });
+});
