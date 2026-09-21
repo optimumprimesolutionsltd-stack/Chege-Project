@@ -1851,6 +1851,33 @@ export default function SettingsScreen() {
               <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
             </View>
           </Pressable>
+          {/* Debt, always reachable.
+              The Debt tab appears only once a debt is tracked, and the prompt
+              that offers to track a first one can be put away. Neither is a
+              way back once both are gone, so this row never moves and never
+              hides — and opening it clears the snooze, so somebody who said
+              "No debt" and then took a loan is asked again. */}
+          <Pressable
+            testID="open-debt"
+            onPress={() => {
+              AsyncStorage.multiRemove(['jamvi:debt-prompt-snooze-until', 'home_debt_prompt_dismissed']).catch(() => {});
+              router.push('/(tabs)/debt');
+            }}
+            style={styles.row}
+          >
+            <View style={[styles.rowLeft, { flexShrink: 0, flex: 0 }]}>
+              <View style={[styles.rowIcon, { backgroundColor: colors.primary + '18' }]}>
+                <Feather name="trending-down" size={16} color={colors.primary} />
+              </View>
+              <Text style={[styles.rowLabel, { color: colors.foreground }]} numberOfLines={1}>Debt</Text>
+            </View>
+            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6, marginLeft: 12 }}>
+              <Text style={[styles.rowValue, { color: colors.mutedForeground, flexShrink: 1 }]} numberOfLines={1}>
+                Track a loan and plan the payoff
+              </Text>
+              <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+            </View>
+          </Pressable>
           <Pressable testID="open-subscription" onPress={() => router.push('/subscription')} style={styles.row}>
             <View style={[styles.rowLeft, { flexShrink: 0, flex: 0 }]}>
               <View style={[styles.rowIcon, { backgroundColor: colors.primary + '18' }]}>
