@@ -46,7 +46,7 @@ describe("paying somebody you owe", () => {
   it("still sends a destination the API knows", () => {
     // Paying a party is a categorised withdrawal: the money left and belongs
     // to a category. Who received it is held beside that, not instead of it.
-    expect(bank).toContain('const sentDestinationKind = withdrawalDestinationKind === "party" ? "category" : withdrawalDestinationKind;');
+    expect(bank).toContain('const sentDestinationKind = withdrawalDestinationKind === "party" || withdrawalDestinationKind === "lend" ? "category" : withdrawalDestinationKind;');
     expect(bank).not.toContain("destinationKind: withdrawalDestinationKind");
   });
 

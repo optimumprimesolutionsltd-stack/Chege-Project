@@ -63,7 +63,9 @@ describe("adding it to what you owe", () => {
   it("asks rather than applying, like every other balance change", () => {
     expect(bank).toContain("const offerDebtIncrease = (categoryName: string, amount: number) => {");
     expect(bank).toContain("const offerBorrowedFromParty = (party: Party, amount: number) => {");
-    expect((bank.match(/if \(!window\.confirm\(/g) ?? []).length).toBe(3);
+    // Four now: the balance change, the two that add what was borrowed, and
+    // the one that adds what was lent.
+    expect((bank.match(/if \(!window\.confirm\(/g) ?? []).length).toBe(4);
   });
 
   it("works on a debt that starts at nothing outstanding", () => {
@@ -99,5 +101,41 @@ describe("naming the lender", () => {
 
   it("is offered only while borrowing", () => {
     expect(bank).toContain('{isBorrowing ? (');
+  });
+});
+
+// If there is borrowing there has to be lending, on the laptop as much as the
+// phone: money out that is not spending, because you expect it back.
+describe("lending, on the laptop too", () => {
+  it("is offered where the money leaves", () => {
+    expect(bank).toContain('data-testid="button-dest-lend"');
+    expect(bank).toContain("Lending it out");
+  });
+
+  it("takes no category, because it is not a cost", () => {
+    expect(bank).toContain('{ isLending: true }');
+    expect(bank).toContain('data-testid="lending-note"');
+    expect(bank).toContain('{mode === "disbursement" && !isLendingOut && (');
+  });
+
+  it("lends to anybody, not only somebody already owed", () => {
+    expect(bank).toContain("{(isLendingOut ? parties : owedParties).map((party) => (");
+  });
+
+  it("asks who, in the words that fit the direction", () => {
+    expect(bank).toContain('{isLendingOut ? "Who are you lending to?" : "Who are you paying?"}');
+  });
+
+  it("adds it to what they owe, asked not applied", () => {
+    expect(bank).toContain("const offerLendingIncrease = (party: Party, amount: number) => {");
+    expect(bank).toContain('body: JSON.stringify({ owedToUs: owed + lent }),');
+  });
+
+  it("starts from nothing when nothing is tracked", () => {
+    expect(bank).toContain('const owed = typeof party.owedToUs === "number" ? party.owedToUs : 0;');
+  });
+
+  it("offers only on a new posting, never on an edit", () => {
+    expect(bank).toContain("if (wasNew && lentTo) offerLendingIncrease(lentTo, total);");
   });
 });

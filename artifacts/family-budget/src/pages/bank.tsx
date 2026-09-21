@@ -162,7 +162,12 @@ export default function Bank() {
   // Default: The group
   const [withdrawerId, setWithdrawerId] = useState<string | null>(JOINT_BANK_ID);
   const [expenseCategory, setExpenseCategory] = useState("");
-  const [withdrawalDestinationKind, setWithdrawalDestinationKind] = useState<"category" | "other" | "party">("category");
+  /**
+   * "lend" is money out that is not spending: you expect it back, and it
+   * becomes owed to you. It carries no category for that reason, and every
+   * spending total filters on a category being present.
+   */
+  const [withdrawalDestinationKind, setWithdrawalDestinationKind] = useState<"category" | "other" | "party" | "lend">("category");
   // Paying somebody you owe: Mwangi, or KCB. And somebody paying you back,
   // which is not income — you had that money once already, when you lent it.
   const [withdrawPartyId, setWithdrawPartyId] = useState<string>("none");
@@ -858,12 +863,15 @@ export default function Bank() {
         await createDisbursement.mutateAsync({
           data: {
             amount: total,
-            description: description.trim() || expenseCategory,
+            description: description.trim() || lentToParty?.name || expenseCategory,
             date,
-            expenseCategory,
             madeById: !isSharedWorkspace ? user?.id : withdrawerId,
-            destinationKind: sentDestinationKind,
             accountId: selectedAccountId ?? undefined,
+            // A loan out has no category, because it is not a cost. That is
+            // what keeps it out of every spending total.
+            ...(isLendingOut
+              ? { isLending: true }
+              : { expenseCategory, destinationKind: sentDestinationKind }),
           },
         });
         toast({ title: "Disbursement recorded" });
@@ -872,11 +880,13 @@ export default function Bank() {
       // would move the balance a second time for one payment.
       const wasNew = !editingTransaction;
       const paidParty = mode === "disbursement" && withdrawalDestinationKind === "party" ? selectedParty : null;
+      const lentTo = mode === "disbursement" && isLendingOut ? lentToParty : null;
       const repaidBy = mode === "deposit" ? repayingParty : null;
       const borrowedAgainst = mode === "deposit" ? borrowTarget : null;
       const borrowedFrom = borrowedFromParty;
       finishEntry(keepOpen, { amount: total, direction: mode === "deposit" ? "in" : "out" });
-      if (wasNew && repaidBy) offerBalanceChange(repaidBy, total, "owedToUs");
+      if (wasNew && lentTo) offerLendingIncrease(lentTo, total);
+      else if (wasNew && repaidBy) offerBalanceChange(repaidBy, total, "owedToUs");
       else if (wasNew && borrowedAgainst?.kind === "debt") offerDebtIncrease(borrowedAgainst.name, total);
       else if (wasNew && borrowedAgainst?.kind === "party" && borrowedFrom) offerBorrowedFromParty(borrowedFrom, total);
       else if (wasNew && paidParty) offerBalanceChange(paidParty, total, "owedByUs");
@@ -983,7 +993,9 @@ export default function Bank() {
   // The API knows two destinations. Paying a party is still a categorised
   // withdrawal — the money left and belongs to a category; who received it is
   // held beside that, not instead of it.
-  const sentDestinationKind = withdrawalDestinationKind === "party" ? "category" : withdrawalDestinationKind;
+  const sentDestinationKind = withdrawalDestinationKind === "party" || withdrawalDestinationKind === "lend" ? "category" : withdrawalDestinationKind;
+  const isLendingOut = withdrawalDestinationKind === "lend";
+  const lentToParty = isLendingOut ? parties.find((party) => String(party.id) === withdrawPartyId) ?? null : null;
 
   const createParty = async ({ owing, asLender = false }: { owing: boolean; asLender?: boolean }) => {
     const name = newPartyName.trim();
@@ -1084,6 +1096,32 @@ export default function Bank() {
         await queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
       } catch (error) {
         toast({ variant: "destructive", title: "Could not update the debt", description: error instanceof Error ? error.message : "Please try again." });
+      }
+    })();
+  };
+
+  /**
+   * Offer to add what was lent to what somebody owes you. Somebody with
+   * nothing tracked on that side starts from zero rather than from nowhere: a
+   * first loan is exactly when nothing is tracked.
+   */
+  const offerLendingIncrease = (party: Party, amount: number) => {
+    if (amount <= 0) return;
+    const owed = typeof party.owedToUs === "number" ? party.owedToUs : 0;
+    const lent = toMoney(amount);
+    if (!window.confirm(`Add ${formatKes(lent)} to what ${party.name} owes you? That makes it ${formatKes(owed + lent)}.`)) return;
+    void (async () => {
+      try {
+        const response = await fetch(`/api/contributors/${party.id}`, {
+          method: "PATCH",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ owedToUs: owed + lent }),
+        });
+        if (!response.ok) throw new Error("Could not update the balance.");
+        await queryClient.invalidateQueries({ queryKey: ["parties"] });
+      } catch (error) {
+        toast({ variant: "destructive", title: "Could not update the balance", description: error instanceof Error ? error.message : "Please try again." });
       }
     })();
   };
@@ -1630,9 +1668,9 @@ export default function Bank() {
                     </p>
                   </div>
                 )}
-                {mode === "disbursement" && withdrawalDestinationKind === "party" ? (
+                {mode === "disbursement" && (withdrawalDestinationKind === "party" || isLendingOut) ? (
                   <div className="space-y-2 sm:col-span-2" data-testid="party-picker">
-                    <label className="text-sm font-semibold text-foreground">Who are you paying?</label>
+                    <label className="text-sm font-semibold text-foreground">{isLendingOut ? "Who are you lending to?" : "Who are you paying?"}</label>
                     <select
                       className="flex h-12 w-full rounded-md border border-input bg-card px-3 py-2 text-base"
                       value={withdrawPartyId}
@@ -1640,9 +1678,9 @@ export default function Bank() {
                       data-testid="select-party"
                     >
                       <option value="none">Choose somebody</option>
-                      {owedParties.map((party) => (
+                      {(isLendingOut ? parties : owedParties).map((party) => (
                         <option key={party.id} value={String(party.id)}>
-                          {party.name} — owe {formatKes(party.owedByUs ?? 0)}
+                          {party.name} — {isLendingOut ? `owes you ${formatKes(party.owedToUs ?? 0)}` : `owe ${formatKes(party.owedByUs ?? 0)}`}
                         </option>
                       ))}
                     </select>
@@ -1678,12 +1716,13 @@ export default function Bank() {
                       A bank or business, not a person
                     </label>
                     <p className="text-xs text-muted-foreground">
-                      The category below still says what kind of cost this was. Once it saves, Jamvi offers to take the
-                      payment off what you owe.
+                      {isLendingOut
+                        ? "Nothing is owed to them yet? Add them above. Once it saves, Jamvi offers to add this to what they owe you."
+                        : "The category below still says what kind of cost this was. Once it saves, Jamvi offers to take the payment off what you owe."}
                     </p>
                   </div>
                 ) : null}
-                {mode === "disbursement" && (
+                {mode === "disbursement" && !isLendingOut && (
                   <div className="space-y-2 sm:col-span-2">
                     <label className="text-sm font-semibold text-foreground">
                       Category <span className="text-destructive">*</span>
@@ -2133,7 +2172,21 @@ export default function Bank() {
                           Someone I owe
                         </Button>
                         <Button type="button" variant={withdrawalDestinationKind === "other" ? "default" : "outline"} onClick={() => setWithdrawalDestinationKind("other")}>Other</Button>
+                        <Button
+                          type="button"
+                          variant={withdrawalDestinationKind === "lend" ? "default" : "outline"}
+                          onClick={() => { setWithdrawalDestinationKind("lend"); setExpenseCategory(""); setWithdrawPartyId("none"); }}
+                          data-testid="button-dest-lend"
+                        >
+                          Lending it out
+                        </Button>
                       </div>
+                      {withdrawalDestinationKind === "lend" && (
+                        <p className="text-xs text-muted-foreground" data-testid="lending-note">
+                          No category: lending is not spending. You expect it back, so it counts against no budget — it
+                          leaves the account and becomes owed to you. Once it saves, Jamvi offers to add it to what they owe.
+                        </p>
+                      )}
                       {withdrawalDestinationKind === "other" && (
                         <p className="text-xs text-muted-foreground">A narration is required for an Other destination.</p>
                       )}
