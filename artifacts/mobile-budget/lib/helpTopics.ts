@@ -55,6 +55,16 @@ export const HELP_SECTIONS: HelpSection[] = [
         keywords: ['withdraw', 'spent', 'paid out', 'payment'],
       },
       {
+        question: 'Record a payment and the bank charge on it together',
+        steps: [
+          'Banking tab, then Withdraw.',
+          'Enter the payment as usual, then put the fee in Bank charge and give it its own category.',
+          'Two postings are saved, because they are two costs. What you owe moves by the payment alone.',
+        ],
+        route: '/(tabs)/bank',
+        keywords: ['charge', 'fee', 'cost', 'excise', 'together', 'both'],
+      },
+      {
         question: 'Record a whole day of banking in one go',
         steps: [
           'Banking tab, then Withdraw.',
