@@ -40,6 +40,7 @@ import {
   getGetBudgetCategoriesQueryKey,
   useGetMembers,
   useGetSavingsGoals,
+  useCreateSavingsGoal,
   useTransferBankToSavings,
   useTransferSavingsToBank,
   useTransferBankToBank,
@@ -262,6 +263,12 @@ export default function BankScreen() {
   const [withdrawSourceName, setWithdrawSourceName] = useState<string | null>(null);
   const [withdrawGoalId, setWithdrawGoalId] = useState<number | null>(null);
   const [showGoalPicker, setShowGoalPicker] = useState(false);
+  // A goal can be made without leaving the withdrawal. Sending somebody to the
+  // Goals tab costs them the posting they were entering, and the moment you
+  // discover the goal is missing is the moment you are trying to use it.
+  const [newGoalName, setNewGoalName] = useState('');
+  const [newGoalTarget, setNewGoalTarget] = useState('');
+  const [addingGoal, setAddingGoal] = useState(false);
   const [transferDirection, setTransferDirection] = useState<'to_savings' | 'from_savings'>('to_savings');
   const [bankTransferDestinationId, setBankTransferDestinationId] = useState<number | null>(null);
 
@@ -278,6 +285,7 @@ export default function BankScreen() {
   const { mutateAsync: transferBankToBank } = useTransferBankToBank();
   const { mutateAsync: updateOpeningBalance } = useUpdateJointAccountOpeningBalance();
   const { mutateAsync: createAccount } = useCreateJointAccount();
+  const { mutateAsync: createSavingsGoal } = useCreateSavingsGoal();
   const { mutateAsync: updateAccount } = useUpdateJointAccount();
   const { mutateAsync: deleteAccount } = useDeleteJointAccount();
   const { data: categories = [] } = useGetBudgetCategories();
@@ -499,12 +507,32 @@ export default function BankScreen() {
     await invalidateBalance();
   };
 
-  const openAccountEditor = (accountId?: number) => {
+  // When the account editor is opened from inside a transaction sheet, the
+  // sheet is put away and brought back afterwards. Without this, adding the
+  // account you realised you needed cost you the posting you were entering.
+  const [resumeTransactionAfterAccount, setResumeTransactionAfterAccount] = useState(false);
+
+  const openAccountEditor = (accountId?: number, { resumeTransaction = false } = {}) => {
+    setResumeTransactionAfterAccount(resumeTransaction);
     const account = accounts.find((item) => item.id === accountId);
     setEditingAccountId(account?.id ?? null);
     setAccountNameDraft(account?.name ?? '');
     setAccountNumberDraft(account?.accountNumber ?? '');
     setAccountModalVisible(true);
+  };
+
+  /**
+   * Leave the account editor, saved or not, and go back to the posting that
+   * sent you here. Backing out used to leave the transaction sheet hidden with
+   * everything typed into it still there but unreachable.
+   */
+  const closeAccountEditor = () => {
+    if (savingAccount) return;
+    setAccountModalVisible(false);
+    if (resumeTransactionAfterAccount) {
+      setResumeTransactionAfterAccount(false);
+      setModalVisible(true);
+    }
   };
 
   const saveAccount = async () => {
@@ -522,6 +550,13 @@ export default function BankScreen() {
       selectAccount(account.id);
       setAccountModalVisible(false);
       await invalidateAccounts();
+      // Back to the posting that sent you here, with the new account already
+      // chosen. Everything typed so far is still in the form: the sheet was
+      // hidden rather than reset.
+      if (resumeTransactionAfterAccount) {
+        setResumeTransactionAfterAccount(false);
+        setModalVisible(true);
+      }
     } catch (error: unknown) {
       Alert.alert('Could not save account', error instanceof Error ? error.message : 'Please try again.');
     } finally {
@@ -690,6 +725,36 @@ export default function BankScreen() {
   };
 
   // Selecting Joint bank chip explicitly clears all named members
+  const handleCreateGoal = async () => {
+    const name = newGoalName.trim();
+    if (!name) {
+      Alert.alert('Name the goal', 'Give it a short name, such as School fees or Emergency fund.');
+      return;
+    }
+    // A target is what makes a goal a goal rather than a pot. Zero is allowed
+    // for somebody setting aside without a figure in mind yet.
+    const target = readAmount(newGoalTarget || '0');
+    if (target === null || target < 0) {
+      Alert.alert('Target not valid', 'Enter zero or more, with up to two decimal places.');
+      return;
+    }
+    setAddingGoal(true);
+    try {
+      const goal = await createSavingsGoal({ data: { name, targetAmount: target } });
+      setWithdrawGoalId(goal.id);
+      setNewGoalName('');
+      setNewGoalTarget('');
+      setShowGoalPicker(false);
+      await queryClient.invalidateQueries({ queryKey: getGetSavingsGoalsQueryKey() });
+    } catch (error: unknown) {
+      if (!handleLapsedError(error)) {
+        Alert.alert('Could not add goal', error instanceof Error ? error.message : 'Please try again.');
+      }
+    } finally {
+      setAddingGoal(false);
+    }
+  };
+
   const selectJointBank = () => {
     if (!canManageShared) {
       Alert.alert('Admin access required', 'Ask a group owner or admin to use Joint bank for this shared transaction.');
@@ -1573,7 +1638,7 @@ export default function BankScreen() {
         visible={accountModalVisible}
         transparent
         animationType="slide"
-        onRequestClose={() => !savingAccount && setAccountModalVisible(false)}
+        onRequestClose={closeAccountEditor}
       >
         <KeyboardAvoidingView style={[styles.modalOverlay, { justifyContent: 'flex-end' }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={[styles.sheet, { backgroundColor: colors.card, paddingBottom: insets.bottom + 20 }]}>
@@ -1599,6 +1664,14 @@ export default function BankScreen() {
                 testID="bank-account-number"
               />
               <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
+                <TouchableOpacity
+                  style={{ minHeight: 48, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 10, borderWidth: 1, borderColor: colors.border }}
+                  onPress={closeAccountEditor}
+                  disabled={savingAccount}
+                  testID="bank-cancel-account"
+                >
+                  <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold' }}>Cancel</Text>
+                </TouchableOpacity>
                 {editingAccountId !== null && (
                   <TouchableOpacity
                     style={{ minHeight: 48, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 10, backgroundColor: '#7f1d1d' }}
@@ -1718,7 +1791,7 @@ export default function BankScreen() {
                             style={[styles.inlineAccountButton, { borderColor: colors.primary, backgroundColor: `${colors.primary}18` }]}
                             onPress={() => {
                               setModalVisible(false);
-                              openAccountEditor();
+                              openAccountEditor(undefined, { resumeTransaction: true });
                             }}
                             testID="bank-create-account-from-transaction"
                           >
@@ -1736,6 +1809,23 @@ export default function BankScreen() {
                         <Text style={{ color: colors.foreground, fontWeight: selectedAccountId === accountOption.id ? '700' : '500' }}>{accountOption.name}{accountOption.accountNumber ? ` · ${accountOption.accountNumber}` : ''}</Text>
                       </TouchableOpacity>
                     ))}
+                    {/* Offered whether or not accounts exist. It used to appear
+                        only when there were none at all, so the moment you
+                        opened an account the app stopped letting you say so
+                        from the one place you notice it is missing. */}
+                    {accounts.length > 0 && canManageAccount ? (
+                      <TouchableOpacity
+                        style={[styles.inlineAccountButton, { borderColor: colors.border, backgroundColor: 'transparent' }]}
+                        onPress={() => {
+                          setModalVisible(false);
+                          openAccountEditor(undefined, { resumeTransaction: true });
+                        }}
+                        testID="bank-add-account-from-transaction"
+                      >
+                        <Feather name="plus-circle" size={16} color={colors.mutedForeground} />
+                        <Text style={[styles.inlineAccountButtonText, { color: colors.mutedForeground }]}>Add another account</Text>
+                      </TouchableOpacity>
+                    ) : null}
                   </View>
                   <Text style={{ color: colors.mutedForeground, fontSize: 12, marginTop: 6 }}>This account will receive the deposit or be reduced by the withdrawal.</Text>
                   {selectedAccountId && data && (
@@ -2011,22 +2101,47 @@ export default function BankScreen() {
                       transfer could not be completed at all — no message, no
                       way out. A transfer needs a goal because the money has to
                       land somewhere nameable; the way forward is to make one. */}
-                  {savingsGoals.length === 0 && (
-                    <View style={{ marginTop: 8, gap: 8 }} testID="bank-transfer-no-goals">
-                      <Text style={{ color: colors.mutedForeground, fontSize: 13, fontFamily: 'Inter_400Regular' }}>
-                        You have no savings goals yet. A transfer needs one, so the money lands somewhere you can name
-                        rather than vanishing into "savings".
-                      </Text>
+                  {/* Made here rather than on the Goals tab. Sending somebody
+                      away costs them the posting they were entering, and the
+                      moment you notice the goal is missing is the moment you
+                      are trying to use it. */}
+                  <View style={{ marginTop: 8, gap: 8 }} testID="bank-inline-goal-form">
+                    <Text style={{ color: colors.mutedForeground, fontSize: 12, fontFamily: 'Inter_600SemiBold' }}>
+                      {savingsGoals.length === 0 ? 'NO GOALS YET — MAKE ONE' : "CAN'T FIND IT? ADD A GOAL"}
+                    </Text>
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      <TextInput
+                        value={newGoalName}
+                        onChangeText={setNewGoalName}
+                        editable={!addingGoal}
+                        placeholder="e.g. School fees"
+                        placeholderTextColor={colors.mutedForeground}
+                        style={[styles.input, { flex: 1, marginTop: 0, color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted }]}
+                        testID="bank-new-goal-name"
+                      />
+                      <TextInput
+                        value={newGoalTarget}
+                        onChangeText={setNewGoalTarget}
+                        editable={!addingGoal}
+                        placeholder="Target"
+                        placeholderTextColor={colors.mutedForeground}
+                        keyboardType="decimal-pad"
+                        style={[styles.input, { width: 96, marginTop: 0, color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted }]}
+                        testID="bank-new-goal-target"
+                      />
                       <TouchableOpacity
-                        style={[styles.inlineAccountButton, { borderColor: colors.primary, backgroundColor: `${colors.primary}18` }]}
-                        onPress={() => { setModalVisible(false); router.push('/(tabs)/goals'); }}
-                        testID="bank-create-goal-from-transfer"
+                        disabled={addingGoal}
+                        onPress={handleCreateGoal}
+                        style={{ minWidth: 58, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary, opacity: addingGoal ? 0.55 : 1 }}
+                        testID="bank-add-goal"
                       >
-                        <Feather name="plus-circle" size={16} color={colors.primary} />
-                        <Text style={[styles.inlineAccountButtonText, { color: colors.primary }]}>Create a savings goal</Text>
+                        {addingGoal ? <ActivityIndicator size="small" color="#fff" /> : <Text style={{ color: '#fff', fontFamily: 'Inter_600SemiBold' }}>Add</Text>}
                       </TouchableOpacity>
                     </View>
-                  )}
+                    <Text style={{ color: colors.mutedForeground, fontSize: 12, fontFamily: 'Inter_400Regular' }}>
+                      Leave the target blank if you are setting money aside without a figure in mind.
+                    </Text>
+                  </View>
                   <Text style={[styles.label, { color: colors.mutedForeground }]}>Narration</Text>
                   <TextInput
                     style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted }]}
@@ -2526,12 +2641,45 @@ export default function BankScreen() {
                     </TouchableOpacity>
                   )}
 
-                  {/* No goal selected yet hint */}
-                  {withdrawDest === 'savings' && !selectedGoal && !showGoalPicker && savingsGoals.length === 0 && (
-                    <Text style={{ color: colors.mutedForeground, fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 4 }}>
-                      No savings goals set up yet
-                    </Text>
-                  )}
+                  {/* The same form the Transfer sheet has: a goal is made
+                      where it is missed, not on another screen. "No savings
+                      goals set up yet" used to be the whole of the help. */}
+                  {withdrawDest === 'savings' && !selectedGoal ? (
+                    <View style={{ marginTop: 8, gap: 8 }} testID="bank-withdraw-goal-form">
+                      <Text style={{ color: colors.mutedForeground, fontSize: 12, fontFamily: 'Inter_600SemiBold' }}>
+                        {savingsGoals.length === 0 ? 'NO GOALS YET — MAKE ONE' : "CAN'T FIND IT? ADD A GOAL"}
+                      </Text>
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <TextInput
+                          value={newGoalName}
+                          onChangeText={setNewGoalName}
+                          editable={!addingGoal}
+                          placeholder="e.g. School fees"
+                          placeholderTextColor={colors.mutedForeground}
+                          style={[styles.input, { flex: 1, marginTop: 0, color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted }]}
+                          testID="bank-withdraw-new-goal-name"
+                        />
+                        <TextInput
+                          value={newGoalTarget}
+                          onChangeText={setNewGoalTarget}
+                          editable={!addingGoal}
+                          placeholder="Target"
+                          placeholderTextColor={colors.mutedForeground}
+                          keyboardType="decimal-pad"
+                          style={[styles.input, { width: 96, marginTop: 0, color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted }]}
+                          testID="bank-withdraw-new-goal-target"
+                        />
+                        <TouchableOpacity
+                          disabled={addingGoal}
+                          onPress={handleCreateGoal}
+                          style={{ minWidth: 58, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary, opacity: addingGoal ? 0.55 : 1 }}
+                          testID="bank-withdraw-add-goal"
+                        >
+                          {addingGoal ? <ActivityIndicator size="small" color="#fff" /> : <Text style={{ color: '#fff', fontFamily: 'Inter_600SemiBold' }}>Add</Text>}
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ) : null}
                 </>
               )}
 

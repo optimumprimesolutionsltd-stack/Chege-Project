@@ -160,10 +160,11 @@ describe('the sitting holds up in use', () => {
 
   it('offers a way out when a transfer has no goal to land in', () => {
     // The picker opened an empty box: no goals, no message, no way to make
-    // one, and a transfer that could not be completed at all.
-    expect(bank).toContain('testID="bank-transfer-no-goals"');
-    expect(bank).toContain('testID="bank-create-goal-from-transfer"');
-    expect(bank).toContain("router.push('/(tabs)/goals')");
+    // one, and a transfer that could not be completed at all. The first fix
+    // sent you to the Goals tab; the goal is now made here, because leaving
+    // costs the posting being entered.
+    expect(bank).toContain('testID="bank-inline-goal-form"');
+    expect(bank).toContain('testID="bank-add-goal"');
   });
 });
 
