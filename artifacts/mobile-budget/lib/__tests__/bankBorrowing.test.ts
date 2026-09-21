@@ -181,3 +181,56 @@ describe('lending is the mirror of borrowing', () => {
     expect(bank).toContain("const lentTo = txType === 'disbursement' && editingTransactionId === null ? lentToParty : null;");
   });
 });
+
+// A deposit can be ordinary money in, a repayment, or borrowing. A withdrawal
+// can be ordinary spending, paying somebody you owe, or lending. The same
+// three shapes in opposite directions — asked one way with a dropdown and the
+// other with chips, they looked like unrelated questions.
+describe('both sides ask the same question the same way', () => {
+  it('asks it in the same words on the way out', () => {
+    expect((bank.match(/What kind of money is this\?/g) ?? []).length).toBe(2);
+    expect(bank).toContain('testID="bank-withdraw-kind"');
+  });
+
+  it('offers the three answers a withdrawal has', () => {
+    expect(bank).toContain('testID="bank-withdraw-kind-ordinary"');
+    expect(bank).toContain('testID="bank-withdraw-dest-party"');
+    expect(bank).toContain('testID="bank-withdraw-dest-lend"');
+  });
+
+  it('groups lending under what it is, as borrowing is', () => {
+    expect(bank).toContain('LENT — NOT SPENDING');
+    expect(bank).toContain('BORROWED — NOT INCOME');
+  });
+
+  it('says what each answer means rather than assuming', () => {
+    expect(bank).toContain('Paying down what you owe them. Still spending — the money is gone.');
+    expect(bank).toContain('You expect it back, so it takes no category and counts against no budget.');
+  });
+
+  it('does not ask the same thing twice on one screen', () => {
+    // The chips that used to carry these answers are gone.
+    expect(bank).not.toContain('Someone I owe\n');
+    expect((bank.match(/testID="bank-withdraw-dest-party"/g) ?? []).length).toBe(1);
+    expect((bank.match(/testID="bank-withdraw-dest-lend"/g) ?? []).length).toBe(1);
+  });
+
+  it('goes back to ordinary spending without stranding a party', () => {
+    expect(bank).toContain("if (withdrawDest === 'party' || withdrawDest === 'lend') setWithdrawDest('other');");
+  });
+});
+
+describe('neither lending nor borrowing asks for a category', () => {
+  it('does not show the picker while lending', () => {
+    expect(bank).toContain("{isWithdrawal && withdrawDest !== 'savings' && withdrawDest !== 'lend' && (");
+  });
+
+  it('does not demand one either', () => {
+    expect(bank).toContain("if (txType === 'disbursement' && withdrawDest !== 'savings' && withdrawDest !== 'lend' && !expenseCategory.trim()) {");
+  });
+
+  it('never asks on a deposit at all, which is where borrowing lives', () => {
+    // A deposit has no expenseCategory field in the first place.
+    expect(bank).not.toContain("txType === 'deposit' && !expenseCategory");
+  });
+});

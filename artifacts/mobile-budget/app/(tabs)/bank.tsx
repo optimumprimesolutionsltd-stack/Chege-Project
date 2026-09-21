@@ -282,6 +282,16 @@ export default function BankScreen() {
   const [showChargeCategoryPicker, setShowChargeCategoryPicker] = useState(false);
   const [showRepayPicker, setShowRepayPicker] = useState(false);
   /**
+   * The same question the deposit side asks, asked on the way out.
+   *
+   * A deposit can be ordinary money in, a repayment, or borrowing. A
+   * withdrawal can be ordinary spending, paying somebody you owe, or lending.
+   * They are the same three shapes in opposite directions, and asking them in
+   * two different ways — a dropdown on one side, chips on the other — made
+   * them look like different questions.
+   */
+  const [showWithdrawKindPicker, setShowWithdrawKindPicker] = useState(false);
+  /**
    * Money borrowed, arriving in the account.
    *
    * The other half of the question above. A loan paid out to you is not
@@ -490,6 +500,7 @@ export default function BankScreen() {
     setShowGoalPicker(false);
     setWithdrawPartyId(null);
     setShowPartyPicker(false);
+    setShowWithdrawKindPicker(false);
     setRepayingPartyId(null);
     setBorrowTarget(null);
     setShowRepayPicker(false);
@@ -535,6 +546,7 @@ export default function BankScreen() {
     setShowGoalPicker(false);
     setWithdrawPartyId(null);
     setShowPartyPicker(false);
+    setShowWithdrawKindPicker(false);
     setRepayingPartyId(null);
     setBorrowTarget(null);
     setShowRepayPicker(false);
@@ -3411,6 +3423,79 @@ export default function BankScreen() {
               {/* ── Withdrawal destination ────────────────────────────────────── */}
               {isWithdrawal && (
                 <>
+                  {/* Asked exactly as the deposit side asks it, because it
+                      is the same question: ordinary spending, paying somebody
+                      you owe, or lending. Borrowing and lending are the two
+                      directions of one idea and should not look unrelated. */}
+                  <Text style={[styles.label, { color: colors.mutedForeground }]}>What kind of money is this?</Text>
+                  <TouchableOpacity
+                    style={[styles.input, styles.pickerButton, { borderColor: colors.border, backgroundColor: colors.muted }]}
+                    onPress={() => setShowWithdrawKindPicker((open) => !open)}
+                    testID="bank-withdraw-kind"
+                  >
+                    <Text style={{ flex: 1, color: withdrawDest === 'party' || withdrawDest === 'lend' ? colors.foreground : colors.mutedForeground, fontFamily: 'Inter_400Regular' }}>
+                      {withdrawDest === 'party'
+                        ? selectedParty ? `Paying ${selectedParty.name}` : 'Paying somebody I owe'
+                        : withdrawDest === 'lend'
+                          ? lentToParty ? `Lending to ${lentToParty.name}` : 'Lending it out'
+                          : 'Ordinary spending'}
+                    </Text>
+                    <Feather name={showWithdrawKindPicker ? 'chevron-up' : 'chevron-down'} size={16} color={colors.mutedForeground} />
+                  </TouchableOpacity>
+                  {showWithdrawKindPicker && (
+                    <View style={[styles.categoryDropdown, { borderColor: colors.dropdownBorder, backgroundColor: colors.dropdownBackground }]}>
+                      <TouchableOpacity
+                        style={styles.categoryOption}
+                        onPress={() => {
+                          if (withdrawDest === 'party' || withdrawDest === 'lend') setWithdrawDest('other');
+                          setWithdrawPartyId(null);
+                          setShowWithdrawKindPicker(false);
+                        }}
+                        testID="bank-withdraw-kind-ordinary"
+                      >
+                        <Text style={{ color: colors.dropdownForeground, fontFamily: 'Inter_400Regular' }}>Ordinary spending</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.categoryOption}
+                        onPress={() => {
+                          setWithdrawDest('party');
+                          setWithdrawSourceName(null);
+                          setWithdrawPartyId(null);
+                          setShowWithdrawKindPicker(false);
+                          setShowPartyPicker(true);
+                        }}
+                        testID="bank-withdraw-dest-party"
+                      >
+                        <Text style={{ color: colors.dropdownForeground, fontFamily: 'Inter_400Regular' }}>Someone I owe</Text>
+                        <Text style={{ color: colors.dropdownMutedForeground, fontFamily: 'Inter_400Regular', fontSize: 12 }}>
+                          Paying down what you owe them. Still spending — the money is gone.
+                        </Text>
+                      </TouchableOpacity>
+                      <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }}>
+                        <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold', fontSize: 12, paddingHorizontal: 14, paddingTop: 10 }}>
+                          LENT — NOT SPENDING
+                        </Text>
+                        <TouchableOpacity
+                          style={styles.categoryOption}
+                          onPress={() => {
+                            setWithdrawDest('lend');
+                            setWithdrawSourceName(null);
+                            setExpenseCategory('');
+                            setWithdrawPartyId(null);
+                            setShowWithdrawKindPicker(false);
+                            setShowPartyPicker(true);
+                          }}
+                          testID="bank-withdraw-dest-lend"
+                        >
+                          <Text style={{ color: colors.dropdownForeground, fontFamily: 'Inter_400Regular' }}>Lending it out</Text>
+                          <Text style={{ color: colors.dropdownMutedForeground, fontFamily: 'Inter_400Regular', fontSize: 12 }}>
+                            You expect it back, so it takes no category and counts against no budget.
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  )}
+
                   <Text style={[styles.label, { color: colors.mutedForeground }]}>
                     Where is this money going?{' '}
                     <Text style={{ fontWeight: '400', fontSize: 11 }}>* required</Text>
@@ -3474,67 +3559,6 @@ export default function BankScreen() {
                           <Feather name="target" size={12} color={selected ? '#fff' : colors.mutedForeground} />
                           <Text style={[styles.memberPillText, { color: selected ? '#fff' : colors.foreground }]}>
                             Savings
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })()}
-
-                    {/* Somebody you owe: a person or an institution. Offered
-                        only when there is one, so a household that has never
-                        recorded a debt sees nothing extra. */}
-                    {(() => {
-                      const selected = withdrawDest === 'party';
-                      return (
-                        <TouchableOpacity
-                          testID="bank-withdraw-dest-party"
-                          style={[
-                            styles.memberPill,
-                            {
-                              backgroundColor: selected ? '#7c3aed' : colors.muted,
-                              borderColor: selected ? '#7c3aed' : colors.border,
-                            },
-                          ]}
-                          onPress={() => {
-                            setWithdrawDest('party');
-                            setWithdrawSourceName(null);
-                            setShowPartyPicker(true);
-                          }}
-                          activeOpacity={0.7}
-                        >
-                          <Feather name="user-check" size={12} color={selected ? '#fff' : colors.mutedForeground} />
-                          <Text style={[styles.memberPillText, { color: selected ? '#fff' : colors.foreground }]}>
-                            Someone I owe
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })()}
-
-                    {/* Money lent. Not spending: it comes back, and until
-                        it does it is owed to you. So it takes no category,
-                        which is what keeps it out of the spending totals. */}
-                    {(() => {
-                      const selected = withdrawDest === 'lend';
-                      return (
-                        <TouchableOpacity
-                          testID="bank-withdraw-dest-lend"
-                          style={[
-                            styles.memberPill,
-                            {
-                              backgroundColor: selected ? '#0ea5e9' : colors.muted,
-                              borderColor: selected ? '#0ea5e9' : colors.border,
-                            },
-                          ]}
-                          onPress={() => {
-                            setWithdrawDest('lend');
-                            setWithdrawSourceName(null);
-                            setExpenseCategory('');
-                            setShowPartyPicker(true);
-                          }}
-                          activeOpacity={0.7}
-                        >
-                          <Feather name="corner-up-right" size={12} color={selected ? '#fff' : colors.mutedForeground} />
-                          <Text style={[styles.memberPillText, { color: selected ? '#fff' : colors.foreground }]}>
-                            Lending it out
                           </Text>
                         </TouchableOpacity>
                       );
