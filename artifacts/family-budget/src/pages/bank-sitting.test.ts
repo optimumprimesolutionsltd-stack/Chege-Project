@@ -90,12 +90,37 @@ describe("checking the account against the statement", () => {
     expect(bank).toContain("Math.round((account.balance - parsedStatementBalance) * 100) / 100");
   });
 
+  it("asks what the shortfall was instead of assuming a fee", () => {
+    // Often it is a posting somebody forgot, and that money was genuinely
+    // spent on something.
+    expect(bank).toContain('data-testid={`button-reconcile-as-${option.key}`}');
+    expect(bank).toContain('{ key: "category" as const, label: "Spending I missed" },');
+  });
+
+  it("posts missed spending as an ordinary withdrawal, not as a charge", () => {
+    // A charge is excluded from household spending, so recording it that way
+    // would keep it out of the budget it belongs to.
+    expect(bank).toContain('if (reconcileAs === "category") {');
+    expect(bank).toContain("await createDisbursement.mutateAsync({");
+    expect(bank).toContain('destinationKind: "category",');
+  });
+
+  it("refuses to post spending with no category", () => {
+    expect(bank).toContain('if (reconcileAs === "category" && !reconcileCategory.trim()) {');
+  });
+
+  it("offers only categories that can hold spending", () => {
+    expect(bank).toContain("const reconcileTree = useMemo(");
+    expect(bank).toContain("group.children.length > 0 ? (");
+    expect(bank).toContain('data-testid="select-reconcile-category"');
+  });
+
   it("offers the charge without asserting it", () => {
     // A shortfall is usually a fee on a Kenyan statement. Usually is not
     // always, so the app proposes and the narration stays editable.
     expect(bank).toContain('data-testid="button-record-difference-as-charge"');
     expect(bank).toContain('data-testid="input-reconcile-narration"');
-    expect(bank).toContain("but Jamvi will not decide that for you.");
+    expect(bank).toContain("Jamvi will not decide which for you.");
   });
 
   it("refuses to call a surplus a charge", () => {

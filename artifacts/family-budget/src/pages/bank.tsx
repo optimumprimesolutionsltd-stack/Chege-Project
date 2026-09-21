@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   useGetJointAccount, useCreateDeposit, useCreateDisbursement, useCreateBankCharge, useUpdateJointAccountTransaction, useDeleteJointAccountTransaction, useDeleteExpense,
   useGetMembers, useGetBudgetCategories, getGetBudgetCategoriesQueryKey,
@@ -20,6 +20,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@workspace/replit-auth-web";
 import { canManageBankAccount, resolveBankAccountSelection } from "@/lib/bank-access";
 import { getProjectedBalanceAfterPosting } from "@/lib/bank-balance-utils";
+import { buildCategoryTree, type CategoryRow } from "@workspace/category-tree";
 import { workspaceLabel } from "@/lib/workspace-identity";
 import { useListEditor } from "@/hooks/use-list-editor";
 import { EditableName, ListEditButton, ListEditorFooter, RemoveRowButton } from "@/components/list-editor";
@@ -175,6 +176,12 @@ export default function Bank() {
   const [reconciling, setReconciling] = useState(false);
   const [statementBalance, setStatementBalance] = useState("");
   const [reconcileNarration, setReconcileNarration] = useState("");
+  // A shortfall can be recorded either way. As a charge it stays out of
+  // household spending, which is right when the bank took a fee. As a category
+  // it counts as spending, which is right when the money went somewhere and
+  // the posting was missed. Only the person reconciling knows which.
+  const [reconcileAs, setReconcileAs] = useState<"charge" | "category">("charge");
+  const [reconcileCategory, setReconcileCategory] = useState("");
 
   const selectedBankAccount = accounts.find((item) => item.id === selectedAccountId) ?? null;
   const isCreatingAccount = addingAccount || !selectedBankAccount;
@@ -258,6 +265,8 @@ export default function Bank() {
   const openReconcile = () => {
     setStatementBalance("");
     setReconcileNarration("");
+    setReconcileAs("charge");
+    setReconcileCategory("");
     setShowReconcile(true);
   };
 
@@ -270,7 +279,7 @@ export default function Bank() {
    * app asks rather than assuming, and why the narration is editable — a
    * mis-attributed difference is worse than a visible one.
    */
-  const recordDifferenceAsCharge = async (difference: number) => {
+  const recordDifference = async (difference: number) => {
     if (!selectedAccountId) {
       toast({
         variant: "destructive",
@@ -279,21 +288,44 @@ export default function Bank() {
       });
       return;
     }
+    if (reconcileAs === "category" && !reconcileCategory.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Choose a category",
+        description: "Pick the category this spending belongs to, or record it as a bank charge.",
+      });
+      return;
+    }
     setReconciling(true);
     try {
-      await createBankCharge.mutateAsync({
-        data: {
-          amount: difference,
-          narration: reconcileNarration.trim() || "Bank charges",
-          date: new Date().toISOString().slice(0, 10),
-          accountId: selectedAccountId,
-        },
-      });
+      if (reconcileAs === "category") {
+        await createDisbursement.mutateAsync({
+          data: {
+            amount: difference,
+            description: reconcileNarration.trim() || reconcileCategory,
+            date: new Date().toISOString().slice(0, 10),
+            expenseCategory: reconcileCategory,
+            madeById: isSharedWorkspace ? null : user?.id,
+            destinationKind: "category",
+            accountId: selectedAccountId,
+          },
+        });
+        toast({ title: "Spending recorded", description: `It counts against ${reconcileCategory}.` });
+      } else {
+        await createBankCharge.mutateAsync({
+          data: {
+            amount: difference,
+            narration: reconcileNarration.trim() || "Bank charges",
+            date: new Date().toISOString().slice(0, 10),
+            accountId: selectedAccountId,
+          },
+        });
+        toast({ title: "Bank charge recorded", description: "It is kept out of household spending." });
+      }
       setShowReconcile(false);
       invalidate();
-      toast({ title: "Bank charge recorded", description: "It is kept out of household spending." });
     } catch {
-      toast({ variant: "destructive", title: "Error", description: "Could not record the charge." });
+      toast({ variant: "destructive", title: "Error", description: "Could not record the difference." });
     } finally {
       setReconciling(false);
     }
@@ -873,6 +905,13 @@ export default function Bank() {
       )
     : null;
 
+  // Spending lands on a category that holds no subcategories: a category with
+  // children is a heading, and its spending is theirs added up.
+  const reconcileTree = useMemo(
+    () => buildCategoryTree((categories ?? []) as unknown as CategoryRow[]),
+    [categories],
+  );
+
   // Reconciling compares Jamvi's balance with the statement's. A positive
   // difference means Jamvi holds more than the bank does: money left the
   // account with nothing recorded against it.
@@ -1070,9 +1109,55 @@ export default function Bank() {
             ) : reconcileDifference > 0 ? (
               <div className="space-y-3">
                 <p className="text-sm text-foreground" data-testid="bank-reconcile-short">
-                  {formatKes(reconcileDifference)} left the account with nothing recorded against it. On a bank
-                  statement that is usually a fee — but Jamvi will not decide that for you.
+                  {formatKes(reconcileDifference)} left the account with nothing recorded against it. That is either a
+                  fee the bank took or a posting you have not entered yet, and the two are counted differently — so
+                  Jamvi will not decide which for you.
                 </p>
+                <div className="flex flex-wrap gap-2">
+                  {([
+                    { key: "charge" as const, label: "A bank charge" },
+                    { key: "category" as const, label: "Spending I missed" },
+                  ]).map((option) => (
+                    <Button
+                      key={option.key}
+                      type="button"
+                      variant={reconcileAs === option.key ? "default" : "outline"}
+                      onClick={() => setReconcileAs(option.key)}
+                      data-testid={`button-reconcile-as-${option.key}`}
+                      className="h-10"
+                    >
+                      {option.label}
+                    </Button>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {reconcileAs === "charge"
+                    ? "A fee is money gone, but it belongs to no category and no budget was set for it, so it is reported apart from spending."
+                    : "This counts as spending against the category you pick, the same as any withdrawal."}
+                </p>
+                {reconcileAs === "category" && (
+                  <select
+                    data-testid="select-reconcile-category"
+                    className="flex h-12 w-full rounded-md border border-input bg-card px-3 py-2 text-base"
+                    value={reconcileCategory}
+                    onChange={(e) => setReconcileCategory(e.target.value)}
+                  >
+                    <option value="">Choose a category</option>
+                    {/* A category holding subcategories is a heading and its
+                        spending is theirs added up, so it is not offered. */}
+                    {reconcileTree.map((group) => (
+                      group.children.length > 0 ? (
+                        <optgroup key={group.name} label={group.name}>
+                          {group.children.map((child) => (
+                            <option key={child} value={child}>{child}</option>
+                          ))}
+                        </optgroup>
+                      ) : (
+                        <option key={group.name} value={group.name}>{group.name}</option>
+                      )
+                    ))}
+                  </select>
+                )}
                 <Input
                   data-testid="input-reconcile-narration"
                   placeholder="What the statement calls it (default: Bank charges)"
@@ -1087,16 +1172,18 @@ export default function Bank() {
                   <Button
                     type="button"
                     disabled={reconciling}
-                    onClick={() => recordDifferenceAsCharge(reconcileDifference)}
+                    onClick={() => recordDifference(reconcileDifference)}
                     data-testid="button-record-difference-as-charge"
                     className="h-12 px-6"
                   >
                     {reconciling && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-                    Record {formatKes(reconcileDifference)} as a bank charge
+                    Record {formatKes(reconcileDifference)} as {reconcileAs === "charge" ? "a bank charge" : "spending"}
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  A charge is kept out of household spending, so this will not touch any budget.
+                  {reconcileAs === "charge"
+                    ? "A charge is kept out of household spending, so this will not touch any budget."
+                    : `This will count against ${reconcileCategory || "the category you pick"} like any other withdrawal.`}
                 </p>
               </div>
             ) : (

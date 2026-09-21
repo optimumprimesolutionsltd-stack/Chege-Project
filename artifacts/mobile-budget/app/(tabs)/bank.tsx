@@ -64,6 +64,7 @@ import { WorkspaceIdentityRow } from '@/components/WorkspaceIdentityRow';
 import { canManageBankAccount, resolveBankAccountSelection } from '@/lib/bankAccess';
 import { getProjectedBalanceAfterPosting } from '@/lib/bankBalance';
 import { evaluateAmountExpression, isAmountExpression } from '@/lib/amountExpression';
+import { buildCategoryTree, type CategoryRow } from '@workspace/category-tree';
 import { workspaceBudgetName } from '@/lib/workspaceIdentity';
 import { formatDisplayDate } from '@/lib/displayFormat';
 
@@ -229,6 +230,14 @@ export default function BankScreen() {
   // this screen exists to fix.
   const [reconcileDate, setReconcileDate] = useState(todayIso());
   const [showReconcileDatePicker, setShowReconcileDatePicker] = useState(false);
+  // A shortfall can be recorded either way. As a charge it stays out of
+  // household spending, which is right when the bank simply took a fee. As a
+  // category it counts as spending, which is right when the money went
+  // somewhere and the posting was missed. Only the person reconciling knows
+  // which, so the app asks instead of deciding.
+  const [reconcileAs, setReconcileAs] = useState<'charge' | 'category'>('charge');
+  const [reconcileCategory, setReconcileCategory] = useState('');
+  const [showReconcileCategoryPicker, setShowReconcileCategoryPicker] = useState(false);
   const [reconciling, setReconciling] = useState(false);
   const [accountModalVisible, setAccountModalVisible] = useState(false);
   const [accountNameDraft, setAccountNameDraft] = useState('');
@@ -429,6 +438,9 @@ export default function BankScreen() {
   const openReconcile = () => {
     setStatementBalance('');
     setReconcileNarration('');
+    setReconcileAs('charge');
+    setReconcileCategory('');
+    setShowReconcileCategoryPicker(false);
     // Default to the day the account was last active rather than today: you
     // reconcile a statement after the fact, often the next morning.
     setReconcileDate(data?.transactions?.[0]?.date?.slice(0, 10) ?? todayIso());
@@ -437,34 +449,53 @@ export default function BankScreen() {
   };
 
   /**
-   * Record the shortfall as a bank charge.
+   * Record the shortfall, as whichever kind of thing it turned out to be.
    *
    * Only offered when Jamvi holds more than the statement does: money has left
-   * the account that no posting accounts for, and on a Kenyan bank statement
-   * that is nearly always a fee. Nearly always is not always, which is why the
-   * app asks rather than assuming, and why the narration is editable — a
-   * mis-attributed difference is worse than a visible one.
+   * the account that no posting accounts for. On a Kenyan statement that is
+   * often a fee, and a fee belongs outside household spending. But it is just
+   * as often a posting somebody forgot, and that money was genuinely spent on
+   * something. Only the person holding the statement knows which, so the app
+   * asks; a mis-attributed difference is worse than a visible one.
    */
-  const recordDifferenceAsCharge = async (difference: number) => {
+  const recordDifference = async (difference: number) => {
     if (!selectedAccountId) {
       Alert.alert('Choose a bank account', 'Pick the account you are checking before recording the difference.');
       return;
     }
+    if (reconcileAs === 'category' && !reconcileCategory.trim()) {
+      Alert.alert('Choose a category', 'Pick the category this spending belongs to, or record it as a bank charge.');
+      return;
+    }
     setReconciling(true);
     try {
-      await createBankCharge({
-        data: {
-          amount: difference,
-          narration: reconcileNarration.trim() || 'Bank charges',
-          date: reconcileDate,
-          accountId: selectedAccountId,
-        },
-      });
+      if (reconcileAs === 'category') {
+        await createDisbursement({
+          data: {
+            amount: difference,
+            description: reconcileNarration.trim() || reconcileCategory,
+            date: reconcileDate,
+            expenseCategory: reconcileCategory,
+            madeById: !isSharedWorkspace ? user?.id : null,
+            destinationKind: 'category',
+            accountId: selectedAccountId,
+          },
+        });
+      } else {
+        await createBankCharge({
+          data: {
+            amount: difference,
+            narration: reconcileNarration.trim() || 'Bank charges',
+            date: reconcileDate,
+            accountId: selectedAccountId,
+          },
+        });
+      }
       setReconcileVisible(false);
       await invalidateBalance();
     } catch (err: unknown) {
       if (!handleLapsedError(err)) {
-        Alert.alert('Could not record the charge', err instanceof Error ? err.message : 'Nothing was recorded.');
+        Alert.alert('Could not record the difference', err instanceof Error ? err.message : 'Nothing was recorded.');
       }
     } finally {
       setReconciling(false);
@@ -1080,6 +1111,15 @@ export default function BankScreen() {
   // A transaction row can only be staged for removal when the person could
   // delete it on its own — the same rule the per-row Delete already enforces.
   const canRemoveTx = (tx: Tx) => canManageAccount || canEditTransaction(tx);
+
+  // Spending lands on a category that holds no subcategories: a category with
+  // children is a heading, and its spending is theirs added up. The withdraw
+  // picker below still lists everything flat and lets the server refuse a
+  // heading; this one does not offer what cannot be chosen.
+  const reconcileTree = useMemo(
+    () => buildCategoryTree(categories as unknown as CategoryRow[]),
+    [categories],
+  );
 
   // Reconciling compares Jamvi's balance with the statement's. A positive
   // difference means Jamvi holds more than the bank does: money left the
@@ -2795,10 +2835,97 @@ export default function BankScreen() {
               ) : reconcileDifference > 0 ? (
                 <>
                   <Text style={[styles.reconcileMessage, { color: colors.foreground }]} testID="bank-reconcile-short">
-                    KES {formatKES(reconcileDifference)} left the account with nothing recorded against it. On a bank
-                    statement that is usually a fee — but Jamvi will not decide that for you.
+                    KES {formatKES(reconcileDifference)} left the account with nothing recorded against it. That is
+                    either a fee the bank took or a posting you have not entered yet, and the two are counted
+                    differently — so Jamvi will not decide which for you.
                   </Text>
-                  <Text style={[styles.label, { color: colors.mutedForeground }]}>Date of the charge</Text>
+                  <Text style={[styles.label, { color: colors.mutedForeground }]}>What was it?</Text>
+                  <View style={{ flexDirection: 'row', gap: 8, marginBottom: 4 }}>
+                    {([
+                      { key: 'charge' as const, label: 'A bank charge' },
+                      { key: 'category' as const, label: 'Spending I missed' },
+                    ]).map((option) => {
+                      const picked = reconcileAs === option.key;
+                      return (
+                        <Pressable
+                          key={option.key}
+                          onPress={() => setReconcileAs(option.key)}
+                          accessibilityRole="radio"
+                          accessibilityState={{ selected: picked }}
+                          testID={`bank-reconcile-as-${option.key}`}
+                          style={[
+                            styles.memberPill,
+                            {
+                              backgroundColor: picked ? colors.primary : colors.muted,
+                              borderColor: picked ? colors.primary : colors.border,
+                            },
+                          ]}
+                        >
+                          <Text style={[styles.memberPillText, { color: picked ? '#fff' : colors.foreground }]}>
+                            {option.label}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                  <Text style={[styles.reconcileHelp, { color: colors.mutedForeground, textAlign: 'left', marginTop: 0 }]}>
+                    {reconcileAs === 'charge'
+                      ? 'A fee is money gone, but it belongs to no category and no budget was set for it, so it is reported apart from spending.'
+                      : 'This counts as spending against the category you pick, the same as any withdrawal.'}
+                  </Text>
+
+                  {reconcileAs === 'category' ? (
+                    <>
+                      <Text style={[styles.label, { color: colors.mutedForeground }]}>
+                        Category <Text style={{ fontWeight: '400', color: '#f87171' }}>* required</Text>
+                      </Text>
+                      <TouchableOpacity
+                        style={[styles.input, styles.pickerButton, { borderColor: colors.border, backgroundColor: colors.muted }]}
+                        onPress={() => setShowReconcileCategoryPicker((open) => !open)}
+                        testID="bank-reconcile-category"
+                      >
+                        <Text style={{ flex: 1, color: reconcileCategory ? colors.foreground : colors.mutedForeground, fontFamily: 'Inter_400Regular' }}>
+                          {reconcileCategory || 'Choose a category'}
+                        </Text>
+                        <Feather name={showReconcileCategoryPicker ? 'chevron-up' : 'chevron-down'} size={16} color={colors.mutedForeground} />
+                      </TouchableOpacity>
+                      {showReconcileCategoryPicker && (
+                        <View style={[styles.categoryDropdown, { borderColor: colors.dropdownBorder, backgroundColor: colors.dropdownBackground }]}>
+                          {reconcileTree.map((group) => (
+                            <View key={`reconcile-group-${group.name}`}>
+                              {group.children.length > 0 ? (
+                                <>
+                                  <Text style={{ color: colors.dropdownMutedForeground, fontFamily: 'Inter_600SemiBold', fontSize: 11, paddingHorizontal: 14, paddingTop: 10 }}>
+                                    {group.name.toUpperCase()}
+                                  </Text>
+                                  {group.children.map((child) => (
+                                    <TouchableOpacity
+                                      key={`reconcile-child-${child}`}
+                                      style={styles.categoryOption}
+                                      onPress={() => { setReconcileCategory(child); setShowReconcileCategoryPicker(false); }}
+                                    >
+                                      <Text style={{ color: colors.dropdownForeground, fontFamily: 'Inter_400Regular' }}>{child}</Text>
+                                    </TouchableOpacity>
+                                  ))}
+                                </>
+                              ) : (
+                                <TouchableOpacity
+                                  style={styles.categoryOption}
+                                  onPress={() => { setReconcileCategory(group.name); setShowReconcileCategoryPicker(false); }}
+                                >
+                                  <Text style={{ color: colors.dropdownForeground, fontFamily: 'Inter_400Regular' }}>{group.name}</Text>
+                                </TouchableOpacity>
+                              )}
+                            </View>
+                          ))}
+                        </View>
+                      )}
+                    </>
+                  ) : null}
+
+                  <Text style={[styles.label, { color: colors.mutedForeground }]}>
+                    {reconcileAs === 'charge' ? 'Date of the charge' : 'Date of the spending'}
+                  </Text>
                   <Pressable
                     onPress={() => setShowReconcileDatePicker(true)}
                     style={[styles.input, styles.pickerButton, { borderColor: colors.border, backgroundColor: colors.muted }]}
@@ -2839,7 +2966,7 @@ export default function BankScreen() {
                   />
                   <TouchableOpacity
                     style={[styles.submitBtn, styles.submitDisburse, reconciling && { opacity: 0.6 }]}
-                    onPress={() => recordDifferenceAsCharge(reconcileDifference)}
+                    onPress={() => recordDifference(reconcileDifference)}
                     disabled={reconciling}
                     activeOpacity={0.85}
                     testID="bank-reconcile-record-charge"
@@ -2848,12 +2975,16 @@ export default function BankScreen() {
                       <ActivityIndicator color="#fff" />
                     ) : (
                       <Text style={[styles.submitText, { color: '#fff' }]}>
-                        Record KES {formatKES(reconcileDifference)} as a bank charge
+                        {reconcileAs === 'charge'
+                          ? `Record KES ${formatKES(reconcileDifference)} as a bank charge`
+                          : `Record KES ${formatKES(reconcileDifference)} as spending`}
                       </Text>
                     )}
                   </TouchableOpacity>
                   <Text style={[styles.reconcileHelp, { color: colors.mutedForeground }]}>
-                    A charge is kept out of household spending, so this will not touch any budget.
+                    {reconcileAs === 'charge'
+                      ? 'A charge is kept out of household spending, so this will not touch any budget.'
+                      : `This will count against ${reconcileCategory || 'the category you pick'} like any other withdrawal.`}
                   </Text>
                 </>
               ) : (
