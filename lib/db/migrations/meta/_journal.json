@@ -260,6 +260,13 @@
       "when": 1789974309079,
       "tag": "0036_bank_charges_become_spending",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1789993571410,
+      "tag": "0037_contributors_become_parties",
+      "breakpoints": true
     }
   ]
 }
