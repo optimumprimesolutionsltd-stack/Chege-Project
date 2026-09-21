@@ -335,6 +335,11 @@ function CategoryDialog({
   const [activeMonth, setActiveMonth] = useState(initial?.activeMonth ?? reportMonth);
   const [activeYear, setActiveYear] = useState(initial?.activeYear ?? reportYear);
   const [parentId, setParentId] = useState<string>(initial?.parentId ? String(initial.parentId) : "none");
+  // A group is a heading: its budget is its subcategories added up, so it is
+  // never asked for one. The form used to ask every new category for a figure
+  // and then quietly replace it with the children's total the moment a
+  // subcategory arrived — a number invited and then discarded.
+  const [isGroup, setIsGroup] = useState(hasChildren);
   const [saving, setSaving] = useState(false);
   const [pendingChange, setPendingChange] = useState<PendingCategoryChange | null>(null);
 
@@ -346,7 +351,8 @@ function CategoryDialog({
     setActiveMonth(initial?.activeMonth ?? reportMonth);
     setActiveYear(initial?.activeYear ?? reportYear);
     setParentId(initial?.parentId ? String(initial.parentId) : "none");
-  }, [initial, open, reportMonth, reportYear, defaultPriority, defaultName, defaultAmount]);
+    setIsGroup(hasChildren);
+  }, [initial, open, reportMonth, reportYear, defaultPriority, defaultName, defaultAmount, hasChildren]);
 
   // Blank means nothing budgeted yet, on a new category as much as on an
     // existing one. Requiring it only when creating made a heading impossible
@@ -361,7 +367,9 @@ function CategoryDialog({
     }
     setPendingChange({
       name: name.trim(),
-      budgetAmount: parsedAmount,
+      // A group carries no figure of its own; the server would zero it the
+      // moment a subcategory arrived anyway.
+      budgetAmount: isGroup ? 0 : parsedAmount,
       priority: parseInt(priority, 10) || 1,
       isRecurring,
       activeMonth,
@@ -386,7 +394,8 @@ function CategoryDialog({
           isRecurring: change.isRecurring,
           activeMonth: change.isRecurring ? null : change.activeMonth,
           activeYear: change.isRecurring ? null : change.activeYear,
-          parentId: parentId === "none" ? null : Number(parentId),
+          // A group is top-level by definition — nesting goes one level deep.
+          parentId: isGroup || parentId === "none" ? null : Number(parentId),
         }),
       });
       if (!res.ok) throw new Error("Failed");
@@ -423,7 +432,39 @@ function CategoryDialog({
                 </p>
               ) : null}
             </div>
-            {hasChildren ? (
+            {/* What kind of thing this is. Asked before the budget, because
+                the answer decides whether a budget makes sense at all. Not
+                asked of a category that already holds subcategories: that one
+                is a group, and saying otherwise would orphan them. */}
+            {!hasChildren && !recurringSetup ? (
+              <div className="space-y-1.5">
+                <label className="text-sm font-semibold">What is this?</label>
+                <div className="flex flex-wrap gap-2">
+                  {([
+                    { value: false, label: "A spending category" },
+                    { value: true, label: "A group of categories" },
+                  ] as const).map(option => (
+                    <Button
+                      key={String(option.value)}
+                      type="button"
+                      size="sm"
+                      variant={isGroup === option.value ? "default" : "outline"}
+                      onClick={() => setIsGroup(option.value)}
+                      data-testid={option.value ? "button-category-kind-group" : "button-category-kind-ledger"}
+                      disabled={saving}
+                    >
+                      {option.label}
+                    </Button>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {isGroup
+                    ? "A group holds no money of its own. Add subcategories to it and its budget becomes their total."
+                    : "Spending and a budget live here. You can put it inside a group below."}
+                </p>
+              </div>
+            ) : null}
+            {hasChildren || isGroup ? (
               <div className="space-y-1.5 rounded-xl border border-border/60 bg-muted/30 p-3" data-testid="parent-budget-note">
                 <label className="text-sm font-semibold">Budget amount</label>
                 <p className="text-xs text-muted-foreground">
@@ -438,7 +479,7 @@ function CategoryDialog({
                 <p className="text-xs text-muted-foreground">Leave it blank, or enter 0, if you are not budgeting this yet. Existing expenses stay recorded.</p>
               </div>
             )}
-            {parentOptions.length > 0 && !hasChildren && !recurringSetup ? (
+            {parentOptions.length > 0 && !hasChildren && !isGroup && !recurringSetup ? (
               <div className="space-y-1.5">
                 <label className="text-sm font-semibold">Inside another category</label>
                 <select

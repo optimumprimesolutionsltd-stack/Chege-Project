@@ -166,6 +166,11 @@ export default function BudgetScreen() {
   const [formPriority, setFormPriority] = useState('1');
   // null means "its own category"; an id nests it under that heading.
   const [formParentId, setFormParentId] = useState<number | null>(null);
+  // A group is a heading: its budget is its subcategories added up, so it is
+  // never asked for one. The form used to ask every new category for a figure
+  // and then quietly replace it with the children's total the moment a
+  // subcategory arrived — a number invited and then discarded.
+  const [formIsGroup, setFormIsGroup] = useState(false);
   const [formIsRecurring, setFormIsRecurring] = useState(true);
   const [formActiveMonth, setFormActiveMonth] = useState(month);
   const [formActiveYear, setFormActiveYear] = useState(year);
@@ -217,6 +222,7 @@ export default function BudgetScreen() {
     setEditTarget(null);
     setFormName(''); setFormAmount(''); setFormPriority(priority.toString());
     setFormParentId(null);
+    setFormIsGroup(false);
     setFormIsRecurring(true); setFormActiveMonth(month); setFormActiveYear(year);
     setAddOpen(true);
   };
@@ -227,6 +233,7 @@ export default function BudgetScreen() {
     setFormAmount(cat.budgetAmount.toString());
     setFormPriority(cat.priority.toString());
     setFormParentId(cat.parentId ?? null);
+    setFormIsGroup(allCategories.some((row) => row.parentId === cat.id));
     setFormIsRecurring(cat.isRecurring);
     setFormActiveMonth(cat.activeMonth ?? month);
     setFormActiveYear(cat.activeYear ?? year);
@@ -277,6 +284,7 @@ export default function BudgetScreen() {
     setFormName(requestedCategory);
     setFormAmount('');
     setFormPriority('3');
+    setFormIsGroup(false);
     setFormIsRecurring(true);
     setFormActiveMonth(month);
     setFormActiveYear(year);
@@ -506,7 +514,7 @@ export default function BudgetScreen() {
       Alert.alert('Name required', 'Give this category a clear name, such as Housing or Transport.');
       return;
     }
-    if (isNaN(amt) || amt < 0) {
+    if (!formIsGroup && (isNaN(amt) || amt < 0)) {
       Alert.alert('Amount not valid', 'Enter a whole number of shillings, or leave it blank to budget it later.');
       return;
     }
@@ -518,11 +526,14 @@ export default function BudgetScreen() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: formName.trim(),
-          budgetAmount: amt,
+          // A group carries no figure of its own; the server would zero it
+          // the moment a subcategory arrived anyway.
+          budgetAmount: formIsGroup ? 0 : amt,
           priority: parseInt(formPriority, 10) || 1,
           // Sent on every save, so clearing it moves the category back out to
-          // the top level rather than silently leaving it where it was.
-          parentId: formParentId,
+          // the top level rather than silently leaving it where it was. A
+          // group is top-level by definition — nesting goes one level deep.
+          parentId: formIsGroup ? null : formParentId,
           isRecurring: formIsRecurring,
           activeMonth: formIsRecurring ? null : formActiveMonth,
           activeYear: formIsRecurring ? null : formActiveYear,
@@ -726,7 +737,44 @@ export default function BudgetScreen() {
                     Enter the average amount you expect to spend each month. Jamvi will use it as this category&apos;s monthly budget.
                   </Text>
                 ) : null}
-                {editingParent ? (
+                {/* What kind of thing this is. Asked before the budget,
+                    because the answer decides whether a budget makes sense at
+                    all. Not asked of a category that already holds
+                    subcategories: that one is a group, and saying otherwise
+                    would mean orphaning them. */}
+                {!editingParent && !recurringSetupActive ? (
+                  <>
+                    <Text style={[styles.label, { color: colors.mutedForeground }]}>WHAT IS THIS?</Text>
+                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
+                      {([
+                        { key: false, label: 'A spending category', testID: 'category-kind-ledger' },
+                        { key: true, label: 'A group of categories', testID: 'category-kind-group' },
+                      ] as const).map((option) => (
+                        <Pressable
+                          key={String(option.key)}
+                          onPress={() => setFormIsGroup(option.key)}
+                          accessibilityRole="radio"
+                          accessibilityState={{ selected: formIsGroup === option.key }}
+                          testID={option.testID}
+                          style={[styles.priorityChip, {
+                            backgroundColor: formIsGroup === option.key ? colors.primary + '22' : colors.muted,
+                            borderColor: formIsGroup === option.key ? colors.primary : colors.border,
+                          }]}
+                        >
+                          <Text style={[styles.priorityChipText, { color: formIsGroup === option.key ? colors.primary : colors.mutedForeground }]}>
+                            {option.label}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                    <Text style={[styles.priorityHint, { color: colors.mutedForeground }]}>
+                      {formIsGroup
+                        ? 'A group holds no money of its own. Add subcategories to it and its budget becomes their total.'
+                        : 'Spending and a budget live here. You can put it inside a group below.'}
+                    </Text>
+                  </>
+                ) : null}
+                {editingParent || formIsGroup ? (
                   <View
                     testID="parent-budget-note"
                     style={[styles.parentBudgetNote, { backgroundColor: colors.accent, borderColor: colors.accentForeground + '55' }]}
@@ -757,7 +805,7 @@ export default function BudgetScreen() {
                 )}
                 {/* A category that already holds subcategories cannot itself
                     become one — nesting only goes one level deep. */}
-                {!editingParent && !recurringSetupActive ? (
+                {!editingParent && !formIsGroup && !recurringSetupActive ? (
                   <>
                     <Text style={[styles.label, { color: colors.mutedForeground }]}>INSIDE ANOTHER CATEGORY</Text>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 6 }}>

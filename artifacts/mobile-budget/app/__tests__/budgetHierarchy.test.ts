@@ -49,7 +49,10 @@ describe('a parent is budgeted through its subcategories', () => {
   });
 
   it('still offers the field for an ordinary category', () => {
-    expect(budget).toContain("{editingParent ? (");
+    // The note now covers a category declared a group as well as one that has
+    // already acquired subcategories: both are budgeted through their
+    // children, and only the timing differs.
+    expect(budget).toContain("{editingParent || formIsGroup ? (");
     expect(budget).toContain("'AVERAGE MONTHLY AMOUNT (KES)' : 'BUDGET AMOUNT (KES)'");
   });
 });

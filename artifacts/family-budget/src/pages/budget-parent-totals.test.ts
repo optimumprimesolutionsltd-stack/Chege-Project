@@ -26,7 +26,10 @@ describe('the web form matches the phone', () => {
   });
 
   it('still offers it for an ordinary category', () => {
-    expect(page).toContain('{hasChildren ? (');
+    // The note now covers a category declared a group as well as one that has
+    // already acquired subcategories: both are budgeted through their
+    // children, and only the timing differs.
+    expect(page).toContain('{hasChildren || isGroup ? (');
     expect(page).toContain('"Average monthly amount (KES)" : "Budget amount (KES)"');
   });
 
