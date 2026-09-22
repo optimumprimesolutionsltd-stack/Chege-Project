@@ -22,7 +22,8 @@ describe('a category can be added the way an income stream is', () => {
 
   it('borrows the income row styles rather than inventing new ones', () => {
     // Looking like it is the point: somebody recognised that row.
-    expect((budget.match(/styles\.incomeAddRow/g) ?? []).length).toBe(2);
+    // Three: income, the category row, and the parent picker beneath it.
+    expect((budget.match(/styles\.incomeAddRow/g) ?? []).length).toBe(3);
     expect((budget.match(/styles\.incomeAddButton/g) ?? []).length).toBe(2);
   });
 
@@ -52,10 +53,47 @@ describe('what the quick row refuses', () => {
 describe('the full form is still there for the rest', () => {
   it('is offered by name, under the quick row', () => {
     expect(budget).toContain('testID="budget-open-full-category-form"');
-    expect(budget).toContain('Subcategory, tier or a one-month category? Open the full form');
+    expect(budget).toContain('Tier, or a one-month category? Open the full form');
   });
 
-  it('makes a plain top-level category, leaving the rest to that form', () => {
-    expect(budget).toContain('parentId: null,');
+  it('sends whichever parent was chosen, top level being one of them', () => {
+    expect(budget).toContain('parentId: newCategoryParentId,');
+  });
+});
+
+// Creating Rent at the top level when it belonged under Housing is the wrong
+// creation the quick row was making easy: it asked for a name and an amount
+// and never for where the category goes.
+describe('the quick row asks where the category goes', () => {
+  it('offers a parent, defaulting to its own category', () => {
+    expect(budget).toContain('testID="budget-new-category-parent"');
+    expect(budget).toContain('testID="budget-new-category-parent-none"');
+    expect(budget).toContain("{chosenParent ? `Inside ${chosenParent.name}` : 'Its own category'}");
+  });
+
+  it('offers only top-level categories, nesting being one deep', () => {
+    // A subcategory offered as a parent would make a category the app then
+    // refuses to save.
+    expect(budget).toContain('const eligibleParents = useMemo(');
+    expect(budget).toContain('allCategories.filter((row) => !row.parentId)');
+    expect(budget).toContain('Nesting goes one level deep.');
+  });
+
+  it('says so when there is nothing to nest under yet', () => {
+    expect(budget).toContain('Nothing to nest under yet.');
+  });
+
+  it('warns before turning a funded category into a heading', () => {
+    // A heading totals its children and holds nothing of its own, so the
+    // parent's amount is about to become a total rather than a budget.
+    expect(budget).toContain('testID="budget-parent-becomes-heading"');
+    expect(budget).toContain('makes it a heading, and its budget becomes the total of what is inside');
+  });
+
+  it('keeps the parent between additions', () => {
+    // Adding three subcategories to one heading is the common case.
+    // Cleared in one place only: the "Its own category" option. Never on a
+    // successful add, where adding three under one heading is the common case.
+    expect((budget.match(/setNewCategoryParentId\(null\)/g) ?? []).length).toBe(1);
   });
 });
