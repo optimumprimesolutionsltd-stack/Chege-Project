@@ -37,6 +37,7 @@ import { PageScrollView } from '@/components/PageScrollReset';
 import { useAuth } from '@/lib/auth';
 import { handleLapsedError } from '@/lib/lapsedError';
 import { readAmount, toMoney } from '@/lib/bankAmount';
+import { AmountCalcRow } from '@/components/AmountCalcRow';
 import { buildCategoryTree, type CategoryRow } from '@workspace/category-tree';
 import {
   customFetch,
@@ -622,6 +623,14 @@ export default function BankDayScreen() {
                   keyboardType="decimal-pad"
                   testID={`bank-day-amount-${index}`}
                   style={[styles.input, { borderColor: colors.border, backgroundColor: colors.muted, color: colors.foreground }]}
+                />
+                {/* decimal-pad has no operators, so the expression readAmount
+                    already understands (see lib/bankAmount.ts) had no way to
+                    be typed - these put +, -, x, / one tap away. */}
+                <AmountCalcRow
+                  amount={row.amount}
+                  onChangeAmount={(value) => patchRow(row.key, { amount: value })}
+                  testIDPrefix={`bank-day-amount-${index}`}
                 />
 
                 {isOutgoing(row.kind) ? (

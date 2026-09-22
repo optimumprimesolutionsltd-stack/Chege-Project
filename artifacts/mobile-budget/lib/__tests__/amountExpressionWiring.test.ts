@@ -3,7 +3,12 @@ import { describe, expect, it } from 'vitest';
 
 const bank = readFileSync('app/(tabs)/bank.tsx', 'utf8');
 const expense = readFileSync('app/add-expense.tsx', 'utf8');
+const bankDay = readFileSync('app/bank-day.tsx', 'utf8');
 const amounts = readFileSync('lib/bankAmount.ts', 'utf8');
+// add-expense.tsx and bank-day.tsx share the calc-row buttons through this
+// component now, rather than each carrying its own copy — see its own
+// comment for why (tabs)/bank.tsx keeps a separate inline copy for now.
+const calcRow = readFileSync('components/AmountCalcRow.tsx', 'utf8');
 
 // Working out a day's receipts meant leaving for a calculator and coming back
 // with a number, losing the sitting on the way.
@@ -27,26 +32,29 @@ describe('the amount fields do arithmetic', () => {
     // A dozen places downstream read that field with Number(), so resolving at
     // each of them is a dozen chances to miss one.
     expect(expense).toContain('if (isAmountExpression(amount) && resolved !== null) setAmount(String(resolved));');
-    expect(expense).toContain('testID="expense-amount-key-equals"');
+    expect(calcRow).toContain('testID={`${testIDPrefix}-key-equals`}');
   });
 
   it('keeps the numeric keypad and puts the operators beside it', () => {
     // A full keyboard would make every plain amount harder to type for the
-    // sake of the occasional sum.
+    // sake of the occasional sum. (tabs)/bank.tsx still carries its own inline
+    // copy of the row; add-expense.tsx and bank-day.tsx share this one.
     expect(bank).toContain('keyboardType="decimal-pad"');
     expect(expense).toContain('keyboardType="numeric"');
-    for (const source of [bank, expense]) {
-      expect(source).toContain("(['+', '−', '×', '÷', '(', ')'] as const).map((key) => (");
-      expect(source).toContain('previous.slice(0, -1)');
+    expect(bankDay).toContain('keyboardType="decimal-pad"');
+    expect(calcRow).toContain("(['+', '−', '×', '÷', '(', ')'] as const).map((key) => (");
+    expect(calcRow).toContain('.slice(0, -1)');
+    for (const source of [expense, bankDay]) {
+      expect(source).toContain('<AmountCalcRow');
     }
   });
 
   it('shows the working only when there is working to show', () => {
     // No point printing "= 5,000" under a field that says 5000.
     expect(bank).toContain('{isAmountExpression(amount) && parsedOutgoingAmount !== null ? (');
-    expect(expense).toContain('{isAmountExpression(amount) ? (');
+    expect(calcRow).toContain('{isAmountExpression(amount) ? (');
     expect(bank).toContain('testID="bank-amount-resolved"');
-    expect(expense).toContain('testID="expense-amount-resolved"');
+    expect(calcRow).toContain('testID={`${testIDPrefix}-resolved`}');
   });
 
   it('never evaluates what somebody typed', () => {
