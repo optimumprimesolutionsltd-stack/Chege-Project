@@ -3419,6 +3419,12 @@ components:
         isBorrowing:
           type: boolean
           description: Money borrowed rather than earned.
+        settlesContributorId:
+          type: ["number", "null"]
+          nullable: true
+          description: >-
+            The party a repayment settled, so an editor can reopen it as a
+            repayment rather than as ordinary money in.
         savingsGoalId:
           type: ["number", "null"]
           description: Linked savings goal for a bank transfer

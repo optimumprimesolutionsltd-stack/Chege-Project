@@ -360,6 +360,9 @@ async function enrichTx(
     expenseCategory: tx.expenseCategory ?? null,
     isLending: tx.isLending ?? false,
     isBorrowing: tx.isBorrowing ?? false,
+    // Which party a repayment settled. Without it the editor reopens a
+    // repayment as ordinary money in, and says so on screen.
+    settlesContributorId: tx.settlesContributorId ?? null,
     savingsGoalId: tx.savingsGoalId ?? null,
     savingsGoalName: savingsGoal?.name ?? null,
     transferDirection: tx.transferDirection ?? null,

@@ -44,6 +44,11 @@ export interface JointAccountTransaction {
   /** Money borrowed rather than earned. */
   isBorrowing?: boolean;
   /**
+     * The party a repayment settled, so an editor can reopen it as a repayment rather than as ordinary money in.
+     * @nullable
+     */
+  settlesContributorId?: number | null;
+  /**
      * Linked savings goal for a bank transfer
      * @nullable
      */
