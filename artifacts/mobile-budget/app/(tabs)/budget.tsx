@@ -414,7 +414,24 @@ export default function BudgetScreen() {
    */
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newCategoryAmount, setNewCategoryAmount] = useState('');
+  const [newCategoryParentId, setNewCategoryParentId] = useState<number | null>(null);
+  const [showNewCategoryParent, setShowNewCategoryParent] = useState(false);
   const [addingCategory, setAddingCategory] = useState(false);
+
+  /**
+   * What a new category may be put inside.
+   *
+   * Nesting goes one level deep, so a subcategory cannot itself be a parent —
+   * offering one would make a category the app then refuses to save. A parent
+   * that already holds an amount is still eligible: it becomes a heading, and
+   * the server zeroes its own figure because a heading totals its children
+   * rather than holding money of its own. The row says so before it happens.
+   */
+  const eligibleParents = useMemo(
+    () => allCategories.filter((row) => !row.parentId),
+    [allCategories],
+  );
+  const chosenParent = eligibleParents.find((row) => row.id === newCategoryParentId) ?? null;
 
   const handleAddCategoryInline = async () => {
     const name = newCategoryName.trim();
@@ -440,13 +457,16 @@ export default function BudgetScreen() {
           name,
           budgetAmount: raw === '' ? 0 : Number(raw),
           priority: 1,
-          parentId: null,
+          parentId: newCategoryParentId,
           isRecurring: true,
         }),
       });
       await refreshAll();
       setNewCategoryName('');
       setNewCategoryAmount('');
+      // The parent stays: adding three subcategories to one heading is the
+      // common case, and re-picking it each time is the nuisance.
+      setShowNewCategoryParent(false);
     } catch (error: unknown) {
       Alert.alert('Could not add the category', error instanceof Error ? error.message : 'Please try again.');
     } finally {
@@ -1394,9 +1414,60 @@ export default function BudgetScreen() {
               {addingCategory ? <ActivityIndicator size="small" color="#fff" /> : <Feather name="plus" size={17} color="#fff" />}
             </Pressable>
           </View>
+          {/* Where it goes, asked here rather than left to be discovered:
+              creating Rent at the top level when it belonged under Housing is
+              the wrong creation this row was making easy. */}
+          <Pressable
+            onPress={() => setShowNewCategoryParent((open) => !open)}
+            testID="budget-new-category-parent"
+            style={[styles.incomeAddRow, { borderColor: colors.border, backgroundColor: colors.card, paddingVertical: 10, marginTop: 8 }]}
+          >
+            <Text style={{ flex: 1, color: chosenParent ? colors.foreground : colors.mutedForeground, fontSize: 13, fontFamily: 'Inter_400Regular' }}>
+              {chosenParent ? `Inside ${chosenParent.name}` : 'Its own category'}
+            </Text>
+            <Feather name={showNewCategoryParent ? 'chevron-up' : 'chevron-down'} size={16} color={colors.mutedForeground} />
+          </Pressable>
+          {showNewCategoryParent ? (
+            <View style={[styles.categoryDropdown, { borderColor: colors.border, backgroundColor: colors.card }]}>
+              <Pressable
+                onPress={() => { setNewCategoryParentId(null); setShowNewCategoryParent(false); }}
+                style={styles.categoryOption}
+                testID="budget-new-category-parent-none"
+              >
+                <Text style={{ color: colors.foreground, fontFamily: 'Inter_400Regular' }}>Its own category</Text>
+              </Pressable>
+              {eligibleParents.length === 0 ? (
+                <Text style={{ color: colors.mutedForeground, padding: 12, fontSize: 12 }}>
+                  Nothing to nest under yet. Add a category first, then put others inside it.
+                </Text>
+              ) : (
+                eligibleParents.map((row) => (
+                  <Pressable
+                    key={`parent-${row.id}`}
+                    onPress={() => { setNewCategoryParentId(row.id); setShowNewCategoryParent(false); }}
+                    style={styles.categoryOption}
+                    testID={`budget-new-category-parent-${row.id}`}
+                  >
+                    <Text style={{ color: colors.foreground, fontFamily: 'Inter_400Regular' }}>Inside {row.name}</Text>
+                  </Pressable>
+                ))
+              )}
+              {/* Only one level deep, so a subcategory is never offered as a
+                  parent: it would make a category the app then refuses. */}
+              <Text style={{ color: colors.mutedForeground, paddingHorizontal: 12, paddingBottom: 10, fontSize: 11, lineHeight: 16 }}>
+                Only top-level categories are listed. Nesting goes one level deep.
+              </Text>
+            </View>
+          ) : null}
+          {chosenParent && chosenParent.budgetAmount > 0 ? (
+            <Text style={{ color: '#f59e0b', fontSize: 11, marginTop: 6, lineHeight: 16 }} testID="budget-parent-becomes-heading">
+              {chosenParent.name} has KES {formatKES(chosenParent.budgetAmount)} of its own. Putting a category inside
+              it makes it a heading, and its budget becomes the total of what is inside.
+            </Text>
+          ) : null}
           <Pressable onPress={() => openAdd()} testID="budget-open-full-category-form" style={{ paddingVertical: 8 }}>
             <Text style={{ color: colors.primary, fontSize: 12, fontFamily: 'Inter_600SemiBold' }}>
-              Subcategory, tier or a one-month category? Open the full form
+              Tier, or a one-month category? Open the full form
             </Text>
           </Pressable>
         </View>
@@ -1906,6 +1977,8 @@ const styles = StyleSheet.create({
   monthLabel: { fontSize: 14, color: '#F4F8FF', fontFamily: 'Inter_500Medium', minWidth: 64, textAlign: 'center' },
   addBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, height: 32, borderRadius: 16, backgroundColor: 'rgba(74,222,128,0.15)', justifyContent: 'center' },
   addBtnText: { color: '#4ade80', fontSize: 12, fontFamily: 'Inter_600SemiBold' },
+  categoryDropdown: { borderWidth: 1, borderRadius: 12, overflow: 'hidden', marginTop: 6 },
+  categoryOption: { paddingHorizontal: 14, paddingVertical: 11 },
   inlineAddCategory: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1, borderStyle: 'dashed', borderRadius: 12, height: 46, marginTop: 10 },
   inlineAddCategoryText: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
    manageBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, height: 32, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.10)' },
