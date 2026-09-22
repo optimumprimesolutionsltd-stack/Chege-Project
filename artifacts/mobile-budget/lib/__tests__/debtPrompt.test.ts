@@ -20,7 +20,9 @@ describe('offering to track a first debt', () => {
 
   it('sends people to the Debt tab, which by then has a reason to exist', () => {
     expect(card).toContain('testID="home-track-debt"');
-    expect((card.match(/router\.push\('\/\(tabs\)\/debt'\)/g) ?? []).length).toBe(2);
+    // Three now: the invitation, the summary, and the card for money owed to
+    // people when no category is tracked.
+    expect((card.match(/router\.push\('\/\(tabs\)\/debt'\)/g) ?? []).length).toBe(3);
   });
 
   it('names the debts people in Kenya actually carry', () => {
@@ -90,5 +92,43 @@ describe('debt is never entirely out of reach', () => {
   it('says so in the guide, under what somebody would search for', () => {
     expect(help).toContain('Find debt when there is no Debt tab');
     expect(help).toContain("'no debt tab'");
+  });
+});
+
+// The tab learned that a creditor is a debt, and so did the Debt screen. The
+// home card had not: borrowing from Mwangi put a creditor on the books and
+// left the home screen silent — or worse, offering to start tracking debt
+// that was already tracked.
+describe('the home card counts who you owe, not only categories', () => {
+  const card = readFileSync('components/DebtSummaryCard.tsx', 'utf8');
+
+  it('reads the parties', () => {
+    expect(card).toContain("queryKey: ['parties'],");
+    expect(card).toContain('const owedToPeople = parties.reduce(');
+  });
+
+  it('shows what is owed when no category is tracked', () => {
+    expect(card).toContain('testID="home-debt-parties-card"');
+    expect(card).toContain('if (debts.length === 0 && owedToPeople > 0) {');
+  });
+
+  it('opens the Debt tab, where something can be done about it', () => {
+    expect((card.match(/router\.push\('\/\(tabs\)\/debt'\)/g) ?? []).length).toBe(3);
+  });
+
+  it('does not offer to start tracking debt that is already tracked', () => {
+    // The invitation branch is only reached once the party total is zero too.
+    const order = card.indexOf('if (debts.length === 0 && owedToPeople > 0) {');
+    expect(order).toBeGreaterThan(0);
+    expect(order).toBeLessThan(card.indexOf('if (debts.length === 0) {'));
+  });
+
+  it('adds it alongside when categories are tracked as well', () => {
+    expect(card).toContain('testID="home-debt-plus-parties"');
+    expect(card).toContain('which has no end date');
+  });
+
+  it('never counts a negative or an untracked balance', () => {
+    expect(card).toContain('Math.max(0, party.owedByUs ?? 0)');
   });
 });
