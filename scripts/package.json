@@ -5,8 +5,6 @@
   "type": "module",
   "scripts": {
     "hello": "tsx ./src/hello.ts",
-    "verify:category-integrity": "tsx ./src/verify-category-integrity.ts",
-    "verify:staging-categories": "tsx ./src/verify-category-integrity.ts",
     "report:category-aliases": "tsx ./src/report-category-aliases.ts",
     "fix:staging-categories": "tsx ./src/report-category-aliases.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
