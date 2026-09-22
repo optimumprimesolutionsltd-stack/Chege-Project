@@ -1258,6 +1258,11 @@ export interface JointAccountTransaction {
   /** Money borrowed rather than earned. */
   isBorrowing?: boolean;
   /**
+     * The posting this bank charge came with, if it is one.
+     * @nullable
+     */
+  chargeForTransactionId?: number | null;
+  /**
      * The party a repayment settled, so an editor can reopen it as a repayment rather than as ordinary money in.
      * @nullable
      */
@@ -1435,6 +1440,11 @@ export interface DisbursementInput {
      * @minimum 1
      */
   settlesContributorId?: number;
+  /**
+     * The posting this bank charge came with. The fee stays its own row, so what is owed moves by the payment alone, but the link lets the posting show its fee again instead of quietly gaining a second one.
+     * @minimum 1
+     */
+  chargeForTransactionId?: number;
   /** Required budget category this disbursement is paying for */
   expenseCategory?: string;
   /** Choose other only when the required description is a narration. */

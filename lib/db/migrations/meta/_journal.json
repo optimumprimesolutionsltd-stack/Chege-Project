@@ -302,6 +302,13 @@
       "when": 1790022175086,
       "tag": "0042_lending_is_not_spending",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1790067968558,
+      "tag": "0043_charge_belongs_to_its_posting",
+      "breakpoints": true
     }
   ]
 }

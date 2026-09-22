@@ -3419,6 +3419,10 @@ components:
         isBorrowing:
           type: boolean
           description: Money borrowed rather than earned.
+        chargeForTransactionId:
+          type: ["number", "null"]
+          nullable: true
+          description: The posting this bank charge came with, if it is one.
         settlesContributorId:
           type: ["number", "null"]
           nullable: true
@@ -3677,6 +3681,13 @@ components:
             being paid, or somebody being lent to. Stored so reopening the
             posting can say who it was for rather than leaving an empty picker
             that invites a guess.
+        chargeForTransactionId:
+          type: number
+          minimum: 1
+          description: >-
+            The posting this bank charge came with. The fee stays its own row,
+            so what is owed moves by the payment alone, but the link lets the
+            posting show its fee again instead of quietly gaining a second one.
         expenseCategory:
           type: string
           description: Required budget category this disbursement is paying for

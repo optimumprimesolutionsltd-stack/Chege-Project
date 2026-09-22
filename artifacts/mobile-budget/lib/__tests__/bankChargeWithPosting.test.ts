@@ -89,10 +89,10 @@ describe('the figures include it', () => {
   it('clears the amount between postings in a sitting', () => {
     // The next line is rarely charged the same fee, and one carried over
     // would be money out that never happened.
-    // Three: both reset paths, and opening an existing posting to edit it —
-    // a fee left in the field must not be added to something else by opening
-    // it.
-    expect((bank.match(/setChargeAmount\(''\);/g) ?? []).length).toBe(3);
+    // Two reset paths. Opening a posting to edit it sets the field from the
+    // fee that posting already has, which is blank when it has none.
+    expect((bank.match(/setChargeAmount\(''\);/g) ?? []).length).toBe(2);
+    expect(bank).toContain("setChargeAmount(chargeOnThis ? String(chargeOnThis.amount) : '');");
   });
 
   it('keeps the category, because it is the same expense every time', () => {
@@ -139,5 +139,38 @@ describe('a category from another budget is caught before anything saves', () =>
   it('does not refuse before the categories have loaded', () => {
     // An empty list means not loaded, not "no categories exist".
     expect((bank.match(/categories\.length > 0/g) ?? []).length).toBe(2);
+  });
+});
+
+// The fee is its own row on purpose — folded into the amount, a repayment of
+// 5,000 with a 50 charge would take 5,050 off the loan. But nothing tied the
+// two together, so reopening a posting could not show its fee, and typing an
+// amount there wrote a second one on top of the first.
+describe('a charge belongs to the posting it came with', () => {
+  it('is linked when it is written', () => {
+    expect(bank).toContain('...(parentId === undefined ? {} : { chargeForTransactionId: parentId }),');
+    expect(bank).toContain("await postBankCharge(txType === 'deposit' ? 'deposit' : 'withdrawal', createdPostingId);");
+  });
+
+  it('takes the id from whichever branch wrote the posting', () => {
+    expect((bank.match(/createdPostingId = \(await create/g) ?? []).length).toBe(3);
+  });
+
+  it('is shown again when the posting is reopened', () => {
+    expect(bank).toContain('const chargeOnThis = data?.transactions.find((row) => row.chargeForTransactionId === tx.id) ?? null;');
+    expect(bank).toContain("setChargeAmount(chargeOnThis ? String(chargeOnThis.amount) : '');");
+  });
+
+  it('is changed rather than duplicated', () => {
+    expect(bank).toContain('if (existingCharge) {');
+    expect(bank).toContain('await updateTransaction({');
+  });
+
+  it('is removed when the field is cleared', () => {
+    expect(bank).toContain('await deleteTransaction({ id: existingCharge.id });');
+  });
+
+  it('is found by the link, not by guessing from the date', () => {
+    expect(bank).toContain('transactions.find((row) => row.chargeForTransactionId === editingTransactionId)');
   });
 });
