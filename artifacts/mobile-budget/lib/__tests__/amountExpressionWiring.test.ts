@@ -63,3 +63,22 @@ describe('the amount fields do arithmetic', () => {
     expect(parser).not.toContain('new Function');
   });
 });
+
+// A full number pad is twelve keys nobody asked for on the common case of
+// typing a plain amount off the device's own keypad, so it sits behind a
+// toggle instead of always on screen.
+describe('the full number pad stays out of the way until asked for', () => {
+  it('starts hidden', () => {
+    expect(calcRow).toContain('const [showKeypad, setShowKeypad] = useState(false);');
+  });
+
+  it('has a toggle that shows and hides it', () => {
+    expect(calcRow).toContain('testID={`${testIDPrefix}-toggle-keypad`}');
+    expect(calcRow).toContain('onPress={() => setShowKeypad((current) => !current)}');
+  });
+
+  it('carries every digit and a decimal point', () => {
+    expect(calcRow).toContain("const DIGIT_KEYS = ['7', '8', '9', '4', '5', '6', '1', '2', '3', '0', '.'] as const;");
+    expect(calcRow).toContain('testID={`${testIDPrefix}-digit-${key}`}');
+  });
+});

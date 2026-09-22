@@ -25,7 +25,8 @@ describe('a day can be written down before it is saved', () => {
     expect(day).toContain("| 'pay-party'");
     expect(day).toContain("| 'money-in'");
     expect(day).toContain("| 'repaid'");
-    expect(day).toContain("| 'borrowed';");
+    expect(day).toContain("| 'borrowed'");
+    expect(day).toContain("| 'lend';");
   });
 
   it('lets a line be added and taken away', () => {
@@ -75,6 +76,21 @@ describe('saving leaves no batch behind', () => {
   it('carries the kind of each line onto its posting', () => {
     expect(day).toContain("...(row.kind === 'repaid' && party ? { settlesContributorId: party.id } : {}),");
     expect(day).toContain("...(row.kind === 'borrowed' ? { isBorrowing: true } : {}),");
+  });
+
+  // A loan out has no category, because it is not a cost — the same reason
+  // (tabs)/bank.tsx leaves expenseCategory out when isLending is set.
+  it('posts a lend line as a loan, not an expense', () => {
+    const save = day.slice(day.indexOf('const saveRow ='), day.indexOf('const offerBalanceChanges ='));
+    const lendBranch = save.slice(save.indexOf("if (row.kind === 'lend') {"), save.indexOf('} else if (isOutgoing(row.kind)) {'));
+    expect(lendBranch).toContain('isLending: true,');
+    expect(lendBranch).toContain('settlesContributorId: party?.id,');
+    expect(lendBranch).not.toContain('expenseCategory');
+  });
+
+  it('never asks a lend line for a category', () => {
+    expect(day).toContain("if (isOutgoing(row.kind) && row.kind !== 'lend' && !row.category.trim()) return 'Give it a category.';");
+    expect(day).toContain("if (row.kind === 'lend' && row.partyId === null) return 'Say who you are lending to.';");
   });
 
   it('posts a line fee separately, after the line it belongs to', () => {
@@ -128,11 +144,39 @@ describe('the balances are offered once, at the end', () => {
     expect(day).toContain('debtBalance: remaining');
   });
 
+  // The mirror of the borrowed branch: lending grows what a party owes you,
+  // exactly as offerLendingIncrease does in (tabs)/bank.tsx.
+  it('grows what a party owes you when a lend line is saved', () => {
+    expect(day).toContain("} else if (row.kind === 'lend' && party) {");
+    expect(day).toContain('owedToUs: owed + amount');
+  });
+
   it('never drives a balance below zero', () => {
     expect((day.match(/Math\.max\(0, owed - amount\)/g) ?? []).length).toBe(3);
   });
 
   it('is in the guide', () => {
     expect(help).toContain('Record a whole day from a statement');
+  });
+});
+
+// The picker used to send you away — "Add them from Deposit or Withdraw" —
+// for one line in a screen built to avoid leaving for other screens.
+describe('a new debtor or creditor can be named without leaving the day', () => {
+  it('offers to add someone from inside the picker', () => {
+    expect(day).toContain("testID={`${testID}-add-new`}");
+    expect(day).not.toContain('Add them from Deposit or Withdraw');
+  });
+
+  it('creates the party with the balance on the right side of the ledger', () => {
+    expect(day).toContain("body: JSON.stringify({ name, [owedField]: toMoney(owed) }),");
+    expect(day).toContain("owedField={row.kind === 'pay-party' ? 'owedByUs' : 'owedToUs'}");
+    expect(day).toContain('owedField="owedByUs"');
+  });
+
+  it('picks the newly created party once it exists', () => {
+    const partyField = day.slice(day.indexOf('function PartyField('));
+    expect(partyField).toContain('await queryClient.invalidateQueries({ queryKey: [\'parties\'] });');
+    expect(partyField).toContain('onPick(created.id);');
   });
 });

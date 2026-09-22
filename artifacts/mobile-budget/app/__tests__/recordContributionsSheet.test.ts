@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 const source = readFileSync('app/record-contributions.tsx', 'utf8');
 const exportSource = readFileSync('components/ContributionExport.tsx', 'utf8');
+const accountPickerSource = readFileSync('components/BankAccountPicker.tsx', 'utf8');
 
 describe('Record contributions', () => {
   // Picking the first account on someone's behalf is how money lands in the
@@ -17,8 +18,12 @@ describe('Record contributions', () => {
   });
 
   it('still offers a picker when there is more than one account', () => {
-    expect(source).toContain("testID=\"record-contributions-account-picker\"");
-    expect(source).toContain("'Choose an account'");
+    // Extracted into BankAccountPicker (shared with bank-day.tsx), which
+    // record-contributions.tsx wires up with this exact testID prefix.
+    expect(source).toContain('<BankAccountPicker');
+    expect(source).toContain('testIDPrefix="record-contributions-account"');
+    expect(accountPickerSource).toContain("testID={`${testIDPrefix}-picker`}");
+    expect(accountPickerSource).toContain("placeholder = 'Choose an account'");
   });
 
   // Inside a formSheet the safe-area inset reads 0, so the footer sat behind
