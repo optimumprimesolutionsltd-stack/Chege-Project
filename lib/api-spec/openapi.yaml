@@ -3411,6 +3411,14 @@ components:
           type: ["string", "null"]
           nullable: true
           description: Expense category this disbursement covers (optional)
+        isLending:
+          type: boolean
+          description: >-
+            Money lent out rather than spent. It carries no category, so an
+            editor must not demand one for it.
+        isBorrowing:
+          type: boolean
+          description: Money borrowed rather than earned.
         savingsGoalId:
           type: ["number", "null"]
           description: Linked savings goal for a bank transfer

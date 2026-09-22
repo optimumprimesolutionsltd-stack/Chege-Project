@@ -89,7 +89,10 @@ describe('the figures include it', () => {
   it('clears the amount between postings in a sitting', () => {
     // The next line is rarely charged the same fee, and one carried over
     // would be money out that never happened.
-    expect((bank.match(/setChargeAmount\(''\);/g) ?? []).length).toBe(2);
+    // Three: both reset paths, and opening an existing posting to edit it —
+    // a fee left in the field must not be added to something else by opening
+    // it.
+    expect((bank.match(/setChargeAmount\(''\);/g) ?? []).length).toBe(3);
   });
 
   it('keeps the category, because it is the same expense every time', () => {

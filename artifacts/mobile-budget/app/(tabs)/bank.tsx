@@ -108,6 +108,7 @@ type Tx = {
   madeByName?: string | null;
   incomeSourceId?: number | null;
   expenseCategory?: string | null;
+  isLending?: boolean | null;
   /** The month a deposit was for, when that is not the month it arrived. */
   appliesToMonth?: number | null;
   appliesToYear?: number | null;
@@ -820,6 +821,14 @@ export default function BankScreen() {
       : tx.description);
     setDate(tx.date);
     setExpenseCategory(tx.expenseCategory ?? '');
+    // Without this the editor treated every withdrawal as ordinary spending,
+    // so opening a loan out — which has no category, by design — and saving
+    // it demanded a category it must never have.
+    setWithdrawDest(type === 'disbursement' ? (tx.isLending ? 'lend' : 'other') : null);
+    setWithdrawPartyId(null);
+    // Blank, so a fee left in the field from the last posting cannot be added
+    // to this one by opening it.
+    setChargeAmount('');
     setAppliesTo(tx.appliesToMonth && tx.appliesToYear
       ? { month: tx.appliesToMonth, year: tx.appliesToYear }
       : null);

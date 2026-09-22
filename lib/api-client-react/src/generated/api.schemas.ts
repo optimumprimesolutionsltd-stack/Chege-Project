@@ -1253,6 +1253,10 @@ export interface JointAccountTransaction {
      * @nullable
      */
   expenseCategory?: string | null;
+  /** Money lent out rather than spent. It carries no category, so an editor must not demand one for it. */
+  isLending?: boolean;
+  /** Money borrowed rather than earned. */
+  isBorrowing?: boolean;
   /**
      * Linked savings goal for a bank transfer
      * @nullable
