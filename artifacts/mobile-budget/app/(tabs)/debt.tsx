@@ -9,6 +9,15 @@ import { PageScrollView } from '@/components/PageScrollReset';
 import { DebtPayoffCard } from '@/components/DebtPayoffCard';
 import { formatInterestRate, type PayoffStrategy } from '@/lib/debts';
 import { formatMonthKey, projectPayoff, summariseDebts, type DebtWithPayment } from '@/lib/debtSummary';
+import { router } from 'expo-router';
+
+type Party = {
+  id: number;
+  name: string;
+  kind?: string | null;
+  owedToUs?: number | null;
+  owedByUs?: number | null;
+};
 
 type CategoryRow = DebtWithPayment & { budgetAmount?: number | null };
 
@@ -48,6 +57,30 @@ export default function DebtScreen() {
       monthlyPayment: row.budgetAmount ?? null,
     }));
 
+  /**
+   * Borrowing and lending are debt, and were reaching this screen nowhere.
+   *
+   * Borrow from Mwangi on the Banking tab and he becomes a creditor; lend to
+   * Kamau and he becomes a debtor. Both are the same thing this screen is
+   * about, and until now neither appeared on it — the screen read only
+   * categories, so a household could owe three people and see "no debts
+   * tracked yet".
+   *
+   * They sit apart from the payoff plan rather than inside it. The plan needs
+   * a monthly amount to work out an end date, and a party has none: putting
+   * them in would replace every date with "no end date yet" and lose the one
+   * figure this screen exists to show.
+   */
+  const { data: parties = [] } = useQuery<Party[]>({
+    queryKey: ['parties'],
+    queryFn: () => customFetch<Party[]>('/api/contributors'),
+    staleTime: 30_000,
+  });
+  const creditors = parties.filter((party) => typeof party.owedByUs === 'number' && (party.owedByUs ?? 0) > 0);
+  const debtors = parties.filter((party) => typeof party.owedToUs === 'number' && (party.owedToUs ?? 0) > 0);
+  const owedToPeople = creditors.reduce((total, party) => total + (party.owedByUs ?? 0), 0);
+  const owedByPeople = debtors.reduce((total, party) => total + (party.owedToUs ?? 0), 0);
+
   const view = summariseDebts(debts, strategy);
   const debtFree = formatMonthKey(view.debtFreeOn);
   const clearedEverything = debts.length > 0 && view.totalOwed === 0;
@@ -66,7 +99,9 @@ export default function DebtScreen() {
           </>
         ) : debts.length === 0 ? (
           <Text style={styles.headerSub}>
-            No debts tracked yet. Mark a budget category as a debt below and Jamvi works out when it ends.
+            {owedToPeople > 0
+              ? `You owe KES ${kes(owedToPeople)} to people and institutions, below. Mark a budget category as a debt too and Jamvi works out when it ends.`
+              : 'No debts tracked yet. Mark a budget category as a debt below and Jamvi works out when it ends.'}
           </Text>
         ) : (
           <>
@@ -165,6 +200,47 @@ export default function DebtScreen() {
             {/* Tagging a category as a debt, and editing balances, already
                 lives in this card — the screen wraps it rather than growing a
                 second way to do the same thing. */}
+            {creditors.length > 0 || debtors.length > 0 ? (
+              <View style={styles.section} testID="debt-parties">
+                <Text style={[styles.strategyHint, { color: colors.mutedForeground, marginBottom: 2 }]}>
+                  PEOPLE AND INSTITUTIONS
+                </Text>
+                {creditors.map((party) => (
+                  <View key={`owe-${party.id}`} testID={`debt-creditor-${party.id}`} style={[styles.debtRow, { borderColor: colors.border, backgroundColor: colors.card }]}>
+                    <View style={styles.debtHead}>
+                      <Text style={[styles.debtName, { color: colors.foreground }]} numberOfLines={1}>{party.name}</Text>
+                      <Text style={[styles.debtBalance, { color: colors.foreground }]}>KES {kes(party.owedByUs ?? 0)}</Text>
+                    </View>
+                    <Text style={[styles.debtMeta, { color: colors.mutedForeground }]}>You owe them</Text>
+                  </View>
+                ))}
+                {debtors.map((party) => (
+                  <View key={`owed-${party.id}`} testID={`debt-debtor-${party.id}`} style={[styles.debtRow, { borderColor: colors.border, backgroundColor: colors.card }]}>
+                    <View style={styles.debtHead}>
+                      <Text style={[styles.debtName, { color: colors.foreground }]} numberOfLines={1}>{party.name}</Text>
+                      <Text style={[styles.debtBalance, { color: '#22c55e' }]}>KES {kes(party.owedToUs ?? 0)}</Text>
+                    </View>
+                    <Text style={[styles.debtMeta, { color: colors.mutedForeground }]}>Owes you</Text>
+                  </View>
+                ))}
+                <Text style={[styles.debtMeta, { color: colors.mutedForeground }]}>
+                  These come from borrowing and lending on the Banking tab. They are not in the payoff plan above: that
+                  works out an end date from a monthly amount, and these have none.
+                </Text>
+                <Pressable
+                  onPress={() => router.push('/parties')}
+                  accessibilityRole="button"
+                  accessibilityLabel="Open creditors and debtors"
+                  testID="debt-open-parties"
+                  style={({ pressed }) => [styles.strategyChip, { borderColor: colors.primary, alignSelf: 'flex-start', opacity: pressed ? 0.7 : 1 }]}
+                >
+                  <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>
+                    Creditors and debtors
+                  </Text>
+                </Pressable>
+              </View>
+            ) : null}
+
             <DebtPayoffCard canManage />
           </>
         )}

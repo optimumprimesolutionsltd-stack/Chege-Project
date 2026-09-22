@@ -95,3 +95,44 @@ describe('an opening balance can be set, and corrected afterwards', () => {
     expect(help).toContain('See everybody you owe, and everybody who owes you');
   });
 });
+
+// Borrow from Mwangi on the Banking tab and he becomes a creditor; lend to
+// Kamau and he becomes a debtor. Both are the same thing the Debt tab is
+// about, and neither reached it: the screen read only categories, so a
+// household could owe three people and be told "no debts tracked yet".
+describe('borrowing and lending reach the Debt tab', () => {
+  const debt = readFileSync('app/(tabs)/debt.tsx', 'utf8');
+
+  it('reads the parties, not only the categories', () => {
+    expect(debt).toContain("queryKey: ['parties'],");
+    expect(debt).toContain('testID="debt-parties"');
+  });
+
+  it('lists both directions, and says which is which', () => {
+    expect(debt).toContain('testID={`debt-creditor-${party.id}`}');
+    expect(debt).toContain('testID={`debt-debtor-${party.id}`}');
+    expect(debt).toContain('You owe them');
+    expect(debt).toContain('Owes you');
+  });
+
+  it('leaves out balances that are settled', () => {
+    // Zero is a tracked balance worth seeing on the parties screen, and noise
+    // on a screen about what is still outstanding.
+    expect(debt).toContain("typeof party.owedByUs === 'number' && (party.owedByUs ?? 0) > 0");
+  });
+
+  it('stops saying nothing is tracked when people are owed', () => {
+    expect(debt).toContain('You owe KES ${kes(owedToPeople)} to people and institutions, below.');
+  });
+
+  it('keeps them out of the payoff plan, and says why', () => {
+    // The plan needs a monthly amount to reach an end date; a party has none,
+    // so including them would replace every date with "no end date yet".
+    expect(debt).toContain('works out an end date from a monthly amount, and these have none');
+  });
+
+  it('links to where the balances are corrected', () => {
+    expect(debt).toContain('testID="debt-open-parties"');
+    expect(debt).toContain("router.push('/parties')");
+  });
+});
