@@ -107,3 +107,46 @@ describe("on the phone", () => {
     expect(screen).toContain('testID="statement-share"');
   });
 });
+
+// The fee is its own row so what is owed moves by the payment alone. Nothing
+// tied the two together, so a posting could not show its fee — and a second
+// fee could be written on top of the first without anybody seeing it.
+describe("a bank charge belongs to its posting", () => {
+  const schema = readFileSync("../../lib/db/src/schema/budget.ts", "utf8");
+  const migration = readFileSync("../../lib/db/migrations/0043_charge_belongs_to_its_posting.sql", "utf8");
+  const journal = readFileSync("../../lib/db/migrations/meta/_journal.json", "utf8");
+
+  it("points at the posting it came with", () => {
+    expect(schema).toContain('chargeForTransactionId: integer("charge_for_transaction_id")');
+    expect(migration).toContain('ADD COLUMN IF NOT EXISTS "charge_for_transaction_id" integer');
+  });
+
+  it("goes when that posting goes", () => {
+    // A fee without the posting it belongs to is an orphan nobody would go
+    // looking for, and deleting the posting already removes what it moved.
+    expect(schema).toContain('onDelete: "cascade"');
+    expect(migration).toContain("ON DELETE CASCADE");
+  });
+
+  it("is indexed, being read every time a posting is reopened", () => {
+    expect(migration).toContain('CREATE INDEX IF NOT EXISTS "joint_account_transactions_charge_for_idx"');
+  });
+
+  it("guesses no parent for what is already recorded", () => {
+    // Matching on a date and a narration would tie the wrong fee to the wrong
+    // posting, which is worse than leaving it unlinked.
+    expect(migration).not.toContain("UPDATE");
+  });
+
+  it("refuses a parent that is itself a charge", () => {
+    expect(bank).toContain('res.status(400).json({ error: "That posting is not one a charge can belong to." });');
+    expect(bank).toContain("if (!parent || parent.chargeFor !== null) {");
+  });
+
+  it("is registered after the migration before it", () => {
+    const entries = JSON.parse(journal).entries as Array<{ tag: string; when: number }>;
+    const mine = entries.find((entry) => entry.tag === "0043_charge_belongs_to_its_posting");
+    const previous = entries.find((entry) => entry.tag === "0042_lending_is_not_spending");
+    expect(mine!.when).toBeGreaterThan(previous!.when);
+  });
+});

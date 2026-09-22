@@ -157,6 +157,8 @@ const DisbursementInput = z.object({
    * scoped to type = 'deposit', where it means a repayment is not income.
    */
   settlesContributorId: z.number().int().positive().optional(),
+  /** The posting this bank charge came with, so it can be found again. */
+  chargeForTransactionId: z.number().int().positive().optional(),
   destinationKind: z.enum(["category", "other"]).optional(),
   accountId: z.number().int().positive().optional(),
 }).superRefine((value, ctx) => {
@@ -375,6 +377,7 @@ async function enrichTx(
     madeByName,
     expenseCategory: tx.expenseCategory ?? null,
     isLending: tx.isLending ?? false,
+    chargeForTransactionId: tx.chargeForTransactionId ?? null,
     isBorrowing: tx.isBorrowing ?? false,
     // Which party a repayment settled. Without it the editor reopens a
     // repayment as ordinary money in, and says so on screen.
@@ -919,6 +922,20 @@ router.post("/joint-account/disbursement", async (req, res): Promise<void> => {
       return;
     }
   }
+  const chargeParentId = parsed.data.chargeForTransactionId;
+  if (chargeParentId !== undefined) {
+    // Scoped to this group, and refused if it is itself a charge: a fee on a
+    // fee is not a thing, and a chain of them would have no parent to show.
+    const [parent] = await db
+      .select({ id: jointAccountTxTable.id, chargeFor: jointAccountTxTable.chargeForTransactionId })
+      .from(jointAccountTxTable)
+      .where(and(eq(jointAccountTxTable.id, chargeParentId), eq(jointAccountTxTable.groupId, groupId)))
+      .limit(1);
+    if (!parent || parent.chargeFor !== null) {
+      res.status(400).json({ error: "That posting is not one a charge can belong to." });
+      return;
+    }
+  }
   const disbursementClash = await alreadyRecorded(groupId, parsed.data.mpesaReceipt);
   if (disbursementClash) { res.status(409).json(disbursementClash); return; }
   // Lending carries no category, so there is nothing to canonicalise, look up
@@ -978,6 +995,7 @@ router.post("/joint-account/disbursement", async (req, res): Promise<void> => {
       expenseCategory,
       isLending,
       settlesContributorId: paidPartyId ?? null,
+      chargeForTransactionId: chargeParentId ?? null,
     })
     .returning();
 

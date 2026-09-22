@@ -109,6 +109,7 @@ type Tx = {
   incomeSourceId?: number | null;
   expenseCategory?: string | null;
   isLending?: boolean | null;
+  chargeForTransactionId?: number | null;
   isBorrowing?: boolean | null;
   settlesContributorId?: number | null;
   /** The month a deposit was for, when that is not the month it arrived. */
@@ -827,9 +828,12 @@ export default function BankScreen() {
     setDate(tx.date);
     setExpenseCategory(tx.expenseCategory ?? '');
     setWithdrawPartyId(type === 'disbursement' ? tx.settlesContributorId ?? null : null);
-    // Blank, so a fee left in the field from the last posting cannot be added
-    // to this one by opening it.
-    setChargeAmount('');
+    // The fee already on this posting, if it has one, so editing changes that
+    // fee instead of writing another. Blank when it has none, so a fee left in
+    // the field from the last posting cannot be added to this one by opening it.
+    const chargeOnThis = data?.transactions.find((row) => row.chargeForTransactionId === tx.id) ?? null;
+    setChargeAmount(chargeOnThis ? String(chargeOnThis.amount) : '');
+    if (chargeOnThis?.expenseCategory) setChargeCategory(chargeOnThis.expenseCategory);
     // What kind of money it was, restored from the row rather than reset.
     // Reopening a repayment as "ordinary money in" is not just cosmetic: it is
     // the screen telling somebody their record says something it does not.
@@ -1320,7 +1324,25 @@ export default function BankScreen() {
    * Posted after the movement it belongs to, so if the fee fails that posting
    * still stands — which is what the statement will show.
    */
-  const postBankCharge = async (kind: 'deposit' | 'withdrawal' | 'transfer') => {
+  const postBankCharge = async (kind: 'deposit' | 'withdrawal' | 'transfer', parentId?: number) => {
+    // Editing: the fee already on this posting is updated, or removed when
+    // the field is cleared, rather than a second one being written.
+    if (existingCharge) {
+      if (chargeToPost <= 0) {
+        await deleteTransaction({ id: existingCharge.id });
+        return;
+      }
+      await updateTransaction({
+        id: existingCharge.id,
+        data: {
+          amount: chargeToPost,
+          description: existingCharge.description,
+          date,
+          expenseCategory: chargeCategory.trim(),
+        },
+      });
+      return;
+    }
     if (chargeToPost <= 0) return;
     await createDisbursement({
       data: {
@@ -1331,6 +1353,7 @@ export default function BankScreen() {
         madeById: !isSharedWorkspace ? user?.id : txType === 'disbursement' ? withdrawerId ?? null : null,
         destinationKind: 'category',
         accountId: selectedAccountId ?? undefined,
+        ...(parentId === undefined ? {} : { chargeForTransactionId: parentId }),
       },
     });
   };
@@ -1547,6 +1570,10 @@ export default function BankScreen() {
     }
     setSubmitting(true);
     try {
+      // The posting the fee belongs to. Undefined on an edit, where the fee
+      // already has a parent, and on the split-deposit branch, which the fee
+      // field is not offered alongside.
+      let createdPostingId: number | undefined;
       if (editingTransactionId !== null) {
         const editingTransaction = data?.transactions.find((transaction) => transaction.id === editingTransactionId);
         const contributorSplits = txType === 'deposit' && validDepositorIds.length > 1
@@ -1633,7 +1660,7 @@ export default function BankScreen() {
           });
         } else if (isJoint) {
           // The group: send madeById: null explicitly
-          await createDeposit({
+          createdPostingId = (await createDeposit({
             data: {
               amount: parsed,
               description: description.trim(),
@@ -1646,11 +1673,11 @@ export default function BankScreen() {
               ...(appliesTo ? { appliesToMonth: appliesTo.month, appliesToYear: appliesTo.year } : {}),
               accountId: selectedAccountId ?? undefined,
             },
-          });
+          }))?.id;
         } else {
           // Single named depositor
           const singleId = validDepositorIds[0];
-          await createDeposit({
+          createdPostingId = (await createDeposit({
             data: {
               amount: parsed,
               description: description.trim(),
@@ -1663,11 +1690,11 @@ export default function BankScreen() {
               ...(appliesTo ? { appliesToMonth: appliesTo.month, appliesToYear: appliesTo.year } : {}),
               accountId: selectedAccountId ?? undefined,
             },
-          });
+          }))?.id;
         }
       } else {
         // Disbursement — include madeById: null for The group or the selected member
-        await createDisbursement({
+        createdPostingId = (await createDisbursement({
           data: {
             amount: parsed,
             description: finalDescription,
@@ -1684,7 +1711,7 @@ export default function BankScreen() {
               ? { settlesContributorId: withdrawPartyId ?? undefined }
               : {}),
           },
-        });
+        }))?.id;
       }
       // The bank's fee, as its own posting, for a deposit as much as a
       // withdrawal — a fee on money paid in is still a fee. Last rather than
@@ -1694,7 +1721,7 @@ export default function BankScreen() {
       // It carries the same date as the posting it came with, so a day's
       // charges sit with the day's postings. Each is separate, and giving
       // them one category is what totals them for the month.
-      await postBankCharge(txType === 'deposit' ? 'deposit' : 'withdrawal');
+      await postBankCharge(txType === 'deposit' ? 'deposit' : 'withdrawal', createdPostingId);
       // Read before finishEntry, which clears it. Asking after an edit would
       // take the money off a second time.
       const wasNewWithdrawal = txType === 'disbursement' && editingTransactionId === null;
@@ -1822,6 +1849,16 @@ export default function BankScreen() {
   );
   const chargeCategoryIsReal =
     chargeCategory.trim() !== '' && knownCategoryNames.has(chargeCategory.trim().toLocaleLowerCase());
+
+  /**
+   * The fee already recorded against the posting being edited.
+   *
+   * Without this the field opened blank, so anybody adding one to a posting
+   * that already had a fee got a second fee on top of the first, silently.
+   */
+  const existingCharge = editingTransactionId === null
+    ? null
+    : transactions.find((row) => row.chargeForTransactionId === editingTransactionId) ?? null;
 
   const parsedOutgoingAmount = readAmount(amount);
   // Blank means no charge. Anything unreadable is caught on submit.

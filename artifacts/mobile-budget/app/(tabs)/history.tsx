@@ -27,6 +27,7 @@ import { PageFlatList } from '@/components/PageScrollReset';
 import { useAuth } from '@/lib/auth';
 import {
   useGetExpenses,
+  useGetJointAccount,
   useGetContributions,
   useGetDashboardActivity,
   useGetDashboardSummary,
@@ -164,7 +165,63 @@ export default function HistoryScreen() {
     setPickerVisible(false);
   }
 
-  const { data: expenses = [], isLoading, refetch } = useGetExpenses({ month, year });
+  const { data: handEntered = [], isLoading, refetch } = useGetExpenses({ month, year });
+
+  /**
+   * Spending that went through a bank account, shown on the tab named for it.
+   *
+   * A withdrawal with a category is spending by every figure in the app — the
+   * category breakdown counts it, the budget measures against it — but it
+   * lives in joint_account_transactions, and this list read only the expenses
+   * table. So a tab called Expenses could say "No expenses yet" to somebody
+   * who had spent all month through the bank.
+   *
+   * Merged for reading only. These rows cannot be edited or removed here: the
+   * money moved in an account, and correcting it means correcting the posting
+   * on the Banking tab, where the balance follows.
+   */
+  const { data: bankAccount } = useGetJointAccount();
+  const bankSpending = useMemo(() => {
+    const rows = (bankAccount?.transactions ?? []) as Array<{
+      id: number;
+      type: string;
+      amount: number;
+      date: string;
+      description: string;
+      expenseCategory?: string | null;
+      expenseId?: number | null;
+      bankTransferId?: string | null;
+      madeByName?: string | null;
+    }>;
+    return rows
+      .filter((row) =>
+        row.type === 'disbursement' &&
+        !row.bankTransferId &&
+        // Already an expense in its own right: counting it here would show it
+        // twice and double the day's total.
+        !row.expenseId &&
+        typeof row.expenseCategory === 'string' &&
+        row.expenseCategory.trim() !== '' &&
+        Number(row.date.slice(0, 4)) === year &&
+        Number(row.date.slice(5, 7)) === month,
+      )
+      .map((row) => ({
+        // Negative, so it can never collide with an expense id in the editor's
+        // staged-removal set or anywhere else keyed by id.
+        id: -row.id,
+        amount: row.amount,
+        category: row.expenseCategory as string,
+        description: row.description,
+        date: row.date,
+        paidByName: row.madeByName ?? null,
+        fromBankPosting: true as const,
+      }));
+  }, [bankAccount, month, year]);
+
+  const expenses = useMemo(
+    () => [...(handEntered as Expense[]), ...(bankSpending as unknown as Expense[])],
+    [handEntered, bankSpending],
+  );
   const prevMonthNum = month === 1 ? 12 : month - 1;
   const prevYearNum = month === 1 ? year - 1 : year;
   const { data: prevExpenses = [] } = useGetExpenses({ month: prevMonthNum, year: prevYearNum });
@@ -228,6 +285,8 @@ export default function HistoryScreen() {
     || currentMember?.role === 'owner' || currentMember?.role === 'admin';
   const isSharedMember = isSharedWorkspace && !isContributionManager;
   const canEditExpenseRecord = (expense: Expense) => {
+    // A bank posting is corrected where the balance follows it, not here.
+    if ((expense as { fromBankPosting?: boolean }).fromBankPosting) return false;
     if (!user) return false;
     if (isContributionManager) return true;
     const hasBankFunding = expense.paidFromBank === true
@@ -246,6 +305,7 @@ export default function HistoryScreen() {
       : expense.date.slice(0, 10) === todayIso() && selfFunded;
   };
   const canRemoveExpenseRecord = (expense: Expense) => {
+    if ((expense as { fromBankPosting?: boolean }).fromBankPosting) return false;
     if (!user) return false;
     if (isContributionManager) return true;
     const personalPayerId = expense.paidById
@@ -1446,6 +1506,7 @@ function ExpenseRow({
         <Text selectable={false} style={[styles.rowDesc, { color: colors.foreground }]} numberOfLines={1}>{expense.description}</Text>
         <Text selectable={false} style={[styles.rowMeta, { color: colors.mutedForeground }]}>
           {expense.paidByName ?? GROUP_ATTRIBUTION} · {expense.category} · {formatDate(expense.date)}
+          {(expense as { fromBankPosting?: boolean }).fromBankPosting ? ' · from Banking' : ''}
         </Text>
         {expense.notes ? <Text selectable={false} style={[styles.rowNotes, { color: colors.mutedForeground }]}>{expense.notes}</Text> : null}
       </View>

@@ -405,6 +405,18 @@ export const jointAccountTxTable = pgTable("joint_account_transactions", {
    * it and a payment with a missing category is not mistaken for a loan.
    */
   isLending: boolean("is_lending").notNull().default(false),
+  /**
+   * The posting this bank charge came with.
+   *
+   * The fee is its own row on purpose — folded into the amount, a repayment
+   * of 5,000 with a 50 charge would take 5,050 off the loan. But nothing tied
+   * the two together, so reopening a posting could not show its fee, and
+   * typing an amount there posted a second one on top of the first.
+   *
+   * Cascades: a fee without the posting it belongs to is an orphan nobody
+   * would go looking for.
+   */
+  chargeForTransactionId: integer("charge_for_transaction_id").references((): AnyPgColumn => jointAccountTxTable.id, { onDelete: "cascade" }),
   /** The month this deposit was *for*, when that differs from the day it
    *  arrived — April's dues paid in September, or June's paid in April. Null
    *  means the month it arrived in, which is every deposit unless somebody

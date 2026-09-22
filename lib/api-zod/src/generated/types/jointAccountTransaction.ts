@@ -44,6 +44,11 @@ export interface JointAccountTransaction {
   /** Money borrowed rather than earned. */
   isBorrowing?: boolean;
   /**
+     * The posting this bank charge came with, if it is one.
+     * @nullable
+     */
+  chargeForTransactionId?: number | null;
+  /**
      * The party a repayment settled, so an editor can reopen it as a repayment rather than as ordinary money in.
      * @nullable
      */
