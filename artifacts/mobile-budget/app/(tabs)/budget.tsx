@@ -1403,16 +1403,6 @@ export default function BudgetScreen() {
               returnKeyType="done"
               testID="budget-new-category-amount"
             />
-            <Pressable
-              onPress={() => void handleAddCategoryInline()}
-              disabled={addingCategory}
-              style={[styles.incomeAddButton, { backgroundColor: colors.primary, opacity: addingCategory ? 0.45 : 1 }]}
-              accessibilityRole="button"
-              accessibilityLabel="Add budget category"
-              testID="budget-new-category-add"
-            >
-              {addingCategory ? <ActivityIndicator size="small" color="#fff" /> : <Feather name="plus" size={17} color="#fff" />}
-            </Pressable>
           </View>
           {/* Where it goes, asked here rather than left to be discovered:
               creating Rent at the top level when it belonged under Housing is
@@ -1465,6 +1455,32 @@ export default function BudgetScreen() {
               it makes it a heading, and its budget becomes the total of what is inside.
             </Text>
           ) : null}
+          {/* After every input, not above one of them. */}
+          <Pressable
+            onPress={() => void handleAddCategoryInline()}
+            disabled={addingCategory || newCategoryName.trim() === ''}
+            style={[
+              styles.quickAddAction,
+              {
+                backgroundColor: colors.primary,
+                opacity: addingCategory || newCategoryName.trim() === '' ? 0.45 : 1,
+              },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Add budget category"
+            testID="budget-new-category-add"
+          >
+            {addingCategory ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <>
+                <Feather name="plus" size={16} color="#fff" />
+                <Text style={styles.quickAddActionText}>
+                  {chosenParent ? `Add inside ${chosenParent.name}` : 'Add category'}
+                </Text>
+              </>
+            )}
+          </Pressable>
           <Pressable onPress={() => openAdd()} testID="budget-open-full-category-form" style={{ paddingVertical: 8 }}>
             <Text style={{ color: colors.primary, fontSize: 12, fontFamily: 'Inter_600SemiBold' }}>
               Tier, or a one-month category? Open the full form
@@ -1977,6 +1993,8 @@ const styles = StyleSheet.create({
   monthLabel: { fontSize: 14, color: '#F4F8FF', fontFamily: 'Inter_500Medium', minWidth: 64, textAlign: 'center' },
   addBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, height: 32, borderRadius: 16, backgroundColor: 'rgba(74,222,128,0.15)', justifyContent: 'center' },
   addBtnText: { color: '#4ade80', fontSize: 12, fontFamily: 'Inter_600SemiBold' },
+  quickAddAction: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 12, height: 46, marginTop: 10 },
+  quickAddActionText: { color: '#fff', fontSize: 13, fontFamily: 'Inter_600SemiBold' },
   categoryDropdown: { borderWidth: 1, borderRadius: 12, overflow: 'hidden', marginTop: 6 },
   categoryOption: { paddingHorizontal: 14, paddingVertical: 11 },
   inlineAddCategory: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1, borderStyle: 'dashed', borderRadius: 12, height: 46, marginTop: 10 },
