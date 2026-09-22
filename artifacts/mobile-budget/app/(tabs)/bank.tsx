@@ -1291,6 +1291,32 @@ export default function BankScreen() {
   const knownMemberIds = new Set(members.map(m => m.userId));
   const validDepositorIds = depositorIds.filter(id => knownMemberIds.has(id));
 
+  /**
+   * The bank's fee, as its own posting.
+   *
+   * It used to be written inline at the end of handleSubmit, which the
+   * savings and transfer branches never reach: they return early, so a fee
+   * entered on a transfer was accepted, taken off the projected balance, and
+   * silently never recorded. One function, called by every branch.
+   *
+   * Posted after the movement it belongs to, so if the fee fails that posting
+   * still stands — which is what the statement will show.
+   */
+  const postBankCharge = async (kind: 'deposit' | 'withdrawal' | 'transfer') => {
+    if (chargeToPost <= 0) return;
+    await createDisbursement({
+      data: {
+        amount: chargeToPost,
+        description: `Bank charge — ${description.trim() || kind}`,
+        date,
+        expenseCategory: chargeCategory.trim(),
+        madeById: !isSharedWorkspace ? user?.id : txType === 'disbursement' ? withdrawerId ?? null : null,
+        destinationKind: 'category',
+        accountId: selectedAccountId ?? undefined,
+      },
+    });
+  };
+
   const handleSubmit = async ({ keepOpen = false }: { keepOpen?: boolean } = {}) => {
     // Clearing the amount on an existing posting means zero, not "unfinished".
     // A line that turned out to be reversed is still a line that happened, and
@@ -1341,7 +1367,8 @@ export default function BankScreen() {
             accountId: selectedAccountId ?? undefined,
           },
         });
-        finishEntry(keepOpen, { amount: parsed, direction: 'out' });
+        await postBankCharge('transfer');
+        finishEntry(keepOpen, { amount: parsed + chargeToPost, direction: 'out' });
         await invalidateBalance();
       } catch (err: unknown) {
         if (!handleLapsedError(err)) {
@@ -1393,7 +1420,8 @@ export default function BankScreen() {
         } else {
           await transferSavingsToBank({ data: transfer });
         }
-        finishEntry(keepOpen, { amount: parsed, direction: transferDirection === 'to_savings' ? 'out' : 'in' });
+        await postBankCharge('transfer');
+        finishEntry(keepOpen, { amount: parsed + chargeToPost, direction: transferDirection === 'to_savings' ? 'out' : 'in' });
         await invalidateBalance();
       } catch (err: unknown) {
         Alert.alert('Could not create transfer', err instanceof Error ? err.message : 'Nothing was transferred.');
@@ -1414,7 +1442,8 @@ export default function BankScreen() {
       setSubmitting(true);
       try {
         await transferBankToBank({ data: { sourceAccountId: selectedAccountId, destinationAccountId: bankTransferDestinationId, amount: parsed, narration: description.trim(), date } });
-        finishEntry(keepOpen, { amount: parsed, direction: 'out' });
+        await postBankCharge('transfer');
+        finishEntry(keepOpen, { amount: parsed + chargeToPost, direction: 'out' });
         await invalidateAccounts();
         // The confirmation is worth an interruption once, but not after every
         // line of a sitting — the running tally already says it landed.
@@ -1610,19 +1639,7 @@ export default function BankScreen() {
       // It carries the same date as the posting it came with, so a day's
       // charges sit with the day's postings. Each is separate, and giving
       // them one category is what totals them for the month.
-      if (chargeToPost > 0) {
-        await createDisbursement({
-          data: {
-            amount: chargeToPost,
-            description: `Bank charge — ${description.trim() || (txType === 'deposit' ? 'deposit' : isMovingMoney ? 'transfer' : 'withdrawal')}`,
-            date,
-            expenseCategory: chargeCategory.trim(),
-            madeById: !isSharedWorkspace ? user?.id : txType === 'disbursement' ? withdrawerId ?? null : null,
-            destinationKind: 'category',
-            accountId: selectedAccountId ?? undefined,
-          },
-        });
-      }
+      await postBankCharge(txType === 'deposit' ? 'deposit' : 'withdrawal');
       // Read before finishEntry, which clears it. Asking after an edit would
       // take the money off a second time.
       const wasNewWithdrawal = txType === 'disbursement' && editingTransactionId === null;

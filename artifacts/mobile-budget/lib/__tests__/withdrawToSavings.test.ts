@@ -48,7 +48,8 @@ describe('a withdrawal into savings is a transfer', () => {
 
   it('takes part in a sitting like every other posting', () => {
     const handler = bank.slice(bank.indexOf('const handleSubmit = async ('), bank.indexOf('const transactions: Tx[] ='));
-    expect(handler).toContain("finishEntry(keepOpen, { amount: parsed, direction: 'out' });");
+    // The fee counts in the tally too, so a sitting's total matches what left.
+    expect(handler).toContain("finishEntry(keepOpen, { amount: parsed + chargeToPost, direction: 'out' });");
   });
 });
 
