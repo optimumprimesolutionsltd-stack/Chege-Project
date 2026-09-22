@@ -10,6 +10,8 @@ import { formatMonthKey, summariseDebts, type DebtWithPayment } from '@/lib/debt
 
 type CategoryRow = DebtWithPayment & { budgetAmount?: number | null };
 
+type Party = { id: number; name: string; owedByUs?: number | null };
+
 /**
  * Put away, not answered for ever.
  *
@@ -92,6 +94,21 @@ export function DebtSummaryCard({ canTrackDebt = false }: { canTrackDebt?: boole
     AsyncStorage.multiRemove([SNOOZE_KEY, LEGACY_DISMISSED_KEY]).catch(() => {});
   }, []);
 
+  /**
+   * Somebody you owe is a debt, and this card could not see one.
+   *
+   * It read categories only, so borrowing from Mwangi on the Banking tab put
+   * a creditor on the books and left the home screen saying nothing — or
+   * worse, offering to start tracking debt that was already tracked. The tab
+   * and the Debt screen learned this; the card had not.
+   */
+  const { data: parties = [] } = useQuery<Party[]>({
+    queryKey: ['parties'],
+    queryFn: () => customFetch<Party[]>('/api/contributors'),
+    staleTime: 30_000,
+  });
+  const owedToPeople = parties.reduce((total, party) => total + Math.max(0, party.owedByUs ?? 0), 0);
+
   const debts: DebtWithPayment[] = categories
     .filter((row) => row.debtBalance !== null && row.debtBalance !== undefined)
     .map((row) => ({
@@ -104,6 +121,37 @@ export function DebtSummaryCard({ canTrackDebt = false }: { canTrackDebt?: boole
     }));
 
   if (isLoading) return null;
+
+  if (debts.length === 0 && owedToPeople > 0) {
+    // No tracked category, but real money owed to real people. The payoff
+    // plan needs a monthly amount and these have none, so this says what is
+    // owed and opens the screen that can do something about it.
+    return (
+      <Pressable
+        onPress={() => router.push('/(tabs)/debt')}
+        accessibilityRole="button"
+        accessibilityLabel={`You owe KES ${kes(owedToPeople)} to people and institutions. Open debt.`}
+        testID="home-debt-parties-card"
+        style={({ pressed }) => [
+          styles.card,
+          { backgroundColor: colors.card, borderColor: pressed ? colors.primary : colors.border },
+        ]}
+      >
+        <View style={styles.headRow}>
+          <View style={styles.headLeft}>
+            <Feather name="trending-down" size={16} color="#ef4444" />
+            <Text style={[styles.heading, { color: colors.foreground }]}>Debt</Text>
+          </View>
+          <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+        </View>
+        <Text style={[styles.label, { color: colors.mutedForeground }]}>OWED TO PEOPLE AND INSTITUTIONS</Text>
+        <Text style={[styles.headline, { color: colors.foreground }]}>KES {kes(owedToPeople)}</Text>
+        <Text style={[styles.sub, { color: colors.mutedForeground }]}>
+          From borrowing recorded on the Banking tab. Mark a budget category as a debt to get an end date as well.
+        </Text>
+      </Pressable>
+    );
+  }
 
   if (debts.length === 0) {
     // Put away a moment ago. Offer it back rather than simply vanishing: this
@@ -216,6 +264,11 @@ export function DebtSummaryCard({ canTrackDebt = false }: { canTrackDebt?: boole
                 ? 'One of these has no monthly amount set, so there is no end date yet.'
                 : `KES ${kes(view.monthlyCommitment)} a month going to debt.`}
           </Text>
+          {owedToPeople > 0 ? (
+            <Text style={[styles.sub, { color: colors.mutedForeground }]} testID="home-debt-plus-parties">
+              Plus KES {kes(owedToPeople)} owed to people and institutions, which has no end date.
+            </Text>
+          ) : null}
           {view.focus ? (
             <Text style={[styles.focus, { color: colors.mutedForeground }]}>
               Next to clear: <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>{view.focus.name}</Text>
