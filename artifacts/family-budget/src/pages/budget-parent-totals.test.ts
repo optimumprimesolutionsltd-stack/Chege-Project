@@ -40,3 +40,26 @@ describe('the web form matches the phone', () => {
     expect(page).not.toContain('Unallocated:');
   });
 });
+
+// The server zeroes a parent's own stored budgetAmount the instant it gains a
+// child (clearParentBudgetAmount, budget-categories.ts). The main report cards
+// already read the server's rolled-up breakdown figures, not that raw column —
+// but "Edit existing budgets" and the no-spending-yet cards read allCategories
+// directly, and would otherwise print a parent's budget as KES 0.
+describe('every raw read of a category list rolls up a parent first', () => {
+  it('imports effectiveBudgets and derives a lookup from it', () => {
+    expect(page).toContain('import { effectiveBudgets } from "@workspace/category-tree";');
+    expect(page).toContain('const effectiveBudgetById = effectiveBudgets(');
+    expect(page).toContain('const budgetFor = (category: BudgetCategory) => effectiveBudgetById.get(category.id) ?? category.budgetAmount;');
+  });
+
+  it('"Edit existing budgets" shows the rolled-up figure, not the raw column', () => {
+    expect(page).toContain('{formatKes(budgetFor(category))} ·');
+    expect(page).not.toContain('{formatKes(category.budgetAmount)} ·');
+  });
+
+  it('a not-yet-spent parent shows its rolled-up figure too', () => {
+    expect(page).toContain('Limit: {formatKes(budgetFor(cat))} · No spending yet');
+    expect(page).toContain('categoryBudgetAmount={budgetFor(cat)}');
+  });
+});

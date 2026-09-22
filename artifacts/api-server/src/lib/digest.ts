@@ -11,6 +11,7 @@ import {
 import { sql, eq, desc, and } from "drizzle-orm";
 import { logger } from "./logger";
 import { sendEmail } from "./email";
+import { effectiveBudgets } from "@workspace/category-tree";
 
 const UNCATEGORIZED_CATEGORY = "Uncategorized";
 
@@ -385,13 +386,25 @@ export async function sendMonthlyDigest(
   spentMap.delete(UNCATEGORIZED_CATEGORY);
   const label = monthName(month, year);
 
+  // A parent's own budgetAmount is zeroed server-side the instant it gains a
+  // child (clearParentBudgetAmount in budget-categories.ts) — its real figure
+  // is the sum of its children's. Without this, a parent's digest row reads
+  // as budgeted for KES 0 instead of its actual total.
+  const effectiveBudgetById = effectiveBudgets(
+    categories.map((cat) => ({ id: cat.id, parentId: cat.parentId ?? null, budgetAmount: cat.budgetAmount })),
+  );
+  const categoriesWithEffectiveBudget = categories.map((cat) => ({
+    ...cat,
+    budgetAmount: effectiveBudgetById.get(cat.id) ?? cat.budgetAmount,
+  }));
+
   const html = buildEmailHtml({
     label,
     totalBudget,
     totalSpent,
     remaining,
     pctUsed,
-    categories,
+    categories: categoriesWithEffectiveBudget,
     spentMap,
     top5: top5.map((e) => ({
       ...e,

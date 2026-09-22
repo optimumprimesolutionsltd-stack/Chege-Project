@@ -27,6 +27,7 @@ import { DebtPayoffCard } from "@/components/debt-payoff-card";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@workspace/replit-auth-web";
 import { getCategoryIcon } from "@/lib/category-icons";
+import { effectiveBudgets } from "@workspace/category-tree";
 import { appPath } from "@/lib/base-path";
 import { workspaceLabel } from "@/lib/workspace-identity";
 
@@ -970,6 +971,15 @@ export default function Budget() {
     return acc;
   }, new Map<number, BudgetCategory[]>());
   const spentByCategoryName = new Map((breakdown ?? []).map(item => [item.category, item.spentAmount]));
+  // The server zeroes a parent's own stored budgetAmount the instant it gains
+  // a child (see clearParentBudgetAmount in budget-categories.ts) — its real
+  // figure is the sum of its children's. `breakdown`-driven views already read
+  // that rolled-up figure from the server; this covers the raw allCategories
+  // list, which would otherwise show a parent as budgeted for KES 0.
+  const effectiveBudgetById = effectiveBudgets(
+    allCategories.map(category => ({ id: category.id, parentId: category.parentId ?? null, budgetAmount: category.budgetAmount })),
+  );
+  const budgetFor = (category: BudgetCategory) => effectiveBudgetById.get(category.id) ?? category.budgetAmount;
 
   const parentNameByChildName = new Map(
     childCategories.map(child => [
@@ -1143,7 +1153,7 @@ export default function Budget() {
                 <div className="min-w-0">
                   <p className="font-medium truncate">{category.name}</p>
                   <p className="text-xs text-muted-foreground">
-                    {formatKes(category.budgetAmount)} · {category.isRecurring
+                    {formatKes(budgetFor(category))} · {category.isRecurring
                       ? "Recurring monthly"
                       : `One-time for ${formatMonthYear(category.activeMonth ?? month, category.activeYear ?? year)}`}
                   </p>
@@ -1594,7 +1604,7 @@ export default function Budget() {
                                  ? <span className="flex items-center gap-2"><RemoveRowButton editor={categoryEditor} id={cat.id} name={cat.name} /><EditableName editor={categoryEditor} id={cat.id} name={cat.name} /></span>
                                  : cat.name}
                              </h3>
-                             <p className="break-words text-sm text-muted-foreground">Limit: {formatKes(cat.budgetAmount)} · No spending yet</p>
+                             <p className="break-words text-sm text-muted-foreground">Limit: {formatKes(budgetFor(cat))} · No spending yet</p>
                             </div>
                           </div>
                            {!categoryEditor.editing ? (
@@ -1613,7 +1623,7 @@ export default function Budget() {
                           <CategoryLedgers
                             ledgers={childrenByParentId.get(cat.id) ?? []}
                             categoryName={cat.name}
-                            categoryBudgetAmount={cat.budgetAmount}
+                            categoryBudgetAmount={budgetFor(cat)}
                             isBudgeted={true}
                             spentByCategoryName={spentByCategoryName}
                             onSelectLedger={(ledger) => setLedgerCategory({ category: ledger.name, isBudgeted: ledger.budgetAmount > 0 })}
