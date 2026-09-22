@@ -1394,23 +1394,33 @@ router.put("/joint-account/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const expenseCategory = canonicalExpenseCategoryName(parsed.data.expenseCategory ?? existing.expenseCategory ?? "");
-  if (!expenseCategory) {
+  // A loan out has no category, by design — that absence is what keeps it out
+  // of every spending total. The create path knows this; the update path did
+  // not, so editing one demanded a category it must never have and refused
+  // the edit when none came. The row itself is the authority: an edit cannot
+  // turn ordinary spending into a loan, or the reverse, by omission.
+  const editingALoanOut = existing.isLending === true;
+  const expenseCategory = editingALoanOut
+    ? null
+    : canonicalExpenseCategoryName(parsed.data.expenseCategory ?? existing.expenseCategory ?? "");
+  if (!editingALoanOut && !expenseCategory) {
     res.status(400).json({ error: "Choose a valid budget category." });
     return;
   }
-  const [category] = await db
-    .select({ id: budgetCategoriesTable.id })
-    .from(budgetCategoriesTable)
-    .where(and(eq(budgetCategoriesTable.name, expenseCategory), eq(budgetCategoriesTable.groupId, groupId)))
-    .limit(1);
-  if (!category) {
-    res.status(400).json({ error: "Choose a valid budget category." });
-    return;
+  if (expenseCategory !== null) {
+    const [category] = await db
+      .select({ id: budgetCategoriesTable.id })
+      .from(budgetCategoriesTable)
+      .where(and(eq(budgetCategoriesTable.name, expenseCategory), eq(budgetCategoriesTable.groupId, groupId)))
+      .limit(1);
+    if (!category) {
+      res.status(400).json({ error: "Choose a valid budget category." });
+      return;
+    }
   }
   // Editing is a second way onto a heading, and would otherwise undo the check
   // the create path just gained.
-  const editHeading = await headingAmong(groupId, [expenseCategory]);
+  const editHeading = expenseCategory === null ? null : await headingAmong(groupId, [expenseCategory]);
   if (editHeading) {
     res.status(400).json({ error: postingToHeadingError(editHeading) });
     return;
@@ -1418,7 +1428,9 @@ router.put("/joint-account/:id", async (req, res): Promise<void> => {
 
   const description = parsed.data.description === undefined
     ? existing.description
-    : parsed.data.description || expenseCategory;
+    // A loan out has no category to fall back on, so what is already there
+    // stands rather than being replaced with nothing.
+    : parsed.data.description || expenseCategory || existing.description;
   if (parsed.data.destinationKind === "other" && !description.trim()) {
     res.status(400).json({ error: "Add a narration for an Other destination." });
     return;
