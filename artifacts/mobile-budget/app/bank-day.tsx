@@ -38,6 +38,7 @@ import { useAuth } from '@/lib/auth';
 import { handleLapsedError } from '@/lib/lapsedError';
 import { readAmount, toMoney } from '@/lib/bankAmount';
 import { AmountCalcRow } from '@/components/AmountCalcRow';
+import { BankAccountPicker } from '@/components/BankAccountPicker';
 import { buildCategoryTree, type CategoryRow } from '@workspace/category-tree';
 import {
   customFetch,
@@ -71,7 +72,8 @@ type RowKind =
   | 'pay-party'    // money out, to somebody you owe
   | 'money-in'     // ordinary money in
   | 'repaid'       // money in, somebody paying you back
-  | 'borrowed';    // money in, a loan
+  | 'borrowed'     // money in, a loan
+  | 'lend';        // money out, a loan — the mirror of borrowed
 
 type DayRow = {
   key: string;
@@ -126,11 +128,12 @@ const KIND_LABEL: Record<RowKind, string> = {
   'money-in': 'Money in',
   repaid: 'Somebody paying me back',
   borrowed: 'Borrowed',
+  lend: 'Lending',
 };
 
 /** Which way the money runs. The fee always runs out, whatever the row does. */
 function isOutgoing(kind: RowKind): boolean {
-  return kind === 'spend' || kind === 'pay-party';
+  return kind === 'spend' || kind === 'pay-party' || kind === 'lend';
 }
 
 export default function BankDayScreen() {
@@ -231,9 +234,12 @@ export default function BankDayScreen() {
   const rowProblem = (row: DayRow): string | null => {
     const amount = readAmount(row.amount);
     if (amount === null || amount <= 0) return 'Give it an amount.';
-    if (isOutgoing(row.kind) && !row.category.trim()) return 'Give it a category.';
+    // A loan out has no category, because it is not a cost — the same reason
+    // (tabs)/bank.tsx leaves it out of expenseCategory entirely.
+    if (isOutgoing(row.kind) && row.kind !== 'lend' && !row.category.trim()) return 'Give it a category.';
     if (row.kind === 'pay-party' && row.partyId === null) return 'Say who you are paying.';
     if (row.kind === 'repaid' && row.partyId === null) return 'Say who paid you.';
+    if (row.kind === 'lend' && row.partyId === null) return 'Say who you are lending to.';
     if (row.kind === 'borrowed' && row.partyId === null && !row.debtName) {
       return 'Say what it was borrowed against, or from whom.';
     }
@@ -257,7 +263,19 @@ export default function BankDayScreen() {
     const party = row.partyId === null ? null : parties.find((candidate) => candidate.id === row.partyId) ?? null;
     const narration = row.description.trim() || party?.name || row.category.trim() || KIND_LABEL[row.kind];
 
-    if (isOutgoing(row.kind)) {
+    if (row.kind === 'lend') {
+      await createDisbursement({
+        data: {
+          amount,
+          description: narration,
+          date,
+          madeById: !isSharedWorkspace ? user?.id : null,
+          isLending: true,
+          settlesContributorId: party?.id,
+          accountId: activeAccountId ?? undefined,
+        },
+      });
+    } else if (isOutgoing(row.kind)) {
       await createDisbursement({
         data: {
           amount,
@@ -341,6 +359,18 @@ export default function BankDayScreen() {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ owedToUs: remaining }),
+            });
+          },
+        });
+      } else if (row.kind === 'lend' && party) {
+        const owed = typeof party.owedToUs === 'number' ? party.owedToUs : 0;
+        changes.push({
+          label: `${party.name}: owes you ${formatKES(owed)} → ${formatKES(owed + amount)}`,
+          apply: async () => {
+            await customFetch(`/api/contributors/${party.id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ owedToUs: owed + amount }),
             });
           },
         });
@@ -506,26 +536,15 @@ export default function BankDayScreen() {
       )}
 
       <Text style={[styles.label, { color: colors.mutedForeground }]}>Account</Text>
-      <View style={{ gap: 8 }}>
-        {accounts.map((candidate) => (
-          <TouchableOpacity
-            key={candidate.id}
-            onPress={() => setSelectedAccountId(candidate.id)}
-            testID={`bank-day-account-${candidate.id}`}
-            style={[
-              styles.field,
-              {
-                borderColor: activeAccountId === candidate.id ? colors.primary : colors.border,
-                backgroundColor: activeAccountId === candidate.id ? `${colors.primary}18` : colors.card,
-              },
-            ]}
-          >
-            <Text style={{ color: colors.foreground, fontFamily: activeAccountId === candidate.id ? 'Inter_700Bold' : 'Inter_400Regular' }}>
-              {candidate.name}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+      {/* Listing every account as its own row, all visible at once, read as
+          "these are all in play" rather than "pick one" — the choice was easy
+          to miss and the rest sat there as noise once it was made. */}
+      <BankAccountPicker
+        accounts={accounts}
+        selectedAccountId={activeAccountId}
+        onSelect={setSelectedAccountId}
+        testIDPrefix="bank-day-account"
+      />
 
       {/* The figure somebody is working towards. */}
       <View style={[styles.balanceCard, { borderColor: colors.primary, backgroundColor: `${colors.primary}12` }]} testID="bank-day-balance">
@@ -633,7 +652,7 @@ export default function BankDayScreen() {
                   testIDPrefix={`bank-day-amount-${index}`}
                 />
 
-                {isOutgoing(row.kind) ? (
+                {isOutgoing(row.kind) && row.kind !== 'lend' ? (
                   <CategoryField
                     testID={`bank-day-category-${index}`}
                     value={row.category}
@@ -643,12 +662,14 @@ export default function BankDayScreen() {
                   />
                 ) : null}
 
-                {row.kind === 'pay-party' || row.kind === 'repaid' ? (
+                {row.kind === 'pay-party' || row.kind === 'repaid' || row.kind === 'lend' ? (
                   <PartyField
                     testID={`bank-day-party-${index}`}
                     parties={parties}
                     value={row.partyId}
                     onPick={(id) => patchRow(row.key, { partyId: id })}
+                    placeholder={row.kind === 'lend' ? 'Who you are lending to' : 'Who'}
+                    owedField={row.kind === 'pay-party' ? 'owedByUs' : 'owedToUs'}
                   />
                 ) : null}
 
@@ -660,6 +681,7 @@ export default function BankDayScreen() {
                       value={row.partyId}
                       onPick={(id) => patchRow(row.key, { partyId: id, debtName: null })}
                       placeholder="Who lent it"
+                      owedField="owedByUs"
                     />
                     {trackedDebts.length > 0 ? (
                       <View style={styles.kindRow}>
@@ -809,16 +831,59 @@ function PartyField({
   onPick,
   placeholder = 'Who',
   testID,
+  owedField,
 }: {
   parties: Party[];
   value: number | null;
   onPick: (id: number) => void;
   placeholder?: string;
   testID: string;
+  /** Which balance a party created from here starts with — which side of the
+   *  ledger they land on depends on why this field is being shown at all. */
+  owedField: 'owedByUs' | 'owedToUs';
 }) {
   const colors = useColors();
+  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newOwed, setNewOwed] = useState('');
+  const [creating, setCreating] = useState(false);
   const chosen = parties.find((party) => party.id === value) ?? null;
+
+  const submitNewParty = async () => {
+    const name = newName.trim();
+    if (!name) {
+      Alert.alert('Who is it?', 'Give the person or institution a name, such as Mwangi or KCB.');
+      return;
+    }
+    const owed = newOwed.trim() === '' ? 0 : readAmount(newOwed);
+    if (owed === null || owed < 0) {
+      Alert.alert('What is owed?', 'Enter zero or more, with up to two decimal places.');
+      return;
+    }
+    setCreating(true);
+    try {
+      const created = await customFetch<{ id: number }>('/api/contributors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, [owedField]: toMoney(owed) }),
+      });
+      // Awaited: onPick fires right after, and the picker's own list has to
+      // already carry this party by the time anything reads it back.
+      await queryClient.invalidateQueries({ queryKey: ['parties'] });
+      onPick(created.id);
+      setNewName('');
+      setNewOwed('');
+      setAdding(false);
+      setOpen(false);
+    } catch (error: unknown) {
+      Alert.alert('Could not add them', error instanceof Error ? error.message : 'Please try again.');
+    } finally {
+      setCreating(false);
+    }
+  };
+
   return (
     <>
       <TouchableOpacity
@@ -831,16 +896,68 @@ function PartyField({
       </TouchableOpacity>
       {open ? (
         <View style={[styles.dropdown, { borderColor: colors.dropdownBorder, backgroundColor: colors.dropdownBackground }]}>
-          {parties.length === 0 ? (
-            <Text style={{ color: colors.dropdownMutedForeground, padding: 14, fontSize: 12 }}>
-              Nobody recorded yet. Add them from Deposit or Withdraw, where the balance can be set at the same time.
-            </Text>
-          ) : (
-            parties.map((party) => (
-              <TouchableOpacity key={party.id} style={styles.option} onPress={() => { onPick(party.id); setOpen(false); }}>
-                <Text style={{ color: colors.dropdownForeground }}>{party.name}</Text>
+          {!adding ? (
+            <>
+              {parties.length === 0 ? (
+                <Text style={{ color: colors.dropdownMutedForeground, padding: 14, fontSize: 12 }}>
+                  Nobody recorded yet.
+                </Text>
+              ) : (
+                parties.map((party) => (
+                  <TouchableOpacity key={party.id} style={styles.option} onPress={() => { onPick(party.id); setOpen(false); }}>
+                    <Text style={{ color: colors.dropdownForeground }}>{party.name}</Text>
+                  </TouchableOpacity>
+                ))
+              )}
+              <TouchableOpacity style={styles.option} onPress={() => setAdding(true)} testID={`${testID}-add-new`}>
+                <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>+ Add someone new</Text>
               </TouchableOpacity>
-            ))
+            </>
+          ) : (
+            <View style={{ padding: 12, gap: 8 }}>
+              <TextInput
+                value={newName}
+                onChangeText={setNewName}
+                placeholder="Name, such as Mwangi or KCB"
+                placeholderTextColor={colors.mutedForeground}
+                editable={!creating}
+                testID={`${testID}-new-name`}
+                style={[styles.input, { borderColor: colors.border, backgroundColor: colors.card, color: colors.foreground }]}
+              />
+              <TextInput
+                value={newOwed}
+                onChangeText={setNewOwed}
+                placeholder={
+                  owedField === 'owedByUs' ? 'What you already owe them (optional)' : 'What they already owe you (optional)'
+                }
+                placeholderTextColor={colors.mutedForeground}
+                keyboardType="decimal-pad"
+                editable={!creating}
+                testID={`${testID}-new-owed`}
+                style={[styles.input, { borderColor: colors.border, backgroundColor: colors.card, color: colors.foreground }]}
+              />
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TouchableOpacity
+                  onPress={() => { setAdding(false); setNewName(''); setNewOwed(''); }}
+                  disabled={creating}
+                  style={[styles.field, { flex: 1, justifyContent: 'center', borderColor: colors.border }]}
+                >
+                  <Text style={{ color: colors.mutedForeground, textAlign: 'center' }}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => void submitNewParty()}
+                  disabled={creating}
+                  testID={`${testID}-new-submit`}
+                  style={[styles.field, { flex: 1, justifyContent: 'center', backgroundColor: colors.primary, borderColor: colors.primary }]}
+                >
+                  {creating ? (
+                    <ActivityIndicator size="small" color={colors.primaryForeground} />
+                  ) : (
+                    <Text style={{ color: colors.primaryForeground, textAlign: 'center', fontFamily: 'Inter_600SemiBold' }}>Add</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
           )}
         </View>
       ) : null}
