@@ -63,6 +63,7 @@ import { buildCategoryTree, parentOf, type CategoryRow } from '@workspace/catego
 import { workspaceBudgetName } from '@/lib/workspaceIdentity';
 import { handleLapsedError } from '@/lib/lapsedError';
 import { evaluateAmountExpression, isAmountExpression } from '@/lib/amountExpression';
+import { AmountCalcRow } from '@/components/AmountCalcRow';
 import {
   addIncomeSourceToSelection,
   buildSinglePayerFundingReplacement,
@@ -1524,46 +1525,7 @@ export default function AddExpenseSheet() {
         {/* A numeric keypad has no operators, and a full keyboard would make
             every plain amount harder to type for the sake of the occasional
             sum. These put them one tap away. */}
-        <View style={styles.calcRow}>
-          {(['+', '−', '×', '÷', '(', ')'] as const).map((key) => (
-            <Pressable
-              key={key}
-              onPress={() => setAmount((previous) => previous + key)}
-              style={[styles.calcKey, { borderColor: colors.border, backgroundColor: colors.muted }]}
-              accessibilityRole="button"
-              accessibilityLabel={`Insert ${key}`}
-              testID={`expense-amount-key-${key}`}
-            >
-              <Text style={[styles.calcKeyText, { color: colors.foreground }]}>{key}</Text>
-            </Pressable>
-          ))}
-          <Pressable
-            onPress={() => setAmount((previous) => previous.slice(0, -1))}
-            style={[styles.calcKey, { borderColor: colors.border, backgroundColor: colors.muted }]}
-            accessibilityRole="button"
-            accessibilityLabel="Delete the last character"
-            testID="expense-amount-key-delete"
-          >
-            <Feather name="delete" size={15} color={colors.foreground} />
-          </Pressable>
-          <Pressable
-            onPress={() => {
-              const resolved = evaluateAmountExpression(amount);
-              if (resolved !== null) setAmount(String(resolved));
-            }}
-            style={[styles.calcKey, { borderColor: colors.primary, backgroundColor: colors.primary + '18' }]}
-            accessibilityRole="button"
-            accessibilityLabel="Work out the total"
-            testID="expense-amount-key-equals"
-          >
-            <Text style={[styles.calcKeyText, { color: colors.primary }]}>=</Text>
-          </Pressable>
-        </View>
-        {isAmountExpression(amount) ? (
-          <Text style={[styles.calcResult, { color: colors.primary }]} testID="expense-amount-resolved">
-            = KES {(evaluateAmountExpression(amount) ?? 0).toLocaleString()}
-          </Text>
-        ) : null}
+        <AmountCalcRow amount={amount} onChangeAmount={setAmount} testIDPrefix="expense-amount" />
 
         {/* Category */}
         <View style={[styles.stageLabel, { backgroundColor: colors.primary + '18', borderColor: colors.primary + '55', borderRadius: colors.radius }]}>
@@ -2920,30 +2882,6 @@ const styles = StyleSheet.create({
   normalSummaryTitle: { fontSize: 13, fontFamily: 'Inter_700Bold' },
   normalBlockerText: { fontSize: 12, lineHeight: 18, fontFamily: 'Inter_600SemiBold', marginTop: 8 },
   normalAdvancedLink: { fontSize: 12, fontFamily: 'Inter_700Bold', marginTop: 7, textDecorationLine: 'underline' },
-  calcRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 8,
-  },
-  calcKey: {
-    minWidth: 42,
-    flexGrow: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 9,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-  calcKeyText: {
-    fontSize: 17,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  calcResult: {
-    fontSize: 14,
-    fontFamily: 'Inter_600SemiBold',
-    marginTop: 6,
-  },
   amountSection: {
     flexDirection: 'row',
     alignItems: 'flex-end',
