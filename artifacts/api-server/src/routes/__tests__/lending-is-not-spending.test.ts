@@ -74,3 +74,32 @@ describe("a missing category is allowed only because it was lent", () => {
     expect(bank).toContain('description: description || expenseCategory || "Lent out",');
   });
 });
+
+// The create path knew a loan out has no category. The update path did not:
+// it required one for every disbursement, falling back to the row's own —
+// which is null for a loan — so editing one was refused with "Choose a valid
+// budget category" and there was no category that would have satisfied it.
+describe("editing a loan out is not refused for having no category", () => {
+  it("does not demand one when the row is a loan", () => {
+    expect(bank).toContain("const editingALoanOut = existing.isLending === true;");
+    expect(bank).toContain("if (!editingALoanOut && !expenseCategory) {");
+  });
+
+  it("takes the row as the authority, not the request", () => {
+    // An edit must not turn ordinary spending into a loan, or the reverse, by
+    // omitting a field.
+    expect(bank).not.toContain("parsed.data.isLending === true");
+  });
+
+  it("skips the lookup and the heading check it has nothing to check", () => {
+    expect(bank).toContain("const editHeading = expenseCategory === null ? null : await headingAmong(groupId, [expenseCategory]);");
+  });
+
+  it("keeps the narration rather than replacing it with nothing", () => {
+    expect(bank).toContain(": parsed.data.description || expenseCategory || existing.description;");
+  });
+
+  it("still demands a category for an ordinary withdrawal", () => {
+    expect((bank.match(/Choose a valid budget category\./g) ?? []).length).toBe(4);
+  });
+});

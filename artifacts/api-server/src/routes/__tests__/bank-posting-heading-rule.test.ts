@@ -32,7 +32,9 @@ describe("both doors refuse a heading", () => {
   it("refuses one edited onto a heading afterwards", () => {
     // Otherwise editing is a second way in, undoing the check the create path
     // just gained.
-    expect(bank).toContain("const editHeading = await headingAmong(groupId, [expenseCategory]);");
+    // A loan out has no category, so there is no heading to check — and the
+    // guard is written so that is the only way past it.
+    expect(bank).toContain("const editHeading = expenseCategory === null ? null : await headingAmong(groupId, [expenseCategory]);");
     expect(bank).toContain("res.status(400).json({ error: postingToHeadingError(editHeading) });");
   });
 
