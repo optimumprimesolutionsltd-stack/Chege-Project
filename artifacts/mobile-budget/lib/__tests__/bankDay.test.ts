@@ -46,12 +46,12 @@ describe('the balance moves as the day is written', () => {
   });
 
   it('counts each line the way that line runs', () => {
-    expect(day).toContain("return (isOutgoing(row.kind) ? -amount : amount) - fee;");
+    expect(day).toContain("return (isOutgoing(row.kind) ? -amount : amount) - fees;");
   });
 
-  it('takes the fee off whichever way the line runs', () => {
-    // A fee on money in is still a fee.
-    expect(day).toContain('- fee;');
+  it('takes every charge off whichever way the line runs', () => {
+    // A fee on money in is still a fee, and a line can carry more than one.
+    expect(day).toContain('const fees = row.charges.reduce((total, charge) => total + chargeAmount(charge), 0);');
   });
 
   it('stops counting a line once it is saved', () => {
@@ -93,10 +93,43 @@ describe('saving leaves no batch behind', () => {
     expect(day).toContain("if (row.kind === 'lend' && row.partyId === null) return 'Say who you are lending to.';");
   });
 
-  it('posts a line fee separately, after the line it belongs to', () => {
+  it('posts every charge separately, after the line it belongs to', () => {
     const save = day.slice(day.indexOf('const saveRow ='));
-    expect(save.indexOf('if (fee > 0) {')).toBeGreaterThan(save.indexOf('await createDeposit({'));
-    expect(day).toContain('description: `Bank charge — ${narration}`,');
+    expect(save.indexOf('for (const charge of row.charges) {')).toBeGreaterThan(save.indexOf('await createDeposit({'));
+    expect(day).toContain('description: charge.label.trim() || `Bank charge — ${narration}`,');
+  });
+
+  // A statement line is often more than one charge at once — a withdrawal
+  // fee and a Fuliza access fee together — so each one gets its own amount,
+  // name and category rather than sharing a single "Bank charge" field.
+  it('lets a line carry more than one named charge', () => {
+    expect(day).toContain('charges: ChargeItem[];');
+    expect(day).toContain("const addCharge = (rowKey: string) => {");
+    expect(day).toContain('label: string;');
+    expect(day).toContain("placeholder=\"Name this charge (optional, e.g. Excise duty)\"");
+  });
+
+  // On a real statement the figure and its bank charge are read together —
+  // the charge used to sit three fields further down, after category, party
+  // and description, which read as unrelated to the amount it came off.
+  it('puts the amount and its first bank charge side by side', () => {
+    const amountRow = day.slice(day.indexOf('testID={`bank-day-amount-${index}`}'), day.indexOf('<AmountCalcRow'));
+    expect(amountRow).toContain('testID={`bank-day-charge-${index}-0`}');
+    expect(amountRow).toContain("placeholder=\"Bank charge\"");
+  });
+
+  it('always has a first charge slot to bind that field to', () => {
+    // So typing into it never has to create the entry first.
+    expect(day).toContain("charges: [blankCharge('')],");
+    expect(day).toContain('charges: [blankCharge(chargeCategory)]');
+  });
+
+  it('never offers to remove the first charge, only ones added after it', () => {
+    // It is a permanent field, like Amount — clearing the text is how you
+    // remove it. Only charges past the first came from "Add another".
+    expect(day).toContain('row.charges.slice(1).map((charge, extraIndex) => {');
+    expect(day).toContain("testID={`bank-day-charge-remove-${index}-${chargeIndex}`}");
+    expect(day).not.toContain('bank-day-charge-remove-${index}-0');
   });
 
   it('refuses a line that is not ready before writing anything', () => {
