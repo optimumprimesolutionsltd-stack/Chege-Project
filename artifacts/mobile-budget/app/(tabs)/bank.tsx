@@ -374,6 +374,9 @@ export default function BankScreen() {
     let active = true;
     AsyncStorage.getItem(CHARGE_CATEGORY_KEY)
       .then((stored) => {
+        // Applied blind here and checked at submit: categories may not have
+        // loaded yet, and refusing to prefill on an empty list would forget
+        // the answer every cold start.
         if (active && stored) setChargeCategory(stored);
       })
       .catch(() => {});
@@ -1394,6 +1397,21 @@ export default function BankScreen() {
       }
       return;
     }
+    // Refused here rather than by the server, which cannot say it in words
+    // somebody can act on and only says it after something else has saved.
+    if (
+      txType === 'disbursement' &&
+      withdrawDest !== 'savings' &&
+      withdrawDest !== 'lend' &&
+      expenseCategory.trim() !== '' &&
+      categories.length > 0 &&
+      !knownCategoryNames.has(expenseCategory.trim().toLocaleLowerCase())
+    ) {
+      setExpenseCategory('');
+      setShowCategoryPicker(true);
+      Alert.alert('That category is not in this budget', 'Pick one from the list below.');
+      return;
+    }
     if (txType === 'disbursement' && withdrawDest !== 'savings' && withdrawDest !== 'lend' && !expenseCategory.trim()) {
       Alert.alert('Category required', 'Choose or add a category for this withdrawal.');
       return;
@@ -1510,6 +1528,18 @@ export default function BankScreen() {
       }
       if (parsedCharge > 0 && !chargeCategory.trim()) {
         Alert.alert('Where does the charge go?', 'Give the bank charge a category of its own.');
+        return;
+      }
+      // Checked against this budget's categories, not merely against being
+      // blank. The remembered one may have come from another budget, and the
+      // server would refuse it only after the posting it belongs to had saved.
+      if (parsedCharge > 0 && !chargeCategoryIsReal && categories.length > 0) {
+        setChargeCategory('');
+        setShowChargeCategoryPicker(true);
+        Alert.alert(
+          'That charge category is not in this budget',
+          `"${chargeCategory.trim()}" belongs to a different budget. Pick one from this budget for the charge.`,
+        );
         return;
       }
     }
@@ -1776,6 +1806,13 @@ export default function BankScreen() {
   const isBankTransfer = txType === 'bank_transfer';
   // Both kinds of transfer, for the one toggle that now covers them.
   const isMovingMoney = isTransfer || isBankTransfer;
+  const knownCategoryNames = useMemo(
+    () => new Set((categories as unknown as Array<{ name: string }>).map((row) => row.name.trim().toLocaleLowerCase())),
+    [categories],
+  );
+  const chargeCategoryIsReal =
+    chargeCategory.trim() !== '' && knownCategoryNames.has(chargeCategory.trim().toLocaleLowerCase());
+
   const parsedOutgoingAmount = readAmount(amount);
   // Blank means no charge. Anything unreadable is caught on submit.
   const parsedCharge = chargeAmount.trim() === '' ? 0 : readAmount(chargeAmount);

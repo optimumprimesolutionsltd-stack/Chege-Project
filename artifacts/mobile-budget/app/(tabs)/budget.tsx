@@ -1245,8 +1245,16 @@ export default function BudgetScreen() {
                   <Feather name="edit-2" size={14} color="#d9fbe5" />
                   <Text style={styles.manageBtnText}>Edit</Text>
                 </Pressable>
-                <Pressable onPress={() => openAdd()} style={styles.addBtn} hitSlop={4}>
-                  <Feather name="plus" size={18} color="#4ade80" />
+                <Pressable
+                  onPress={() => openAdd()}
+                  style={styles.addBtn}
+                  hitSlop={4}
+                  accessibilityRole="button"
+                  accessibilityLabel="Add a budget category or subcategory"
+                  testID="budget-add-category"
+                >
+                  <Feather name="plus" size={16} color="#4ade80" />
+                  <Text style={styles.addBtnText}>Category</Text>
                 </Pressable>
               </View>
             </View>
@@ -1748,6 +1756,26 @@ export default function BudgetScreen() {
                   </Pressable>
                 );
               })}
+              {/* At the end of the list as well as the header, which scrolls
+                  away. The tier rows carry an Add too, but somebody has to
+                  already know what a tier is to find it. */}
+              {!catEditor.editing ? (
+                <Pressable
+                  testID="budget-add-category-inline"
+                  accessibilityRole="button"
+                  accessibilityLabel="Add a budget category or subcategory"
+                  onPress={() => openAdd()}
+                  style={({ pressed }) => [
+                    styles.inlineAddCategory,
+                    { borderColor: colors.primary, opacity: pressed ? 0.75 : 1 },
+                  ]}
+                >
+                  <Feather name="plus" size={16} color={colors.primary} />
+                  <Text style={[styles.inlineAddCategoryText, { color: colors.primary }]}>
+                    Add a category or subcategory
+                  </Text>
+                </Pressable>
+              ) : null}
             </>
           )}
           {catEditor.editing ? (
@@ -1774,7 +1802,10 @@ const styles = StyleSheet.create({
   monthNav: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   navBtn: { padding: 4 },
   monthLabel: { fontSize: 14, color: '#F4F8FF', fontFamily: 'Inter_500Medium', minWidth: 64, textAlign: 'center' },
-  addBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(74,222,128,0.15)', alignItems: 'center', justifyContent: 'center' },
+  addBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, height: 32, borderRadius: 16, backgroundColor: 'rgba(74,222,128,0.15)', justifyContent: 'center' },
+  addBtnText: { color: '#4ade80', fontSize: 12, fontFamily: 'Inter_600SemiBold' },
+  inlineAddCategory: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1, borderStyle: 'dashed', borderRadius: 12, height: 46, marginTop: 10 },
+  inlineAddCategoryText: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
    manageBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, height: 32, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.10)' },
    manageBtnText: { color: '#d9fbe5', fontSize: 12, fontFamily: 'Inter_600SemiBold' },
   overallCard: { backgroundColor: 'rgba(255,255,255,0.07)', borderRadius: 16, padding: 16 },
