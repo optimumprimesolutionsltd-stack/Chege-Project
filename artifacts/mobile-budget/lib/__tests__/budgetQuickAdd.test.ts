@@ -20,11 +20,28 @@ describe('a category can be added the way an income stream is', () => {
     expect(budget).toContain('testID="budget-new-category-add"');
   });
 
-  it('borrows the income row styles rather than inventing new ones', () => {
+  it('borrows the income row styles for its inputs', () => {
     // Looking like it is the point: somebody recognised that row.
     // Three: income, the category row, and the parent picker beneath it.
     expect((budget.match(/styles\.incomeAddRow/g) ?? []).length).toBe(3);
-    expect((budget.match(/styles\.incomeAddButton/g) ?? []).length).toBe(2);
+  });
+
+  it('puts the action after every input, not above one of them', () => {
+    // The plus sat in the first row, above the parent picker, so pressing
+    // it before reaching "Inside …" made exactly the top-level category
+    // this row exists to stop somebody making by accident.
+    expect(budget.indexOf('testID="budget-new-category-parent"')).toBeLessThan(
+      budget.indexOf('testID="budget-new-category-add"'),
+    );
+    expect(budget).toContain('styles.quickAddAction');
+  });
+
+  it('says where it will go, on the button itself', () => {
+    expect(budget).toContain("{chosenParent ? `Add inside ${chosenParent.name}` : 'Add category'}");
+  });
+
+  it('cannot be pressed with nothing to add', () => {
+    expect(budget).toContain("disabled={addingCategory || newCategoryName.trim() === ''}");
   });
 
   it('takes the keyboard return as well as the button', () => {
