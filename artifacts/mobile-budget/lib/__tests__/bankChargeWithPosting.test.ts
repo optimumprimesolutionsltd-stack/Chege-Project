@@ -21,7 +21,7 @@ describe('a withdrawal can carry its bank charge', () => {
   });
 
   it('names a transfer as a transfer when it does', () => {
-    expect(bank).toContain("isMovingMoney ? 'transfer' : 'withdrawal'");
+    expect(bank).toContain("await postBankCharge('transfer');");
   });
 
   it('is optional, and blank means none', () => {
@@ -38,8 +38,8 @@ describe('it is a second posting, never part of the first', () => {
     // Folded into the amount, a repayment of 5,000 with a 50 charge would
     // offer to take 5,050 off the loan when only 5,000 reached it, and the
     // balance would drift by the fee every time.
-    expect(bank).toContain('if (chargeToPost > 0) {');
-    expect(bank).toContain('description: `Bank charge — ${description.trim() ||');
+    expect(bank).toContain('const postBankCharge = async (kind:');
+    expect(bank).toContain('description: `Bank charge — ${description.trim() || kind}`,');
   });
 
   it('carries a category of its own', () => {
@@ -56,14 +56,22 @@ describe('it is a second posting, never part of the first', () => {
   it('is posted after the posting it belongs to, not before', () => {
     // If the fee fails, that posting still stands, which is what the
     // statement will show. The other way round invents a fee for nothing.
-    const submit = bank.slice(bank.indexOf('const handleSubmit'));
-    expect(submit.indexOf('destinationKind: withdrawDest')).toBeLessThan(submit.indexOf('if (chargeToPost > 0) {'));
+    const submit = bank.slice(bank.indexOf('const handleSubmit = async ('));
+    expect(submit.indexOf('destinationKind: withdrawDest')).toBeLessThan(
+      submit.indexOf("await postBankCharge(txType === 'deposit'"),
+    );
   });
 
   it('carries the date of the posting it came with', () => {
     // A day's charges belong with that day's postings, not with today's.
-    const block = bank.slice(bank.indexOf('if (chargeToPost > 0) {'));
+    const block = bank.slice(bank.indexOf('const postBankCharge = async'));
     expect(block.slice(0, 600)).toContain('date,');
+  });
+
+  it('is posted by every branch, not only the one that falls through', () => {
+    // Savings and transfers return early, so a fee entered on one was taken
+    // off the projected balance and silently never recorded.
+    expect((bank.match(/await postBankCharge\(/g) ?? []).length).toBe(4);
   });
 });
 
