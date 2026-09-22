@@ -243,6 +243,22 @@ describe('editing a posting keeps what kind it is', () => {
     expect(bank).toContain("setWithdrawDest(type === 'disbursement' ? (tx.isLending ? 'lend' : 'other') : null);");
   });
 
+  it('sets it exactly once, so nothing later undoes it', () => {
+    // The first fix set it early and the original assignment three lines
+    // further down reset it, so the bug survived its own fix.
+    expect((bank.match(/setWithdrawDest\(type === 'disbursement'/g) ?? []).length).toBe(1);
+  });
+
+  it('reopens a repayment as a repayment, not as ordinary money in', () => {
+    expect(bank).toContain("setRepayingPartyId(type === 'deposit' ? tx.settlesContributorId ?? null : null);");
+    expect(bank).toContain('settlesContributorId?: number | null;');
+  });
+
+  it('reopens borrowed money as borrowed', () => {
+    expect(bank).toContain("setBorrowTarget(type === 'deposit' && tx.isBorrowing ? { kind: 'none' } : null);");
+    expect(bank).toContain('isBorrowing?: boolean | null;');
+  });
+
   it('can tell a loan out from a withdrawal missing its category', () => {
     expect(bank).toContain('isLending?: boolean | null;');
   });

@@ -109,6 +109,8 @@ type Tx = {
   incomeSourceId?: number | null;
   expenseCategory?: string | null;
   isLending?: boolean | null;
+  isBorrowing?: boolean | null;
+  settlesContributorId?: number | null;
   /** The month a deposit was for, when that is not the month it arrived. */
   appliesToMonth?: number | null;
   appliesToYear?: number | null;
@@ -821,14 +823,15 @@ export default function BankScreen() {
       : tx.description);
     setDate(tx.date);
     setExpenseCategory(tx.expenseCategory ?? '');
-    // Without this the editor treated every withdrawal as ordinary spending,
-    // so opening a loan out — which has no category, by design — and saving
-    // it demanded a category it must never have.
-    setWithdrawDest(type === 'disbursement' ? (tx.isLending ? 'lend' : 'other') : null);
     setWithdrawPartyId(null);
     // Blank, so a fee left in the field from the last posting cannot be added
     // to this one by opening it.
     setChargeAmount('');
+    // What kind of money it was, restored from the row rather than reset.
+    // Reopening a repayment as "ordinary money in" is not just cosmetic: it is
+    // the screen telling somebody their record says something it does not.
+    setRepayingPartyId(type === 'deposit' ? tx.settlesContributorId ?? null : null);
+    setBorrowTarget(type === 'deposit' && tx.isBorrowing ? { kind: 'none' } : null);
     setAppliesTo(tx.appliesToMonth && tx.appliesToYear
       ? { month: tx.appliesToMonth, year: tx.appliesToYear }
       : null);
@@ -851,7 +854,10 @@ export default function BankScreen() {
     setWithdrawerId(type === 'disbursement'
       ? (!isSharedWorkspace ? user?.id ?? null : tx.madeById ?? null)
       : null);
-    setWithdrawDest(type === 'disbursement' ? 'other' : null);
+    // A loan out has no category by design, so opening one as ordinary
+    // spending demands a category it must never have. There is only one
+    // assignment of this: an earlier one was silently overwritten here.
+    setWithdrawDest(type === 'disbursement' ? (tx.isLending ? 'lend' : 'other') : null);
     setWithdrawSourceName(null);
     setWithdrawGoalId(tx.savingsGoalId ?? null);
     setShowGoalPicker(false);
