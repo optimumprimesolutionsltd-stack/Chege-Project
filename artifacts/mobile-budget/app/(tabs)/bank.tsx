@@ -1416,7 +1416,7 @@ export default function BankScreen() {
       Alert.alert('Category required', 'Choose or add a category for this withdrawal.');
       return;
     }
-    if (txType === 'disbursement' && withdrawDest === 'lend' && !lentToParty) {
+    if (txType === 'disbursement' && editingTransactionId === null && withdrawDest === 'lend' && !lentToParty) {
       Alert.alert('Who are you lending to?', 'Pick the person, or add them, so it can be recorded as owed to you.');
       return;
     }
@@ -1498,11 +1498,13 @@ export default function BankScreen() {
         }
         finalDescription = description.trim() || withdrawSourceName;
       } else if (withdrawDest === 'party') {
-        if (!selectedParty) {
+        if (!selectedParty && editingTransactionId === null) {
           Alert.alert('Who are you paying?', 'Choose the person or institution this is going to.');
           return;
         }
-        finalDescription = description.trim() || selectedParty.name;
+        // On an edit the narration already on the posting stands: there is no
+        // party to name it after, and replacing it with nothing would lose it.
+        finalDescription = description.trim() || selectedParty?.name || finalDescription;
       } else if (withdrawDest === 'savings') {
         if (!selectedGoal) {
           Alert.alert('Select a goal', 'Please choose which savings goal this is for.');

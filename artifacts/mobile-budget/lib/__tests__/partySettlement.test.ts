@@ -67,7 +67,9 @@ describe('paying somebody you owe', () => {
   });
 
   it('names them on the posting when nothing else was written', () => {
-    expect(bank).toContain('finalDescription = description.trim() || selectedParty.name;');
+    // Falls back to what is already on the posting when editing, where the
+    // party cannot be restored and replacing it would lose the narration.
+    expect(bank).toContain('finalDescription = description.trim() || selectedParty?.name || finalDescription;');
   });
 
   it('still asks what kind of cost it was', () => {
