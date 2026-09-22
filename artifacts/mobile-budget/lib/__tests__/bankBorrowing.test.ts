@@ -234,3 +234,23 @@ describe('neither lending nor borrowing asks for a category', () => {
     expect(bank).not.toContain("txType === 'deposit' && !expenseCategory");
   });
 });
+
+// Opening a posting to edit it treated every withdrawal as ordinary spending,
+// because openEdit never set the destination. A loan out has no category by
+// design, so saving one demanded a category it must never have.
+describe('editing a posting keeps what kind it is', () => {
+  it('restores the destination from the row', () => {
+    expect(bank).toContain("setWithdrawDest(type === 'disbursement' ? (tx.isLending ? 'lend' : 'other') : null);");
+  });
+
+  it('can tell a loan out from a withdrawal missing its category', () => {
+    expect(bank).toContain('isLending?: boolean | null;');
+  });
+
+  it('does not carry a party over from whatever was open before', () => {
+    // Sliced forward by length: openReconcile is defined earlier in the file,
+    // so slicing to it inverts the range and matches nothing.
+    const start = bank.indexOf('const openEdit = (tx: Tx) => {');
+    expect(bank.slice(start, start + 2000)).toContain('setWithdrawPartyId(null);');
+  });
+});

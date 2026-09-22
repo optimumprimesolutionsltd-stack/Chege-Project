@@ -358,6 +358,8 @@ async function enrichTx(
     // null madeById = Joint bank (shared household); name resolves to null so UI can show GROUP_ATTRIBUTION
     madeByName,
     expenseCategory: tx.expenseCategory ?? null,
+    isLending: tx.isLending ?? false,
+    isBorrowing: tx.isBorrowing ?? false,
     savingsGoalId: tx.savingsGoalId ?? null,
     savingsGoalName: savingsGoal?.name ?? null,
     transferDirection: tx.transferDirection ?? null,
