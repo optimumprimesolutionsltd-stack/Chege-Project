@@ -270,3 +270,29 @@ describe('editing a posting keeps what kind it is', () => {
     expect(bank.slice(start, start + 2000)).toContain('setWithdrawPartyId(null);');
   });
 });
+
+// "whatever was not touched should not be dropped" — which party a payment or
+// a loan went to was never stored on the posting: the balance is offered after
+// saving and applied separately. So on an edit there is nothing to restore,
+// and demanding it again asks somebody to re-enter what they did not come to
+// change, then blocks the edit when they cannot.
+describe('an edit does not demand what it cannot restore', () => {
+  it('does not ask who was lent to when editing', () => {
+    expect(bank).toContain("if (txType === 'disbursement' && editingTransactionId === null && withdrawDest === 'lend' && !lentToParty) {");
+  });
+
+  it('does not ask who was paid when editing', () => {
+    expect(bank).toContain('if (!selectedParty && editingTransactionId === null) {');
+  });
+
+  it('keeps the narration already on the posting', () => {
+    // Naming it after a party that cannot be restored would replace a real
+    // description with nothing.
+    expect(bank).toContain('finalDescription = description.trim() || selectedParty?.name || finalDescription;');
+  });
+
+  it('still asks on a new posting, where the answer is knowable', () => {
+    expect(bank).toContain("Alert.alert('Who are you lending to?'");
+    expect(bank).toContain("Alert.alert('Who are you paying?'");
+  });
+});
