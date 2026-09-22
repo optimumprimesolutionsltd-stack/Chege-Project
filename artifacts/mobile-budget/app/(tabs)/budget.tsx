@@ -401,6 +401,59 @@ export default function BudgetScreen() {
       qc.invalidateQueries({ queryKey: ['income-sources'] }),
     ]);
   };
+  /**
+   * A category in one line, in the shape income streams already use.
+   *
+   * There was a plus in the header, which is clipped off the edge on a narrow
+   * phone, and an Add inside each tier, which somebody has to know what a tier
+   * is to find. Neither reads as "make a category", and the one place on this
+   * screen that plainly does is the income row — so this matches it.
+   *
+   * Only the quick case: a name and an amount. A subcategory, a tier, or a
+   * recurring month still opens the full form, which says so underneath.
+   */
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategoryAmount, setNewCategoryAmount] = useState('');
+  const [addingCategory, setAddingCategory] = useState(false);
+
+  const handleAddCategoryInline = async () => {
+    const name = newCategoryName.trim();
+    if (!name) {
+      Alert.alert('Category name required', 'Enter a name before adding the category.');
+      return;
+    }
+    if (allCategories.some((row) => row.name.trim().toLocaleLowerCase() === name.toLocaleLowerCase())) {
+      Alert.alert('That category already exists', `"${name}" is already in this budget.`);
+      return;
+    }
+    const raw = newCategoryAmount.trim().replace(/,/g, '');
+    if (raw !== '' && !/^\d+(?:\.\d{1,2})?$/.test(raw)) {
+      Alert.alert('Check the amount', 'Enter a number, or leave it blank to set it later.');
+      return;
+    }
+    setAddingCategory(true);
+    try {
+      await customFetch('/api/budget-categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          budgetAmount: raw === '' ? 0 : Number(raw),
+          priority: 1,
+          parentId: null,
+          isRecurring: true,
+        }),
+      });
+      await refreshAll();
+      setNewCategoryName('');
+      setNewCategoryAmount('');
+    } catch (error: unknown) {
+      Alert.alert('Could not add the category', error instanceof Error ? error.message : 'Please try again.');
+    } finally {
+      setAddingCategory(false);
+    }
+  };
+
   const handleAddIncomeSource = async () => {
     const name = newIncomeSource.trim();
     if (!name) {
@@ -1298,6 +1351,55 @@ export default function BudgetScreen() {
             </Pressable>
           ) : <ActivityIndicator color="#4ade80" style={{ marginVertical: 16 }} />}
         </LinearGradient>
+
+        <View style={styles.incomeSection} testID="budget-category-quick-add">
+          <View style={styles.incomeHeader}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.incomeTitle, { color: colors.foreground }]}>Budget categories</Text>
+              <Text style={[styles.incomeSubtitle, { color: colors.mutedForeground }]}>Add what this budget spends on</Text>
+            </View>
+            <Feather name="pie-chart" size={19} color={colors.secondary} />
+          </View>
+          <View style={[styles.incomeAddRow, { borderColor: colors.border, backgroundColor: colors.card }]}>
+            <TextInput
+              style={[styles.incomeAddInput, { color: colors.foreground }]}
+              placeholder="Category name"
+              placeholderTextColor={colors.mutedForeground}
+              value={newCategoryName}
+              onChangeText={setNewCategoryName}
+              editable={!addingCategory}
+              returnKeyType="done"
+              onSubmitEditing={() => void handleAddCategoryInline()}
+              testID="budget-new-category-name"
+            />
+            <TextInput
+              style={[styles.incomeExpectedInput, { color: colors.foreground, borderColor: colors.border }]}
+              placeholder="Budget KES"
+              placeholderTextColor={colors.mutedForeground}
+              value={newCategoryAmount}
+              onChangeText={setNewCategoryAmount}
+              editable={!addingCategory}
+              keyboardType="numeric"
+              returnKeyType="done"
+              testID="budget-new-category-amount"
+            />
+            <Pressable
+              onPress={() => void handleAddCategoryInline()}
+              disabled={addingCategory}
+              style={[styles.incomeAddButton, { backgroundColor: colors.primary, opacity: addingCategory ? 0.45 : 1 }]}
+              accessibilityRole="button"
+              accessibilityLabel="Add budget category"
+              testID="budget-new-category-add"
+            >
+              {addingCategory ? <ActivityIndicator size="small" color="#fff" /> : <Feather name="plus" size={17} color="#fff" />}
+            </Pressable>
+          </View>
+          <Pressable onPress={() => openAdd()} testID="budget-open-full-category-form" style={{ paddingVertical: 8 }}>
+            <Text style={{ color: colors.primary, fontSize: 12, fontFamily: 'Inter_600SemiBold' }}>
+              Subcategory, tier or a one-month category? Open the full form
+            </Text>
+          </Pressable>
+        </View>
 
         <View style={styles.incomeSection}>
           <View style={styles.incomeHeader}>

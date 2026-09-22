@@ -71,9 +71,9 @@ describe("bank balance contract", () => {
   });
 
   it("keeps the existing member attribution when an ordinary disbursement edit omits madeById", () => {
-    expect(routeSource).toContain(
-      "madeById: requestedMadeById, description, expenseCategory, accountId",
-    );
+    // The .set() is spread across lines now that the party rides along, so
+    // the assertion names the one field it is about.
+    expect(routeSource).toContain('madeById: requestedMadeById,');
     expect(routeSource).not.toContain(
       ".set({ amount, date, madeById, description, expenseCategory, accountId })",
     );

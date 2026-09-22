@@ -103,3 +103,41 @@ describe("editing a loan out is not refused for having no category", () => {
     expect((bank.match(/Choose a valid budget category\./g) ?? []).length).toBe(4);
   });
 });
+
+// Reopening a payment to a party showed an empty picker: the posting never
+// recorded who it went to, because the balance is offered afterwards and
+// applied separately. An empty picker on an edit is worse than none — it
+// invites a guess, and the guess moves somebody else's balance.
+describe("a posting remembers who it was for", () => {
+  const mobile = readFileSync("../mobile-budget/app/(tabs)/bank.tsx", "utf8");
+
+  it("is stored on the way in", () => {
+    expect(bank).toContain("settlesContributorId: paidPartyId ?? null,");
+    expect(mobile).toContain("{ settlesContributorId: withdrawPartyId ?? undefined }");
+  });
+
+  it("refuses a party from another budget", () => {
+    expect(bank).toContain("const paidPartyId = parsed.data.settlesContributorId;");
+    expect((bank.match(/That person is not in this budget\./g) ?? []).length).toBe(2);
+  });
+
+  it("is left alone by an edit that never touched it", () => {
+    expect(bank).toContain("...(parsed.data.settlesContributorId === undefined");
+    expect(mobile).toContain("...(txType === 'disbursement' && withdrawPartyId !== null");
+  });
+
+  it("is read back when the posting is reopened", () => {
+    expect(mobile).toContain("setWithdrawPartyId(type === 'disbursement' ? tx.settlesContributorId ?? null : null);");
+  });
+
+  it("is safe on a disbursement", () => {
+    // Every figure that filters on this column is scoped to type = 'deposit',
+    // where it means a repayment is not income. A disbursement carrying it
+    // changes no total.
+    const dashboard = readFileSync("src/routes/dashboard.ts", "utf8");
+    for (const match of dashboard.matchAll(/settles_contributor_id IS NULL/g)) {
+      const before = dashboard.slice(Math.max(0, match.index! - 260), match.index!);
+      expect(before).toContain("= 'deposit'");
+    }
+  });
+});

@@ -263,11 +263,13 @@ describe('editing a posting keeps what kind it is', () => {
     expect(bank).toContain('isLending?: boolean | null;');
   });
 
-  it('does not carry a party over from whatever was open before', () => {
-    // Sliced forward by length: openReconcile is defined earlier in the file,
-    // so slicing to it inverts the range and matches nothing.
+  it('restores the party the posting was for, rather than clearing it', () => {
+    // Clearing it left an empty picker on an edit, which invites a guess that
+    // moves somebody else's balance. It is stored now, so it can be shown.
     const start = bank.indexOf('const openEdit = (tx: Tx) => {');
-    expect(bank.slice(start, start + 2000)).toContain('setWithdrawPartyId(null);');
+    expect(bank.slice(start, start + 2000)).toContain(
+      "setWithdrawPartyId(type === 'disbursement' ? tx.settlesContributorId ?? null : null);",
+    );
   });
 });
 

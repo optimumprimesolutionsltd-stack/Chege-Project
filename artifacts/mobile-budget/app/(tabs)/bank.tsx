@@ -826,7 +826,7 @@ export default function BankScreen() {
       : tx.description);
     setDate(tx.date);
     setExpenseCategory(tx.expenseCategory ?? '');
-    setWithdrawPartyId(null);
+    setWithdrawPartyId(type === 'disbursement' ? tx.settlesContributorId ?? null : null);
     // Blank, so a fee left in the field from the last posting cannot be added
     // to this one by opening it.
     setChargeAmount('');
@@ -1581,6 +1581,11 @@ export default function BankScreen() {
                 ? { isLending: true as const }
                 : { expenseCategory, destinationKind: withdrawDest === 'other' ? 'other' : 'category' }
               : {}),
+            // Omitted when nothing was chosen, so an edit that never touched
+            // the party leaves whoever is recorded alone.
+            ...(txType === 'disbursement' && withdrawPartyId !== null
+              ? { settlesContributorId: withdrawPartyId }
+              : {}),
             accountId: selectedAccountId ?? undefined,
           },
         });
@@ -1675,6 +1680,9 @@ export default function BankScreen() {
             ...(withdrawDest === 'lend'
               ? { isLending: true }
               : { expenseCategory, destinationKind: withdrawDest === 'other' ? 'other' : 'category' }),
+            ...(withdrawDest === 'lend' || withdrawDest === 'party'
+              ? { settlesContributorId: withdrawPartyId ?? undefined }
+              : {}),
           },
         });
       }
