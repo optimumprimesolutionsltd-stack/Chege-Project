@@ -108,10 +108,12 @@ describe('the figures include it', () => {
 
   it('remembers it on the day screen under the same key', () => {
     // Two screens disagreeing about where a fee goes is the same scattering
-    // by another route.
+    // by another route. A line can carry several charges now, so what is
+    // remembered seeds each newly added one rather than the row itself.
     expect(day).toContain("const CHARGE_CATEGORY_KEY = 'jamvi:last-charge-category';");
     expect(day).toContain('const addRow = () => {');
-    expect(day).toContain('const row = { ...blankRow(), chargeCategory };');
+    expect(day).toContain('function blankCharge(category: string): ChargeItem {');
+    expect(day).toContain('charges: [...row.charges, blankCharge(chargeCategory)]');
   });
 });
 

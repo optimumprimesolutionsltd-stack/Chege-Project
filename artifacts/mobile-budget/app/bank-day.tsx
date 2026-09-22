@@ -42,6 +42,7 @@ import { BankAccountPicker } from '@/components/BankAccountPicker';
 import { buildCategoryTree, type CategoryRow } from '@workspace/category-tree';
 import {
   customFetch,
+  useCreateBudgetCategory,
   useCreateDeposit,
   useCreateDisbursement,
   useGetBudgetCategories,
@@ -75,6 +76,22 @@ type RowKind =
   | 'borrowed'     // money in, a loan
   | 'lend';        // money out, a loan — the mirror of borrowed
 
+/**
+ * One fee on a row, posted separately, exactly as the sheet does.
+ *
+ * A statement line is often more than one charge — a withdrawal fee and
+ * excise duty on the same entry — so a row carries a list rather than one
+ * amount. The label is what the posting is called; left blank it falls back
+ * to "Bank charge — <what the row was>", which was the only name a charge
+ * could ever have before.
+ */
+type ChargeItem = {
+  key: string;
+  amount: string;
+  category: string;
+  label: string;
+};
+
 type DayRow = {
   key: string;
   kind: RowKind;
@@ -86,9 +103,7 @@ type DayRow = {
   /** For borrowed against a tracked debt rather than a party. */
   debtName: string | null;
   description: string;
-  /** The bank's fee on this row, posted separately, exactly as the sheet does. */
-  charge: string;
-  chargeCategory: string;
+  charges: ChargeItem[];
   /** Set once saved, so a retry does not post it twice. */
   saved: boolean;
   error: string | null;
@@ -115,11 +130,17 @@ function blankRow(): DayRow {
     partyId: null,
     debtName: null,
     description: '',
-    charge: '',
-    chargeCategory: '',
+    // Always at least one, blank, so the amount beside the main figure has
+    // something to bind to from the start — an unused blank charge posts
+    // nothing, exactly like an empty charge amount always has.
+    charges: [blankCharge('')],
     saved: false,
     error: null,
   };
+}
+
+function blankCharge(category: string): ChargeItem {
+  return { key: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, amount: '', category, label: '' };
 }
 
 const KIND_LABEL: Record<RowKind, string> = {
@@ -165,9 +186,9 @@ export default function BankDayScreen() {
     };
   }, []);
 
-  const rememberChargeCategory = (key: string, name: string) => {
+  const rememberChargeCategory = (rowKey: string, chargeKey: string, name: string) => {
     setChargeCategory(name);
-    patchRow(key, { chargeCategory: name });
+    patchCharge(rowKey, chargeKey, { category: name });
     AsyncStorage.setItem(CHARGE_CATEGORY_KEY, name).catch(() => {});
   };
 
@@ -202,11 +223,14 @@ export default function BankDayScreen() {
   const activeAccountId = selectedAccountId ?? accounts[0]?.id ?? null;
   const openingBalance = account?.balance ?? 0;
 
-  /** What each row moves, in the direction it moves it, fee included. */
+  /** What one charge amounts to, blank or unparsable read as nothing yet. */
+  const chargeAmount = (charge: ChargeItem): number => (charge.amount.trim() === '' ? 0 : readAmount(charge.amount) ?? 0);
+
+  /** What each row moves, in the direction it moves it, every charge included. */
   const rowEffect = (row: DayRow): number => {
     const amount = row.amount.trim() === '' ? 0 : readAmount(row.amount) ?? 0;
-    const fee = row.charge.trim() === '' ? 0 : readAmount(row.charge) ?? 0;
-    return (isOutgoing(row.kind) ? -amount : amount) - fee;
+    const fees = row.charges.reduce((total, charge) => total + chargeAmount(charge), 0);
+    return (isOutgoing(row.kind) ? -amount : amount) - fees;
   };
 
   const unsavedRows = rows.filter((row) => !row.saved);
@@ -221,13 +245,35 @@ export default function BankDayScreen() {
   };
 
   const addRow = () => {
-    const row = { ...blankRow(), chargeCategory };
+    const row = { ...blankRow(), charges: [blankCharge(chargeCategory)] };
     setRows((current) => [...current, row]);
     setOpenRow(row.key);
   };
 
   const removeRow = (key: string) => {
     setRows((current) => (current.length === 1 ? [blankRow()] : current.filter((row) => row.key !== key)));
+  };
+
+  const addCharge = (rowKey: string) => {
+    setRows((current) =>
+      current.map((row) => (row.key === rowKey ? { ...row, charges: [...row.charges, blankCharge(chargeCategory)] } : row)),
+    );
+  };
+
+  const removeCharge = (rowKey: string, chargeKey: string) => {
+    setRows((current) =>
+      current.map((row) => (row.key === rowKey ? { ...row, charges: row.charges.filter((charge) => charge.key !== chargeKey) } : row)),
+    );
+  };
+
+  const patchCharge = (rowKey: string, chargeKey: string, change: Partial<ChargeItem>) => {
+    setRows((current) =>
+      current.map((row) =>
+        row.key === rowKey
+          ? { ...row, charges: row.charges.map((charge) => (charge.key === chargeKey ? { ...charge, ...change } : charge)), error: null }
+          : row,
+      ),
+    );
   };
 
   /** What is wrong with a row, in the words somebody can act on. */
@@ -243,10 +289,11 @@ export default function BankDayScreen() {
     if (row.kind === 'borrowed' && row.partyId === null && !row.debtName) {
       return 'Say what it was borrowed against, or from whom.';
     }
-    if (row.charge.trim() !== '') {
-      const fee = readAmount(row.charge);
+    for (const charge of row.charges) {
+      if (charge.amount.trim() === '') continue;
+      const fee = readAmount(charge.amount);
       if (fee === null || fee < 0) return 'Check the bank charge.';
-      if (fee > 0 && !row.chargeCategory.trim()) return 'Give the bank charge a category.';
+      if (fee > 0 && !charge.category.trim()) return 'Give the bank charge a category.';
     }
     return null;
   };
@@ -259,7 +306,6 @@ export default function BankDayScreen() {
    */
   const saveRow = async (row: DayRow): Promise<void> => {
     const amount = readAmount(row.amount) as number;
-    const fee = row.charge.trim() === '' ? 0 : readAmount(row.charge) ?? 0;
     const party = row.partyId === null ? null : parties.find((candidate) => candidate.id === row.partyId) ?? null;
     const narration = row.description.trim() || party?.name || row.category.trim() || KIND_LABEL[row.kind];
 
@@ -301,15 +347,19 @@ export default function BankDayScreen() {
       });
     }
 
-    // The fee, as its own posting, after the one it belongs to — exactly as
-    // the sheet does it, and for the same reason.
-    if (fee > 0) {
+    // Every charge, each as its own posting, after the one it belongs to —
+    // exactly as the sheet does it, and for the same reason. A statement line
+    // can carry more than one (a withdrawal fee and excise duty together), so
+    // each gets its own name rather than sharing one "Bank charge" label.
+    for (const charge of row.charges) {
+      const fee = chargeAmount(charge);
+      if (fee <= 0) continue;
       await createDisbursement({
         data: {
           amount: fee,
-          description: `Bank charge — ${narration}`,
+          description: charge.label.trim() || `Bank charge — ${narration}`,
           date,
-          expenseCategory: row.chargeCategory.trim(),
+          expenseCategory: charge.category.trim(),
           madeById: !isSharedWorkspace ? user?.id : null,
           destinationKind: 'category',
           accountId: activeAccountId ?? undefined,
@@ -634,15 +684,30 @@ export default function BankDayScreen() {
                   ))}
                 </View>
 
-                <TextInput
-                  value={row.amount}
-                  onChangeText={(value) => patchRow(row.key, { amount: value })}
-                  placeholder="Amount, or 1200+800"
-                  placeholderTextColor={colors.mutedForeground}
-                  keyboardType="decimal-pad"
-                  testID={`bank-day-amount-${index}`}
-                  style={[styles.input, { borderColor: colors.border, backgroundColor: colors.muted, color: colors.foreground }]}
-                />
+                {/* The figure and its bank charge are one glance on a real
+                    statement, so they sit side by side here too — the charge
+                    was three fields further down, which read as unrelated to
+                    the amount it actually came off. */}
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <TextInput
+                    value={row.amount}
+                    onChangeText={(value) => patchRow(row.key, { amount: value })}
+                    placeholder="Amount, or 1200+800"
+                    placeholderTextColor={colors.mutedForeground}
+                    keyboardType="decimal-pad"
+                    testID={`bank-day-amount-${index}`}
+                    style={[styles.input, { flex: 1, borderColor: colors.border, backgroundColor: colors.muted, color: colors.foreground }]}
+                  />
+                  <TextInput
+                    value={row.charges[0]?.amount ?? ''}
+                    onChangeText={(value) => patchCharge(row.key, row.charges[0].key, { amount: value })}
+                    placeholder="Bank charge"
+                    placeholderTextColor={colors.mutedForeground}
+                    keyboardType="decimal-pad"
+                    testID={`bank-day-charge-${index}-0`}
+                    style={[styles.input, { flex: 1, borderColor: colors.border, backgroundColor: colors.muted, color: colors.foreground }]}
+                  />
+                </View>
                 {/* decimal-pad has no operators, so the expression readAmount
                     already understands (see lib/bankAmount.ts) had no way to
                     be typed - these put +, -, x, / one tap away. */}
@@ -657,6 +722,7 @@ export default function BankDayScreen() {
                     testID={`bank-day-category-${index}`}
                     value={row.category}
                     tree={categoryTree}
+                    categories={categories as unknown as Array<{ id: number; name: string }>}
                     onPick={(name) => patchRow(row.key, { category: name })}
                     placeholder="Category"
                   />
@@ -717,24 +783,85 @@ export default function BankDayScreen() {
                   style={[styles.input, { borderColor: colors.border, backgroundColor: colors.muted, color: colors.foreground }]}
                 />
 
-                <TextInput
-                  value={row.charge}
-                  onChangeText={(value) => patchRow(row.key, { charge: value })}
-                  placeholder="Bank charge on this line (optional)"
-                  placeholderTextColor={colors.mutedForeground}
-                  keyboardType="decimal-pad"
-                  testID={`bank-day-charge-${index}`}
-                  style={[styles.input, { borderColor: colors.border, backgroundColor: colors.muted, color: colors.foreground }]}
-                />
-                {row.charge.trim() !== '' ? (
-                  <CategoryField
-                    testID={`bank-day-charge-category-${index}`}
-                    value={row.chargeCategory}
-                    tree={categoryTree}
-                    onPick={(name) => rememberChargeCategory(row.key, name)}
-                    placeholder="Charge category"
-                  />
+                {/* The first charge's amount already sits beside the main
+                    Amount field above — this is just its name and category.
+                    A statement line can carry more than one charge though — a
+                    withdrawal fee and a Fuliza access fee together — so
+                    anything past the first gets its own full row below,
+                    amount included. */}
+                {row.charges[0] && row.charges[0].amount.trim() !== '' ? (
+                  <>
+                    <TextInput
+                      value={row.charges[0].label}
+                      onChangeText={(value) => patchCharge(row.key, row.charges[0].key, { label: value })}
+                      placeholder="Name this charge (optional, e.g. Fuliza)"
+                      placeholderTextColor={colors.mutedForeground}
+                      testID={`bank-day-charge-label-${index}-0`}
+                      style={[styles.input, { borderColor: colors.border, backgroundColor: colors.muted, color: colors.foreground }]}
+                    />
+                    <CategoryField
+                      testID={`bank-day-charge-category-${index}-0`}
+                      value={row.charges[0].category}
+                      tree={categoryTree}
+                      categories={categories as unknown as Array<{ id: number; name: string }>}
+                      onPick={(name) => rememberChargeCategory(row.key, row.charges[0].key, name)}
+                      placeholder="Charge category"
+                    />
+                  </>
                 ) : null}
+                {row.charges.slice(1).map((charge, extraIndex) => {
+                  const chargeIndex = extraIndex + 1;
+                  return (
+                    <View key={charge.key} style={{ gap: 8 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <TextInput
+                          value={charge.amount}
+                          onChangeText={(value) => patchCharge(row.key, charge.key, { amount: value })}
+                          placeholder={`Bank charge ${chargeIndex + 1}`}
+                          placeholderTextColor={colors.mutedForeground}
+                          keyboardType="decimal-pad"
+                          testID={`bank-day-charge-${index}-${chargeIndex}`}
+                          style={[styles.input, { flex: 1, borderColor: colors.border, backgroundColor: colors.muted, color: colors.foreground }]}
+                        />
+                        <Pressable
+                          onPress={() => removeCharge(row.key, charge.key)}
+                          testID={`bank-day-charge-remove-${index}-${chargeIndex}`}
+                          accessibilityLabel="Remove this charge"
+                        >
+                          <Feather name="x" size={18} color={colors.mutedForeground} />
+                        </Pressable>
+                      </View>
+                      <TextInput
+                        value={charge.label}
+                        onChangeText={(value) => patchCharge(row.key, charge.key, { label: value })}
+                        placeholder="Name this charge (optional, e.g. Excise duty)"
+                        placeholderTextColor={colors.mutedForeground}
+                        testID={`bank-day-charge-label-${index}-${chargeIndex}`}
+                        style={[styles.input, { borderColor: colors.border, backgroundColor: colors.muted, color: colors.foreground }]}
+                      />
+                      {charge.amount.trim() !== '' ? (
+                        <CategoryField
+                          testID={`bank-day-charge-category-${index}-${chargeIndex}`}
+                          value={charge.category}
+                          tree={categoryTree}
+                          categories={categories as unknown as Array<{ id: number; name: string }>}
+                          onPick={(name) => rememberChargeCategory(row.key, charge.key, name)}
+                          placeholder="Charge category"
+                        />
+                      ) : null}
+                    </View>
+                  );
+                })}
+                <TouchableOpacity
+                  onPress={() => addCharge(row.key)}
+                  testID={`bank-day-add-charge-${index}`}
+                  style={[styles.addRow, { borderColor: colors.border, height: 40 }]}
+                >
+                  <Feather name="plus" size={14} color={colors.foreground} />
+                  <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>
+                    Add another bank charge
+                  </Text>
+                </TouchableOpacity>
               </View>
             ) : null}
           </View>
@@ -774,18 +901,68 @@ export default function BankDayScreen() {
 function CategoryField({
   value,
   tree,
+  categories,
   onPick,
   placeholder,
   testID,
 }: {
   value: string;
   tree: ReturnType<typeof buildCategoryTree>;
+  categories: Array<{ id: number; name: string }>;
   onPick: (name: string) => void;
   placeholder: string;
   testID: string;
 }) {
   const colors = useColors();
+  const queryClient = useQueryClient();
+  const { mutateAsync: createCategory, isPending: creating } = useCreateBudgetCategory();
   const [open, setOpen] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [newName, setNewName] = useState('');
+  // null is a top-level category of its own — never a second level, since the
+  // server refuses one anyway.
+  const [newParentId, setNewParentId] = useState<number | null>(null);
+  const [newBudget, setNewBudget] = useState('');
+
+  const submitNewCategory = async () => {
+    const name = newName.trim();
+    if (!name) {
+      Alert.alert('Name it', 'Give this category a clear name, such as Transport or Childcare.');
+      return;
+    }
+    if (categories.some((candidate) => candidate.name.trim().toLocaleLowerCase() === name.toLocaleLowerCase())) {
+      Alert.alert('Already exists', 'Pick it from the list instead.');
+      return;
+    }
+    const budgetAmount = newBudget.trim() === '' ? 0 : Number(newBudget);
+    if (!Number.isInteger(budgetAmount) || budgetAmount < 0) {
+      Alert.alert('Enter a valid monthly budget', 'Use a whole number of KES, or leave it blank.');
+      return;
+    }
+    try {
+      const created = await createCategory({
+        data: {
+          name,
+          budgetAmount,
+          priority: 3,
+          isRecurring: true,
+          activeMonth: null,
+          activeYear: null,
+          ...(newParentId !== null ? { parentId: newParentId } : {}),
+        },
+      });
+      await queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
+      onPick(created.name);
+      setNewName('');
+      setNewParentId(null);
+      setNewBudget('');
+      setAdding(false);
+      setOpen(false);
+    } catch (error: unknown) {
+      Alert.alert('Could not add it', error instanceof Error ? error.message : 'Please try again.');
+    }
+  };
+
   return (
     <>
       <TouchableOpacity
@@ -798,26 +975,109 @@ function CategoryField({
       </TouchableOpacity>
       {open ? (
         <View style={[styles.dropdown, { borderColor: colors.dropdownBorder, backgroundColor: colors.dropdownBackground }]}>
-          {tree.map((group) => (
-            <View key={group.name}>
-              {group.children.length > 0 ? (
-                <>
-                  <Text style={{ color: colors.dropdownMutedForeground, fontSize: 11, paddingHorizontal: 14, paddingTop: 10, fontFamily: 'Inter_600SemiBold' }}>
-                    {group.name.toUpperCase()}
-                  </Text>
-                  {group.children.map((child) => (
-                    <TouchableOpacity key={child} style={styles.option} onPress={() => { onPick(child); setOpen(false); }}>
-                      <Text style={{ color: colors.dropdownForeground }}>{child}</Text>
+          {!adding ? (
+            <>
+              {tree.map((group) => (
+                <View key={group.name}>
+                  {group.children.length > 0 ? (
+                    <>
+                      <Text style={{ color: colors.dropdownMutedForeground, fontSize: 11, paddingHorizontal: 14, paddingTop: 10, fontFamily: 'Inter_600SemiBold' }}>
+                        {group.name.toUpperCase()}
+                      </Text>
+                      {group.children.map((child) => (
+                        <TouchableOpacity key={child} style={styles.option} onPress={() => { onPick(child); setOpen(false); }}>
+                          <Text style={{ color: colors.dropdownForeground }}>{child}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </>
+                  ) : (
+                    <TouchableOpacity style={styles.option} onPress={() => { onPick(group.name); setOpen(false); }}>
+                      <Text style={{ color: colors.dropdownForeground }}>{group.name}</Text>
                     </TouchableOpacity>
-                  ))}
-                </>
-              ) : (
-                <TouchableOpacity style={styles.option} onPress={() => { onPick(group.name); setOpen(false); }}>
-                  <Text style={{ color: colors.dropdownForeground }}>{group.name}</Text>
+                  )}
+                </View>
+              ))}
+              <TouchableOpacity style={styles.option} onPress={() => setAdding(true)} testID={`${testID}-add-new`}>
+                <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>+ Add a category or subcategory</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <View style={{ padding: 12, gap: 8 }}>
+              <TextInput
+                value={newName}
+                onChangeText={setNewName}
+                placeholder="Name, such as Transport"
+                placeholderTextColor={colors.mutedForeground}
+                editable={!creating}
+                testID={`${testID}-new-name`}
+                style={[styles.input, { borderColor: colors.border, backgroundColor: colors.card, color: colors.foreground }]}
+              />
+              <Text style={{ color: colors.dropdownMutedForeground, fontSize: 12 }}>Where does it go?</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                <TouchableOpacity
+                  onPress={() => setNewParentId(null)}
+                  disabled={creating}
+                  testID={`${testID}-new-parent-top-level`}
+                  style={[
+                    styles.kindChip,
+                    { borderColor: newParentId === null ? colors.primary : colors.border, backgroundColor: newParentId === null ? colors.primary + '1F' : 'transparent' },
+                  ]}
+                >
+                  <Text style={{ color: newParentId === null ? colors.primary : colors.mutedForeground, fontSize: 12 }}>Its own group</Text>
                 </TouchableOpacity>
-              )}
+                {tree.map((group) => {
+                  const parent = categories.find((candidate) => candidate.name === group.name);
+                  if (!parent) return null;
+                  const picked = newParentId === parent.id;
+                  return (
+                    <TouchableOpacity
+                      key={parent.id}
+                      onPress={() => setNewParentId(parent.id)}
+                      disabled={creating}
+                      testID={`${testID}-new-parent-${group.name}`}
+                      style={[
+                        styles.kindChip,
+                        { borderColor: picked ? colors.primary : colors.border, backgroundColor: picked ? colors.primary + '1F' : 'transparent' },
+                      ]}
+                    >
+                      <Text style={{ color: picked ? colors.primary : colors.mutedForeground, fontSize: 12 }}>Under {group.name}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <TextInput
+                value={newBudget}
+                onChangeText={setNewBudget}
+                placeholder="Monthly budget, KES (optional)"
+                placeholderTextColor={colors.mutedForeground}
+                keyboardType="numeric"
+                editable={!creating}
+                testID={`${testID}-new-budget`}
+                style={[styles.input, { borderColor: colors.border, backgroundColor: colors.card, color: colors.foreground }]}
+              />
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TouchableOpacity
+                  onPress={() => { setAdding(false); setNewName(''); setNewParentId(null); setNewBudget(''); }}
+                  disabled={creating}
+                  style={[styles.field, { flex: 1, justifyContent: 'center', borderColor: colors.border }]}
+                >
+                  <Text style={{ color: colors.mutedForeground, textAlign: 'center' }}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => void submitNewCategory()}
+                  disabled={creating}
+                  testID={`${testID}-new-submit`}
+                  style={[styles.field, { flex: 1, justifyContent: 'center', backgroundColor: colors.primary, borderColor: colors.primary }]}
+                >
+                  {creating ? (
+                    <ActivityIndicator size="small" color={colors.primaryForeground} />
+                  ) : (
+                    <Text style={{ color: colors.primaryForeground, textAlign: 'center', fontFamily: 'Inter_600SemiBold' }}>Add</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
-          ))}
+          )}
         </View>
       ) : null}
     </>
@@ -844,7 +1104,12 @@ function PartyField({
 }) {
   const colors = useColors();
   const queryClient = useQueryClient();
-  const [open, setOpen] = useState(false);
+  // This field only exists once a line's kind needs a party — Paying someone
+  // I owe, Somebody paying me back, Lending, Borrowed. Landing on it with
+  // nothing chosen yet is exactly the moment picking or creating a ledger is
+  // the next thing to do, so it opens itself rather than waiting for a tap
+  // that would otherwise land on "Choose" and nothing else.
+  const [open, setOpen] = useState(value === null);
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState('');
   const [newOwed, setNewOwed] = useState('');
