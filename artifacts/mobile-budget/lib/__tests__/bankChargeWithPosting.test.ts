@@ -98,7 +98,10 @@ describe('the figures include it', () => {
   it('keeps the category, because it is the same expense every time', () => {
     // Picking it afresh per posting is how a month's fees end up spread over
     // four categories and never total.
-    expect(bank).not.toContain("setChargeCategory('');");
+    // It is cleared in one place only: when the remembered one turns out to
+    // belong to a different budget, which is the one time keeping it is wrong.
+    expect((bank.match(/setChargeCategory\(''\);/g) ?? []).length).toBe(1);
+    expect(bank).toContain('const chargeCategoryIsReal =');
     expect(bank).toContain("const CHARGE_CATEGORY_KEY = 'jamvi:last-charge-category';");
     expect(bank).toContain('AsyncStorage.setItem(CHARGE_CATEGORY_KEY, name)');
   });
@@ -109,5 +112,32 @@ describe('the figures include it', () => {
     expect(day).toContain("const CHARGE_CATEGORY_KEY = 'jamvi:last-charge-category';");
     expect(day).toContain('const addRow = () => {');
     expect(day).toContain('const row = { ...blankRow(), chargeCategory };');
+  });
+});
+
+// The remembered charge category is one string for the whole app, and
+// categories belong to a budget. Carried into a budget that has no such
+// category, the fee posting was refused by the server — after the posting it
+// belonged to had already saved, so the alert read as a total failure when
+// half of it had worked.
+describe('a category from another budget is caught before anything saves', () => {
+  it('checks the charge category against this budget', () => {
+    expect(bank).toContain('const knownCategoryNames = useMemo(');
+    // Never spanning a line: these files are CRLF on disk.
+    expect(bank).toContain("'That charge category is not in this budget',");
+  });
+
+  it('checks the spending category the same way', () => {
+    expect(bank).toContain("Alert.alert('That category is not in this budget', 'Pick one from the list below.');");
+  });
+
+  it('opens the picker rather than only complaining', () => {
+    expect(bank).toContain('setShowChargeCategoryPicker(true);');
+    expect(bank).toContain('setShowCategoryPicker(true);');
+  });
+
+  it('does not refuse before the categories have loaded', () => {
+    // An empty list means not loaded, not "no categories exist".
+    expect((bank.match(/categories\.length > 0/g) ?? []).length).toBe(2);
   });
 });
