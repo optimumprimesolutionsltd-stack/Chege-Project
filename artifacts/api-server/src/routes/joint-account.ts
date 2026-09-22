@@ -144,6 +144,19 @@ const DisbursementInput = z.object({
    * is now owed to you. The mirror of isBorrowing on the way in.
    */
   isLending: z.boolean().optional(),
+  /**
+   * Who the money went to, when it went to a party: somebody you owe being
+   * paid, or somebody being lent to.
+   *
+   * It was not stored at all before, because the balance is offered after
+   * saving and applied separately — so reopening a posting could not say who
+   * it was for, and the picker sat empty inviting a guess that would move the
+   * wrong person's balance.
+   *
+   * Safe on a disbursement: every figure that filters on this column is
+   * scoped to type = 'deposit', where it means a repayment is not income.
+   */
+  settlesContributorId: z.number().int().positive().optional(),
   destinationKind: z.enum(["category", "other"]).optional(),
   accountId: z.number().int().positive().optional(),
 }).superRefine((value, ctx) => {
@@ -162,6 +175,9 @@ const UpdateJointAccountInput = z.object({
   madeById: z.string().nullable().optional(),
   incomeSourceId: z.number().int().positive().nullable().optional(),
   expenseCategory: z.string().trim().min(1).max(80).optional(),
+  // Omitted leaves whoever was recorded alone: an edit that never touches the
+  // party must not drop it.
+  settlesContributorId: z.number().int().positive().nullable().optional(),
   sourceKind: z.enum(["income_source", "other"]).optional(),
   destinationKind: z.enum(["category", "other"]).optional(),
   contributorSplits: z.array(z.object({
@@ -889,6 +905,20 @@ router.post("/joint-account/disbursement", async (req, res): Promise<void> => {
 
   const { amount, description, date, destinationKind } = parsed.data;
   const isLending = parsed.data.isLending ?? false;
+  const paidPartyId = parsed.data.settlesContributorId;
+  if (paidPartyId !== undefined) {
+    // Scoped to this group, like the deposit side: an id from another budget
+    // must not be reachable by guessing.
+    const [party] = await db
+      .select({ id: groupContributorsTable.id })
+      .from(groupContributorsTable)
+      .where(and(eq(groupContributorsTable.id, paidPartyId), eq(groupContributorsTable.groupId, groupId)))
+      .limit(1);
+    if (!party) {
+      res.status(400).json({ error: "That person is not in this budget." });
+      return;
+    }
+  }
   const disbursementClash = await alreadyRecorded(groupId, parsed.data.mpesaReceipt);
   if (disbursementClash) { res.status(409).json(disbursementClash); return; }
   // Lending carries no category, so there is nothing to canonicalise, look up
@@ -947,6 +977,7 @@ router.post("/joint-account/disbursement", async (req, res): Promise<void> => {
       madeById,
       expenseCategory,
       isLending,
+      settlesContributorId: paidPartyId ?? null,
     })
     .returning();
 
@@ -1437,7 +1468,17 @@ router.put("/joint-account/:id", async (req, res): Promise<void> => {
   }
   const [updated] = await db
     .update(jointAccountTxTable)
-    .set({ amount, date, madeById: requestedMadeById, description, expenseCategory, accountId })
+    .set({
+      amount,
+      date,
+      madeById: requestedMadeById,
+      description,
+      expenseCategory,
+      accountId,
+      ...(parsed.data.settlesContributorId === undefined
+        ? {}
+        : { settlesContributorId: parsed.data.settlesContributorId }),
+    })
     .where(and(eq(jointAccountTxTable.id, existing.id), eq(jointAccountTxTable.groupId, groupId)))
     .returning();
   res.json(await enrichTx(updated, groupId));

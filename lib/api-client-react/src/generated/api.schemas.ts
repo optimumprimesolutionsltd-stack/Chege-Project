@@ -1430,6 +1430,11 @@ export interface DisbursementInput {
   madeById?: string | null;
   /** Money lent, leaving the account. Not spending — you expect it back and it is now owed to you — so it carries no category, which is what keeps it out of every spending total. */
   isLending?: boolean;
+  /**
+     * Who the money went to, when it went to a party: somebody you owe being paid, or somebody being lent to. Stored so reopening the posting can say who it was for rather than leaving an empty picker that invites a guess.
+     * @minimum 1
+     */
+  settlesContributorId?: number;
   /** Required budget category this disbursement is paying for */
   expenseCategory?: string;
   /** Choose other only when the required description is a narration. */

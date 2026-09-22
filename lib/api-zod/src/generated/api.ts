@@ -1161,6 +1161,7 @@ export const createDisbursementBodyAmountMultipleOf = 0.01;
 
 
 
+
 export const CreateDisbursementBody = zod.object({
   "mpesaReceipt": zod.string().min(createDisbursementBodyMpesaReceiptMin).max(createDisbursementBodyMpesaReceiptMax).optional().describe('The M-Pesa receipt code this posting came from. Unique per budget: recording the same code twice is refused with 409, so a message pasted again cannot be counted again.'),
   "amount": zod.number().min(createDisbursementBodyAmountMin).multipleOf(createDisbursementBodyAmountMultipleOf).describe('KES amount with up to two decimal places. Zero is allowed, so an existing posting can be cleared to nothing rather than deleted.'),
@@ -1168,6 +1169,7 @@ export const CreateDisbursementBody = zod.object({
   "date": zod.coerce.date(),
   "madeById": zod.string().nullish().describe('ID of the household member responsible for this disbursement. Omit or pass null for Joint bank. Must be a valid household member ID when non-null.\n'),
   "isLending": zod.boolean().optional().describe('Money lent, leaving the account. Not spending — you expect it back and it is now owed to you — so it carries no category, which is what keeps it out of every spending total.'),
+  "settlesContributorId": zod.number().min(1).optional().describe('Who the money went to, when it went to a party: somebody you owe being paid, or somebody being lent to. Stored so reopening the posting can say who it was for rather than leaving an empty picker that invites a guess.'),
   "expenseCategory": zod.string().optional().describe('Required budget category this disbursement is paying for'),
   "destinationKind": zod.enum(['category', 'other']).optional().describe('Choose other only when the required description is a narration.'),
   "accountId": zod.number().min(1).optional()
