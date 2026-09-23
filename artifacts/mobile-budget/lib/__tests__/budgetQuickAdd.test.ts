@@ -59,11 +59,40 @@ describe('what the quick row refuses', () => {
   });
 
   it('lets the amount be left for later', () => {
-    expect(budget).toContain("budgetAmount: raw === '' ? 0 : Number(raw),");
+    expect(budget).toContain("budgetAmount: newCategoryIsGroup || raw === '' ? 0 : Number(raw),");
   });
 
   it('checks the amount is a number', () => {
-    expect(budget).toContain("if (raw !== '' && !/^");
+    expect(budget).toContain("if (!newCategoryIsGroup && raw !== '' && !/^");
+  });
+});
+
+// The quick row asked for an amount even when the category being made was
+// clearly meant to hold subcategories rather than money of its own — the
+// only way around it was typing something and letting it get silently
+// zeroed out later by putting a category inside it.
+describe('a new category can say up front that it is a group', () => {
+  it('offers the same choice the full form already has, but only for a new top-level category', () => {
+    expect(budget).toContain("{ key: false, label: 'A spending category', testID: 'budget-new-category-kind-ledger' }");
+    expect(budget).toContain("{ key: true, label: 'A group of categories', testID: 'budget-new-category-kind-group' }");
+    expect(budget).toContain('{!chosenParent ? (');
+  });
+
+  it('hides the amount field entirely rather than leaving it optional and confusing', () => {
+    expect(budget).toContain('{!newCategoryIsGroup ? (');
+  });
+
+  it('forces the amount to zero no matter what was typed before switching', () => {
+    expect(budget).toContain('newCategoryIsGroup || raw === \'\'');
+  });
+
+  it('clears itself the moment an actual parent is chosen, since nesting always makes a leaf', () => {
+    expect(budget).toContain('setNewCategoryParentId(row.id); setNewCategoryIsGroup(false);');
+  });
+
+  it('resets after a successful add, the same as the name and amount fields do', () => {
+    const handler = budget.slice(budget.indexOf('const handleAddCategoryInline'), budget.indexOf('const handleAddIncomeSource'));
+    expect(handler).toContain('setNewCategoryIsGroup(false);');
   });
 });
 
