@@ -201,17 +201,39 @@ export function MerryGoRound({ canManage = false }: { canManage?: boolean }) {
           <View style={styles.headingRow}>
             <Feather name="refresh-cw" size={15} color={colors.primary} />
             <Text style={[styles.heading, { color: colors.foreground }]}>Merry-go-round</Text>
-            {open && canManage && !editing ? (
-              <Pressable
-                onPress={(event) => {
-                  event.stopPropagation?.();
-                  setEditing(true);
-                }}
-                hitSlop={8}
-                testID="edit-merry-go-round"
-              >
-                <Feather name="edit-2" size={14} color={colors.mutedForeground} />
-              </Pressable>
+            {open && canManage ? (
+              editing ? (
+                // In place of the pencil, not hidden — Cancel used to live only
+                // at the foot of the form, past the member chips and the whole
+                // payout history, which was a real scroll to find a way out.
+                <Pressable
+                  onPress={(event) => {
+                    event.stopPropagation?.();
+                    resetForm();
+                    setEditing(false);
+                  }}
+                  disabled={recordPayout.isPending}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Stuck in editing? Tap to cancel"
+                  testID="cancel-merry-go-round"
+                  style={styles.stuckCancel}
+                >
+                  <Feather name="x" size={13} color={colors.mutedForeground} />
+                  <Text style={[styles.stuckCancelText, { color: colors.mutedForeground }]}>Stuck? Cancel</Text>
+                </Pressable>
+              ) : (
+                <Pressable
+                  onPress={(event) => {
+                    event.stopPropagation?.();
+                    setEditing(true);
+                  }}
+                  hitSlop={8}
+                  testID="edit-merry-go-round"
+                >
+                  <Feather name="edit-2" size={14} color={colors.mutedForeground} />
+                </Pressable>
+              )
             ) : null}
           </View>
           <Text style={[styles.sub, { color: colors.mutedForeground }]}>{summary}</Text>
@@ -440,6 +462,8 @@ const styles = StyleSheet.create({
   headerText: { flex: 1, gap: 3 },
   headingRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   heading: { fontSize: 15, fontFamily: 'Inter_700Bold' },
+  stuckCancel: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  stuckCancelText: { fontSize: 11, fontFamily: 'Inter_600SemiBold' },
   sub: { fontSize: 12, lineHeight: 17 },
   body: { fontSize: 13, lineHeight: 19 },
   button: {

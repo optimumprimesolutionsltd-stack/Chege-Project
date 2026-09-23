@@ -76,7 +76,7 @@ export function ListEditButton({ editor, canManage }: { editor: ListEditor; canM
         disabled={editor.saving}
         hitSlop={8}
         accessibilityRole="button"
-        accessibilityLabel="Stop editing this list"
+        accessibilityLabel="Stuck in editing? Tap to cancel"
         testID="list-edit-cancel"
         style={({ pressed }) => [
           editPillStyles.pill,
@@ -89,7 +89,7 @@ export function ListEditButton({ editor, canManage }: { editor: ListEditor; canM
         ]}
       >
         <Feather name="x" size={13} color={colors.mutedForeground} />
-        <Text style={[editPillStyles.label, { color: colors.mutedForeground }]}>Cancel</Text>
+        <Text style={[editPillStyles.label, { color: colors.mutedForeground }]}>Stuck? Cancel</Text>
       </Pressable>
     );
   }

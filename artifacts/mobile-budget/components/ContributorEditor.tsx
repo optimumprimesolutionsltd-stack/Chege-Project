@@ -186,7 +186,7 @@ export function EditListButton({ editor, canManage }: { editor: Editor; canManag
         disabled={editor.saving}
         hitSlop={8}
         accessibilityRole="button"
-        accessibilityLabel="Stop editing this list"
+        accessibilityLabel="Stuck in editing? Tap to cancel"
         testID="contributor-edit-cancel"
         style={({ pressed }) => [
           editListButtonStyles.pill,
@@ -199,7 +199,7 @@ export function EditListButton({ editor, canManage }: { editor: Editor; canManag
         ]}
       >
         <Feather name="x" size={13} color={colors.mutedForeground} />
-        <Text style={[editListButtonStyles.label, { color: colors.mutedForeground }]}>Cancel</Text>
+        <Text style={[editListButtonStyles.label, { color: colors.mutedForeground }]}>Stuck? Cancel</Text>
       </Pressable>
     );
   }
