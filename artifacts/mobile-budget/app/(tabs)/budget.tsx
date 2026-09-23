@@ -417,6 +417,12 @@ export default function BudgetScreen() {
   const [newCategoryParentId, setNewCategoryParentId] = useState<number | null>(null);
   const [showNewCategoryParent, setShowNewCategoryParent] = useState(false);
   const [addingCategory, setAddingCategory] = useState(false);
+  // Only offered here for a new top-level category — nesting goes one level
+  // deep, so a category being put inside another is always a leaf, and a leaf
+  // always carries its own amount. The quick row used to ask for an amount
+  // regardless, with no way to say up front "this one is just a group" the
+  // way the full form already could.
+  const [newCategoryIsGroup, setNewCategoryIsGroup] = useState(false);
 
   /**
    * What a new category may be put inside.
@@ -444,7 +450,7 @@ export default function BudgetScreen() {
       return;
     }
     const raw = newCategoryAmount.trim().replace(/,/g, '');
-    if (raw !== '' && !/^\d+(?:\.\d{1,2})?$/.test(raw)) {
+    if (!newCategoryIsGroup && raw !== '' && !/^\d+(?:\.\d{1,2})?$/.test(raw)) {
       Alert.alert('Check the amount', 'Enter a number, or leave it blank to set it later.');
       return;
     }
@@ -455,7 +461,10 @@ export default function BudgetScreen() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name,
-          budgetAmount: raw === '' ? 0 : Number(raw),
+          // A group holds no money of its own regardless of what is still
+          // sitting in the amount field — the same rule the full form's
+          // formIsGroup already enforces.
+          budgetAmount: newCategoryIsGroup || raw === '' ? 0 : Number(raw),
           priority: 1,
           parentId: newCategoryParentId,
           isRecurring: true,
@@ -464,6 +473,7 @@ export default function BudgetScreen() {
       await refreshAll();
       setNewCategoryName('');
       setNewCategoryAmount('');
+      setNewCategoryIsGroup(false);
       // The parent stays: adding three subcategories to one heading is the
       // common case, and re-picking it each time is the nuisance.
       setShowNewCategoryParent(false);
@@ -1392,18 +1402,54 @@ export default function BudgetScreen() {
               onSubmitEditing={() => void handleAddCategoryInline()}
               testID="budget-new-category-name"
             />
-            <TextInput
-              style={[styles.incomeExpectedInput, { color: colors.foreground, borderColor: colors.border }]}
-              placeholder="Budget KES"
-              placeholderTextColor={colors.mutedForeground}
-              value={newCategoryAmount}
-              onChangeText={setNewCategoryAmount}
-              editable={!addingCategory}
-              keyboardType="numeric"
-              returnKeyType="done"
-              testID="budget-new-category-amount"
-            />
+            {!newCategoryIsGroup ? (
+              <TextInput
+                style={[styles.incomeExpectedInput, { color: colors.foreground, borderColor: colors.border }]}
+                placeholder="Budget KES"
+                placeholderTextColor={colors.mutedForeground}
+                value={newCategoryAmount}
+                onChangeText={setNewCategoryAmount}
+                editable={!addingCategory}
+                keyboardType="numeric"
+                returnKeyType="done"
+                testID="budget-new-category-amount"
+              />
+            ) : null}
           </View>
+          {/* Only offered for a new top-level category — nesting makes it a
+              leaf, and a leaf always carries its own amount, so the choice
+              would have nothing to mean. Without this, the only way to create
+              a plain group here was to type an amount and let it get zeroed
+              out later by putting something inside it. */}
+          {!chosenParent ? (
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+              {([
+                { key: false, label: 'A spending category', testID: 'budget-new-category-kind-ledger' },
+                { key: true, label: 'A group of categories', testID: 'budget-new-category-kind-group' },
+              ] as const).map((option) => (
+                <Pressable
+                  key={String(option.key)}
+                  onPress={() => setNewCategoryIsGroup(option.key)}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: newCategoryIsGroup === option.key }}
+                  testID={option.testID}
+                  style={[styles.priorityChip, {
+                    backgroundColor: newCategoryIsGroup === option.key ? colors.primary + '22' : colors.muted,
+                    borderColor: newCategoryIsGroup === option.key ? colors.primary : colors.border,
+                  }]}
+                >
+                  <Text style={[styles.priorityChipText, { color: newCategoryIsGroup === option.key ? colors.primary : colors.mutedForeground }]}>
+                    {option.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
+          {newCategoryIsGroup ? (
+            <Text style={{ color: colors.mutedForeground, fontSize: 11, marginTop: 6, lineHeight: 16 }} testID="budget-new-category-group-hint">
+              A group holds no money of its own. Add subcategories to it and its budget becomes their total.
+            </Text>
+          ) : null}
           {/* Where it goes, asked here rather than left to be discovered:
               creating Rent at the top level when it belonged under Housing is
               the wrong creation this row was making easy. */}
@@ -1434,7 +1480,7 @@ export default function BudgetScreen() {
                 eligibleParents.map((row) => (
                   <Pressable
                     key={`parent-${row.id}`}
-                    onPress={() => { setNewCategoryParentId(row.id); setShowNewCategoryParent(false); }}
+                    onPress={() => { setNewCategoryParentId(row.id); setNewCategoryIsGroup(false); setShowNewCategoryParent(false); }}
                     style={styles.categoryOption}
                     testID={`budget-new-category-parent-${row.id}`}
                   >
