@@ -607,6 +607,8 @@ export interface SpendingByItemEntry {
   category: string;
   paidFromBank: boolean;
   payerName: string;
+  /** True when this is a categorised bank withdrawal rather than a row in the expenses table. Shown read-only: correcting it means correcting the posting on the Banking tab, where the balance follows it. */
+  fromBank: boolean;
 }
 
 export interface SpendingByItem {
@@ -666,6 +668,30 @@ export interface IncomeStreamReport {
   totalExpected: number;
   remainingBalance: number;
   streams: IncomeStreamFunding[];
+}
+
+export interface TrendMonth {
+  month: number;
+  year: number;
+  /** Human-readable label e.g. "Aug 2026" */
+  label: string;
+}
+
+export interface IncomeStreamTrendSeries {
+  /** @nullable */
+  incomeSourceId?: number | null;
+  sourceName: string;
+  /** Funding total per month, aligned by index with the report's months array. A month with nothing recorded is 0, not missing. */
+  amounts: number[];
+  /** Sum of amounts across the whole range */
+  total: number;
+}
+
+export interface IncomeStreamTrendReport {
+  /** The months covered, oldest first, ending with the current one. */
+  months: TrendMonth[];
+  /** One entry per income stream, plus Unattributed when any funding has no stream. Sorted by total, largest first. */
+  streams: IncomeStreamTrendSeries[];
 }
 
 export interface PeriodTotalsReport {
@@ -1809,6 +1835,10 @@ month?: number;
  * @maximum 2200
  */
 year?: number;
+};
+
+export type GetDashboardIncomeStreamsTrendParams = {
+months?: number;
 };
 
 export type GetDashboardPeriodTotalsParams = {

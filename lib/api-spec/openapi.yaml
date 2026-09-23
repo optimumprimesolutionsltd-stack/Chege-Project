@@ -792,6 +792,24 @@ paths:
               schema:
                 $ref: "#/components/schemas/IncomeStreamReport"
 
+  /dashboard/income-streams-trend:
+    get:
+      operationId: getDashboardIncomeStreamsTrend
+      tags: [dashboard]
+      summary: Month-over-month funding totals per income stream for the last N months
+      parameters:
+        - name: months
+          in: query
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Per-stream income trend data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IncomeStreamTrendReport"
+
   /dashboard/period-totals:
     get:
       operationId: getDashboardPeriodTotals
@@ -2767,6 +2785,13 @@ components:
           type: boolean
         payerName:
           type: string
+        fromBank:
+          type: boolean
+          description: >-
+            True when this is a categorised bank withdrawal rather than a
+            row in the expenses table. Shown read-only: correcting it means
+            correcting the posting on the Banking tab, where the balance
+            follows it.
       required:
         - id
         - date
@@ -2775,6 +2800,7 @@ components:
         - category
         - paidFromBank
         - payerName
+        - fromBank
 
     SpendingByItem:
       type: object
@@ -2895,6 +2921,58 @@ components:
         - amount
         - description
         - date
+
+    IncomeStreamTrendReport:
+      type: object
+      properties:
+        months:
+          type: array
+          description: The months covered, oldest first, ending with the current one.
+          items:
+            $ref: "#/components/schemas/TrendMonth"
+        streams:
+          type: array
+          description: One entry per income stream, plus Unattributed when any funding has no stream. Sorted by total, largest first.
+          items:
+            $ref: "#/components/schemas/IncomeStreamTrendSeries"
+      required:
+        - months
+        - streams
+
+    TrendMonth:
+      type: object
+      properties:
+        month:
+          type: number
+        year:
+          type: number
+        label:
+          type: string
+          description: Human-readable label e.g. "Aug 2026"
+      required:
+        - month
+        - year
+        - label
+
+    IncomeStreamTrendSeries:
+      type: object
+      properties:
+        incomeSourceId:
+          type: ["number", "null"]
+        sourceName:
+          type: string
+        amounts:
+          type: array
+          description: Funding total per month, aligned by index with the report's months array. A month with nothing recorded is 0, not missing.
+          items:
+            type: number
+        total:
+          type: number
+          description: Sum of amounts across the whole range
+      required:
+        - sourceName
+        - amounts
+        - total
 
     PeriodTotalsReport:
       type: object

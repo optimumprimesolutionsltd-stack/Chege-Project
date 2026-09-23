@@ -822,7 +822,8 @@ export const GetDashboardSpendingByItemResponse = zod.object({
   "amount": zod.number(),
   "category": zod.string(),
   "paidFromBank": zod.boolean(),
-  "payerName": zod.string()
+  "payerName": zod.string(),
+  "fromBank": zod.boolean().describe('True when this is a categorised bank withdrawal rather than a row in the expenses table. Shown read-only: correcting it means correcting the posting on the Banking tab, where the balance follows it.')
 })).nullable().describe('The individual expenses behind one thing\'s total. Null unless `item` named one.')
 })
 
@@ -867,6 +868,28 @@ export const GetDashboardIncomeStreamsResponse = zod.object({
   "date": zod.string()
 })).describe('Individual funding entries that make up this stream total.')
 }))
+})
+
+
+/**
+ * @summary Month-over-month funding totals per income stream for the last N months
+ */
+export const GetDashboardIncomeStreamsTrendQueryParams = zod.object({
+  "months": zod.coerce.number().optional()
+})
+
+export const GetDashboardIncomeStreamsTrendResponse = zod.object({
+  "months": zod.array(zod.object({
+  "month": zod.number(),
+  "year": zod.number(),
+  "label": zod.string().describe('Human-readable label e.g. \"Aug 2026\"')
+})).describe('The months covered, oldest first, ending with the current one.'),
+  "streams": zod.array(zod.object({
+  "incomeSourceId": zod.number().nullish(),
+  "sourceName": zod.string(),
+  "amounts": zod.array(zod.number()).describe('Funding total per month, aligned by index with the report\'s months array. A month with nothing recorded is 0, not missing.'),
+  "total": zod.number().describe('Sum of amounts across the whole range')
+})).describe('One entry per income stream, plus Unattributed when any funding has no stream. Sorted by total, largest first.')
 })
 
 

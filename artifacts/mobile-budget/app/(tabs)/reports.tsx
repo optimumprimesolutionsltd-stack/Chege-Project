@@ -28,6 +28,8 @@ import {
   useGetDashboardCategoryBreakdown,
   getGetDashboardIncomeStreamsQueryKey,
   useGetDashboardIncomeStreams,
+  getGetDashboardIncomeStreamsTrendQueryKey,
+  useGetDashboardIncomeStreamsTrend,
   useGetDashboardSummary,
   useGetMembers,
   useGetSavingsGoals,
@@ -218,13 +220,22 @@ export default function ReportsScreen() {
   } = useGetDashboardIncomeStreams(queryParams, {
     query: { queryKey: getGetDashboardIncomeStreamsQueryKey(queryParams), retry: false },
   });
+  const {
+    data: incomeTrend,
+    isLoading: loadingIncomeTrend,
+    isError: incomeTrendError,
+    refetch: refetchIncomeTrend,
+  } = useGetDashboardIncomeStreamsTrend(
+    { months: 6 },
+    { query: { queryKey: getGetDashboardIncomeStreamsTrendQueryKey({ months: 6 }), retry: false } },
+  );
   const { data: members = [] } = useGetMembers();
 
   const isLoading = loadingExp || loadingCat || loadingSummary;
 
   const onRefresh = useCallback(() => {
-    refetchExp(); refetchCat(); refetchSummary(); refetchIncomeStreams();
-  }, [refetchExp, refetchCat, refetchSummary, refetchIncomeStreams]);
+    refetchExp(); refetchCat(); refetchSummary(); refetchIncomeStreams(); refetchIncomeTrend();
+  }, [refetchExp, refetchCat, refetchSummary, refetchIncomeStreams, refetchIncomeTrend]);
 
   const exportPdf = useCallback(async () => {
     setIsExporting(true);
@@ -897,6 +908,90 @@ export default function ReportsScreen() {
             )}
           </View>
 
+          {/* ── Income trend ── */}
+          <View style={styles.section} testID="income-trend-section">
+            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Income Trend</Text>
+            <Text style={[styles.sectionSub, { color: colors.mutedForeground }]}>
+              Per stream, last {incomeTrend?.months.length ?? 6} months
+            </Text>
+            {loadingIncomeTrend ? (
+              <View style={[styles.incomeStreamStatus, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <ActivityIndicator color={colors.primary} />
+                <Text style={[styles.incomeStreamStatusText, { color: colors.mutedForeground }]}>Loading the income trend…</Text>
+              </View>
+            ) : incomeTrendError ? (
+              <Pressable
+                onPress={() => refetchIncomeTrend()}
+                testID="income-trend-retry"
+                style={[styles.incomeStreamStatus, { backgroundColor: colors.card, borderColor: '#ef444455' }]}
+              >
+                <Feather name="alert-circle" size={18} color="#ef4444" />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.incomeStreamStatusTitle, { color: colors.foreground }]}>Couldn’t load the income trend</Text>
+                  <Text style={[styles.incomeStreamStatusText, { color: colors.mutedForeground }]}>Tap to try again.</Text>
+                </View>
+              </Pressable>
+            ) : (incomeTrend?.streams.length ?? 0) === 0 ? (
+              <View style={[styles.incomeStreamStatus, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <Feather name="trending-up" size={18} color={colors.mutedForeground} />
+                <Text style={[styles.incomeStreamStatusText, { color: colors.mutedForeground }]}>
+                  No income streams recorded yet.
+                </Text>
+              </View>
+            ) : (
+              incomeTrend!.streams.map((stream) => {
+                // A blank card for a stream nobody has funded yet reads as
+                // broken rather than as "nothing here" — a bar floor instead
+                // of a zero-height gap keeps the axis itself visible.
+                const max = Math.max(1, ...stream.amounts);
+                return (
+                  <View
+                    key={stream.incomeSourceId ?? 'unattributed'}
+                    testID={`income-trend-stream-${stream.incomeSourceId ?? 'unattributed'}`}
+                    style={[styles.incomeStreamCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+                  >
+                    <View style={styles.incomeTrendHeader}>
+                      <Text style={[styles.incomeStreamName, { color: colors.foreground }]} numberOfLines={1}>
+                        {stream.sourceName}
+                      </Text>
+                      <Text style={[styles.variance, { color: colors.mutedForeground }]}>
+                        {formatKES(stream.total)} total
+                      </Text>
+                    </View>
+                    <View style={styles.incomeTrendBars}>
+                      {incomeTrend!.months.map((monthLabel, index) => {
+                        const amount = stream.amounts[index];
+                        const barH = amount > 0 ? Math.max(6, Math.round((amount / max) * 72)) : 2;
+                        const isPeak = amount > 0 && amount === max;
+                        return (
+                          <View key={`${monthLabel.year}-${monthLabel.month}`} style={styles.trendBarCol}>
+                            {isPeak ? (
+                              <Text style={[styles.trendPeakLabel, { color: colors.primary }]}>{shortKES(amount)}</Text>
+                            ) : null}
+                            <View style={styles.trendBarWrap}>
+                              <View
+                                style={[
+                                  styles.trendBar,
+                                  { height: barH, backgroundColor: isPeak ? colors.primary : colors.primary + '55' },
+                                ]}
+                              />
+                            </View>
+                            <Text
+                              style={[styles.trendDayNum, { color: isPeak ? colors.primary : colors.mutedForeground }]}
+                              numberOfLines={1}
+                            >
+                              {monthLabel.label.split(' ')[0]}
+                            </Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </View>
+                );
+              })
+            )}
+          </View>
+
           {/* ── Savings goals ── */}
           {goals.length > 0 && (
             <View style={styles.section}>
@@ -1368,6 +1463,8 @@ const styles = StyleSheet.create({
   incomeStreamOwner: { fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: 1 },
   incomeStreamAmount: { fontSize: 13, fontFamily: 'Inter_700Bold' },
   incomeStreamMeta: { flexDirection: 'row', justifyContent: 'space-between', gap: 10 },
+  incomeTrendHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  incomeTrendBars: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 8 },
 
   // Savings goal cards
   savingsCard: { borderRadius: 12, borderWidth: 1, padding: 12, gap: 10 },

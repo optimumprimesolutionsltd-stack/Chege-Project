@@ -56,8 +56,10 @@ describe("every figure that counts money in leaves it out", () => {
     expect(dashboard).toContain("AND ${jointAccountTxTable.settlesContributorId} IS NULL");
   });
 
-  it("is absent from the income streams, both halves", () => {
-    expect((dashboard.match(/AND deposit\.settles_contributor_id IS NULL/g) ?? []).length).toBe(2);
+  it("is absent from the income streams, both halves — single month and trend alike", () => {
+    // Two branches (split deposits, legacy deposits) in the single-month
+    // route, and the same two in its per-stream trend counterpart.
+    expect((dashboard.match(/AND deposit\.settles_contributor_id IS NULL/g) ?? []).length).toBe(4);
   });
 
   it("is absent from the period totals, amount and count alike", () => {

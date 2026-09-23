@@ -283,15 +283,17 @@ export default function SpendingByItemScreen() {
                       {(detail?.entries ?? []).map((entry) => (
                         <Pressable
                           key={entry.id}
-                          onPress={() => router.push(getExpenseEditHref({ id: entry.id, date: entry.date }))}
+                          // A bank-recorded row is corrected where the balance
+                          // follows it, on the Banking tab, not here.
+                          onPress={entry.fromBank ? undefined : () => router.push(getExpenseEditHref({ id: entry.id, date: entry.date }))}
                           accessibilityRole="button"
-                          accessibilityLabel={`Open the expense from ${longDay(entry.date)}`}
+                          accessibilityLabel={entry.fromBank ? `Recorded from Banking on ${longDay(entry.date)}` : `Open the expense from ${longDay(entry.date)}`}
                           testID={`spending-entry-${entry.id}`}
                           style={styles.entryRow}
                         >
                           <Text style={[styles.entryDate, { color: colors.mutedForeground }]}>{longDay(entry.date)}</Text>
                           <Text style={[styles.entryWho, { color: colors.mutedForeground }]} numberOfLines={1}>
-                            {entry.paidFromBank ? GROUP_ATTRIBUTION : entry.payerName}
+                            {entry.paidFromBank ? GROUP_ATTRIBUTION : entry.payerName}{entry.fromBank ? ' · from Banking' : ''}
                           </Text>
                           <Text style={[styles.entryAmount, { color: colors.foreground }]}>{formatKES(entry.amount)}</Text>
                         </Pressable>

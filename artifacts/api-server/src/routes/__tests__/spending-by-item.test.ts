@@ -169,6 +169,113 @@ describe("GET /dashboard/spending-by-item", () => {
   });
 });
 
+/** Finds the one full outer statement among every sql`` call the route made,
+ *  by a fragment only that statement's text contains. */
+function findStatement(matches: (text: string) => boolean): string {
+  const statements: TemplateStringsArray[] = sqlMock.mock.calls.map(
+    (call: unknown[]) => call[0] as TemplateStringsArray,
+  );
+  const found = statements.find((strings) => matches(strings.join("")));
+  if (!found) throw new Error("No matching sql`` statement was found.");
+  return found.join("");
+}
+
+// A categorised bank withdrawal is spending by every other figure in the
+// app, but it lives in joint_account_transactions, not expenses — reading
+// only the expenses table here meant "no expenses recorded" could be shown
+// to somebody who had spent all month through the bank.
+describe("bank-recorded spending counts here too", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockedDb.execute.mockResolvedValue({ rows: [netflix] });
+  });
+
+  it("unions in a categorised, unlinked bank withdrawal for the totals query", async () => {
+    await request(buildApp()).get("/dashboard/spending-by-item");
+
+    const statement = findStatement((text) => text.includes("GROUP BY lower(btrim(spending.description))"));
+    expect(statement).toContain("FROM joint_account_transactions tx");
+    expect(statement).toContain("tx.type = 'disbursement'");
+    expect(statement).toContain("tx.bank_transfer_id IS NULL");
+    expect(statement).toContain("tx.expense_id IS NULL");
+    expect(statement).toContain("tx.expense_category IS NOT NULL");
+  });
+
+  it("unions the same bank rows into the per-item entry list", async () => {
+    await request(buildApp()).get("/dashboard/spending-by-item?item=Netflix");
+
+    const statement = findStatement((text) => text.includes("LEFT JOIN users u ON u.id = spending.payer_id"));
+    expect(statement).toContain("FROM joint_account_transactions tx");
+    expect(statement).toContain("tx.made_by_id AS payer_id");
+  });
+
+  it("never counts a disbursement already linked to its own expense", async () => {
+    // Counted there already — counting it again here would double the day's
+    // total for that one expense.
+    await request(buildApp()).get("/dashboard/spending-by-item");
+
+    const statement = findStatement((text) => text.includes("GROUP BY lower(btrim(spending.description))"));
+    expect(statement).toContain("tx.expense_id IS NULL");
+  });
+
+  it("gates the category-allocations check on the expense side, not the bank side", async () => {
+    // A bank row's id is a joint_account_transactions id, not an expenses
+    // id — both tables count from one, so trusting it against
+    // expense_category_allocations without this guard could match a
+    // completely unrelated expense's allocation by coincidence.
+    await request(buildApp()).get("/dashboard/spending-by-item?category=Entertainment");
+
+    const statement = findStatement((text) => text.includes("NOT spending.from_bank AND EXISTS"));
+    expect(statement).toContain("expense_category_allocations");
+  });
+
+  it("marks a bank-recorded entry and keeps its id out of the expenses' own numbering", async () => {
+    mockedDb.execute
+      .mockResolvedValueOnce({ rows: [netflix] })
+      .mockResolvedValueOnce({
+        rows: [{
+          id: 9,
+          date: "2026-09-05",
+          description: "Netflix",
+          amount: "1200",
+          category: "Entertainment",
+          paidFromBank: true,
+          fromBank: true,
+          preferredName: null,
+          firstName: null,
+          lastName: null,
+        }],
+      });
+
+    const response = await request(buildApp()).get("/dashboard/spending-by-item?item=Netflix");
+
+    expect(response.body.entries[0]).toMatchObject({ id: -9, fromBank: true, payerName: "The group" });
+  });
+
+  it("leaves an ordinary expense's id and fromBank untouched", async () => {
+    mockedDb.execute
+      .mockResolvedValueOnce({ rows: [netflix] })
+      .mockResolvedValueOnce({
+        rows: [{
+          id: 9,
+          date: "2026-09-05",
+          description: "Netflix",
+          amount: "1200",
+          category: "Entertainment",
+          paidFromBank: false,
+          fromBank: false,
+          preferredName: "Jane Wanjiku",
+          firstName: "Jane",
+          lastName: "Wanjiku",
+        }],
+      });
+
+    const response = await request(buildApp()).get("/dashboard/spending-by-item?item=Netflix");
+
+    expect(response.body.entries[0]).toMatchObject({ id: 9, fromBank: false });
+  });
+});
+
 // "KES 3,600 on Netflix" invites "which three?" — a total that cannot be
 // checked is a total that has to be believed.
 describe("the expenses behind one thing's total", () => {
@@ -221,8 +328,9 @@ describe("the expenses behind one thing's total", () => {
 
     await request(buildApp()).get("/dashboard/spending-by-item?item=" + encodeURIComponent("  NETFLIX "));
 
-    // Both the grouping and the entry list are asked about the same spelling.
-    expect(sqlValues().filter((value) => value === "  NETFLIX ")).toHaveLength(2);
+    // The grouping query asks once; the entry list asks once per source it
+    // unions (expenses, then bank), so the same spelling appears three times.
+    expect(sqlValues().filter((value) => value === "  NETFLIX ")).toHaveLength(3);
   });
 
   it("names a bank-funded expense rather than leaving the payer blank", async () => {

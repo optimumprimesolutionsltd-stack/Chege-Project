@@ -25,6 +25,7 @@ import {
   GetDashboardActivityQueryParams,
   GetDashboardIncomeStreamsQueryParams,
   GetDashboardIncomeStreamsResponse,
+  GetDashboardIncomeStreamsTrendResponse,
   GetDashboardPeriodTotalsQueryParams,
   GetDashboardPeriodTotalsResponse,
   GetDashboardMonthlyReportPdfQueryParams,
@@ -33,6 +34,7 @@ import { memberLedgerName } from "../lib/contributor-name";
 import { effectiveBudgets, totalBudget as sumBudget } from "@workspace/category-tree";
 import { getActiveGroupId } from "../lib/activeGroup";
 import { buildContributionHistory, historyMonths } from "../lib/contribution-history";
+import { buildIncomeStreamTrend } from "../lib/income-stream-trend";
 import { createMonthlyReportPdf } from "../lib/monthly-report-pdf";
 import { GROUP_ATTRIBUTION } from "../lib/attribution";
 
@@ -1018,27 +1020,51 @@ router.get("/dashboard/spending-by-item", async (req, res): Promise<void> => {
   // no escaping of its own on the way here.
   const search = q?.trim() ? `%${q.trim().replace(/[!%_]/g, (ch) => `!${ch}`)}%` : null;
 
+  // A categorised bank withdrawal is spending by every other figure in the
+  // app — the category breakdown counts it, the budget measures against it —
+  // but it lives in joint_account_transactions, not expenses. Reading only
+  // the expenses table here meant this page could say "no expenses recorded"
+  // to somebody who had spent all month through the bank. Excluded when it
+  // already has an expense_id: that row is counted as the expense it funded,
+  // and counting it again here would double it.
   const rows = await db.execute(sql`
-    SELECT (array_agg(e.description ORDER BY e.date DESC, e.id DESC))[1] AS "description",
-           COALESCE(SUM(e.amount), 0) AS "total",
+    WITH spending AS (
+      SELECT e.id, e.date, e.description, e.amount, e.category, false AS from_bank
+      FROM expenses e
+      WHERE e.group_id = ${groupId} AND e.date >= ${from} AND e.date <= ${to}
+
+      UNION ALL
+
+      SELECT tx.id, tx.date, tx.description, tx.amount, tx.expense_category AS category, true AS from_bank
+      FROM joint_account_transactions tx
+      WHERE tx.group_id = ${groupId}
+        AND tx.type = 'disbursement'
+        AND tx.bank_transfer_id IS NULL
+        AND tx.expense_id IS NULL
+        AND tx.expense_category IS NOT NULL
+        AND tx.date >= ${from} AND tx.date <= ${to}
+    )
+    SELECT (array_agg(spending.description ORDER BY spending.date DESC, spending.id DESC))[1] AS "description",
+           COALESCE(SUM(spending.amount), 0) AS "total",
            COUNT(*) AS "count",
-           MIN(e.date) AS "firstDate",
-           MAX(e.date) AS "lastDate",
-           array_agg(DISTINCT e.category) AS "categories"
-    FROM expenses e
-    WHERE e.group_id = ${groupId}
-      AND e.date >= ${from}
-      AND e.date <= ${to}
-      ${search ? sql`AND e.description ILIKE ${search} ESCAPE '!'` : sql``}
-      ${item ? sql`AND lower(btrim(e.description)) = lower(btrim(${item}))` : sql``}
+           MIN(spending.date) AS "firstDate",
+           MAX(spending.date) AS "lastDate",
+           array_agg(DISTINCT spending.category) AS "categories"
+    FROM spending
+    WHERE TRUE
+      ${search ? sql`AND spending.description ILIKE ${search} ESCAPE '!'` : sql``}
+      ${item ? sql`AND lower(btrim(spending.description)) = lower(btrim(${item}))` : sql``}
       ${category ? sql`AND (
-        e.category = ${category}
-        OR EXISTS (
+        spending.category = ${category}
+        -- A bank row's id is a joint_account_transactions id, not an
+        -- expenses id — both tables count from one, so this is gated on
+        -- from_bank rather than trusted to never collide.
+        OR (NOT spending.from_bank AND EXISTS (
           SELECT 1 FROM expense_category_allocations a
-          WHERE a.expense_id = e.id AND a.group_id = ${groupId} AND a.category = ${category}
-        )
+          WHERE a.expense_id = spending.id AND a.group_id = ${groupId} AND a.category = ${category}
+        ))
       )` : sql``}
-    GROUP BY lower(btrim(e.description))
+    GROUP BY lower(btrim(spending.description))
     ORDER BY "total" DESC
     LIMIT 200
   `);
@@ -1049,7 +1075,7 @@ router.get("/dashboard/spending-by-item", async (req, res): Promise<void> => {
     count: string | number;
     firstDate: string;
     lastDate: string;
-    categories: string[] | null;
+    categories: (string | null)[] | null;
   }[]).map((row) => ({
     description: row.description,
     total: Number(row.total),
@@ -1061,42 +1087,65 @@ router.get("/dashboard/spending-by-item", async (req, res): Promise<void> => {
 
   // "KES 3,600 on Netflix" invites "which three?". Naming an item returns the
   // expenses behind the figure, so the total can be checked rather than
-  // believed.
+  // believed — bank-recorded spending included, for the same reason as above.
   const entries = item == null ? null : await db.execute(sql`
-    SELECT e.id AS "id",
-           e.date AS "date",
-           e.description AS "description",
-           e.amount AS "amount",
-           e.category AS "category",
-           e.paid_from_bank AS "paidFromBank",
+    WITH spending AS (
+      SELECT e.id, e.date, e.description, e.amount, e.category,
+             e.paid_from_bank AS paid_from_bank, e.paid_by_id AS payer_id, false AS from_bank
+      FROM expenses e
+      WHERE e.group_id = ${groupId}
+        AND e.date >= ${from} AND e.date <= ${to}
+        AND lower(btrim(e.description)) = lower(btrim(${item}))
+
+      UNION ALL
+
+      SELECT tx.id, tx.date, tx.description, tx.amount, tx.expense_category AS category,
+             true AS paid_from_bank, tx.made_by_id AS payer_id, true AS from_bank
+      FROM joint_account_transactions tx
+      WHERE tx.group_id = ${groupId}
+        AND tx.type = 'disbursement'
+        AND tx.bank_transfer_id IS NULL
+        AND tx.expense_id IS NULL
+        AND tx.expense_category IS NOT NULL
+        AND tx.date >= ${from} AND tx.date <= ${to}
+        AND lower(btrim(tx.description)) = lower(btrim(${item}))
+    )
+    SELECT spending.id AS "id",
+           spending.date AS "date",
+           spending.description AS "description",
+           spending.amount AS "amount",
+           spending.category AS "category",
+           spending.paid_from_bank AS "paidFromBank",
+           spending.from_bank AS "fromBank",
            u.preferred_name AS "preferredName",
            u.first_name AS "firstName",
            u.last_name AS "lastName"
-    FROM expenses e
-    LEFT JOIN users u ON u.id = e.paid_by_id
-    WHERE e.group_id = ${groupId}
-      AND e.date >= ${from}
-      AND e.date <= ${to}
-      AND lower(btrim(e.description)) = lower(btrim(${item}))
-    ORDER BY e.date DESC, e.id DESC
+    FROM spending
+    LEFT JOIN users u ON u.id = spending.payer_id
+    ORDER BY spending.date DESC, spending.id DESC
     LIMIT 500
   `).then((result) => (result.rows as {
     id: number;
     date: string;
     description: string;
     amount: string | number;
-    category: string;
+    category: string | null;
     paidFromBank: boolean;
+    fromBank: boolean;
     preferredName: string | null;
     firstName: string | null;
     lastName: string | null;
   }[]).map((row) => ({
-    id: Number(row.id),
+    // Negated for a bank row, so this id can never collide with a real
+    // expense id in anything keyed by one — both tables count from one, the
+    // same trick the Expenses tab uses for the same reason.
+    id: row.fromBank ? -row.id : row.id,
     date: String(row.date).slice(0, 10),
     description: row.description,
     amount: Number(row.amount),
-    category: row.category,
+    category: row.category ?? "",
     paidFromBank: Boolean(row.paidFromBank),
+    fromBank: row.fromBank,
     // The same rule the rest of the ledgers name people by, rather than a
     // bare first name that reads as somebody else in a group of cousins.
     payerName: memberLedgerName(row.preferredName, row.firstName, row.lastName)
@@ -1372,6 +1421,124 @@ router.get("/dashboard/income-streams", async (req, res): Promise<void> => {
   };
 
   res.json(GetDashboardIncomeStreamsResponse.parse(response));
+});
+
+/**
+ * Per-income-stream funding, month by month.
+ *
+ * The single-month endpoint above answers "how did this month go"; a
+ * treasurer's next question is "is this stream slipping", which needs the
+ * same total against a row of months. One query over the whole range rather
+ * than one call per month: the funding CTE is identical, only what it is
+ * grouped by changes.
+ */
+router.get("/dashboard/income-streams-trend", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+
+  const monthsBack = Math.min(Math.max(Number(req.query.months) || 6, 1), 12);
+  const months = historyMonths(monthsBack);
+  const earliest = months[0];
+  const latest = months[months.length - 1];
+  const rangeStart = `${earliest.year}-${String(earliest.month).padStart(2, "0")}-01`;
+  const rangeEndExclusive = new Date(latest.year, latest.month, 1).toISOString().slice(0, 10);
+
+  const result = await db.execute(sql`
+    WITH funding AS (
+      SELECT split.income_source_id, split.amount, expense.date::text AS date
+      FROM expense_income_splits split
+      INNER JOIN expenses expense ON expense.id = split.expense_id AND expense.group_id = ${groupId}
+      WHERE split.group_id = ${groupId}
+        AND split.from_bank = false
+        AND expense.date >= ${rangeStart}::date AND expense.date < ${rangeEndExclusive}::date
+
+      UNION ALL
+
+      SELECT expense.income_source_id, expense.amount, expense.date::text AS date
+      FROM expenses expense
+      WHERE expense.group_id = ${groupId}
+        AND expense.paid_from_bank = false
+        AND expense.date >= ${rangeStart}::date AND expense.date < ${rangeEndExclusive}::date
+        AND NOT EXISTS (
+          SELECT 1
+          FROM expense_income_splits split
+          WHERE split.expense_id = expense.id
+            AND split.group_id = ${groupId}
+        )
+
+      UNION ALL
+
+      SELECT split.income_source_id, split.amount, deposit.date::text AS date
+      FROM joint_account_deposit_splits split
+      INNER JOIN joint_account_transactions deposit
+        ON deposit.id = split.transaction_id AND deposit.group_id = ${groupId}
+      WHERE split.group_id = ${groupId}
+        AND deposit.type = 'deposit'
+        AND deposit.bank_transfer_id IS NULL
+        AND deposit.settles_contributor_id IS NULL
+        AND NOT deposit.is_borrowing
+        AND deposit.transfer_direction IS DISTINCT FROM 'from_savings'
+        AND deposit.date >= ${rangeStart}::date AND deposit.date < ${rangeEndExclusive}::date
+
+      UNION ALL
+
+      SELECT deposit.income_source_id, deposit.amount, deposit.date::text AS date
+      FROM joint_account_transactions deposit
+      WHERE deposit.group_id = ${groupId}
+        AND deposit.type = 'deposit'
+        AND deposit.bank_transfer_id IS NULL
+        AND deposit.settles_contributor_id IS NULL
+        AND NOT deposit.is_borrowing
+        AND deposit.transfer_direction IS DISTINCT FROM 'from_savings'
+        AND deposit.date >= ${rangeStart}::date AND deposit.date < ${rangeEndExclusive}::date
+        AND NOT EXISTS (
+          SELECT 1
+          FROM joint_account_deposit_splits split
+          WHERE split.transaction_id = deposit.id
+            AND split.group_id = ${groupId}
+        )
+
+      UNION ALL
+
+      SELECT NULL::integer AS income_source_id, contribution.amount, contribution.created_at::text AS date
+      FROM savings_goal_contributions contribution
+      WHERE contribution.group_id = ${groupId}
+        AND contribution.created_by_user_id IS NOT NULL
+        AND contribution.is_balance_correction = false
+        AND contribution.note IS NULL
+        AND contribution.created_at >= ${rangeStart}::timestamp AND contribution.created_at < ${rangeEndExclusive}::timestamp
+    )
+    SELECT
+      CASE WHEN source.id IS NULL THEN NULL ELSE funding.income_source_id END AS "incomeSourceId",
+      CASE WHEN source.id IS NULL THEN 'Unattributed' ELSE source.name END AS "sourceName",
+      EXTRACT(YEAR FROM funding.date::date)::int AS year,
+      EXTRACT(MONTH FROM funding.date::date)::int AS month,
+      COALESCE(SUM(funding.amount), 0) AS amount
+    FROM funding
+    LEFT JOIN income_sources source
+      ON source.id = funding.income_source_id
+      AND source.group_id = ${groupId}
+    GROUP BY 1, 2, 3, 4
+  `);
+
+  const rows = result.rows as Array<{
+    incomeSourceId: number | null;
+    sourceName: string;
+    year: number;
+    month: number;
+    amount: string | number;
+  }>;
+
+  const sources = await db
+    .select({ id: incomeSourcesTable.id, name: incomeSourcesTable.name })
+    .from(incomeSourcesTable)
+    .where(eq(incomeSourcesTable.groupId, groupId));
+
+  res.json(
+    GetDashboardIncomeStreamsTrendResponse.parse(
+      buildIncomeStreamTrend({ months, rows, sources }),
+    ),
+  );
 });
 
 router.get("/dashboard/period-totals", async (req, res): Promise<void> => {
