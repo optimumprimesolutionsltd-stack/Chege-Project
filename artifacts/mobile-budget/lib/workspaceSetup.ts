@@ -15,7 +15,7 @@ export type WorkspaceSetupStep = {
   id: WorkspaceSetupStepId;
   title: string;
   action: string;
-  route: '/(tabs)/budget' | '/(tabs)/bank' | '/(tabs)/goals' | '/(tabs)/settings';
+  route: '/(tabs)/budget' | '/(tabs)/bank' | '/(tabs)/goals' | '/(tabs)/settings?openInvite=1';
   complete: boolean;
 };
 
@@ -35,7 +35,7 @@ export function deriveWorkspaceSetup(data: WorkspaceSetupData): WorkspaceSetupSt
     { id: 'goals', title: 'Create a savings goal', action: 'Create a savings goal', route: '/(tabs)/goals', complete: (data.goals?.length ?? 0) > 0 },
   ];
   if (data.isShared) {
-    steps.push({ id: 'invite', title: 'Invite a member', action: 'Invite a member', route: '/(tabs)/settings', complete: (data.members?.length ?? 0) > 1 });
+    steps.push({ id: 'invite', title: 'Invite a member', action: 'Invite a member', route: '/(tabs)/settings?openInvite=1', complete: (data.members?.length ?? 0) > 1 });
   }
   return steps;
 }

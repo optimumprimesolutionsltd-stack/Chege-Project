@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -12,10 +12,11 @@ import {
   Modal,
   ScrollView,
   KeyboardAvoidingView,
+  type LayoutChangeEvent,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as Updates from 'expo-updates';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
@@ -140,6 +141,16 @@ export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const { user, logout, saveDisplayName, saveProfilePhoto } = useAuth();
+  const params = useLocalSearchParams<{ openInvite?: string }>();
+  // The setup guide's "Invite a member" step used to land here and stop —
+  // the invite form lives inside GROUP ACCESS, folded shut until Edit is
+  // tapped, several sections down a page nothing pointed at. This opens it
+  // and scrolls to it in the same motion the step promised.
+  const scrollRef = useRef<ScrollView>(null);
+  const groupAccessTop = useRef<number | null>(null);
+  const captureGroupAccessTop = useCallback((event: LayoutChangeEvent) => {
+    groupAccessTop.current = event.nativeEvent.layout.y;
+  }, []);
   const [loggingOut, setLoggingOut] = useState(false);
   const [inviteEmails, setInviteEmails] = useState('');
   const [newMemberRole, setNewMemberRole] = useState<'admin' | 'member'>('member');
@@ -187,6 +198,27 @@ export default function SettingsScreen() {
     enabled: !!user?.id,
   });
   const { data: group } = useGetGroup();
+
+  useEffect(() => {
+    if (params.openInvite !== '1' || !group || group.isPrivate) return;
+    setEditingAccess(true);
+    // Two frames: one for GROUP ACCESS to switch into its editing layout
+    // (the invite form adds height above where it used to measure), one for
+    // that layout to actually land before scrolling to it.
+    let second = 0;
+    const first = requestAnimationFrame(() => {
+      second = requestAnimationFrame(() => {
+        if (groupAccessTop.current != null) {
+          scrollRef.current?.scrollTo({ y: Math.max(groupAccessTop.current - 12, 0), animated: true });
+        }
+      });
+    });
+    return () => {
+      cancelAnimationFrame(first);
+      cancelAnimationFrame(second);
+    };
+  }, [params.openInvite, group]);
+
   const {
     data: workspaces = [],
     isLoading: workspacesLoading,
@@ -892,6 +924,7 @@ export default function SettingsScreen() {
       </View>
 
       <PageScrollView
+        ref={scrollRef}
         contentContainerStyle={[styles.content, { paddingBottom: Platform.OS === 'web' ? 100 : insets.bottom + 100 }]}
         showsVerticalScrollIndicator={false}
       >
@@ -1544,7 +1577,7 @@ export default function SettingsScreen() {
         {/* Shared group access */}
         {!group?.isPrivate && (
           <>
-         <View style={styles.sectionHeaderRow}>
+         <View style={styles.sectionHeaderRow} onLayout={captureGroupAccessTop}>
            <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>GROUP ACCESS</Text>
            {canManageShared ? (
              <Pressable
