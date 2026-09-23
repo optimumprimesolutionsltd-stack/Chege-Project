@@ -777,6 +777,42 @@ export default function BankScreen() {
     }
   };
 
+  /**
+   * Move an ordinary posting to a different account.
+   *
+   * Deleting and re-typing it was the only way to fix a wrong-account entry
+   * before this — every other field is sent back unchanged (amount and date
+   * are the only ones the server insists on), so nothing about the entry
+   * shifts except which account it belongs to.
+   */
+  const moveTransactionToAccount = async (tx: Tx, targetAccountId: number) => {
+    try {
+      await updateTransaction({ id: tx.id, data: { amount: tx.amount, date: tx.date, accountId: targetAccountId } });
+      await invalidateAccounts();
+    } catch (error: unknown) {
+      Alert.alert('Could not move it', error instanceof Error ? error.message : 'Please try again.');
+    }
+  };
+
+  const openMovePicker = (tx: Tx) => {
+    const destinations = accounts.filter((account) => account.id !== selectedAccountId);
+    if (destinations.length === 0) {
+      Alert.alert('No other account', 'Create another bank account first, then you can move entries onto it.');
+      return;
+    }
+    Alert.alert(
+      'Move to which account?',
+      `This takes "${tx.description}" off ${selectedAccount?.name ?? 'this account'} and onto the one you choose. Both balances update once it saves.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        ...destinations.map((account) => ({
+          text: account.name,
+          onPress: () => void moveTransactionToAccount(tx, account.id),
+        })),
+      ],
+    );
+  };
+
   const handleDelete = (tx: Tx) => {
     if (!canManageAccount) {
       Alert.alert('Admin access required', `Ask a group owner or admin to delete a shared bank transaction from "${budgetName}".`);
@@ -1806,6 +1842,13 @@ export default function BankScreen() {
   // A transaction row can only be staged for removal when the person could
   // delete it on its own — the same rule the per-row Delete already enforces.
   const canRemoveTx = (tx: Tx) => canManageAccount || canEditTransaction(tx);
+  // A transfer's two legs are a pair, and a savings or expense-linked posting
+  // is not an ordinary bank entry either — moving any of those independently
+  // would break what they are linked to, so only a plain deposit or
+  // withdrawal can change accounts. Requires the same access as deleting: it
+  // restructures history rather than correcting today's own entry.
+  const canMoveTx = (tx: Tx) =>
+    canManageAccount && tx.bankTransferId == null && tx.savingsGoalId == null && tx.expenseId == null;
 
   // Spending lands on a category that holds no subcategories: a category with
   // children is a heading, and its spending is theirs added up, so neither
@@ -2349,6 +2392,14 @@ export default function BankScreen() {
                     testID={`bank-edit-transaction-${item.id}`}
                   >
                     <Feather name="edit-2" size={16} color={colors.mutedForeground} />
+                  </TouchableOpacity>}
+                  {canMoveTx(item) && <TouchableOpacity
+                    onPress={() => openMovePicker(item)}
+                    hitSlop={8}
+                    accessibilityLabel="Move to another account"
+                    testID={`bank-move-transaction-${item.id}`}
+                  >
+                    <Feather name="repeat" size={16} color={colors.mutedForeground} />
                   </TouchableOpacity>}
                   {canManageAccount && <TouchableOpacity
                     onPress={() => handleDelete(item)}
