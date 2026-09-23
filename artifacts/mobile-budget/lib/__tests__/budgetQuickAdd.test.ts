@@ -73,7 +73,10 @@ describe('what the quick row refuses', () => {
 // zeroed out later by putting a category inside it.
 describe('a new category can say up front that it is a group', () => {
   it('offers the same choice the full form already has, but only for a new top-level category', () => {
-    expect(budget).toContain("{ key: false, label: 'A spending category', testID: 'budget-new-category-kind-ledger' }");
+    // "A spending category" read as "this is a child" to somebody who had
+    // just been asked whether it's inside a group — renamed to make plain
+    // that carrying its own amount and being nested are unrelated questions.
+    expect(budget).toContain("{ key: false, label: 'A regular category', testID: 'budget-new-category-kind-ledger' }");
     expect(budget).toContain("{ key: true, label: 'A group of categories', testID: 'budget-new-category-kind-group' }");
     expect(budget).toContain('{!chosenParent ? (');
   });
@@ -111,10 +114,15 @@ describe('the full form is still there for the rest', () => {
 // creation the quick row was making easy: it asked for a name and an amount
 // and never for where the category goes.
 describe('the quick row asks where the category goes', () => {
-  it('offers a parent, defaulting to its own category', () => {
+  it('offers a parent, defaulting to not being inside one', () => {
+    // "Its own category" used to sit right under "A regular category" /
+    // "A group of categories" with no label of its own, reading as a third
+    // option in that set rather than the answer to a separate question
+    // (what kind vs. where it goes) — renamed so the two cannot be confused.
     expect(budget).toContain('testID="budget-new-category-parent"');
     expect(budget).toContain('testID="budget-new-category-parent-none"');
-    expect(budget).toContain("{chosenParent ? `Inside ${chosenParent.name}` : 'Its own category'}");
+    expect(budget).toContain("{chosenParent ? `Inside ${chosenParent.name}` : 'Not inside a group'}");
+    expect(budget).not.toContain('Its own category');
   });
 
   it('offers only top-level categories, nesting being one deep', () => {
@@ -138,7 +146,7 @@ describe('the quick row asks where the category goes', () => {
 
   it('keeps the parent between additions', () => {
     // Adding three subcategories to one heading is the common case.
-    // Cleared in one place only: the "Its own category" option. Never on a
+    // Cleared in one place only: the "Not inside a group" option. Never on a
     // successful add, where adding three under one heading is the common case.
     expect((budget.match(/setNewCategoryParentId\(null\)/g) ?? []).length).toBe(1);
   });

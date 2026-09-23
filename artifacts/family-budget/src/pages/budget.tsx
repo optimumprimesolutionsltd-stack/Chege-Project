@@ -442,7 +442,7 @@ function CategoryDialog({
                 <label className="text-sm font-semibold">What is this?</label>
                 <div className="flex flex-wrap gap-2">
                   {([
-                    { value: false, label: "A spending category" },
+                    { value: false, label: "A regular category" },
                     { value: true, label: "A group of categories" },
                   ] as const).map(option => (
                     <Button
@@ -490,7 +490,7 @@ function CategoryDialog({
                   disabled={saving}
                   data-testid="select-category-parent"
                 >
-                  <option value="none">Not inside anything — its own category</option>
+                  <option value="none">Not inside a group</option>
                   {parentOptions.map(option => (
                     <option key={option.id} value={String(option.id)}>{option.name}</option>
                   ))}

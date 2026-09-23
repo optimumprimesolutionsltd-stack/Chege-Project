@@ -831,7 +831,7 @@ export default function BudgetScreen() {
                     <Text style={[styles.label, { color: colors.mutedForeground }]}>WHAT IS THIS?</Text>
                     <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
                       {([
-                        { key: false, label: 'A spending category', testID: 'category-kind-ledger' },
+                        { key: false, label: 'A regular category', testID: 'category-kind-ledger' },
                         { key: true, label: 'A group of categories', testID: 'category-kind-group' },
                       ] as const).map((option) => (
                         <Pressable
@@ -902,7 +902,7 @@ export default function BudgetScreen() {
                         }]}
                       >
                         <Text style={[styles.priorityChipText, { color: formParentId === null ? colors.primary : colors.mutedForeground }]}>
-                          Its own category
+                          Not inside a group
                         </Text>
                       </Pressable>
                       {allCategories
@@ -1424,7 +1424,7 @@ export default function BudgetScreen() {
           {!chosenParent ? (
             <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
               {([
-                { key: false, label: 'A spending category', testID: 'budget-new-category-kind-ledger' },
+                { key: false, label: 'A regular category', testID: 'budget-new-category-kind-ledger' },
                 { key: true, label: 'A group of categories', testID: 'budget-new-category-kind-group' },
               ] as const).map((option) => (
                 <Pressable
@@ -1459,7 +1459,7 @@ export default function BudgetScreen() {
             style={[styles.incomeAddRow, { borderColor: colors.border, backgroundColor: colors.card, paddingVertical: 10, marginTop: 8 }]}
           >
             <Text style={{ flex: 1, color: chosenParent ? colors.foreground : colors.mutedForeground, fontSize: 13, fontFamily: 'Inter_400Regular' }}>
-              {chosenParent ? `Inside ${chosenParent.name}` : 'Its own category'}
+              {chosenParent ? `Inside ${chosenParent.name}` : 'Not inside a group'}
             </Text>
             <Feather name={showNewCategoryParent ? 'chevron-up' : 'chevron-down'} size={16} color={colors.mutedForeground} />
           </Pressable>
@@ -1470,7 +1470,7 @@ export default function BudgetScreen() {
                 style={styles.categoryOption}
                 testID="budget-new-category-parent-none"
               >
-                <Text style={{ color: colors.foreground, fontFamily: 'Inter_400Regular' }}>Its own category</Text>
+                <Text style={{ color: colors.foreground, fontFamily: 'Inter_400Regular' }}>Not inside a group</Text>
               </Pressable>
               {eligibleParents.length === 0 ? (
                 <Text style={{ color: colors.mutedForeground, padding: 12, fontSize: 12 }}>
