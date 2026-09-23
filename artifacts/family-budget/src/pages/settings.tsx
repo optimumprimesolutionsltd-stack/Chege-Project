@@ -26,7 +26,7 @@ import { GroupInviteLinks } from "@/components/group-invite-links";
 import { ReadOnlyLink } from "@/components/read-only-link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getGetMembersQueryKey } from "@workspace/api-client-react";
-import { Award, BriefcaseBusiness, Camera, Heart, Home, LockKeyhole, LogOut, Moon, Palette, Pencil, Star, Sun, Trash2, UserPlus, Users, Shield, Send, RotateCcw, X, MessageSquare } from "lucide-react";
+import { Award, BookOpen, BriefcaseBusiness, Camera, Coffee, Gift, Heart, Home, LockKeyhole, LogOut, MapPin, Moon, Palette, Pencil, ShoppingBag, Star, Sun, Trash2, TrendingUp, Truck, User, UserPlus, Users, Shield, Send, RotateCcw, Wrench, X, MessageSquare } from "lucide-react";
 import { FeedbackDialog } from "@/components/feedback-dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { WORKSPACE_NAME_STYLES, workspaceNameClass } from "@/lib/workspace-identity";
@@ -54,10 +54,21 @@ const SHARED_BUDGET_ICONS = [
   { value: "briefcase", label: "Work", icon: BriefcaseBusiness },
   { value: "award", label: "Goals", icon: Award },
   { value: "star", label: "Star", icon: Star },
+  { value: "user", label: "Personal", icon: User },
+  { value: "shopping-bag", label: "Shopping", icon: ShoppingBag },
+  { value: "truck", label: "Transport", icon: Truck },
+  { value: "book-open", label: "Education", icon: BookOpen },
+  { value: "coffee", label: "Lifestyle", icon: Coffee },
+  { value: "gift", label: "Celebrations", icon: Gift },
+  { value: "shield", label: "Protection", icon: Shield },
+  { value: "map-pin", label: "Travel", icon: MapPin },
+  { value: "trending-up", label: "Savings", icon: TrendingUp },
+  { value: "tool", label: "Maintenance", icon: Wrench },
 ] as const;
 const SHARED_BUDGET_ACCENTS = [
   "#011C4E", "#003383", "#087F8C", "#08B7B0", "#209E45", "#C98C00",
   "#0F766E", "#2563EB", "#7C3AED", "#DB2777", "#D97706", "#059669",
+  "#DC2626", "#4F46E5", "#65A30D", "#C026D3", "#0284C7", "#475569",
 ] as const;
 const MAX_PHOTO_BYTES = 15 * 1024 * 1024;
 const PHOTO_OPTIMIZE_THRESHOLD_BYTES = 1024 * 1024;
