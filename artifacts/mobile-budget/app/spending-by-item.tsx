@@ -58,6 +58,11 @@ export default function SpendingByItemScreen() {
   const [picker, setPicker] = useState<null | 'from' | 'to'>(null);
   const [search, setSearch] = useState('');
   const [openItem, setOpenItem] = useState<string | null>(null);
+  // Bank charges are each named differently on purpose — "Bank charge — Rent",
+  // "Bank charge — Generator repair" — so by item they scatter across a dozen
+  // rows nobody asked to see separately. By category combines everything
+  // sharing a category into one row instead.
+  const [groupBy, setGroupBy] = useState<'item' | 'category'>('item');
 
   const [rangeFrom, rangeTo] = orderedRange(
     customDates ? from : monthsAgoIso(preset - 1),
@@ -70,8 +75,9 @@ export default function SpendingByItemScreen() {
       to: rangeTo,
       ...(search.trim() ? { q: search.trim() } : {}),
       ...(category ? { category } : {}),
+      ...(groupBy === 'category' ? { groupBy } : {}),
     }),
-    [rangeFrom, rangeTo, search, category],
+    [rangeFrom, rangeTo, search, category, groupBy],
   );
 
   const { data, isLoading, isError, refetch } = useGetDashboardSpendingByItem(query, {
@@ -109,7 +115,11 @@ export default function SpendingByItemScreen() {
         <View style={styles.headerText}>
           <Text style={[styles.title, { color: colors.foreground }]} numberOfLines={1}>What you spend on</Text>
           <Text style={[styles.subtitle, { color: colors.mutedForeground }]} numberOfLines={1}>
-            {category ? `Within ${category}` : 'Every expense, grouped by what it was for'}
+            {category
+              ? `Within ${category}`
+              : groupBy === 'category'
+              ? 'Every expense, grouped by category'
+              : 'Every expense, grouped by what it was for'}
           </Text>
         </View>
       </View>
@@ -175,6 +185,39 @@ export default function SpendingByItemScreen() {
               Exact dates
             </Text>
           </Pressable>
+        </View>
+
+        <View style={styles.presets}>
+          {([
+            { value: 'item' as const, label: 'By item' },
+            { value: 'category' as const, label: 'By category' },
+          ]).map((option) => {
+            const active = groupBy === option.value;
+            return (
+              <Pressable
+                key={option.value}
+                onPress={() => {
+                  // A drill-down open under one grouping names the wrong
+                  // thing under the other — a category open by mistake would
+                  // ask the server for an item nobody typed.
+                  setOpenItem(null);
+                  setGroupBy(option.value);
+                }}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+                testID={`spending-group-by-${option.value}`}
+                style={[
+                  styles.presetBtn,
+                  { borderColor: colors.border },
+                  active && { backgroundColor: colors.primary, borderColor: colors.primary },
+                ]}
+              >
+                <Text style={[styles.presetLabel, { color: active ? colors.primaryForeground : colors.mutedForeground }]}>
+                  {option.label}
+                </Text>
+              </Pressable>
+            );
+          })}
         </View>
 
         {customDates ? (
@@ -266,7 +309,9 @@ export default function SpendingByItemScreen() {
                     </Text>
                     <Text style={[styles.itemMeta, { color: colors.mutedForeground }]} numberOfLines={1}>
                       {item.count} {item.count === 1 ? 'time' : 'times'} · last {longDay(item.lastDate)}
-                      {item.categories.length > 0 ? ` · ${item.categories.join(', ')}` : ''}
+                      {/* In category view the title already is the category — repeating it
+                          here would read as "Bank charges · Bank charges". */}
+                      {groupBy === 'item' && item.categories.length > 0 ? ` · ${item.categories.join(', ')}` : ''}
                     </Text>
                   </View>
                   <View style={styles.cardAmount}>

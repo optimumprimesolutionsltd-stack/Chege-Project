@@ -753,14 +753,26 @@ paths:
         - name: item
           in: query
           description: >-
-            One thing by name, ignoring case and surrounding spaces. The
-            response then carries the individual expenses behind its total.
+            One thing by name (or one category, when groupBy is category),
+            ignoring case and surrounding spaces. The response then carries
+            the individual expenses behind its total.
           schema:
             type: string
             minLength: 1
+        - name: groupBy
+          in: query
+          description: >-
+            item (the default) totals each distinct description on its own —
+            right for "how much on Netflix". category combines everything
+            charged to the same category into one row — right for "how much
+            in bank charges altogether", when the individual charges are each
+            named differently.
+          schema:
+            type: string
+            enum: [item, category]
       responses:
         "200":
-          description: Totals per named thing, largest first
+          description: Totals per named thing (or per category), largest first
           content:
             application/json:
               schema:

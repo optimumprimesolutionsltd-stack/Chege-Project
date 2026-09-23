@@ -11,12 +11,15 @@ const route = readFileSync('../api-server/src/routes/dashboard.ts', 'utf8');
 // spent on this particular thing" had no answer anywhere in the app.
 describe('spending by the thing itself, not the category', () => {
   it('groups on the name however it was typed', () => {
-    // "Netflix", "netflix " and "NETFLIX" are one subscription.
-    expect(route).toContain('GROUP BY lower(btrim(spending.description))');
+    // "Netflix", "netflix " and "NETFLIX" are one subscription. The grouped
+    // column is picked at request time (description, or category in
+    // groupBy=category), so the literal column name is no longer in the
+    // template text — only the shape of the clause is.
+    expect(route).toContain('GROUP BY lower(btrim(${groupColumn}))');
   });
 
   it('shows the spelling used most recently', () => {
-    expect(route).toContain('(array_agg(spending.description ORDER BY spending.date DESC, spending.id DESC))[1] AS "description"');
+    expect(route).toContain('(array_agg(${groupColumn} ORDER BY spending.date DESC, spending.id DESC))[1] AS "description"');
   });
 
   it('counts the whole expense, not a category portion', () => {
@@ -51,6 +54,29 @@ describe('a categorised bank withdrawal counts as spending here too', () => {
   });
 });
 
+// Bank charges are each named differently on purpose, so by item they
+// scatter across a dozen rows nobody asked to see separately. By category
+// combines everything sharing a category into one row instead.
+describe('grouping by category instead of by item', () => {
+  it('toggles between the two, resetting whatever drill-down was open', () => {
+    // A category open by mistake would ask the server for an item nobody
+    // typed — the two modes name different things by the same field.
+    expect(screen).toContain("const [groupBy, setGroupBy] = useState<'item' | 'category'>('item');");
+    expect(screen).toContain('testID={`spending-group-by-${option.value}`}');
+    expect(screen).toContain('setOpenItem(null);');
+  });
+
+  it('only adds groupBy to the request when it differs from the default', () => {
+    // Keeps the common case\'s cache key identical to what it was before
+    // this existed.
+    expect(screen).toContain("...(groupBy === 'category' ? { groupBy } : {}),");
+  });
+
+  it('never repeats the row title as its own category underneath it', () => {
+    expect(screen).toContain("groupBy === 'item' && item.categories.length > 0");
+  });
+});
+
 describe('the span it answers about', () => {
   it('offers the ranges a recurring bill is asked about', () => {
     expect(screen).toContain('const PRESETS = [3, 6, 12] as const;');
@@ -64,7 +90,7 @@ describe('the span it answers about', () => {
   it('puts the span and the search in the cache key', () => {
     // Otherwise changing either shows the previous answer under new controls.
     expect(screen).toContain('queryKey: getGetDashboardSpendingByItemQueryKey(query)');
-    expect(screen).toContain('[rangeFrom, rangeTo, search, category]');
+    expect(screen).toContain('[rangeFrom, rangeTo, search, category, groupBy]');
   });
 
   it('reads a backwards range as the span between the dates', () => {
