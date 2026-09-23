@@ -47,3 +47,46 @@ describe("mobile bank transaction display", () => {
     expect(bankScreenSource).toContain("As of {formatDisplayDate(data.openingBalanceDate");
   });
 });
+
+// Fixing a wrong-account entry used to mean deleting it and retyping it
+// under the right one. A move sends the entry's own amount and date back
+// unchanged — the only fields the server insists on — plus the new
+// accountId, so nothing about the entry shifts except which account holds it.
+describe("moving a transaction to a different account", () => {
+  it("is offered only for an ordinary, unlinked posting", () => {
+    // A transfer's two legs are a pair, and a savings or expense-linked
+    // posting is not an ordinary bank entry — moving any of those on its own
+    // would break what it is linked to.
+    expect(bankScreenSource).toContain(
+      "canManageAccount && tx.bankTransferId == null && tx.savingsGoalId == null && tx.expenseId == null",
+    );
+  });
+
+  it("requires the same access as deleting, not just editing today's own entry", () => {
+    expect(bankScreenSource).toContain("const canMoveTx = (tx: Tx) =>");
+  });
+
+  it("sends the entry's own amount and date back, changing only the account", () => {
+    expect(bankScreenSource).toContain(
+      "await updateTransaction({ id: tx.id, data: { amount: tx.amount, date: tx.date, accountId: targetAccountId } });",
+    );
+  });
+
+  it("refreshes every account's balance afterwards, not just the one it left", () => {
+    expect(bankScreenSource).toContain("await invalidateAccounts();");
+  });
+
+  it("offers every account except the one the entry is already on", () => {
+    expect(bankScreenSource).toContain("const destinations = accounts.filter((account) => account.id !== selectedAccountId);");
+  });
+
+  it("has a move action on the transaction row, alongside edit and delete", () => {
+    expect(bankScreenSource).toContain('testID={`bank-move-transaction-${item.id}`}');
+    expect(bankScreenSource).toContain("onPress={() => openMovePicker(item)}");
+    const row = bankScreenSource.slice(
+      bankScreenSource.indexOf('testID={`bank-edit-transaction-${item.id}`}'),
+      bankScreenSource.indexOf('testID={`bank-delete-transaction-${item.id}`}'),
+    );
+    expect(row).toContain('testID={`bank-move-transaction-${item.id}`}');
+  });
+});
