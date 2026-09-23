@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 const listEditor = readFileSync('components/ListEditor.tsx', 'utf8');
 const contributorEditor = readFileSync('components/ContributorEditor.tsx', 'utf8');
+const merryGoRound = readFileSync('components/MerryGoRound.tsx', 'utf8');
 
 // The Edit control on every panel heading was a bare 14px pencil in muted
 // grey, with no label. It read as decoration rather than something to press,
@@ -62,7 +63,9 @@ describe('getting back out of edit mode without scrolling to find it', () => {
       const body = editButtonBody(source);
       expect(body).toContain('if (editor.editing) {');
       expect(body).toContain('onPress={editor.cancel}');
-      expect(body).toContain('>Cancel</Text>');
+      // The plain word "Cancel" alone did not say what it was for — this is
+      // the wording that names the situation somebody presses it in.
+      expect(body).toContain('Stuck? Cancel');
     }
   });
 
@@ -71,5 +74,28 @@ describe('getting back out of edit mode without scrolling to find it', () => {
       const body = editButtonBody(source);
       expect(body).toContain('disabled={editor.saving}');
     }
+  });
+});
+
+// The same shape of bug, on a third, independent implementation — Merry-go-
+// round doesn't share ListEditor.tsx's editor object, so applying the fix
+// "across the board" meant finding and rewriting this one by hand rather
+// than getting it for free.
+describe('the same fix on Merry-go-round, a separate editing implementation', () => {
+  it('shows Stuck? Cancel in the pencil\'s place once editing, not only at the form\'s foot', () => {
+    const header = merryGoRound.slice(merryGoRound.indexOf('{open && canManage ?'), merryGoRound.indexOf('<Text style={[styles.sub'));
+    expect(header).toContain('editing ? (');
+    expect(header).toContain('setEditing(false);');
+    expect(header).toContain('Stuck? Cancel');
+  });
+
+  it('still resets whatever was drafted, so a stuck-and-cancelled form does not linger', () => {
+    const header = merryGoRound.slice(merryGoRound.indexOf('{open && canManage ?'), merryGoRound.indexOf('<Text style={[styles.sub'));
+    expect(header).toContain('resetForm();');
+  });
+
+  it('cannot be interrupted mid-save any more than the other two can', () => {
+    const header = merryGoRound.slice(merryGoRound.indexOf('{open && canManage ?'), merryGoRound.indexOf('<Text style={[styles.sub'));
+    expect(header).toContain('disabled={recordPayout.isPending}');
   });
 });
