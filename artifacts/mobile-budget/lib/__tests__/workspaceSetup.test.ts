@@ -46,4 +46,17 @@ describe('workspace setup', () => {
     expect(workspaceSetupStorageKey('a/b')).toBe('jamvi:workspace-setup-collapsed:a/b');
     expect(workspaceSetupStorageKey(42)).not.toBe(workspaceSetupStorageKey(43));
   });
+
+  // Landing on Settings said nothing about where the invite form actually
+  // was — folded shut behind GROUP ACCESS's own Edit, several sections down
+  // a page nothing pointed at. The route now carries the signal Settings
+  // opens and scrolls to it on.
+  it('sends the invite step to the section that opens and scrolls to it, not a bare Settings landing', () => {
+    const steps = deriveWorkspaceSetup({
+      isShared: true,
+      categories: [{ name: 'Rent', budgetAmount: 1 }], incomeSources: [{}], bankAccounts: [{}], goals: [{}], members: [{}],
+    });
+    const invite = steps.find((step) => step.id === 'invite');
+    expect(invite?.route).toBe('/(tabs)/settings?openInvite=1');
+  });
 });
