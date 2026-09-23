@@ -2,6 +2,8 @@ import {
   GetWorkspacesResponse,
   SelectWorkspaceBody,
   SelectWorkspaceResponse,
+  type WorkspaceAccentColor,
+  type WorkspaceIcon,
 } from "@workspace/api-zod";
 import { db, groupMembershipsTable, groupsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
@@ -18,10 +20,14 @@ const router = Router();
 // list — an older default, or one written by a newer client. A single such
 // row must not make `GetWorkspacesResponse.parse` throw and hide *every*
 // workspace, so each field is snapped to a known value first.
-const VALID_ICONS = new Set(["users", "home", "heart", "briefcase", "award", "star"]);
+const VALID_ICONS = new Set([
+  "users", "home", "heart", "briefcase", "award", "star",
+  "user", "shopping-bag", "truck", "book-open", "coffee", "gift", "shield", "map-pin", "trending-up", "tool",
+]);
 const VALID_ACCENTS = new Set([
   "#011C4E", "#003383", "#087F8C", "#08B7B0", "#209E45", "#C98C00",
   "#0F766E", "#2563EB", "#7C3AED", "#DB2777", "#D97706", "#059669",
+  "#DC2626", "#4F46E5", "#65A30D", "#C026D3", "#0284C7", "#475569",
 ]);
 const VALID_NAME_STYLES = new Set(["plain", "italic", "bold", "serif"]);
 const VALID_KINDS = new Set([
@@ -58,10 +64,8 @@ export function toWorkspaceListItem(row: WorkspaceRow, photoUrl: string | null) 
     name: row.name,
     emoji: typeof row.emoji === "string" && row.emoji.length <= 16 ? row.emoji : null,
     nameStyle: oneOf(VALID_NAME_STYLES, row.nameStyle, "plain") as "plain" | "italic" | "bold" | "serif",
-    icon: oneOf(VALID_ICONS, row.icon, "users") as "users" | "home" | "heart" | "briefcase" | "award" | "star",
-    accentColor: oneOf(VALID_ACCENTS, row.accentColor, "#0F766E") as
-      | "#011C4E" | "#003383" | "#087F8C" | "#08B7B0" | "#209E45" | "#C98C00"
-      | "#0F766E" | "#2563EB" | "#7C3AED" | "#DB2777" | "#D97706" | "#059669",
+    icon: oneOf(VALID_ICONS, row.icon, "users") as WorkspaceIcon,
+    accentColor: oneOf(VALID_ACCENTS, row.accentColor, "#0F766E") as WorkspaceAccentColor,
     photoUrl: isPrivate ? null : photoUrl,
     slogan: typeof row.slogan === "string" && row.slogan.length <= 120 ? row.slogan : null,
     isPrivate,

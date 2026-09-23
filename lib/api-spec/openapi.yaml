@@ -3269,10 +3269,10 @@ components:
           enum: [plain, italic, bold, serif]
         icon:
           type: string
-          enum: [users, home, heart, briefcase, award, star]
+          enum: [users, home, heart, briefcase, award, star, user, shopping-bag, truck, book-open, coffee, gift, shield, map-pin, trending-up, tool]
         accentColor:
           type: string
-          enum: ["#011C4E", "#003383", "#087F8C", "#08B7B0", "#209E45", "#C98C00", "#0F766E", "#2563EB", "#7C3AED", "#DB2777", "#D97706", "#059669"]
+          enum: ["#011C4E", "#003383", "#087F8C", "#08B7B0", "#209E45", "#C98C00", "#0F766E", "#2563EB", "#7C3AED", "#DB2777", "#D97706", "#059669", "#DC2626", "#4F46E5", "#65A30D", "#C026D3", "#0284C7", "#475569"]
         photoUrl:
           type: ["string", "null"]
         slogan:
@@ -3330,10 +3330,10 @@ components:
           enum: [plain, italic, bold, serif]
         icon:
           type: string
-          enum: [users, home, heart, briefcase, award, star]
+          enum: [users, home, heart, briefcase, award, star, user, shopping-bag, truck, book-open, coffee, gift, shield, map-pin, trending-up, tool]
         accentColor:
           type: string
-          enum: ["#011C4E", "#003383", "#087F8C", "#08B7B0", "#209E45", "#C98C00", "#0F766E", "#2563EB", "#7C3AED", "#DB2777", "#D97706", "#059669"]
+          enum: ["#011C4E", "#003383", "#087F8C", "#08B7B0", "#209E45", "#C98C00", "#0F766E", "#2563EB", "#7C3AED", "#DB2777", "#D97706", "#059669", "#DC2626", "#4F46E5", "#65A30D", "#C026D3", "#0284C7", "#475569"]
         photoUrl:
           type: ["string", "null"]
         slogan:
@@ -3375,10 +3375,10 @@ components:
           enum: [plain, italic, bold, serif]
         icon:
           type: string
-          enum: [users, home, heart, briefcase, award, star]
+          enum: [users, home, heart, briefcase, award, star, user, shopping-bag, truck, book-open, coffee, gift, shield, map-pin, trending-up, tool]
         accentColor:
           type: string
-          enum: ["#011C4E", "#003383", "#087F8C", "#08B7B0", "#209E45", "#C98C00", "#0F766E", "#2563EB", "#7C3AED", "#DB2777", "#D97706", "#059669"]
+          enum: ["#011C4E", "#003383", "#087F8C", "#08B7B0", "#209E45", "#C98C00", "#0F766E", "#2563EB", "#7C3AED", "#DB2777", "#D97706", "#059669", "#DC2626", "#4F46E5", "#65A30D", "#C026D3", "#0284C7", "#475569"]
         photoPath:
           type: ["string", "null"]
           pattern: "^/objects/photos/[a-f0-9-]+$"
