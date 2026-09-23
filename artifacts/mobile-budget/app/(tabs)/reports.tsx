@@ -183,6 +183,9 @@ export default function ReportsScreen() {
   const [dayFrom, setDayFrom] = useState<string>(monthStartIso);
   const [dayTo, setDayTo] = useState<string>(() => isoDay(new Date()));
   const [picker, setPicker] = useState<null | 'from' | 'to'>(null);
+  // What the PDF includes beyond the always-present summary cards.
+  const [includeBudget, setIncludeBudget] = useState(true);
+  const [includeIncome, setIncludeIncome] = useState(true);
 
   // The summary cards describe sections that are already further down this
   // page, but only one of the three was pressable, so the other two read as
@@ -243,7 +246,11 @@ export default function ReportsScreen() {
     try {
       const [rangeFrom, rangeTo] = orderedRange(dayFrom, dayTo);
       const pdf = await getDashboardMonthlyReportPdf(
-        customDates ? { month, year, from: rangeFrom, to: rangeTo } : { month, year },
+        {
+          ...(customDates ? { month, year, from: rangeFrom, to: rangeTo } : { month, year }),
+          includeBudget,
+          includeIncome,
+        },
         { responseType: 'blob', cache: 'no-store' },
       );
       const [fileFrom, fileTo] = orderedRange(dayFrom, dayTo);
@@ -283,7 +290,7 @@ export default function ReportsScreen() {
     } finally {
       setIsExporting(false);
     }
-  }, [month, year, customDates, dayFrom, dayTo]);
+  }, [month, year, customDates, dayFrom, dayTo, includeBudget, includeIncome]);
 
   // ── Derived values ─────────────────────────────────────────────────────────
 
@@ -447,6 +454,30 @@ export default function ReportsScreen() {
             <Feather name={customDates ? 'check-square' : 'square'} size={14} color="#FFFFFF" />
             <Text style={styles.customDatesToggleText}>Exact dates</Text>
           </Pressable>
+          <View style={styles.pdfSectionsRow}>
+            <Pressable
+              onPress={() => setIncludeBudget((on) => !on)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: includeBudget }}
+              accessibilityLabel={includeBudget ? 'Remove Budget performance from the PDF' : 'Include Budget performance in the PDF'}
+              testID="report-include-budget"
+              style={styles.customDatesToggle}
+            >
+              <Feather name={includeBudget ? 'check-square' : 'square'} size={14} color="#FFFFFF" />
+              <Text style={styles.customDatesToggleText}>Budget performance</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setIncludeIncome((on) => !on)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: includeIncome }}
+              accessibilityLabel={includeIncome ? 'Remove Income-stream funding from the PDF' : 'Include Income-stream funding in the PDF'}
+              testID="report-include-income"
+              style={styles.customDatesToggle}
+            >
+              <Feather name={includeIncome ? 'check-square' : 'square'} size={14} color="#FFFFFF" />
+              <Text style={styles.customDatesToggleText}>Income-stream funding</Text>
+            </Pressable>
+          </View>
           {customDates && (
             <View style={styles.dayRow}>
               {(['from', 'to'] as const).map((which) => (
@@ -1330,6 +1361,7 @@ const styles = StyleSheet.create({
   // white on translucent white rather than the usual card tokens.
   customDatesToggle: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, minHeight: 32, alignSelf: 'flex-start' },
   customDatesToggleText: { color: '#FFFFFF', fontSize: 12, fontFamily: 'Inter_600SemiBold' },
+  pdfSectionsRow: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 16 },
   dayRow: { flexDirection: 'row', gap: 8, marginTop: 6 },
   dayField: {
     flex: 1,

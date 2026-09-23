@@ -221,6 +221,10 @@ export function ContributionExport() {
   const [dayTo, setDayTo] = useState<string>(() => isoDay(new Date()));
   const [picker, setPicker] = useState<null | 'from' | 'to'>(null);
   const [busy, setBusy] = useState<null | 'pdf' | 'whatsapp'>(null);
+  // What the downloaded PDF includes — the on-screen preview and WhatsApp
+  // text are unaffected, only the PDF itself.
+  const [includeEntries, setIncludeEntries] = useState(true);
+  const [includePerMemberTotals, setIncludePerMemberTotals] = useState(true);
   const [viewing, setViewing] = useState(false);
   const [viewData, setViewData] = useState<ContributionStatement | null>(null);
   const [viewLoading, setViewLoading] = useState(false);
@@ -285,7 +289,8 @@ export function ContributionExport() {
     setBusy('pdf');
     try {
       // The dated statement PDF for exactly what View shows.
-      const blob = (await customFetch(`/api/contributions/statement.pdf?${viewQuery}`, {
+      const pdfQuery = `${viewQuery}&includeEntries=${includeEntries}&includePerMemberTotals=${includePerMemberTotals}`;
+      const blob = (await customFetch(`/api/contributions/statement.pdf?${pdfQuery}`, {
         responseType: 'blob',
         cache: 'no-store',
       })) as Blob;
@@ -464,6 +469,33 @@ export function ContributionExport() {
         />
       )}
 
+      <View style={styles.sections}>
+        <Pressable
+          onPress={() => setIncludeEntries((on) => !on)}
+          disabled={busy !== null}
+          accessibilityRole="button"
+          accessibilityState={{ selected: includeEntries }}
+          accessibilityLabel={includeEntries ? 'Remove the dated entries from the PDF' : 'Include the dated entries in the PDF'}
+          testID="contribution-export-include-entries"
+          style={styles.sectionToggle}
+        >
+          <Feather name={includeEntries ? 'check-square' : 'square'} size={14} color={colors.foreground} />
+          <Text style={[styles.sectionToggleLabel, { color: colors.foreground }]}>Dated entries</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => setIncludePerMemberTotals((on) => !on)}
+          disabled={busy !== null}
+          accessibilityRole="button"
+          accessibilityState={{ selected: includePerMemberTotals }}
+          accessibilityLabel={includePerMemberTotals ? 'Remove the by-member totals from the PDF' : 'Include the by-member totals in the PDF'}
+          testID="contribution-export-include-by-member"
+          style={styles.sectionToggle}
+        >
+          <Feather name={includePerMemberTotals ? 'check-square' : 'square'} size={14} color={colors.foreground} />
+          <Text style={[styles.sectionToggleLabel, { color: colors.foreground }]}>By-member totals</Text>
+        </Pressable>
+      </View>
+
       <Pressable
         onPress={toggleView}
         disabled={busy !== null}
@@ -592,6 +624,9 @@ const styles = StyleSheet.create({
   ranges: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   rangeBtn: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 9, borderWidth: StyleSheet.hairlineWidth },
   rangeLabel: { fontSize: 11, fontFamily: 'Inter_600SemiBold' },
+  sections: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 16, rowGap: 4 },
+  sectionToggle: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 28 },
+  sectionToggleLabel: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
   dayRow: { flexDirection: 'row', gap: 10 },
   dayField: { flex: 1, borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 10, paddingVertical: 8, gap: 3 },
   dayLabel: { fontSize: 10, fontFamily: 'Inter_600SemiBold', textTransform: 'uppercase', letterSpacing: 0.4 },
