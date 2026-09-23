@@ -14,4 +14,6 @@ export interface SpendingByItemEntry {
   category: string;
   paidFromBank: boolean;
   payerName: string;
+  /** True when this is a categorised bank withdrawal rather than a row in the expenses table. Shown read-only: correcting it means correcting the posting on the Banking tab, where the balance follows it. */
+  fromBank: boolean;
 }

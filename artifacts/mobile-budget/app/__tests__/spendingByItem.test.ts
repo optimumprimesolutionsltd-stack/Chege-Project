@@ -12,22 +12,42 @@ const route = readFileSync('../api-server/src/routes/dashboard.ts', 'utf8');
 describe('spending by the thing itself, not the category', () => {
   it('groups on the name however it was typed', () => {
     // "Netflix", "netflix " and "NETFLIX" are one subscription.
-    expect(route).toContain('GROUP BY lower(btrim(e.description))');
+    expect(route).toContain('GROUP BY lower(btrim(spending.description))');
   });
 
   it('shows the spelling used most recently', () => {
-    expect(route).toContain('(array_agg(e.description ORDER BY e.date DESC, e.id DESC))[1] AS "description"');
+    expect(route).toContain('(array_agg(spending.description ORDER BY spending.date DESC, spending.id DESC))[1] AS "description"');
   });
 
   it('counts the whole expense, not a category portion', () => {
     // A 5,000 shop split across Food and Household still cost 5,000.
-    expect(route).toContain('COALESCE(SUM(e.amount), 0) AS "total"');
+    expect(route).toContain('COALESCE(SUM(spending.amount), 0) AS "total"');
   });
 
   it('is reachable from Reports', () => {
     expect(reports).toContain("router.push('/spending-by-item')");
     expect(reports).toContain('testID="open-spending-by-item"');
     expect(layout).toContain('<Stack.Screen name="spending-by-item"');
+  });
+});
+
+// A categorised bank withdrawal is spending by every other figure in the
+// app — the category breakdown counts it, the budget measures against it —
+// but it lives in joint_account_transactions, not expenses. This page used
+// to read only the expenses table, so it could say "no expenses recorded"
+// to somebody who had spent all month through the bank.
+describe('a categorised bank withdrawal counts as spending here too', () => {
+  it('unions it in, excluding a transfer or one already counted as an expense', () => {
+    expect(route).toContain("FROM joint_account_transactions tx");
+    expect(route).toContain("tx.type = 'disbursement'");
+    expect(route).toContain('tx.bank_transfer_id IS NULL');
+    expect(route).toContain('tx.expense_id IS NULL');
+    expect(route).toContain('tx.expense_category IS NOT NULL');
+  });
+
+  it('cannot be edited from here — the balance follows it on the Banking tab', () => {
+    expect(screen).toContain("onPress={entry.fromBank ? undefined : () => router.push(getExpenseEditHref({ id: entry.id, date: entry.date }))}");
+    expect(screen).toContain("{entry.fromBank ? ' · from Banking' : ''}");
   });
 });
 

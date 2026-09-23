@@ -58,7 +58,10 @@ describe("every figure that counts money in leaves it out", () => {
       (contributors.match(/AND NOT \w+\.is_borrowing/g) ?? []).length +
       (contributors.match(/AND NOT \$\{jointAccountTxTable\.isBorrowing\}/g) ?? []).length;
     expect(borrowingFilters).toBe(settlementFilters);
-    expect(borrowingFilters).toBe(10);
+    // The per-stream income trend duplicates the same two deposit branches
+    // (split, legacy) as the single-month funding query, so both counts grew
+    // by 2 together when it was added.
+    expect(borrowingFilters).toBe(12);
   });
 });
 

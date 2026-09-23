@@ -57,6 +57,7 @@ import type {
   GetDashboardCategoryLedgerParams,
   GetDashboardExpenseLedgerParams,
   GetDashboardIncomeStreamsParams,
+  GetDashboardIncomeStreamsTrendParams,
   GetDashboardMonthlyReportPdfParams,
   GetDashboardPeriodTotalsParams,
   GetDashboardSpendingByItemParams,
@@ -76,6 +77,7 @@ import type {
   HealthStatus,
   IncomeSource,
   IncomeStreamReport,
+  IncomeStreamTrendReport,
   JointAccountSummary,
   JointAccountTransaction,
   Member,
@@ -2253,6 +2255,90 @@ export function useGetDashboardIncomeStreams<TData = Awaited<ReturnType<typeof g
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetDashboardIncomeStreamsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetDashboardIncomeStreamsTrendUrl = (params?: GetDashboardIncomeStreamsTrendParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/dashboard/income-streams-trend?${stringifiedParams}` : `/api/dashboard/income-streams-trend`
+}
+
+/**
+ * @summary Month-over-month funding totals per income stream for the last N months
+ */
+export const getDashboardIncomeStreamsTrend = async (params?: GetDashboardIncomeStreamsTrendParams, options?: Parameters<typeof customFetch>[1]): Promise<IncomeStreamTrendReport> => {
+
+  return customFetch<IncomeStreamTrendReport>(getGetDashboardIncomeStreamsTrendUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetDashboardIncomeStreamsTrendQueryKey = (params?: GetDashboardIncomeStreamsTrendParams,) => {
+    return [
+    `/api/dashboard/income-streams-trend`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetDashboardIncomeStreamsTrendQueryOptions = <TData = Awaited<ReturnType<typeof getDashboardIncomeStreamsTrend>>, TError = ErrorType<unknown>>(params?: GetDashboardIncomeStreamsTrendParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDashboardIncomeStreamsTrend>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetDashboardIncomeStreamsTrendQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDashboardIncomeStreamsTrend>>> = ({ signal }) => getDashboardIncomeStreamsTrend(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getDashboardIncomeStreamsTrend>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetDashboardIncomeStreamsTrendQueryResult = NonNullable<Awaited<ReturnType<typeof getDashboardIncomeStreamsTrend>>>
+export type GetDashboardIncomeStreamsTrendQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Month-over-month funding totals per income stream for the last N months
+ */
+
+export function useGetDashboardIncomeStreamsTrend<TData = Awaited<ReturnType<typeof getDashboardIncomeStreamsTrend>>, TError = ErrorType<unknown>>(
+ params?: GetDashboardIncomeStreamsTrendParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDashboardIncomeStreamsTrend>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetDashboardIncomeStreamsTrendQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
