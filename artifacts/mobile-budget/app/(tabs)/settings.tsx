@@ -10,11 +10,9 @@ import {
   TextInput,
   ActivityIndicator,
   Modal,
-  Share,
   ScrollView,
   KeyboardAvoidingView,
 } from 'react-native';
-import * as Linking from 'expo-linking';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
@@ -27,7 +25,6 @@ import {
   customFetch,
   requestPhotoUpload,
   useCreateSharedGroup,
-  useCreateGroupInviteLink,
   useGetGroup,
   useGetWorkspaces,
   useSelectWorkspace,
@@ -50,6 +47,7 @@ import { useAuth } from '@/lib/auth';
 import { getDisplayName } from '@/utils/avatarHelper';
 import { ProfileAvatar } from '@/components/ProfileAvatar';
 import { ReadOnlyLinkCard } from '@/components/ReadOnlyLinkCard';
+import { GroupInviteLinkCard } from '@/components/GroupInviteLinkCard';
 import { FeedbackModal } from '@/components/FeedbackModal';
 import { markFeedbackSubmitted } from '@/lib/feedbackPrompt';
 import {
@@ -167,7 +165,6 @@ export default function SettingsScreen() {
   const [editingBudgetName, setEditingBudgetName] = useState(false);
   const [uploadingProfilePhoto, setUploadingProfilePhoto] = useState(false);
   const [uploadingGroupPhoto, setUploadingGroupPhoto] = useState(false);
-  const [sharingInvite, setSharingInvite] = useState(false);
   const [editingBudgetPlan, setEditingBudgetPlan] = useState(false);
   const [budgetPurposeDraft, setBudgetPurposeDraft] = useState('');
   const [budgetDurationDraft, setBudgetDurationDraft] = useState<MobileBudgetDuration>('ongoing');
@@ -201,7 +198,6 @@ export default function SettingsScreen() {
   });
   const selectWorkspace = useSelectWorkspace();
   const createSharedGroup = useCreateSharedGroup();
-  const createInviteLink = useCreateGroupInviteLink();
   const updateGroup = useUpdateGroup();
   const recommendations = useGetBudgetCategoryRecommendations({
     query: {
@@ -331,33 +327,6 @@ export default function SettingsScreen() {
     setGroupNameStyle(group?.nameStyle ?? 'plain');
     setEditingBudgetName(true);
     requestAnimationFrame(() => budgetNameInputRef.current?.focus());
-  };
-
-  const handleWhatsAppInvite = async () => {
-    if (!group) return;
-    setSharingInvite(true);
-    try {
-      const created = await createInviteLink.mutateAsync();
-      const domain = process.env.EXPO_PUBLIC_DOMAIN;
-      if (!domain) {
-        Alert.alert('Invite link unavailable', 'Use the email invitation below or open Jamvi on the web to share a WhatsApp link.');
-        return;
-      }
-      const inviteUrl = `https://${domain}/invite/${encodeURIComponent(created.token)}`;
-      const message = `Join ${group.name || 'my Jamvi Shared group'} using this private invite link: ${inviteUrl}`;
-      try {
-        await Linking.openURL(`https://wa.me/?text=${encodeURIComponent(message)}`);
-      } catch {
-        await Share.share({ title: 'Share Jamvi invitation', message });
-      }
-    } catch (error) {
-      Alert.alert(
-        isMemberLimitError(error) ? MEMBER_LIMIT_PROMPT.title : 'Could not create invite link',
-        isMemberLimitError(error) ? MEMBER_LIMIT_PROMPT.message : error instanceof Error ? error.message : 'Please try again.',
-      );
-    } finally {
-      setSharingInvite(false);
-    }
   };
 
   const selectAndUploadPhoto = async (): Promise<string | null> => {
@@ -1728,32 +1697,7 @@ export default function SettingsScreen() {
               <Text style={{ width: '100%', color: colors.mutedForeground, fontSize: 11, fontFamily: 'Inter_400Regular' }}>
                 Tap Member to choose Admin instead. They only join after signing in and accepting the email invitation.
               </Text>
-              <Pressable
-                onPress={() => void handleWhatsAppInvite()}
-                disabled={managingMembers || sharingInvite}
-                style={{
-                  width: '100%',
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 8,
-                  borderRadius: 9,
-                  paddingVertical: 11,
-                  backgroundColor: '#25D366',
-                  opacity: managingMembers || sharingInvite ? 0.55 : 1,
-                }}
-                accessibilityRole="button"
-                accessibilityLabel="Share invite on WhatsApp"
-                testID="share-invite-whatsapp"
-              >
-                {sharingInvite ? <ActivityIndicator size="small" color="#fff" /> : <Feather name="message-circle" size={17} color="#fff" />}
-                <Text style={{ color: '#fff', fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>
-                  {sharingInvite ? 'Preparing invite…' : 'Share invite on WhatsApp'}
-                </Text>
-              </Pressable>
-              <Text style={{ width: '100%', color: colors.mutedForeground, fontSize: 11, fontFamily: 'Inter_400Regular' }}>
-                WhatsApp opens first. If it is not available, your device’s other sharing options will open instead.
-              </Text>
+              <GroupInviteLinkCard groupName={group?.name} />
             </View>
           ) : null}
           {!canManageShared ? (
