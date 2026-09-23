@@ -33,9 +33,43 @@ describe('the panel Edit control', () => {
     expect(listEditor).not.toContain('<Feather name="edit-2" size={14} color={colors.mutedForeground} />');
   });
 
-  it('still hides for people who cannot manage the list, and while editing', () => {
+  it('still hides for people who cannot manage the list', () => {
     for (const source of [listEditor, contributorEditor]) {
-      expect(source).toContain('if (!canManage || editor.editing) return null;');
+      expect(source).toContain('if (!canManage) return null;');
+    }
+  });
+});
+
+// Edit used to just vanish once pressed, leaving Cancel reachable only from
+// the footer below every row — a real scroll on a long list, with no way
+// back into ordinary browsing until you found it. People were quitting the
+// app and reopening it instead of finding Cancel.
+describe('getting back out of edit mode without scrolling to find it', () => {
+  // Scoped to the button function itself, not the whole file — both files
+  // also have an unrelated onPress={editor.cancel} in their footer's own
+  // Cancel button, which would make a plain toContain pass even if the
+  // button's own wiring were broken.
+  function editButtonBody(source: string): string {
+    const start = source.indexOf('function EditListButton') !== -1
+      ? source.indexOf('function EditListButton')
+      : source.indexOf('function ListEditButton');
+    const end = source.indexOf('\n}', start);
+    return source.slice(start, end);
+  }
+
+  it('turns into Cancel in the same spot, in both copies of the pattern', () => {
+    for (const source of [listEditor, contributorEditor]) {
+      const body = editButtonBody(source);
+      expect(body).toContain('if (editor.editing) {');
+      expect(body).toContain('onPress={editor.cancel}');
+      expect(body).toContain('>Cancel</Text>');
+    }
+  });
+
+  it('is still disabled while a save is in flight, so it cannot interrupt one', () => {
+    for (const source of [listEditor, contributorEditor]) {
+      const body = editButtonBody(source);
+      expect(body).toContain('disabled={editor.saving}');
     }
   });
 });

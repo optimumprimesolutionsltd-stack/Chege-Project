@@ -173,12 +173,54 @@ export function useContributorEditor() {
 type Editor = ReturnType<typeof useContributorEditor>;
 
 export function EditListButton({ editor, canManage }: { editor: Editor; canManage: boolean }) {
-  if (!canManage || editor.editing) return null;
+  const colors = useColors();
+  if (!canManage) return null;
+  // While editing this becomes Cancel rather than disappearing — the same
+  // fix as ListEditor.tsx's ListEditButton, for the same reason: Cancel
+  // living only in the footer below every row meant a long list had no way
+  // back into ordinary browsing without scrolling all the way down to find it.
+  if (editor.editing) {
+    return (
+      <Pressable
+        onPress={editor.cancel}
+        disabled={editor.saving}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel="Stop editing this list"
+        testID="contributor-edit-cancel"
+        style={({ pressed }) => [
+          editListButtonStyles.pill,
+          {
+            borderColor: colors.border,
+            backgroundColor: pressed ? colors.muted : 'transparent',
+            borderRadius: colors.radius,
+            opacity: editor.saving ? 0.5 : 1,
+          },
+        ]}
+      >
+        <Feather name="x" size={13} color={colors.mutedForeground} />
+        <Text style={[editListButtonStyles.label, { color: colors.mutedForeground }]}>Cancel</Text>
+      </Pressable>
+    );
+  }
   // Same pill as every other panel heading — the contributions cards had the
   // same invisible pencil, and this is the control people could not find on
   // Expected vs actual.
   return <EditPill onPress={editor.open} accessibilityLabel="Add or remove members" testID="contributor-edit" />;
 }
+
+const editListButtonStyles = StyleSheet.create({
+  pill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    minHeight: 32,
+    paddingVertical: 4,
+  },
+  label: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
+});
 
 export function RemoveRowButton({ editor, id }: { editor: Editor; id: number }) {
   const colors = useColors();

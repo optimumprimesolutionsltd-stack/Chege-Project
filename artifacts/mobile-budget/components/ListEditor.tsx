@@ -57,9 +57,42 @@ const editPillStyles = StyleSheet.create({
   label: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
 });
 
-/** The Edit control for a panel heading. Hidden for non-managers and while editing. */
+/**
+ * The Edit control for a panel heading. Hidden for non-managers.
+ *
+ * While editing it becomes Cancel instead of disappearing — it used to just
+ * vanish, leaving Cancel reachable only from the footer below every row in
+ * the list. A long transaction history made that a real scroll, with no way
+ * back into ordinary browsing until you found it, so people were quitting
+ * the app and reopening it instead.
+ */
 export function ListEditButton({ editor, canManage }: { editor: ListEditor; canManage: boolean }) {
-  if (!canManage || editor.editing) return null;
+  const colors = useColors();
+  if (!canManage) return null;
+  if (editor.editing) {
+    return (
+      <Pressable
+        onPress={editor.cancel}
+        disabled={editor.saving}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel="Stop editing this list"
+        testID="list-edit-cancel"
+        style={({ pressed }) => [
+          editPillStyles.pill,
+          {
+            borderColor: colors.border,
+            backgroundColor: pressed ? colors.muted : 'transparent',
+            borderRadius: colors.radius,
+            opacity: editor.saving ? 0.5 : 1,
+          },
+        ]}
+      >
+        <Feather name="x" size={13} color={colors.mutedForeground} />
+        <Text style={[editPillStyles.label, { color: colors.mutedForeground }]}>Cancel</Text>
+      </Pressable>
+    );
+  }
   return <EditPill onPress={editor.open} accessibilityLabel="Edit this list" testID="list-edit" />;
 }
 
