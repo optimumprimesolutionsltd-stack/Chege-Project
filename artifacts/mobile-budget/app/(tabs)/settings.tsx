@@ -88,10 +88,21 @@ const SHARED_BUDGET_ICONS = [
   { value: 'briefcase', label: 'Work' },
   { value: 'award', label: 'Goals' },
   { value: 'star', label: 'Star' },
+  { value: 'user', label: 'Personal' },
+  { value: 'shopping-bag', label: 'Shopping' },
+  { value: 'truck', label: 'Transport' },
+  { value: 'book-open', label: 'Education' },
+  { value: 'coffee', label: 'Lifestyle' },
+  { value: 'gift', label: 'Celebrations' },
+  { value: 'shield', label: 'Protection' },
+  { value: 'map-pin', label: 'Travel' },
+  { value: 'trending-up', label: 'Savings' },
+  { value: 'tool', label: 'Maintenance' },
 ] as const;
 const SHARED_BUDGET_ACCENTS = [
   '#011C4E', '#003383', '#087F8C', '#08B7B0', '#209E45', '#C98C00',
   '#0F766E', '#2563EB', '#7C3AED', '#DB2777', '#D97706', '#059669',
+  '#DC2626', '#4F46E5', '#65A30D', '#C026D3', '#0284C7', '#475569',
 ] as const;
 type SharedBudgetIcon = (typeof SHARED_BUDGET_ICONS)[number]['value'];
 type SharedBudgetAccent = (typeof SHARED_BUDGET_ACCENTS)[number];

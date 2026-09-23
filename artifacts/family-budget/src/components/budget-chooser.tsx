@@ -8,7 +8,7 @@ import {
   type GroupKind,
   type Workspace,
 } from "@workspace/api-client-react";
-import { ArrowUpRight, Award, BriefcaseBusiness, Check, ChevronRight, Heart, Home, Plus, Star, Users, UsersRound, Wallet } from "lucide-react";
+import { ArrowUpRight, Award, BookOpen, BriefcaseBusiness, Check, ChevronRight, Coffee, Gift, Heart, Home, MapPin, Plus, Shield, ShoppingBag, Star, TrendingUp, Truck, User, Users, UsersRound, Wallet, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { groupKindPresentation, SHARED_GROUP_KINDS, type SharedGroupKind } from "@/components/group-kind";
 import { workspaceLabel, workspaceNameClass } from "@/lib/workspace-identity";
@@ -206,6 +206,16 @@ function WorkspaceIdentity({
     briefcase: BriefcaseBusiness,
     award: Award,
     star: Star,
+    user: User,
+    "shopping-bag": ShoppingBag,
+    truck: Truck,
+    "book-open": BookOpen,
+    coffee: Coffee,
+    gift: Gift,
+    shield: Shield,
+    "map-pin": MapPin,
+    "trending-up": TrendingUp,
+    tool: Wrench,
   }[workspace.icon] ?? Users);
   const accent = workspace.accentColor ?? "#003383";
 

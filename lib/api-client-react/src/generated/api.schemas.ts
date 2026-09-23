@@ -945,6 +945,16 @@ export const WorkspaceIcon = {
   briefcase: 'briefcase',
   award: 'award',
   star: 'star',
+  user: 'user',
+  'shopping-bag': 'shopping-bag',
+  truck: 'truck',
+  'book-open': 'book-open',
+  coffee: 'coffee',
+  gift: 'gift',
+  shield: 'shield',
+  'map-pin': 'map-pin',
+  'trending-up': 'trending-up',
+  tool: 'tool',
 } as const;
 
 export type WorkspaceAccentColor = typeof WorkspaceAccentColor[keyof typeof WorkspaceAccentColor];
@@ -963,6 +973,12 @@ export const WorkspaceAccentColor = {
   '#DB2777': '#DB2777',
   '#D97706': '#D97706',
   '#059669': '#059669',
+  '#DC2626': '#DC2626',
+  '#4F46E5': '#4F46E5',
+  '#65A30D': '#65A30D',
+  '#C026D3': '#C026D3',
+  '#0284C7': '#0284C7',
+  '#475569': '#475569',
 } as const;
 
 export type WorkspaceRole = typeof WorkspaceRole[keyof typeof WorkspaceRole];
@@ -1040,6 +1056,16 @@ export const GroupIcon = {
   briefcase: 'briefcase',
   award: 'award',
   star: 'star',
+  user: 'user',
+  'shopping-bag': 'shopping-bag',
+  truck: 'truck',
+  'book-open': 'book-open',
+  coffee: 'coffee',
+  gift: 'gift',
+  shield: 'shield',
+  'map-pin': 'map-pin',
+  'trending-up': 'trending-up',
+  tool: 'tool',
 } as const;
 
 export type GroupAccentColor = typeof GroupAccentColor[keyof typeof GroupAccentColor];
@@ -1058,6 +1084,12 @@ export const GroupAccentColor = {
   '#DB2777': '#DB2777',
   '#D97706': '#D97706',
   '#059669': '#059669',
+  '#DC2626': '#DC2626',
+  '#4F46E5': '#4F46E5',
+  '#65A30D': '#65A30D',
+  '#C026D3': '#C026D3',
+  '#0284C7': '#0284C7',
+  '#475569': '#475569',
 } as const;
 
 export type GroupRole = typeof GroupRole[keyof typeof GroupRole];
@@ -1130,6 +1162,16 @@ export const UpdateGroupInputIcon = {
   briefcase: 'briefcase',
   award: 'award',
   star: 'star',
+  user: 'user',
+  'shopping-bag': 'shopping-bag',
+  truck: 'truck',
+  'book-open': 'book-open',
+  coffee: 'coffee',
+  gift: 'gift',
+  shield: 'shield',
+  'map-pin': 'map-pin',
+  'trending-up': 'trending-up',
+  tool: 'tool',
 } as const;
 
 export type UpdateGroupInputAccentColor = typeof UpdateGroupInputAccentColor[keyof typeof UpdateGroupInputAccentColor];
@@ -1148,6 +1190,12 @@ export const UpdateGroupInputAccentColor = {
   '#DB2777': '#DB2777',
   '#D97706': '#D97706',
   '#059669': '#059669',
+  '#DC2626': '#DC2626',
+  '#4F46E5': '#4F46E5',
+  '#65A30D': '#65A30D',
+  '#C026D3': '#C026D3',
+  '#0284C7': '#0284C7',
+  '#475569': '#475569',
 } as const;
 
 export type UpdateGroupInputEnabledSectionsItem = typeof UpdateGroupInputEnabledSectionsItem[keyof typeof UpdateGroupInputEnabledSectionsItem];

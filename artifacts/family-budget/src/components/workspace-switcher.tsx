@@ -5,7 +5,7 @@ import {
 } from "@workspace/api-client-react";
 import { useGetGroup } from "@workspace/api-client-react";
 import { useState } from "react";
-import { Award, BriefcaseBusiness, ChevronDown, Heart, Home, Star, Users } from "lucide-react";
+import { Award, BookOpen, BriefcaseBusiness, ChevronDown, Coffee, Gift, Heart, Home, MapPin, Shield, ShoppingBag, Star, TrendingUp, Truck, User, Users, Wrench } from "lucide-react";
 import { workspaceIdentityText, workspaceLabel, workspaceNameClass } from "@/lib/workspace-identity";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@workspace/replit-auth-web";
@@ -56,6 +56,16 @@ export function WorkspaceSwitcher({
     briefcase: BriefcaseBusiness,
     award: Award,
     star: Star,
+    user: User,
+    "shopping-bag": ShoppingBag,
+    truck: Truck,
+    "book-open": BookOpen,
+    coffee: Coffee,
+    gift: Gift,
+    shield: Shield,
+    "map-pin": MapPin,
+    "trending-up": TrendingUp,
+    tool: Wrench,
   }[activeBrandedBudget?.icon ?? "users"] ?? Users);
   const photoForWorkspace = (workspace: Pick<Workspace, "isPrivate" | "photoUrl">) =>
     workspace.isPrivate ? user?.profileImageUrl ?? null : workspace.photoUrl ?? null;
@@ -117,6 +127,16 @@ export function WorkspaceSwitcher({
                 briefcase: BriefcaseBusiness,
                 award: Award,
                 star: Star,
+                user: User,
+                "shopping-bag": ShoppingBag,
+                truck: Truck,
+                "book-open": BookOpen,
+                coffee: Coffee,
+                gift: Gift,
+                shield: Shield,
+                "map-pin": MapPin,
+                "trending-up": TrendingUp,
+                tool: Wrench,
               }[workspace.icon ?? "users"] ?? Users;
 
               return (
