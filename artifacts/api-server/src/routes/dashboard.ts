@@ -995,11 +995,18 @@ router.get("/dashboard/spending-by-item", async (req, res): Promise<void> => {
     res.status(400).json({ error: "Invalid query" });
     return;
   }
-  const { from: askedFrom, to: askedTo, q, category, item } = parsed.data;
+  const { from: askedFrom, to: askedTo, q, category, item, groupBy } = parsed.data;
   if ((askedFrom == null) !== (askedTo == null)) {
     res.status(400).json({ error: "Give both a start and an end date, or neither." });
     return;
   }
+  // item totals each distinct description on its own — right for "how much
+  // on Netflix". category combines everything charged to the same category
+  // into one row — right for "how much in bank charges altogether", when
+  // each individual charge is named differently and would otherwise scatter
+  // across a dozen rows nobody asked to see separately.
+  const byCategory = groupBy === "category";
+  const groupColumn = byCategory ? sql.raw("spending.category") : sql.raw("spending.description");
 
   // Asked with no range at all, this answers about the last twelve months.
   // "How much do I spend on rent" is not a question about one month, and a
@@ -1044,7 +1051,7 @@ router.get("/dashboard/spending-by-item", async (req, res): Promise<void> => {
         AND tx.expense_category IS NOT NULL
         AND tx.date >= ${from} AND tx.date <= ${to}
     )
-    SELECT (array_agg(spending.description ORDER BY spending.date DESC, spending.id DESC))[1] AS "description",
+    SELECT (array_agg(${groupColumn} ORDER BY spending.date DESC, spending.id DESC))[1] AS "description",
            COALESCE(SUM(spending.amount), 0) AS "total",
            COUNT(*) AS "count",
            MIN(spending.date) AS "firstDate",
@@ -1053,7 +1060,7 @@ router.get("/dashboard/spending-by-item", async (req, res): Promise<void> => {
     FROM spending
     WHERE TRUE
       ${search ? sql`AND spending.description ILIKE ${search} ESCAPE '!'` : sql``}
-      ${item ? sql`AND lower(btrim(spending.description)) = lower(btrim(${item}))` : sql``}
+      ${item ? sql`AND lower(btrim(${groupColumn})) = lower(btrim(${item}))` : sql``}
       ${category ? sql`AND (
         spending.category = ${category}
         -- A bank row's id is a joint_account_transactions id, not an
@@ -1064,7 +1071,7 @@ router.get("/dashboard/spending-by-item", async (req, res): Promise<void> => {
           WHERE a.expense_id = spending.id AND a.group_id = ${groupId} AND a.category = ${category}
         ))
       )` : sql``}
-    GROUP BY lower(btrim(spending.description))
+    GROUP BY lower(btrim(${groupColumn}))
     ORDER BY "total" DESC
     LIMIT 200
   `);
@@ -1085,9 +1092,12 @@ router.get("/dashboard/spending-by-item", async (req, res): Promise<void> => {
     categories: (row.categories ?? []).filter((name): name is string => typeof name === "string"),
   }));
 
-  // "KES 3,600 on Netflix" invites "which three?". Naming an item returns the
-  // expenses behind the figure, so the total can be checked rather than
-  // believed — bank-recorded spending included, for the same reason as above.
+  // "KES 3,600 on Netflix" invites "which three?". Naming an item (or, in
+  // category view, naming the category) returns the expenses behind the
+  // figure, so the total can be checked rather than believed — bank-recorded
+  // spending included, for the same reason as above.
+  const expenseMatchColumn = byCategory ? sql.raw("e.category") : sql.raw("e.description");
+  const bankMatchColumn = byCategory ? sql.raw("tx.expense_category") : sql.raw("tx.description");
   const entries = item == null ? null : await db.execute(sql`
     WITH spending AS (
       SELECT e.id, e.date, e.description, e.amount, e.category,
@@ -1095,7 +1105,7 @@ router.get("/dashboard/spending-by-item", async (req, res): Promise<void> => {
       FROM expenses e
       WHERE e.group_id = ${groupId}
         AND e.date >= ${from} AND e.date <= ${to}
-        AND lower(btrim(e.description)) = lower(btrim(${item}))
+        AND lower(btrim(${expenseMatchColumn})) = lower(btrim(${item}))
 
       UNION ALL
 
@@ -1108,7 +1118,7 @@ router.get("/dashboard/spending-by-item", async (req, res): Promise<void> => {
         AND tx.expense_id IS NULL
         AND tx.expense_category IS NOT NULL
         AND tx.date >= ${from} AND tx.date <= ${to}
-        AND lower(btrim(tx.description)) = lower(btrim(${item}))
+        AND lower(btrim(${bankMatchColumn})) = lower(btrim(${item}))
     )
     SELECT spending.id AS "id",
            spending.date AS "date",

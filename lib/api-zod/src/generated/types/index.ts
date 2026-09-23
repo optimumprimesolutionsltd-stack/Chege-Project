@@ -63,6 +63,7 @@ export * from './getDashboardIncomeStreamsParams';
 export * from './getDashboardIncomeStreamsTrendParams';
 export * from './getDashboardMonthlyReportPdfParams';
 export * from './getDashboardPeriodTotalsParams';
+export * from './getDashboardSpendingByItemGroupBy';
 export * from './getDashboardSpendingByItemParams';
 export * from './getDashboardSummaryParams';
 export * from './getDashboardTrendsParams';

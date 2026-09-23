@@ -5,6 +5,7 @@
  * Jamvi API — personal and group money management
  * OpenAPI spec version: 0.1.0
  */
+import type { GetDashboardSpendingByItemGroupBy } from './getDashboardSpendingByItemGroupBy';
 
 export type GetDashboardSpendingByItemParams = {
 /**
@@ -27,8 +28,12 @@ q?: string;
  */
 category?: string;
 /**
- * One thing by name, ignoring case and surrounding spaces. The response then carries the individual expenses behind its total.
+ * One thing by name (or one category, when groupBy is category), ignoring case and surrounding spaces. The response then carries the individual expenses behind its total.
  * @minLength 1
  */
 item?: string;
+/**
+ * item (the default) totals each distinct description on its own — right for "how much on Netflix". category combines everything charged to the same category into one row — right for "how much in bank charges altogether", when the individual charges are each named differently.
+ */
+groupBy?: GetDashboardSpendingByItemGroupBy;
 };

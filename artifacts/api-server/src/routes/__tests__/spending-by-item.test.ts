@@ -4,6 +4,7 @@ import request from "supertest";
 
 const { sqlMock } = vi.hoisted(() => {
   const mock: any = vi.fn((strings: TemplateStringsArray, ...values: unknown[]) => ({ strings, values }));
+  mock.raw = vi.fn((text: string) => ({ raw: text }));
   return { sqlMock: mock };
 });
 
@@ -193,7 +194,7 @@ describe("bank-recorded spending counts here too", () => {
   it("unions in a categorised, unlinked bank withdrawal for the totals query", async () => {
     await request(buildApp()).get("/dashboard/spending-by-item");
 
-    const statement = findStatement((text) => text.includes("GROUP BY lower(btrim(spending.description))"));
+    const statement = findStatement((text) => text.includes("GROUP BY lower(btrim("));
     expect(statement).toContain("FROM joint_account_transactions tx");
     expect(statement).toContain("tx.type = 'disbursement'");
     expect(statement).toContain("tx.bank_transfer_id IS NULL");
@@ -214,7 +215,7 @@ describe("bank-recorded spending counts here too", () => {
     // total for that one expense.
     await request(buildApp()).get("/dashboard/spending-by-item");
 
-    const statement = findStatement((text) => text.includes("GROUP BY lower(btrim(spending.description))"));
+    const statement = findStatement((text) => text.includes("GROUP BY lower(btrim("));
     expect(statement).toContain("tx.expense_id IS NULL");
   });
 
@@ -273,6 +274,70 @@ describe("bank-recorded spending counts here too", () => {
     const response = await request(buildApp()).get("/dashboard/spending-by-item?item=Netflix");
 
     expect(response.body.entries[0]).toMatchObject({ id: 9, fromBank: false });
+  });
+});
+
+// Bank charges are each named differently on purpose — "Bank charge — Rent",
+// "Bank charge — Generator repair" — so by item they scatter across a dozen
+// rows nobody asked to see separately. groupBy=category combines everything
+// sharing a category into one row instead.
+describe("groupBy=category combines everything sharing a category", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockedDb.execute.mockResolvedValue({ rows: [{ ...netflix, description: "Bank charges" }] });
+  });
+
+  it("groups and matches on category rather than description in the totals query", async () => {
+    await request(buildApp()).get("/dashboard/spending-by-item?groupBy=category&item=Bank%20charges");
+
+    // The interpolated column is a value, not template text, so the actual
+    // column name is asserted on the call's values rather than its strings.
+    const rawCalls = sqlMock.raw.mock.calls.map((call: unknown[]) => call[0]);
+    expect(rawCalls).toContain("spending.category");
+  });
+
+  it("leaves item-mode grouping on description when groupBy is omitted", async () => {
+    await request(buildApp()).get("/dashboard/spending-by-item?item=Netflix");
+
+    const rawCalls = sqlMock.raw.mock.calls.map((call: unknown[]) => call[0]);
+    expect(rawCalls).toContain("spending.description");
+    expect(rawCalls).not.toContain("spending.category");
+  });
+
+  it("matches the named category against each source's own category column in the entry list", async () => {
+    await request(buildApp()).get("/dashboard/spending-by-item?groupBy=category&item=Bank%20charges");
+
+    const rawCalls = sqlMock.raw.mock.calls.map((call: unknown[]) => call[0]);
+    expect(rawCalls).toContain("e.category");
+    expect(rawCalls).toContain("tx.expense_category");
+    expect(rawCalls).not.toContain("e.description");
+    expect(rawCalls).not.toContain("tx.description");
+  });
+
+  it("still returns each entry's own description in the breakdown, not the category", async () => {
+    mockedDb.execute
+      .mockResolvedValueOnce({ rows: [{ ...netflix, description: "Bank charges" }] })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: 9, date: "2026-09-01", description: "Bank charge — Rent", amount: "132",
+            category: "Bank charges", paidFromBank: true, fromBank: true,
+            preferredName: null, firstName: null, lastName: null,
+          },
+          {
+            id: 10, date: "2026-09-01", description: "Bank charge — Generator repair", amount: "13",
+            category: "Bank charges", paidFromBank: true, fromBank: true,
+            preferredName: null, firstName: null, lastName: null,
+          },
+        ],
+      });
+
+    const response = await request(buildApp()).get("/dashboard/spending-by-item?groupBy=category&item=Bank%20charges");
+
+    expect(response.body.entries.map((entry: { description: string }) => entry.description)).toEqual([
+      "Bank charge — Rent",
+      "Bank charge — Generator repair",
+    ]);
   });
 });
 

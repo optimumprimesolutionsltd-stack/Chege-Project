@@ -800,7 +800,8 @@ export const GetDashboardSpendingByItemQueryParams = zod.object({
   "to": zod.coerce.string().regex(getDashboardSpendingByItemQueryToRegExp).optional().describe('End of the day range (YYYY-MM-DD), inclusive.'),
   "q": zod.coerce.string().optional().describe('Narrows the list to names containing this text, ignoring case.'),
   "category": zod.coerce.string().min(1).optional().describe('Narrows the list to things charged to this category.'),
-  "item": zod.coerce.string().min(1).optional().describe('One thing by name, ignoring case and surrounding spaces. The response then carries the individual expenses behind its total.')
+  "item": zod.coerce.string().min(1).optional().describe('One thing by name (or one category, when groupBy is category), ignoring case and surrounding spaces. The response then carries the individual expenses behind its total.'),
+  "groupBy": zod.enum(['item', 'category']).optional().describe('item (the default) totals each distinct description on its own — right for \"how much on Netflix\". category combines everything charged to the same category into one row — right for \"how much in bank charges altogether\", when the individual charges are each named differently.')
 })
 
 export const GetDashboardSpendingByItemResponse = zod.object({
