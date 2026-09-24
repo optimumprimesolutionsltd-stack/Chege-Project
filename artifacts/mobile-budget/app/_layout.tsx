@@ -27,6 +27,7 @@ import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEntitlements } from '@/hooks/useEntitlements';
 import { readPlanChoice, shouldShowPlanChoice } from '@/lib/planChoice';
+import { consumeResumePoint } from '@/lib/resumeAfterUpdate';
 import * as Updates from 'expo-updates';
 import {
   getGetWorkspacesQueryKey,
@@ -195,6 +196,18 @@ function RootLayoutNav() {
       enabled: isAuthenticated && !!user?.id && !user?.needsDisplayName,
     },
   });
+
+  // An update restarts the app on Home. If somebody accepted it from another
+  // screen, that screen was noted just before the restart: go back to it once
+  // the app has settled on Home, instead of making them find their way again.
+  const resumedRef = useRef(false);
+  useEffect(() => {
+    if (!isAuthenticated || checkingChooser || !isTabsHome || resumedRef.current) return;
+    resumedRef.current = true;
+    void consumeResumePoint(AsyncStorage).then((route) => {
+      if (route) router.push(route as never);
+    });
+  }, [isAuthenticated, checkingChooser, isTabsHome]);
 
   // Jamvi is paid: somebody still on the free trial who has never said what
   // they intend is stopped once, on landing in the app proper, by a screen
