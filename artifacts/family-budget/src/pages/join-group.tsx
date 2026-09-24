@@ -3,7 +3,7 @@ import {
   useGetGroupInviteLinkPreview,
 } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
-import { CheckCircle2, Eye, KeyRound, Link2, ShieldCheck, UsersRound } from "lucide-react";
+import { CheckCircle2, Eye, Gift, KeyRound, Link2, ShieldCheck, UsersRound } from "lucide-react";
 import { useState } from "react";
 import { useRoute } from "wouter";
 import { useAuth } from "@workspace/replit-auth-web";
@@ -198,6 +198,20 @@ export default function JoinGroupPage() {
                   {isAuthenticated
                     ? <>Signed in as <strong className="text-foreground">{user?.email ?? "your account"}</strong>. Join only if you know and trust this group.</>
                      : "Sign in to join. My budget stays private and separate from this Shared group."}
+                </p>
+              </div>
+            </div>
+            {/* This is the member branch specifically — the view-link branch
+                above stays free by design and must not get this note. A
+                member joining here starts their own trial and, later, their
+                own subscription, the same as the mobile onboarding flow's
+                TrialNote (budget-chooser.tsx), which this join path bypasses
+                entirely. */}
+            <div className="mt-3 rounded-xl border border-primary/25 bg-primary/5 p-4">
+              <div className="flex gap-3">
+                <Gift className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+                <p className="text-sm leading-relaxed text-muted-foreground">
+                  <strong className="text-foreground">Free for your first 14 days.</strong> Then KES 100/month or KES 1,000/year — one subscription covers your own Personal budget and every group you're in. Nothing is ever deleted if you don&rsquo;t subscribe; recording just goes read-only until you do.
                 </p>
               </div>
             </div>

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRoute } from "wouter";
-import { CheckCircle2, Mail, ShieldCheck, UsersRound } from "lucide-react";
+import { CheckCircle2, Gift, Mail, ShieldCheck, UsersRound } from "lucide-react";
 import { useAuth } from "@workspace/replit-auth-web";
 import { Button } from "@/components/ui/button";
 import { appPath } from "@/lib/base-path";
@@ -104,6 +104,20 @@ export default function InvitePage() {
                   {isAuthenticated
                     ? <>Signed in as <strong className="text-foreground">{user?.email ?? "your account"}</strong>. Accept only if this is the email that received the invitation.</>
                     : "Sign in using the email address that received this invitation, then accept it to join the group."}
+                </p>
+              </div>
+            </div>
+            {/* A member joining here starts their own trial and, later, their
+                own subscription — separate from the group they're joining.
+                Said here rather than left for them to discover after the
+                trial ends, the same as the mobile onboarding flow's own
+                TrialNote (budget-chooser.tsx), which this join path bypasses
+                entirely. */}
+            <div className="mt-3 rounded-xl border border-primary/25 bg-primary/5 p-4">
+              <div className="flex gap-3">
+                <Gift className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+                <p className="text-sm leading-relaxed text-muted-foreground">
+                  <strong className="text-foreground">Free for your first 14 days.</strong> Then KES 100/month or KES 1,000/year — one subscription covers your own Personal budget and every group you're in. Nothing is ever deleted if you don&rsquo;t subscribe; recording just goes read-only until you do.
                 </p>
               </div>
             </div>
