@@ -27,6 +27,8 @@ import {
   useGetJointAccount,
   useGetJointAccounts,
   getGetBudgetCategoriesQueryKey,
+  getGetJointAccountQueryKey,
+  getGetJointAccountsQueryKey,
 } from "@workspace/api-client-react";
 import { buildCategoryTree, type CategoryRow } from "@workspace/category-tree";
 import { CategorySearchInput, useCategorySearch } from "@/components/category-search";
@@ -378,6 +380,8 @@ export default function BankDayPage() {
   const [chargeCategory, setChargeCategory] = useState("");
   const [rows, setRows] = useState<DayRow[]>([blankRow()]);
   const [saving, setSaving] = useState(false);
+  // What the last save recorded, shown over the fresh form that follows it.
+  const [lastRecorded, setLastRecorded] = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -690,9 +694,18 @@ export default function BankDayPage() {
           return;
         }
       }
-      await queryClient.invalidateQueries({ queryKey: ["joint-account"] });
+      // The generated query keys, not a hand-written one: "joint-account" never
+      // matched "/api/joint-account", so the balance above went stale after
+      // every save.
+      await queryClient.invalidateQueries({ queryKey: getGetJointAccountQueryKey() });
+      await queryClient.invalidateQueries({ queryKey: getGetJointAccountsQueryKey() });
       await offerBalanceChanges(saved);
-      toast({ title: `${saved.length} ${saved.length === 1 ? "line" : "lines"} recorded` });
+      const recorded = `${saved.length} ${saved.length === 1 ? "line" : "lines"} recorded`;
+      toast({ title: recorded });
+      // Everything on screen is saved: start the next entry from a clean line
+      // instead of leaving a finished, greyed-out form to work around.
+      setRows((current) => (current.every((candidate) => candidate.saved) ? [blankRow(chargeCategory)] : current));
+      setLastRecorded(recorded);
     } finally {
       setSaving(false);
     }
@@ -707,6 +720,12 @@ export default function BankDayPage() {
           batch afterwards, only the day. Amounts can be sums, such as 500+250.
         </p>
       </div>
+
+      {lastRecorded ? (
+        <p className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-500" data-testid="day-last-recorded">
+          {lastRecorded}. The balance above includes them — add the next line below.
+        </p>
+      ) : null}
 
       <Card>
         <CardContent className="grid gap-4 p-4 sm:grid-cols-3">

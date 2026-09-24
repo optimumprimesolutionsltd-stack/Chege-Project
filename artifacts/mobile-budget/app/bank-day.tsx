@@ -52,6 +52,8 @@ import {
   useGetJointAccount,
   useGetJointAccounts,
   getGetBudgetCategoriesQueryKey,
+  getGetJointAccountQueryKey,
+  getGetJointAccountsQueryKey,
 } from '@workspace/api-client-react';
 
 type Party = {
@@ -562,7 +564,10 @@ export default function BankDayScreen() {
           return;
         }
       }
-      await queryClient.invalidateQueries({ queryKey: ['joint-account'] });
+      // The generated keys: ['joint-account'] never matched '/api/joint-account',
+      // so the balance stayed stale after a save.
+      await queryClient.invalidateQueries({ queryKey: getGetJointAccountQueryKey() });
+      await queryClient.invalidateQueries({ queryKey: getGetJointAccountsQueryKey() });
       await offerBalanceChanges(saved);
     } finally {
       setSaving(false);
