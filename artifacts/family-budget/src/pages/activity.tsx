@@ -206,8 +206,8 @@ export default function Activity() {
           <h1 className="text-2xl font-display font-bold text-foreground sm:text-3xl">{isSharedWorkspace ? "Group Activity" : "My Activity"}</h1>
           <p className="mt-1 max-w-xl text-sm text-muted-foreground sm:text-base">
             {isSharedWorkspace
-              ? "Group expenses, contributions, and joint-account movements in one place."
-              : "Your expenses, contributions, and account movements in one place."}
+              ? "Everything that happened with the group's money, newest first."
+              : "Everything that happened with your money, newest first."}
           </p>
         </div>
         {tab === "contributions" && (

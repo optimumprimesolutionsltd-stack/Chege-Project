@@ -274,8 +274,8 @@ export default function PartiesScreen() {
         <Text style={[styles.title, { color: colors.foreground }]}>Who owes who</Text>
       </View>
       <Text style={[styles.sub, { color: colors.mutedForeground }]}>
-        Everybody money stands between you and — people and institutions alike. A loan from a bank sits here the same
-        way money owed to a neighbour does.
+        Money you owe, and money other people owe you, in one list. A loan from a bank sits here the same way money
+        owed to a neighbour does.
       </Text>
 
       <View style={[styles.totals, { borderColor: colors.border, backgroundColor: colors.card }]} testID="parties-totals">

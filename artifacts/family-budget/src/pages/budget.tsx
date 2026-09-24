@@ -1270,7 +1270,7 @@ export default function Budget() {
        <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
          <div className="min-w-0">
           <h1 className="text-3xl font-display font-bold text-foreground">Budget Breakdown</h1>
-          <p className="text-muted-foreground mt-1">Manage category limits and track spending.</p>
+          <p className="text-muted-foreground mt-1">Decide how much to spend on each thing, and see how you are doing.</p>
         </div>
          <div className="flex w-full flex-col items-stretch gap-3 sm:w-auto sm:flex-row sm:items-center">
            <div className="flex w-full items-center justify-between gap-2 rounded-xl border border-input bg-card p-1 text-foreground shadow-sm sm:w-auto">

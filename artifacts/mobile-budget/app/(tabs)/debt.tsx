@@ -10,6 +10,7 @@ import { DebtPayoffCard } from '@/components/DebtPayoffCard';
 import { formatInterestRate, type PayoffStrategy } from '@/lib/debts';
 import { formatMonthKey, projectPayoff, summariseDebts, type DebtWithPayment } from '@/lib/debtSummary';
 import { router } from 'expo-router';
+import { ScreenHint } from '@/components/ScreenHint';
 
 type Party = {
   id: number;
@@ -92,6 +93,7 @@ export default function DebtScreen() {
         style={[styles.header, { paddingTop: insets.top + 12 }]}
       >
         <Text style={styles.headerTitle}>Debt</Text>
+        <ScreenHint light>Money you owe, and how close you are to paying it off.</ScreenHint>
         {isLoading ? null : clearedEverything ? (
           <>
             <Text style={styles.headline}>All clear</Text>

@@ -106,7 +106,7 @@ export default function StatementPage() {
       <div>
         <h1 className="text-2xl font-bold text-foreground">Account statement</h1>
         <p className="text-sm text-muted-foreground">
-          Oldest first, with a running balance, so it can be read alongside the one your bank sends.
+          Every bank entry from oldest to newest, with the balance after each, so you can match it with your bank's own statement.
         </p>
       </div>
 

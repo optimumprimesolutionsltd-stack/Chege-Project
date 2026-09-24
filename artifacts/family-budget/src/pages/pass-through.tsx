@@ -178,8 +178,7 @@ export default function PassThroughPage() {
       <div>
         <h1 className="text-2xl font-bold text-foreground">Paid through your account</h1>
         <p className="text-sm text-muted-foreground">
-          Somebody who owes you settling with somebody you owe, their money passing through your account on the way.
-          Two debts fall, and your balance ends where it started.
+          When someone who owes you pays a person you owe, the money passes through your account. Both debts get smaller and your balance stays the same.
         </p>
       </div>
 

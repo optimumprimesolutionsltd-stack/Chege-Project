@@ -505,8 +505,8 @@ export default function Contributions() {
           <h1 className="text-3xl font-display font-bold text-foreground">{isSharedWorkspace ? "Group Contributions" : "My Contributions"}</h1>
           <p className="text-muted-foreground mt-1">
             {isSharedWorkspace
-              ? "Group contributions from expenses paid, joint-account deposits, and shared goals."
-              : "Your contributions from expenses paid, deposits made, and goals saved."}
+              ? "Who has put money into the group, and how much."
+              : "What you have put in, and how much."}
           </p>
         </div>
 

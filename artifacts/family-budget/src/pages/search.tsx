@@ -70,7 +70,7 @@ export default function SearchPage() {
         <p className="text-xs font-bold uppercase tracking-[0.14em] text-primary">Current budget only</p>
         <h1 className="mt-2 font-display text-3xl font-bold text-foreground">Search</h1>
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-          Find expenses, bank entries, goals, and income sources in {group?.name ?? "this budget"}.
+          Type to find any expense, payment or goal in {group?.name ?? "this budget"}.
         </p>
       </section>
 

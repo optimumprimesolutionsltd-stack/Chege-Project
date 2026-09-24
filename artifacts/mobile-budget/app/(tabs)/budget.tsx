@@ -47,6 +47,7 @@ import { WorkspaceIdentityRow } from '@/components/WorkspaceIdentityRow';
 import { getLedgerExpenseEditHref } from '@/lib/expenseEditLink';
 import { workspaceBudgetName } from '@/lib/workspaceIdentity';
 import { HelpButton } from '@/components/HelpButton';
+import { ScreenHint } from '@/components/ScreenHint';
 
 type BudgetCategory = {
   id: number;
@@ -1337,6 +1338,7 @@ export default function BudgetScreen() {
           <WorkspaceIdentityRow group={group} />
           <View style={styles.headerTop}>
             <Text style={styles.headerTitle}>Budget</Text>
+            <ScreenHint light>Decide how much to spend on each thing, and see how you are doing.</ScreenHint>
             <View style={styles.headerRight}>
               <HelpButton about="category" />
               <View style={styles.monthNav}>
