@@ -104,6 +104,8 @@ type DayRow = {
   debtName: string | null;
   description: string;
   charges: ChargeItem[];
+  /** For ordinary money in: which income stream it came from (optional). */
+  incomeSourceId: number | null;
   /** Set once saved, so a retry does not post it twice. */
   saved: boolean;
   error: string | null;
@@ -130,6 +132,7 @@ function blankRow(): DayRow {
     partyId: null,
     debtName: null,
     description: '',
+    incomeSourceId: null,
     // Always at least one, blank, so the amount beside the main figure has
     // something to bind to from the start — an unused blank charge posts
     // nothing, exactly like an empty charge amount always has.
@@ -201,6 +204,16 @@ export default function BankDayScreen() {
   const { data: parties = [] } = useQuery<Party[]>({
     queryKey: ['parties'],
     queryFn: () => customFetch<Party[]>('/api/contributors'),
+    staleTime: 30_000,
+  });
+
+  // Whose income streams to offer on money in: the person's own in a Personal
+  // budget, the group's in a shared one (deposits there go to the joint bank).
+  const { data: incomeSources = [] } = useQuery<{ id: number; name: string }[]>({
+    queryKey: ['income-sources', !isSharedWorkspace ? user?.id ?? '__me__' : '__group__'],
+    queryFn: () => customFetch<{ id: number; name: string }[]>(
+      !isSharedWorkspace && user?.id ? `/api/income-sources?userId=${user.id}` : '/api/income-sources',
+    ),
     staleTime: 30_000,
   });
 
@@ -342,6 +355,7 @@ export default function BankDayScreen() {
           madeById: !isSharedWorkspace ? user?.id : null,
           ...(row.kind === 'repaid' && party ? { settlesContributorId: party.id } : {}),
           ...(row.kind === 'borrowed' ? { isBorrowing: true } : {}),
+          ...(row.kind === 'money-in' && row.incomeSourceId ? { incomeSourceId: row.incomeSourceId } : {}),
           accountId: activeAccountId ?? undefined,
         },
       });
@@ -771,6 +785,37 @@ export default function BankDayScreen() {
                         ))}
                       </View>
                     ) : null}
+                  </>
+                ) : null}
+
+                {row.kind === 'money-in' && incomeSources.length > 0 ? (
+                  <>
+                    <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>
+                      Where did this money come from? (optional)
+                    </Text>
+                    <View style={styles.kindRow}>
+                      {incomeSources.map((source) => {
+                        const selected = row.incomeSourceId === source.id;
+                        return (
+                          <TouchableOpacity
+                            key={source.id}
+                            onPress={() => patchRow(row.key, { incomeSourceId: selected ? null : source.id })}
+                            testID={`bank-day-income-source-${index}-${source.id}`}
+                            style={[
+                              styles.kindChip,
+                              {
+                                borderColor: selected ? colors.primary : colors.border,
+                                backgroundColor: selected ? `${colors.primary}18` : 'transparent',
+                              },
+                            ]}
+                          >
+                            <Text style={{ color: selected ? colors.primary : colors.mutedForeground, fontSize: 12 }}>
+                              {source.name}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
                   </>
                 ) : null}
 
