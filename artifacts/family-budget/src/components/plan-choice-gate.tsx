@@ -12,6 +12,8 @@ import {
   shouldShowPlanChoice,
   type PlanChoice,
 } from "@/lib/plan-choice";
+import { usePrices } from "@/hooks/use-prices";
+import { kesLabel } from "@/lib/pricing";
 
 /**
  * Compulsory, once per account: Jamvi is paid, so somebody on the free trial
@@ -21,6 +23,7 @@ import {
  */
 export function PlanChoiceGate({ children }: { children: ReactNode }) {
   const { user } = useAuth();
+  const prices = usePrices();
   const [location, navigate] = useLocation();
   const [chosen, setChosen] = useState<PlanChoice | null>(null);
   const { data: entitlements } = useQuery<MemberEntitlements>({
@@ -56,7 +59,7 @@ export function PlanChoiceGate({ children }: { children: ReactNode }) {
         <h1 className="mt-2 font-display text-3xl font-bold text-foreground">Jamvi is a paid app</h1>
         <p className="mt-3 leading-relaxed text-muted-foreground">
           Try everything free{daysLeft !== null && daysLeft > 0 ? ` for ${daysLeft} days` : " for your first 14 days"}. After that it is
-          KES 100 a month or KES 1,000 a year — one subscription covers your Personal budget and every group you are in.
+          {kesLabel(prices.monthly)} a month or {kesLabel(prices.annual)} a year — one subscription covers your Personal budget and every group you are in.
           Nothing is ever deleted if you stop; recording just goes read-only.
         </p>
         <div className="mt-7 space-y-3">
