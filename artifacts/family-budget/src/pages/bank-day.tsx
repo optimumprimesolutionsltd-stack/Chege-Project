@@ -15,10 +15,11 @@
  * been typed one at a time.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 import {
+  useCreateBudgetCategory,
   useCreateDeposit,
   useCreateDisbursement,
   useGetBudgetCategories,
@@ -33,6 +34,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@workspace/replit-auth-web";
+import { evaluateAmountExpression, isAmountExpression } from "@/lib/amount-expression";
 
 type Party = { id: number; name: string; owedToUs?: number | null; owedByUs?: number | null };
 type Account = { id: number; name: string };
@@ -41,7 +43,7 @@ type Account = { id: number; name: string };
  * What a row is, in the words somebody would use for it. Direction is implied
  * rather than asked separately: nobody thinks "money out, category rent".
  */
-type RowKind = "spend" | "pay-party" | "money-in" | "repaid" | "borrowed";
+type RowKind = "spend" | "pay-party" | "money-in" | "repaid" | "borrowed" | "lend";
 
 const KIND_LABEL: Record<RowKind, string> = {
   spend: "Spending",
@@ -49,7 +51,16 @@ const KIND_LABEL: Record<RowKind, string> = {
   "money-in": "Money in",
   repaid: "Somebody paying me back",
   borrowed: "Borrowed",
+  lend: "Lending",
 };
+
+/**
+ * One fee on a row, posted separately. A statement line is often more than one
+ * charge - a withdrawal fee and excise duty on the same entry - so a row
+ * carries a list. The label is what the posting is called; left blank it falls
+ * back to "Bank charge - <what the row was>".
+ */
+type ChargeItem = { key: string; amount: string; category: string; label: string };
 
 type DayRow = {
   key: string;
@@ -60,12 +71,14 @@ type DayRow = {
   /** For ordinary money in: which income stream it came from ("none" = not said). */
   incomeSourceId: string;
   description: string;
+  charges: ChargeItem[];
   saved: boolean;
   error: string | null;
 };
 
+/** Which way the money runs. The fee always runs out, whatever the row does. */
 function isOutgoing(kind: RowKind): boolean {
-  return kind === "spend" || kind === "pay-party";
+  return kind === "spend" || kind === "pay-party" || kind === "lend";
 }
 
 function formatKes(value?: number | null): string {
@@ -77,18 +90,29 @@ function toMoney(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+/** A plain amount, or a sum such as 500+250 (the phone's calculator keys, typed). */
 function readAmount(value: string): number | null {
   const normalized = value.trim().replace(/,/g, "");
-  if (!/^\d+(?:\.\d{1,2})?$/.test(normalized)) return null;
-  const parsed = Number(normalized);
-  return Number.isFinite(parsed) ? parsed : null;
+  if (/^\d+(?:\.\d{1,2})?$/.test(normalized)) {
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  const evaluated = normalized === "" ? null : evaluateAmountExpression(value);
+  return evaluated !== null && Number.isFinite(evaluated) && evaluated >= 0 ? toMoney(evaluated) : null;
 }
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-function blankRow(): DayRow {
+/** Shared with the posting form: a bank charge is the same expense every time. */
+const CHARGE_CATEGORY_KEY = "jamvi:last-charge-category";
+
+function blankCharge(category: string): ChargeItem {
+  return { key: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, amount: "", category, label: "" };
+}
+
+function blankRow(chargeCategory = ""): DayRow {
   return {
     key: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     kind: "spend",
@@ -97,9 +121,246 @@ function blankRow(): DayRow {
     partyId: "none",
     incomeSourceId: "none",
     description: "",
+    // Always at least one, blank, so the amount beside the main figure has
+    // something to bind to - an unused blank charge posts nothing.
+    charges: [blankCharge(chargeCategory)],
     saved: false,
     error: null,
   };
+}
+
+const SELECT_CLASS = "flex h-10 w-full rounded-md border border-input bg-card px-2 text-sm";
+const NEW_CATEGORY = "__new_category__";
+const NEW_PARTY = "__new_party__";
+
+/** "= KES 750" under a field that holds a sum, so the arithmetic is visible. */
+function SumPreview({ value }: { value: string }) {
+  if (!isAmountExpression(value)) return null;
+  const evaluated = readAmount(value);
+  return (
+    <p className="mt-1 text-xs text-muted-foreground">
+      {evaluated === null ? "Not a sum I can read." : `= KES ${formatKes(evaluated)}`}
+    </p>
+  );
+}
+
+/**
+ * A category picker that can also make one on the spot, so a line is never
+ * blocked on leaving the page to create the category it needs. New ones go at
+ * the top level, or under a group when one is chosen - never a second level,
+ * since the server refuses that anyway.
+ */
+function CategoryField({
+  value,
+  disabled,
+  tree,
+  names,
+  groups,
+  onPick,
+  placeholder,
+  testId,
+}: {
+  value: string;
+  disabled: boolean;
+  tree: ReturnType<typeof buildCategoryTree>;
+  names: string[];
+  groups: Array<{ id: number; name: string }>;
+  onPick: (name: string) => void;
+  placeholder: string;
+  testId: string;
+}) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const createCategory = useCreateBudgetCategory();
+  const [adding, setAdding] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newParent, setNewParent] = useState("none");
+  const [newBudget, setNewBudget] = useState("");
+
+  const submit = async () => {
+    const name = newName.trim();
+    if (!name) {
+      toast({ variant: "destructive", title: "Name it", description: "Give this category a clear name, such as Transport or Childcare." });
+      return;
+    }
+    if (names.some((existing) => existing.trim().toLocaleLowerCase() === name.toLocaleLowerCase())) {
+      toast({ variant: "destructive", title: "Already exists", description: "Pick it from the list instead." });
+      return;
+    }
+    const budgetAmount = newBudget.trim() === "" ? 0 : Number(newBudget);
+    if (!Number.isInteger(budgetAmount) || budgetAmount < 0) {
+      toast({ variant: "destructive", title: "Enter a valid monthly budget", description: "Use a whole number of KES, or leave it blank." });
+      return;
+    }
+    try {
+      const created = await createCategory.mutateAsync({
+        data: {
+          name,
+          budgetAmount,
+          priority: 3,
+          isRecurring: true,
+          activeMonth: null,
+          activeYear: null,
+          ...(newParent !== "none" ? { parentId: Number(newParent) } : {}),
+        },
+      });
+      await queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
+      onPick(created.name);
+      setNewName("");
+      setNewParent("none");
+      setNewBudget("");
+      setAdding(false);
+    } catch (error) {
+      toast({ variant: "destructive", title: "Could not add it", description: error instanceof Error ? error.message : "Please try again." });
+    }
+  };
+
+  if (adding) {
+    return (
+      <div className="space-y-2 rounded-md border border-input p-2" data-testid={`${testId}-new`}>
+        <Input value={newName} onChange={(event) => setNewName(event.target.value)} placeholder="New category name" className="h-9 bg-card" data-testid={`${testId}-new-name`} />
+        <select className={SELECT_CLASS} value={newParent} onChange={(event) => setNewParent(event.target.value)} data-testid={`${testId}-new-parent`}>
+          <option value="none">Not inside a group</option>
+          {groups.map((group) => (
+            <option key={group.id} value={String(group.id)}>Inside {group.name}</option>
+          ))}
+        </select>
+        <Input value={newBudget} onChange={(event) => setNewBudget(event.target.value)} placeholder="Monthly budget (optional)" inputMode="numeric" className="h-9 bg-card" />
+        <div className="flex gap-2">
+          <Button type="button" size="sm" onClick={() => void submit()} disabled={createCategory.isPending} data-testid={`${testId}-new-save`}>
+            {createCategory.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Add category"}
+          </Button>
+          <Button type="button" size="sm" variant="ghost" onClick={() => setAdding(false)}>Cancel</Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <select
+      className={SELECT_CLASS}
+      value={value}
+      disabled={disabled}
+      onChange={(event) => {
+        if (event.target.value === NEW_CATEGORY) setAdding(true);
+        else onPick(event.target.value);
+      }}
+      data-testid={testId}
+    >
+      <option value="">{placeholder}</option>
+      {tree.flatMap((group) => (group.children.length > 0 ? group.children : [group.name])).map((name) => (
+        <option key={name} value={name}>{name}</option>
+      ))}
+      <option value={NEW_CATEGORY}>＋ New category…</option>
+    </select>
+  );
+}
+
+/**
+ * A person picker that can also add one on the spot, with what is already owed
+ * on the side this row is about (what we owe them, or what they owe us).
+ */
+function PartyField({
+  value,
+  disabled,
+  parties,
+  owedField,
+  onPick,
+  placeholder,
+  testId,
+}: {
+  value: string;
+  disabled: boolean;
+  parties: Party[];
+  owedField: "owedByUs" | "owedToUs";
+  onPick: (id: string) => void;
+  placeholder: string;
+  testId: string;
+}) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [adding, setAdding] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newOwed, setNewOwed] = useState("");
+  const [creating, setCreating] = useState(false);
+
+  const submit = async () => {
+    const name = newName.trim();
+    if (!name) {
+      toast({ variant: "destructive", title: "Who is it?", description: "Give the person or institution a name, such as Mwangi or KCB." });
+      return;
+    }
+    const owed = newOwed.trim() === "" ? 0 : readAmount(newOwed);
+    if (owed === null || owed < 0) {
+      toast({ variant: "destructive", title: "What is owed?", description: "Enter zero or more, with up to two decimal places." });
+      return;
+    }
+    setCreating(true);
+    try {
+      const response = await fetch("/api/contributors", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, [owedField]: toMoney(owed) }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.error);
+      }
+      const created = (await response.json()) as { id: number };
+      // Awaited: onPick fires right after, and the list has to carry this
+      // person by the time anything reads it back.
+      await queryClient.invalidateQueries({ queryKey: ["parties"] });
+      onPick(String(created.id));
+      setNewName("");
+      setNewOwed("");
+      setAdding(false);
+    } catch (error) {
+      toast({ variant: "destructive", title: "Could not add them", description: error instanceof Error && error.message ? error.message : "Please try again." });
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  if (adding) {
+    return (
+      <div className="space-y-2 rounded-md border border-input p-2" data-testid={`${testId}-new`}>
+        <Input value={newName} onChange={(event) => setNewName(event.target.value)} placeholder="Name, e.g. Mwangi or KCB" className="h-9 bg-card" data-testid={`${testId}-new-name`} />
+        <Input
+          value={newOwed}
+          onChange={(event) => setNewOwed(event.target.value)}
+          placeholder={owedField === "owedByUs" ? "What you owe them (optional)" : "What they owe you (optional)"}
+          inputMode="decimal"
+          className="h-9 bg-card"
+        />
+        <div className="flex gap-2">
+          <Button type="button" size="sm" onClick={() => void submit()} disabled={creating} data-testid={`${testId}-new-save`}>
+            {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Add"}
+          </Button>
+          <Button type="button" size="sm" variant="ghost" onClick={() => setAdding(false)}>Cancel</Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <select
+      className={SELECT_CLASS}
+      value={value}
+      disabled={disabled}
+      onChange={(event) => {
+        if (event.target.value === NEW_PARTY) setAdding(true);
+        else onPick(event.target.value);
+      }}
+      data-testid={testId}
+    >
+      <option value="none">{placeholder}</option>
+      {parties.map((party) => (
+        <option key={party.id} value={String(party.id)}>{party.name}</option>
+      ))}
+      <option value={NEW_PARTY}>＋ Add someone…</option>
+    </select>
+  );
 }
 
 export default function BankDayPage() {
@@ -111,8 +372,26 @@ export default function BankDayPage() {
 
   const [date, setDate] = useState(todayIso());
   const [accountId, setAccountId] = useState<number | null>(null);
+  // The category every fee on this day goes to, remembered across sittings so
+  // the month's charges total instead of scattering.
+  const [chargeCategory, setChargeCategory] = useState("");
   const [rows, setRows] = useState<DayRow[]>([blankRow()]);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(CHARGE_CATEGORY_KEY);
+      if (!stored) return;
+      setChargeCategory(stored);
+      // Fill it into charges that have not been given a category yet.
+      setRows((current) => current.map((row) => ({
+        ...row,
+        charges: row.charges.map((charge) => (charge.category === "" ? { ...charge, category: stored } : charge)),
+      })));
+    } catch {
+      /* private mode: the category just is not remembered */
+    }
+  }, []);
 
   const { data: accountList = [] } = useGetJointAccounts();
   const accounts = accountList as unknown as Account[];
@@ -128,7 +407,6 @@ export default function BankDayPage() {
     },
     staleTime: 30_000,
   });
-
   // Whose income streams to offer on money in: the person's own in a Personal
   // budget, the group's in a shared one (deposits there go to the joint bank).
   const { data: incomeSources = [] } = useQuery<{ id: number; name: string }[]>({
@@ -146,6 +424,14 @@ export default function BankDayPage() {
   const createDisbursement = useCreateDisbursement();
 
   const categoryTree = useMemo(() => buildCategoryTree(categories as unknown as CategoryRow[]), [categories]);
+  const categoryNames = useMemo(() => (categories as unknown as Array<{ name: string }>).map((row) => row.name), [categories]);
+  // Top-level categories a new one can be filed under.
+  const categoryGroups = useMemo(
+    () => (categories as unknown as Array<{ id: number; name: string; parentId?: number | null }>)
+      .filter((row) => !row.parentId)
+      .map((row) => ({ id: row.id, name: row.name })),
+    [categories],
+  );
   const trackedDebts = useMemo(
     () =>
       (categories as unknown as Array<{ id: number; name: string; debtBalance?: number | null }>).filter(
@@ -155,9 +441,12 @@ export default function BankDayPage() {
   );
 
   const openingBalance = account?.balance ?? 0;
+  const chargeAmount = (charge: ChargeItem): number => (charge.amount.trim() === "" ? 0 : readAmount(charge.amount) ?? 0);
+  /** What each row moves, in the direction it moves it, every charge included. */
   const rowEffect = (row: DayRow): number => {
     const amount = row.amount.trim() === "" ? 0 : readAmount(row.amount) ?? 0;
-    return isOutgoing(row.kind) ? -amount : amount;
+    const fees = row.charges.reduce((total, charge) => total + chargeAmount(charge), 0);
+    return (isOutgoing(row.kind) ? -amount : amount) - fees;
   };
   const unsavedRows = rows.filter((row) => !row.saved);
   const projected = openingBalance + unsavedRows.reduce((total, row) => total + rowEffect(row), 0);
@@ -169,35 +458,86 @@ export default function BankDayPage() {
   const patchRow = (key: string, change: Partial<DayRow>) =>
     setRows((current) => current.map((row) => (row.key === key ? { ...row, ...change, error: null } : row)));
 
-  const addRow = () => setRows((current) => [...current, blankRow()]);
+  const addRow = () => setRows((current) => [...current, blankRow(chargeCategory)]);
   const removeRow = (key: string) =>
-    setRows((current) => (current.length === 1 ? [blankRow()] : current.filter((row) => row.key !== key)));
+    setRows((current) => (current.length === 1 ? [blankRow(chargeCategory)] : current.filter((row) => row.key !== key)));
+
+  const addCharge = (rowKey: string) =>
+    setRows((current) =>
+      current.map((row) => (row.key === rowKey ? { ...row, charges: [...row.charges, blankCharge(chargeCategory)] } : row)),
+    );
+  const removeCharge = (rowKey: string, chargeKey: string) =>
+    setRows((current) =>
+      current.map((row) => (row.key === rowKey ? { ...row, charges: row.charges.filter((charge) => charge.key !== chargeKey) } : row)),
+    );
+  const patchCharge = (rowKey: string, chargeKey: string, change: Partial<ChargeItem>) =>
+    setRows((current) =>
+      current.map((row) =>
+        row.key === rowKey
+          ? { ...row, charges: row.charges.map((charge) => (charge.key === chargeKey ? { ...charge, ...change } : charge)), error: null }
+          : row,
+      ),
+    );
+  const rememberChargeCategory = (rowKey: string, chargeKey: string, name: string) => {
+    setChargeCategory(name);
+    patchCharge(rowKey, chargeKey, { category: name });
+    try {
+      window.localStorage.setItem(CHARGE_CATEGORY_KEY, name);
+    } catch {
+      /* not remembered */
+    }
+  };
 
   /** What is wrong with a row, in words somebody can act on. */
   const rowProblem = (row: DayRow): string | null => {
     const amount = readAmount(row.amount);
     if (amount === null || amount <= 0) return "Give it an amount.";
-    if (isOutgoing(row.kind) && !row.category.trim()) return "Give it a category.";
+    // A loan out has no category, because it is not a cost.
+    if (isOutgoing(row.kind) && row.kind !== "lend" && !row.category.trim()) return "Give it a category.";
     if ((row.kind === "pay-party" || row.kind === "repaid") && row.partyId === "none") return "Say who.";
+    if (row.kind === "lend" && row.partyId === "none") return "Say who you are lending to.";
     if (row.kind === "borrowed" && row.partyId === "none" && !row.category.trim()) {
       return "Say what it was borrowed against, or from whom.";
+    }
+    for (const charge of row.charges) {
+      if (charge.amount.trim() === "") continue;
+      const fee = readAmount(charge.amount);
+      if (fee === null || fee < 0) return "Check the bank charge.";
+      if (fee > 0 && !charge.category.trim()) return "Give the bank charge a category.";
     }
     return null;
   };
 
+  /**
+   * Save one row, then each of its charges as its own posting, in the order
+   * written, so a failure stops at a known point rather than leaving a hole.
+   */
   const saveRow = async (row: DayRow) => {
     const amount = readAmount(row.amount) as number;
     const party = parties.find((candidate) => String(candidate.id) === row.partyId) ?? null;
     const narration = row.description.trim() || party?.name || row.category.trim() || KIND_LABEL[row.kind];
+    const madeById = !isSharedWorkspace ? user?.id : null;
 
-    if (isOutgoing(row.kind)) {
+    if (row.kind === "lend") {
+      await createDisbursement.mutateAsync({
+        data: {
+          amount,
+          description: narration,
+          date,
+          madeById,
+          isLending: true,
+          settlesContributorId: party?.id,
+          accountId: activeAccountId ?? undefined,
+        },
+      });
+    } else if (isOutgoing(row.kind)) {
       await createDisbursement.mutateAsync({
         data: {
           amount,
           description: narration,
           date,
           expenseCategory: row.category.trim(),
-          madeById: !isSharedWorkspace ? user?.id : null,
+          madeById,
           destinationKind: "category",
           accountId: activeAccountId ?? undefined,
         },
@@ -208,10 +548,26 @@ export default function BankDayPage() {
           amount,
           description: narration,
           date,
-          madeById: !isSharedWorkspace ? user?.id : null,
+          madeById,
           ...(row.kind === "repaid" && party ? { settlesContributorId: party.id } : {}),
           ...(row.kind === "borrowed" ? { isBorrowing: true } : {}),
           ...(row.kind === "money-in" && row.incomeSourceId !== "none" ? { incomeSourceId: Number(row.incomeSourceId) } : {}),
+          accountId: activeAccountId ?? undefined,
+        },
+      });
+    }
+
+    for (const charge of row.charges) {
+      const fee = chargeAmount(charge);
+      if (fee <= 0) continue;
+      await createDisbursement.mutateAsync({
+        data: {
+          amount: fee,
+          description: charge.label.trim() || `Bank charge — ${narration}`,
+          date,
+          expenseCategory: charge.category.trim(),
+          madeById,
+          destinationKind: "category",
           accountId: activeAccountId ?? undefined,
         },
       });
@@ -237,6 +593,14 @@ export default function BankDayPage() {
           body: JSON.stringify({ [field]: value }),
         });
       };
+      const patchDebt = (id: number, value: number) => async () => {
+        await fetch(`/api/budget-categories/${id}`, {
+          method: "PUT",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ debtBalance: value }),
+        });
+      };
       if (row.kind === "pay-party" && party) {
         const owed = typeof party.owedByUs === "number" ? party.owedByUs : 0;
         const left = Math.max(0, toMoney(owed - amount));
@@ -245,24 +609,27 @@ export default function BankDayPage() {
         const owed = typeof party.owedToUs === "number" ? party.owedToUs : 0;
         const left = Math.max(0, toMoney(owed - amount));
         changes.push({ label: `${party.name}: owes you ${formatKes(owed)} → ${formatKes(left)}`, apply: patchParty("owedToUs", left, party.id) });
+      } else if (row.kind === "lend" && party) {
+        const owed = typeof party.owedToUs === "number" ? party.owedToUs : 0;
+        changes.push({ label: `${party.name}: owes you ${formatKes(owed)} → ${formatKes(owed + amount)}`, apply: patchParty("owedToUs", toMoney(owed + amount), party.id) });
       } else if (row.kind === "borrowed" && party) {
         const owed = typeof party.owedByUs === "number" ? party.owedByUs : 0;
-        changes.push({ label: `${party.name}: owe ${formatKes(owed)} → ${formatKes(owed + amount)}`, apply: patchParty("owedByUs", owed + amount, party.id) });
+        changes.push({ label: `${party.name}: owe ${formatKes(owed)} → ${formatKes(owed + amount)}`, apply: patchParty("owedByUs", toMoney(owed + amount), party.id) });
       } else if (row.kind === "borrowed" && row.category) {
         const debt = trackedDebts.find((candidate) => candidate.name === row.category);
         if (!debt) continue;
         const owed = debt.debtBalance ?? 0;
-        changes.push({
-          label: `${debt.name}: ${formatKes(owed)} → ${formatKes(owed + amount)}`,
-          apply: async () => {
-            await fetch(`/api/budget-categories/${debt.id}`, {
-              method: "PUT",
-              credentials: "include",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ debtBalance: owed + amount }),
-            });
-          },
-        });
+        changes.push({ label: `${debt.name}: ${formatKes(owed)} → ${formatKes(owed + amount)}`, apply: patchDebt(debt.id, owed + amount) });
+      } else if (row.kind === "spend") {
+        // Spending against a debt category pays it down.
+        const debt = trackedDebts.find(
+          (candidate) => candidate.name.trim().toLocaleLowerCase() === row.category.trim().toLocaleLowerCase(),
+        );
+        if (!debt) continue;
+        const owed = debt.debtBalance ?? 0;
+        if (owed <= 0) continue;
+        const left = Math.max(0, toMoney(owed - amount));
+        changes.push({ label: `${debt.name}: ${formatKes(owed)} → ${formatKes(left)}`, apply: patchDebt(debt.id, left) });
       }
     }
     if (changes.length === 0) return;
@@ -330,7 +697,7 @@ export default function BankDayPage() {
         <h1 className="text-2xl font-bold text-foreground">A day of banking</h1>
         <p className="text-sm text-muted-foreground">
           Write the day down line by line, then save it in one go. Each line becomes an ordinary posting — there is no
-          batch afterwards, only the day.
+          batch afterwards, only the day. Amounts can be sums, such as 500+250.
         </p>
       </div>
 
@@ -358,7 +725,7 @@ export default function BankDayPage() {
             <p className={projected < 0 ? "text-xl font-bold text-destructive" : "text-xl font-bold text-foreground"} data-testid="day-projected">
               {formatKes(projected)}
             </p>
-            <p className="text-xs text-muted-foreground">Now: {formatKes(openingBalance)}. Moves as you type.</p>
+            <p className="text-xs text-muted-foreground">Now: {formatKes(openingBalance)}. Moves as you type, fees included.</p>
           </div>
         </CardContent>
       </Card>
@@ -368,54 +735,67 @@ export default function BankDayPage() {
           <Card key={row.key} className={row.error ? "border-destructive" : row.saved ? "border-emerald-500" : undefined}>
             <CardContent className="grid gap-3 p-4 sm:grid-cols-6" data-testid={`day-row-${index}`}>
               <select
-                className="flex h-10 w-full rounded-md border border-input bg-card px-2 text-sm sm:col-span-2"
+                className={`${SELECT_CLASS} sm:col-span-2`}
                 value={row.kind}
                 disabled={row.saved}
-                onChange={(event) => patchRow(row.key, { kind: event.target.value as RowKind, partyId: "none", category: "" })}
+                onChange={(event) => patchRow(row.key, { kind: event.target.value as RowKind, partyId: "none", category: "", incomeSourceId: "none" })}
                 data-testid={`select-day-kind-${index}`}
               >
                 {(Object.keys(KIND_LABEL) as RowKind[]).map((kind) => (
                   <option key={kind} value={kind}>{KIND_LABEL[kind]}</option>
                 ))}
               </select>
-              <Input
-                value={row.amount}
-                disabled={row.saved}
-                onChange={(event) => patchRow(row.key, { amount: event.target.value })}
-                placeholder="Amount"
-                className="h-10 bg-card"
-                data-testid={`input-day-amount-${index}`}
-              />
-              {isOutgoing(row.kind) || row.kind === "borrowed" ? (
-                <select
-                  className="flex h-10 w-full rounded-md border border-input bg-card px-2 text-sm"
-                  value={row.category}
+              <div>
+                <Input
+                  value={row.amount}
                   disabled={row.saved}
-                  onChange={(event) => patchRow(row.key, { category: event.target.value })}
-                  data-testid={`select-day-category-${index}`}
-                >
-                  <option value="">{row.kind === "borrowed" ? "Against a debt…" : "Category…"}</option>
-                  {(row.kind === "borrowed" ? trackedDebts.map((debt) => debt.name) : categoryTree.flatMap((g) => (g.children.length > 0 ? g.children : [g.name]))).map((name) => (
-                    <option key={name} value={name}>{name}</option>
-                  ))}
-                </select>
+                  onChange={(event) => patchRow(row.key, { amount: event.target.value })}
+                  placeholder="Amount"
+                  className="h-10 bg-card"
+                  data-testid={`input-day-amount-${index}`}
+                />
+                <SumPreview value={row.amount} />
+              </div>
+              {(isOutgoing(row.kind) && row.kind !== "lend") || row.kind === "borrowed" ? (
+                row.kind === "borrowed" ? (
+                  <select
+                    className={SELECT_CLASS}
+                    value={row.category}
+                    disabled={row.saved}
+                    onChange={(event) => patchRow(row.key, { category: event.target.value })}
+                    data-testid={`select-day-category-${index}`}
+                  >
+                    <option value="">Against a debt…</option>
+                    {trackedDebts.map((debt) => (
+                      <option key={debt.id} value={debt.name}>{debt.name}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <CategoryField
+                    value={row.category}
+                    disabled={row.saved}
+                    tree={categoryTree}
+                    names={categoryNames}
+                    groups={categoryGroups}
+                    onPick={(name) => patchRow(row.key, { category: name })}
+                    placeholder="Category…"
+                    testId={`select-day-category-${index}`}
+                  />
+                )
               ) : <div />}
               {row.kind !== "spend" && row.kind !== "money-in" ? (
-                <select
-                  className="flex h-10 w-full rounded-md border border-input bg-card px-2 text-sm"
+                <PartyField
                   value={row.partyId}
                   disabled={row.saved}
-                  onChange={(event) => patchRow(row.key, { partyId: event.target.value })}
-                  data-testid={`select-day-party-${index}`}
-                >
-                  <option value="none">Who…</option>
-                  {parties.map((party) => (
-                    <option key={party.id} value={String(party.id)}>{party.name}</option>
-                  ))}
-                </select>
+                  parties={parties}
+                  owedField={row.kind === "pay-party" || row.kind === "borrowed" ? "owedByUs" : "owedToUs"}
+                  onPick={(id) => patchRow(row.key, { partyId: id })}
+                  placeholder={row.kind === "lend" ? "Who you are lending to…" : row.kind === "borrowed" ? "Who lent it…" : "Who…"}
+                  testId={`select-day-party-${index}`}
+                />
               ) : row.kind === "money-in" && incomeSources.length > 0 ? (
                 <select
-                  className="flex h-10 w-full rounded-md border border-input bg-card px-2 text-sm"
+                  className={SELECT_CLASS}
                   value={row.incomeSourceId}
                   disabled={row.saved}
                   onChange={(event) => patchRow(row.key, { incomeSourceId: event.target.value })}
@@ -443,6 +823,63 @@ export default function BankDayPage() {
                   </Button>
                 )}
               </div>
+
+              {/* Bank charges: a statement line often carries a withdrawal fee,
+                  excise duty, a Fuliza fee. Each is its own posting, named and
+                  filed under its own category. */}
+              <div className="space-y-2 sm:col-span-6" data-testid={`day-charges-${index}`}>
+                {row.charges.map((charge, chargeIndex) => (
+                  <div key={charge.key} className="grid gap-2 sm:grid-cols-6">
+                    <div>
+                      <Input
+                        value={charge.amount}
+                        disabled={row.saved}
+                        onChange={(event) => patchCharge(row.key, charge.key, { amount: event.target.value })}
+                        placeholder="Bank charge"
+                        className="h-9 bg-card"
+                        data-testid={`input-day-charge-amount-${index}-${chargeIndex}`}
+                      />
+                      <SumPreview value={charge.amount} />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <CategoryField
+                        value={charge.category}
+                        disabled={row.saved}
+                        tree={categoryTree}
+                        names={categoryNames}
+                        groups={categoryGroups}
+                        onPick={(name) => rememberChargeCategory(row.key, charge.key, name)}
+                        placeholder="Charge category…"
+                        testId={`select-day-charge-category-${index}-${chargeIndex}`}
+                      />
+                    </div>
+                    <Input
+                      value={charge.label}
+                      disabled={row.saved}
+                      onChange={(event) => patchCharge(row.key, charge.key, { label: event.target.value })}
+                      placeholder="Name it (e.g. Fuliza)"
+                      className="h-9 bg-card sm:col-span-2"
+                      data-testid={`input-day-charge-label-${index}-${chargeIndex}`}
+                    />
+                    {!row.saved && row.charges.length > 1 ? (
+                      <Button type="button" size="icon" variant="ghost" onClick={() => removeCharge(row.key, charge.key)} data-testid={`button-day-charge-remove-${index}-${chargeIndex}`}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    ) : <div />}
+                  </div>
+                ))}
+                {!row.saved ? (
+                  <button
+                    type="button"
+                    onClick={() => addCharge(row.key)}
+                    className="text-xs font-semibold text-primary hover:underline"
+                    data-testid={`button-day-add-charge-${index}`}
+                  >
+                    ＋ Add another charge
+                  </button>
+                ) : null}
+              </div>
+
               {row.error ? <p className="text-xs text-destructive sm:col-span-6" data-testid={`day-row-error-${index}`}>{row.error}</p> : null}
               {row.saved ? <p className="text-xs text-emerald-600 sm:col-span-6">Saved.</p> : null}
             </CardContent>
