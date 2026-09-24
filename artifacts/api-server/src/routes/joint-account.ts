@@ -630,10 +630,21 @@ router.get("/joint-account", async (req, res): Promise<void> => {
 
   const enriched = await Promise.all(txs.map((tx) => enrichTx(tx, groupId)));
 
-  const ledgerDeposits = txs.filter(t => t.type === "deposit").reduce((s, t) => s + t.amount, 0);
-  const ledgerDisbursements = txs.filter(t => t.type === "disbursement").reduce((s, t) => s + t.amount, 0);
-  const totalDeposits = txs.filter(t => t.type === "deposit" && t.bankTransferId == null).reduce((s, t) => s + t.amount, 0);
-  const totalDisbursements = txs.filter(t => t.type === "disbursement" && t.bankTransferId == null).reduce((s, t) => s + t.amount, 0);
+  // The balance is as at today (Kenyan date). An entry dated in the future has
+  // not happened yet, so it is listed but not counted - the headline used to
+  // add everything, so a posting dated next week already moved today's balance.
+  const today = currentBusinessDate();
+  const dayOf = (value: unknown) => value instanceof Date ? value.toISOString().slice(0, 10) : String(value).slice(0, 10);
+  const happened = txs.filter(t => dayOf(t.date) <= today);
+  const ledgerDeposits = happened.filter(t => t.type === "deposit").reduce((s, t) => s + t.amount, 0);
+  const ledgerDisbursements = happened.filter(t => t.type === "disbursement").reduce((s, t) => s + t.amount, 0);
+  const totalDeposits = happened.filter(t => t.type === "deposit" && t.bankTransferId == null).reduce((s, t) => s + t.amount, 0);
+  const totalDisbursements = happened.filter(t => t.type === "disbursement" && t.bankTransferId == null).reduce((s, t) => s + t.amount, 0);
+  // Every entry, future ones included: the running balance on each row walks
+  // the whole ledger, and the first row dated today or earlier lands exactly
+  // on the balance above.
+  const fullDeposits = txs.filter(t => t.type === "deposit").reduce((s, t) => s + t.amount, 0);
+  const fullDisbursements = txs.filter(t => t.type === "disbursement").reduce((s, t) => s + t.amount, 0);
   const openingBalance = isAggregate
     ? accounts.reduce((sum, account) => sum + account.openingBalance, 0)
     : selectedAccount!.openingBalance;
@@ -641,7 +652,7 @@ router.get("/joint-account", async (req, res): Promise<void> => {
     ? null
     : resolveOpeningBalanceDate(selectedAccount!);
   const balance = openingBalance + ledgerDeposits - ledgerDisbursements;
-  let balanceCursor = balance;
+  let balanceCursor = openingBalance + fullDeposits - fullDisbursements;
   const transactions = enriched.map((transaction) => {
     const runningBalance = isAggregate ? null : balanceCursor;
     if (!isAggregate) {
