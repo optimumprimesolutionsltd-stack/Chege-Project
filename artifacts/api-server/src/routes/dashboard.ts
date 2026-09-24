@@ -403,6 +403,34 @@ router.get("/dashboard/activity", async (req, res): Promise<void> => {
     .orderBy(sql`${savingsGoalContributionsTable.createdAt} DESC`)
     .limit(monthlyLimit);
 
+  // Bank withdrawals that are spending. A categorised withdrawal is counted as
+  // spending by the category breakdown and the budget, but it lives in
+  // joint_account_transactions, so a feed built from the expenses table alone
+  // left a day of banking out of Activity entirely. Same rule as everywhere
+  // else: not a transfer leg, and not already an expense in its own right
+  // (that would show it twice).
+  const bankSpending = isMonthlyReport ? [] : await db
+    .select({
+      id: jointAccountTxTable.id,
+      amount: jointAccountTxTable.amount,
+      description: jointAccountTxTable.description,
+      category: jointAccountTxTable.expenseCategory,
+      madeById: jointAccountTxTable.madeById,
+      madeByName: usersTable.firstName,
+      date: jointAccountTxTable.date,
+    })
+    .from(jointAccountTxTable)
+    .leftJoin(usersTable, eq(jointAccountTxTable.madeById, usersTable.id))
+    .where(and(
+      eq(jointAccountTxTable.groupId, groupId),
+      eq(jointAccountTxTable.type, "disbursement"),
+      isNull(jointAccountTxTable.bankTransferId),
+      isNull(jointAccountTxTable.expenseId),
+      sql`${jointAccountTxTable.expenseCategory} IS NOT NULL`,
+    ))
+    .orderBy(sql`${jointAccountTxTable.createdAt} DESC`)
+    .limit(monthlyLimit);
+
   // A monthly contribution report must use the same attribution units as the
   // summary above. A mixed expense or deposit therefore becomes one row per
   // funding portion instead of a misleading transaction-level total.
@@ -581,6 +609,16 @@ router.get("/dashboard/activity", async (req, res): Promise<void> => {
       category: null,
       // Deposits are reported in the month of their banking transaction, not entry time.
       date: String(d.date),
+    })),
+    ...bankSpending.map((w) => ({
+      id: `bank-spend-${w.id}`,
+      type: "expense",
+      amount: Number(w.amount),
+      description: w.description,
+      userName: w.madeById === null ? GROUP_ATTRIBUTION : (w.madeByName ?? "Unknown"),
+      category: displayExpenseCategory(w.category ?? ""),
+      // Corrected on the Banking tab, where the balance follows it.
+      date: String(w.date),
     })),
     ...savingsContribs.map((s) => ({
       id: `savings-${s.id}`,
