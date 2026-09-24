@@ -43,6 +43,7 @@ function getBankEditDeepLink() {
 type MemberIncomeSource = {
   id: number;
   name: string;
+  userId?: string | null;
 };
 
 type EditableTransaction = {
@@ -354,6 +355,20 @@ export default function Bank() {
       return res.json();
     },
     enabled: !!singleDepositorId,
+    staleTime: 60_000,
+  });
+
+  // With nobody chosen yet, offer every member's streams instead of an empty
+  // list: picking one names its owner as the depositor. A shared-group deposit
+  // must belong to a person anyway, so this saves a step rather than adding one.
+  const { data: groupSources = [] } = useQuery<MemberIncomeSource[]>({
+    queryKey: ["income-sources", "__group__"],
+    queryFn: async () => {
+      const res = await fetch("/api/income-sources", { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: isSharedWorkspace && depositorIds.length === 0,
     staleTime: 60_000,
   });
 
@@ -2219,13 +2234,19 @@ export default function Bank() {
                             } else {
                               setDepositSourceKind(e.target.value ? "income_source" : null);
                               setIncomeSourceId(e.target.value ? Number(e.target.value) : null);
+                              // No depositor chosen yet: the stream's owner is it.
+                              const picked = groupSources.find((src) => String(src.id) === e.target.value);
+                              if (picked?.userId && depositorIds.length === 0) setDepositorIds([picked.userId]);
                             }
                           }}
                         >
                           <option value="">Select an income source...</option>
-                          {depositSources.map(src => (
+                          {(depositorIds.length === 0 ? groupSources : depositSources).map(src => (
                             <option key={src.id} value={src.id}>
                               {src.name}
+                              {depositorIds.length === 0 && src.userId
+                                ? ` — ${(members ?? []).find((m) => m.userId === src.userId)?.userName?.split(" ")[0] ?? "member"}`
+                                : ""}
                             </option>
                           ))}
                           <option value="other">Other — add narration</option>
