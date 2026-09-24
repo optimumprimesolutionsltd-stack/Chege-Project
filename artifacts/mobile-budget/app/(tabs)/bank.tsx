@@ -804,13 +804,34 @@ export default function BankScreen() {
   const [moveDayDate, setMoveDayDate] = useState<string | null>(null);
   const [movingDay, setMovingDay] = useState(false);
 
+  // What to change about the day: the account it sits on, or the date it was
+  // recorded under (the same slip, just as common - a whole day keyed in on the
+  // wrong date).
+  const [moveDayMode, setMoveDayMode] = useState<'account' | 'date' | null>(null);
+  const [moveDayNewDate, setMoveDayNewDate] = useState('');
+  const [showMoveDatePicker, setShowMoveDatePicker] = useState(false);
+
   const closeMoveDay = () => {
     if (movingDay) return;
     setMoveDayOpen(false);
     setMoveDayDate(null);
+    setMoveDayMode(null);
+    setMoveDayNewDate('');
+    setShowMoveDatePicker(false);
   };
 
-  const moveDayTo = async (targetAccountId: number, targetName: string) => {
+  const moveDayTo = (targetAccountId: number, targetName: string) =>
+    applyDayMove({ accountId: targetAccountId }, `moved to ${targetName}`);
+
+  const moveDayToDate = () => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(moveDayNewDate) || moveDayNewDate === moveDayDate) {
+      Alert.alert('Pick a different date', 'Choose the date these entries should really be under.');
+      return Promise.resolve();
+    }
+    return applyDayMove({ date: moveDayNewDate }, `dated ${formatBankDate(moveDayNewDate)}`);
+  };
+
+  const applyDayMove = async (change: { accountId?: number; date?: string }, summary: string) => {
     if (!moveDayDate || movingDay) return;
     const batch = movableOnDay(transactions, moveDayDate, canMoveTx);
     const daySize = transactions.filter((tx) => tx.date.slice(0, 10) === moveDayDate).length;
@@ -819,7 +840,12 @@ export default function BankScreen() {
     let failure: string | null = null;
     for (const tx of batch) {
       try {
-        await updateTransaction({ id: tx.id, data: { amount: tx.amount, date: tx.date, accountId: targetAccountId } });
+        // The account is always sent, so a date-only change cannot drop an
+        // entry back onto the default account.
+        await updateTransaction({
+          id: tx.id,
+          data: { amount: tx.amount, date: change.date ?? tx.date, accountId: change.accountId ?? selectedAccountId ?? undefined },
+        });
         moved += 1;
       } catch (error: unknown) {
         failure = error instanceof Error ? error.message : 'Please try again.';
@@ -828,15 +854,22 @@ export default function BankScreen() {
     }
     await invalidateAccounts();
     setMovingDay(false);
-    setMoveDayOpen(false);
-    setMoveDayDate(null);
+    closeMoveDayAfterSave();
     const left = daySize - moved;
     Alert.alert(
-      failure ? 'Only some were moved' : 'Day moved',
-      `${moved} ${moved === 1 ? 'entry' : 'entries'} moved to ${targetName}.`
+      failure ? 'Only some were changed' : 'Day changed',
+      `${moved} ${moved === 1 ? 'entry' : 'entries'} ${summary}.`
         + (failure ? ` Stopped because: ${failure}` : '')
-        + (!failure && left > 0 ? ` ${left} stayed here - transfers and savings or expense-linked entries cannot move on their own.` : ''),
+        + (!failure && left > 0 ? ` ${left} stayed as they were - transfers and savings or expense-linked entries cannot be changed on their own.` : ''),
     );
+  };
+
+  const closeMoveDayAfterSave = () => {
+    setMoveDayOpen(false);
+    setMoveDayDate(null);
+    setMoveDayMode(null);
+    setMoveDayNewDate('');
+    setShowMoveDatePicker(false);
   };
 
   const openMovePicker = (tx: Tx) => {
@@ -2322,7 +2355,7 @@ export default function BankScreen() {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <Text style={[styles.listHeader, { color: colors.mutedForeground }]}>TRANSACTIONS</Text>
               <ListEditButton editor={txEditor} canManage={canManageAccount} />
-              {canManageAccount && !txEditor.editing && accounts.length > 1 ? (
+              {canManageAccount && !txEditor.editing ? (
                 <TouchableOpacity
                   onPress={() => setMoveDayOpen(true)}
                   hitSlop={8}
@@ -2537,16 +2570,77 @@ export default function BankScreen() {
             <TouchableWithoutFeedback>
               <View style={{ backgroundColor: colors.card, borderRadius: 16, padding: 16, maxHeight: '75%', gap: 8 }}>
                 <Text style={{ color: colors.foreground, fontSize: 16, fontFamily: 'Inter_700Bold' }}>
-                  {moveDayDate ? 'Move to which account?' : 'Which day was recorded under the wrong account?'}
+                  {!moveDayDate
+                    ? 'Which day needs fixing?'
+                    : moveDayMode === null
+                    ? 'What was wrong with it?'
+                    : moveDayMode === 'account'
+                    ? 'Move to which account?'
+                    : 'Which date should it be under?'}
                 </Text>
                 <Text style={{ color: colors.mutedForeground, fontSize: 12, lineHeight: 17 }}>
-                  {moveDayDate
+                  {!moveDayDate
+                    ? `Entries on ${selectedAccount?.name ?? 'this account'}. Transfers and savings or expense-linked entries are left as they are.`
+                    : moveDayMode === 'date'
+                    ? `Every ordinary entry on ${formatBankDate(moveDayDate)} is re-dated to the day you pick. Balances are as at today, so they may change.`
+                    : moveDayMode === 'account'
                     ? `Every ordinary entry on ${formatBankDate(moveDayDate)} leaves ${selectedAccount?.name ?? 'this account'} and goes to the one you pick. Both balances update.`
-                    : `Entries on ${selectedAccount?.name ?? 'this account'}. Transfers and savings or expense-linked entries are left where they are.`}
+                    : `${formatBankDate(moveDayDate)} on ${selectedAccount?.name ?? 'this account'}.`}
                 </Text>
                 <ScrollView style={{ flexGrow: 0 }}>
                   {movingDay ? (
                     <ActivityIndicator color={colors.primary} style={{ marginVertical: 16 }} />
+                  ) : moveDayDate && moveDayMode === null ? (
+                    <>
+                      {accounts.length > 1 ? (
+                        <TouchableOpacity
+                          onPress={() => setMoveDayMode('account')}
+                          style={{ paddingVertical: 13, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}
+                          testID="bank-move-day-mode-account"
+                        >
+                          <Text style={{ color: colors.foreground, fontSize: 15 }}>Recorded under the wrong account</Text>
+                        </TouchableOpacity>
+                      ) : null}
+                      <TouchableOpacity
+                        onPress={() => { setMoveDayNewDate(moveDayDate); setMoveDayMode('date'); }}
+                        style={{ paddingVertical: 13 }}
+                        testID="bank-move-day-mode-date"
+                      >
+                        <Text style={{ color: colors.foreground, fontSize: 15 }}>Recorded under the wrong date</Text>
+                      </TouchableOpacity>
+                    </>
+                  ) : moveDayDate && moveDayMode === 'date' ? (
+                    <>
+                      <TouchableOpacity
+                        onPress={() => setShowMoveDatePicker(true)}
+                        style={{ paddingVertical: 13, flexDirection: 'row', justifyContent: 'space-between', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}
+                        testID="bank-move-day-new-date"
+                      >
+                        <Text style={{ color: colors.foreground, fontSize: 15 }}>{formatBankDate(moveDayNewDate)}</Text>
+                        <Feather name="calendar" size={16} color={colors.mutedForeground} />
+                      </TouchableOpacity>
+                      {showMoveDatePicker ? (
+                        <DateTimePicker
+                          value={new Date(`${moveDayNewDate}T12:00:00`)}
+                          mode="date"
+                          display={Platform.OS === 'ios' ? 'inline' : 'calendar'}
+                          onChange={(_event: DateTimePickerEvent, picked?: Date) => {
+                            setShowMoveDatePicker(Platform.OS === 'ios');
+                            if (picked) {
+                              const pad = (value: number) => String(value).padStart(2, '0');
+                              setMoveDayNewDate(`${picked.getFullYear()}-${pad(picked.getMonth() + 1)}-${pad(picked.getDate())}`);
+                            }
+                          }}
+                        />
+                      ) : null}
+                      <TouchableOpacity
+                        onPress={() => void moveDayToDate()}
+                        style={{ marginTop: 10, minHeight: 46, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary }}
+                        testID="bank-move-day-date-save"
+                      >
+                        <Text style={{ color: colors.primaryForeground, fontFamily: 'Inter_700Bold' }}>Change the date</Text>
+                      </TouchableOpacity>
+                    </>
                   ) : moveDayDate ? (
                     accounts.filter((account) => account.id !== selectedAccountId).map((account) => (
                       <TouchableOpacity

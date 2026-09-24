@@ -37,3 +37,21 @@ describe('moving a whole day to another account', () => {
     expect(bank).toContain('movableOnDay(transactions, moveDayDate, canMoveTx)');
   });
 });
+
+// "It doesn't necessarily have to be about switching banks, it could also be
+// wrong date used."
+describe('Move a day can also fix the date', () => {
+  const bank = readFileSync('app/(tabs)/bank.tsx', 'utf8').replace(/\r\n/g, '\n');
+  it('offers a choice of what was wrong, and a date picker', () => {
+    expect(bank).toContain('testID="bank-move-day-mode-account"');
+    expect(bank).toContain('testID="bank-move-day-mode-date"');
+    expect(bank).toContain('testID="bank-move-day-new-date"');
+  });
+  it('re-dates each ordinary entry, always sending the account so it cannot fall back to the default', () => {
+    expect(bank).toContain('date: change.date ?? tx.date, accountId: change.accountId ?? selectedAccountId ?? undefined');
+  });
+  it('is available with a single account, since re-dating needs no second account', () => {
+    expect(bank).toContain('{canManageAccount && !txEditor.editing ? (');
+    expect(bank).not.toContain('{canManageAccount && !txEditor.editing && accounts.length > 1 ? (');
+  });
+});
