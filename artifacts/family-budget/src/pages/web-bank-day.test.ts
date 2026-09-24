@@ -21,12 +21,12 @@ describe("a day of banking, on the laptop", () => {
   });
 
   it("takes lines of any kind, because a real day is a mix", () => {
-    expect(page).toContain('type RowKind = "spend" | "pay-party" | "money-in" | "repaid" | "borrowed";');
+    expect(page).toContain('type RowKind = "spend" | "pay-party" | "money-in" | "repaid" | "borrowed" | "lend";');
   });
 
   it("lets a line be added and taken away, never leaving none", () => {
     expect(page).toContain('data-testid="button-day-add-row"');
-    expect(page).toContain("current.length === 1 ? [blankRow()]");
+    expect(page).toContain("current.length === 1 ? [blankRow(chargeCategory)]");
   });
 });
 
@@ -75,6 +75,7 @@ describe("the balances are offered once, at the end", () => {
   });
 
   it("never drives a balance below zero", () => {
-    expect((page.match(/Math\.max\(0, toMoney\(owed - amount\)\)/g) ?? []).length).toBe(2);
+    // Paying a person, being repaid, and spending against a debt category.
+    expect((page.match(/Math\.max\(0, toMoney\(owed - amount\)\)/g) ?? []).length).toBe(3);
   });
 });
