@@ -16,6 +16,8 @@ export interface ActivityItem {
   category?: string | null;
   date: string;
   editTarget?: string;
+  /** Only for transfer and debt items, which are neither spending nor a contribution. */
+  direction?: 'in' | 'out';
 }
 
 interface Colors {
@@ -53,15 +55,19 @@ const CATEGORY_ICONS: Record<string, keyof typeof Feather.glyphMap> = {
 export default function ActivityCard({ item, colors }: Props) {
   const isExpense = item.type === ACTIVITY_TYPE.EXPENSE;
   const isSavings = item.type === ACTIVITY_TYPE.SAVINGS;
+  const isTransfer = item.type === ACTIVITY_TYPE.TRANSFER;
+  const isDebt = item.type === ACTIVITY_TYPE.DEBT;
+  const isNeutral = isTransfer || isDebt;
+  const goesOut = isNeutral ? item.direction === 'out' : isExpense;
   const expenseEditHref = getExpenseActivityEditHref(item);
 
   const iconName: keyof typeof Feather.glyphMap =
     (item.category ? CATEGORY_ICONS[item.category] : undefined) ??
-    (isExpense ? 'shopping-bag' : isSavings ? 'target' : 'arrow-down-circle');
+    (isExpense ? 'shopping-bag' : isSavings ? 'target' : isTransfer ? 'repeat' : isDebt ? 'users' : 'arrow-down-circle');
 
   const iconBg = isExpense ? colors.accent : isSavings ? '#1a3320' : colors.muted;
-  const iconColor = isExpense ? colors.accentForeground : isSavings ? '#4ade80' : colors.primary;
-  const amountColor = isExpense ? colors.foreground : isSavings ? '#4ade80' : colors.primary;
+  const iconColor = isExpense ? colors.accentForeground : isSavings ? '#4ade80' : isNeutral ? colors.mutedForeground : colors.primary;
+  const amountColor = isExpense ? colors.foreground : isSavings ? '#4ade80' : isNeutral ? colors.mutedForeground : colors.primary;
 
   const content = (
     <>
@@ -91,7 +97,7 @@ export default function ActivityCard({ item, colors }: Props) {
       </View>
 
       <Text style={[styles.amount, { color: amountColor }]}>
-        {isExpense ? '−' : '+'}
+        {goesOut ? '−' : '+'}
         {item.amount.toLocaleString('en-KE', { maximumFractionDigits: 0 })}
       </Text>
       {expenseEditHref ? <Feather name="edit-2" size={15} color={colors.primary} /> : null}

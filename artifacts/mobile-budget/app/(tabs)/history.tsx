@@ -367,7 +367,8 @@ export default function HistoryScreen() {
         .filter(i => i.type === ACTIVITY_TYPE.EXPENSE)
         .reduce((s, i) => s + (i.amount ?? 0), 0);
       const totalDeposits = items
-        .filter(i => i.type !== ACTIVITY_TYPE.EXPENSE)
+        // Transfers and debt events move money without being income or spending.
+        .filter(i => i.type !== ACTIVITY_TYPE.EXPENSE && i.type !== ACTIVITY_TYPE.TRANSFER && i.type !== ACTIVITY_TYPE.DEBT)
         .reduce((s, i) => s + (i.amount ?? 0), 0);
       let dateLabel: string;
       if (date === todayStr) dateLabel = 'Today';

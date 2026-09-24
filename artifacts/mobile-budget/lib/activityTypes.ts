@@ -7,6 +7,10 @@ export const ACTIVITY_TYPE = {
   EXPENSE: 'expense',
   CONTRIBUTION: 'contribution',
   SAVINGS: 'savings',
+  /** Money moved between two of the group's own accounts. Neither in nor out. */
+  TRANSFER: 'transfer',
+  /** Borrowed, lent or settled. Not spending and not a contribution. */
+  DEBT: 'debt',
 } as const;
 
 export type ActivityType = (typeof ACTIVITY_TYPE)[keyof typeof ACTIVITY_TYPE];

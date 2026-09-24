@@ -26,3 +26,28 @@ describe("Activity includes spending that went through the bank", () => {
     expect(feed).toContain("const bankSpending = isMonthlyReport ? [] :");
   });
 });
+
+// Also missing from the feed: transfers between the group's own accounts,
+// debt events (borrowed, lent, settled) and contributions recorded by hand.
+describe("Activity includes transfers, debt events and hand-recorded contributions", () => {
+  it("lists one transfer per pair, from the withdrawal leg", () => {
+    expect(feed).toContain("const transferRows = isMonthlyReport ? [] :");
+    expect(feed).toContain('eq(jointAccountTxTable.type, "disbursement")');
+    expect(feed).toContain("bankTransferId} IS NOT NULL");
+    expect(feed).toContain('type: "transfer"');
+  });
+
+  it("lists lending and repayments made as debt events", () => {
+    expect(feed).toContain("const debtRows = isMonthlyReport ? [] :");
+    // Money going out only: borrowed money and repayments received are
+    // deposits the feed already lists, and must not appear twice.
+    expect(feed).toContain("sql`(${jointAccountTxTable.isLending} OR ${jointAccountTxTable.settlesContributorId} IS NOT NULL)`");
+    expect(feed).toContain('type: "debt"');
+    expect(feed).toContain('"Repayment made"');
+  });
+
+  it("lists hand-recorded contributions as contributions", () => {
+    expect(feed).toContain("const handContributions = isMonthlyReport ? [] :");
+    expect(feed).toContain("id: `hand-contribution-${c.id}`");
+  });
+});

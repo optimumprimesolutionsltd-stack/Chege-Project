@@ -45,6 +45,14 @@ function fundingEntryLabel(recordType: "expense" | "deposit" | "savings") {
   return "Personal expense";
 }
 
+// Transfers and debt events move money without being spending or a
+// contribution: neutral colour, and the sign follows which way it went.
+const isNeutralActivity = (type: string) => type === ACTIVITY_TYPE.TRANSFER || type === ACTIVITY_TYPE.DEBT;
+const activityGoesOut = (item: { type: string }) =>
+  isNeutralActivity(item.type)
+    ? (item as { direction?: string }).direction === "out"
+    : item.type === ACTIVITY_TYPE.EXPENSE;
+
 export default function Activity() {
   const { data: group } = useGetGroup();
   const queryClient = useQueryClient();
@@ -372,17 +380,19 @@ export default function Activity() {
                             )
                           ) : null}
                           <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center shrink-0 shadow-sm ${
-                            item.type === ACTIVITY_TYPE.EXPENSE ? 'bg-accent/50 text-accent-foreground border border-accent/20' : 'bg-primary/10 text-primary border border-primary/20'
+                            item.type === ACTIVITY_TYPE.EXPENSE ? 'bg-accent/50 text-accent-foreground border border-accent/20'
+                              : isNeutralActivity(item.type) ? 'bg-muted text-muted-foreground border border-border'
+                              : 'bg-primary/10 text-primary border border-primary/20'
                           }`}>
-                            {item.type === ACTIVITY_TYPE.EXPENSE ? <ArrowDownRight className="w-5 h-5 sm:w-6 sm:h-6" /> : <ArrowUpRight className="w-5 h-5 sm:w-6 sm:h-6" />}
+                            {activityGoesOut(item) ? <ArrowDownRight className="w-5 h-5 sm:w-6 sm:h-6" /> : <ArrowUpRight className="w-5 h-5 sm:w-6 sm:h-6" />}
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-col items-start gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-2">
                               <p className="break-words text-sm font-semibold leading-tight text-foreground sm:text-base">{item.description}</p>
                               <span className={`shrink-0 whitespace-nowrap font-display text-base font-bold sm:text-lg ${
-                                item.type === ACTIVITY_TYPE.EXPENSE ? 'text-foreground' : 'text-primary'
+                                item.type === ACTIVITY_TYPE.EXPENSE ? 'text-foreground' : isNeutralActivity(item.type) ? 'text-muted-foreground' : 'text-primary'
                               }`}>
-                                {item.type === ACTIVITY_TYPE.EXPENSE ? '-' : '+'}{formatKes(item.amount)}
+                                {activityGoesOut(item) ? '-' : '+'}{formatKes(item.amount)}
                               </span>
                             </div>
                             <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground sm:text-sm">
