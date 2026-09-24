@@ -162,6 +162,11 @@ function isOutgoing(kind: RowKind): boolean {
   return kind === 'spend' || kind === 'pay-party' || kind === 'lend';
 }
 
+/** Only money going out can carry a bank charge; money coming in never does. */
+function chargesOf<T extends { kind: RowKind; charges: ChargeItem[] }>(row: T): ChargeItem[] {
+  return isOutgoing(row.kind) ? row.charges : [];
+}
+
 export default function BankDayScreen() {
   const colors = useColors();
   const queryClient = useQueryClient();
@@ -211,7 +216,7 @@ export default function BankDayScreen() {
 
   // Whose income streams to offer on money in: the person's own in a Personal
   // budget, the group's in a shared one (deposits there go to the joint bank).
-  const { data: incomeSources = [] } = useQuery<{ id: number; name: string }[]>({
+  const { data: incomeSources = [] } = useQuery<{ id: number; name: string; userId?: string | null }[]>({
     queryKey: ['income-sources', !isSharedWorkspace ? user?.id ?? '__me__' : '__group__'],
     queryFn: () => customFetch<{ id: number; name: string }[]>(
       !isSharedWorkspace && user?.id ? `/api/income-sources?userId=${user.id}` : '/api/income-sources',
@@ -246,7 +251,7 @@ export default function BankDayScreen() {
   /** What each row moves, in the direction it moves it, every charge included. */
   const rowEffect = (row: DayRow): number => {
     const amount = row.amount.trim() === '' ? 0 : readAmount(row.amount) ?? 0;
-    const fees = row.charges.reduce((total, charge) => total + chargeAmount(charge), 0);
+    const fees = chargesOf(row).reduce((total, charge) => total + chargeAmount(charge), 0);
     return (isOutgoing(row.kind) ? -amount : amount) - fees;
   };
 
@@ -306,7 +311,7 @@ export default function BankDayScreen() {
     if (row.kind === 'borrowed' && row.partyId === null && !row.debtName) {
       return 'Say what it was borrowed against, or from whom.';
     }
-    for (const charge of row.charges) {
+    for (const charge of chargesOf(row)) {
       if (charge.amount.trim() === '') continue;
       const fee = readAmount(charge.amount);
       if (fee === null || fee < 0) return 'Check the bank charge.';
@@ -356,7 +361,11 @@ export default function BankDayScreen() {
           amount,
           description: narration,
           date,
-          madeById: !isSharedWorkspace ? user?.id : null,
+          // A source belongs to one member, and the server only accepts it
+          // when the deposit names that same member.
+          madeById: row.kind === 'money-in' && row.incomeSourceId
+            ? incomeSources.find((source) => source.id === row.incomeSourceId)?.userId ?? (!isSharedWorkspace ? user?.id : null)
+            : !isSharedWorkspace ? user?.id : null,
           ...(row.kind === 'repaid' && party ? { settlesContributorId: party.id } : {}),
           ...(row.kind === 'borrowed' ? { isBorrowing: true } : {}),
           ...(row.kind === 'money-in' && row.incomeSourceId ? { incomeSourceId: row.incomeSourceId } : {}),
@@ -369,7 +378,7 @@ export default function BankDayScreen() {
     // exactly as the sheet does it, and for the same reason. A statement line
     // can carry more than one (a withdrawal fee and excise duty together), so
     // each gets its own name rather than sharing one "Bank charge" label.
-    for (const charge of row.charges) {
+    for (const charge of chargesOf(row)) {
       const fee = chargeAmount(charge);
       if (fee <= 0) continue;
       await createDisbursement({
@@ -716,6 +725,7 @@ export default function BankDayScreen() {
                     testID={`bank-day-amount-${index}`}
                     style={[styles.input, { flex: 1, borderColor: colors.border, backgroundColor: colors.muted, color: colors.foreground }]}
                   />
+                  {isOutgoing(row.kind) ? (
                   <TextInput
                     value={row.charges[0]?.amount ?? ''}
                     onChangeText={(value) => patchCharge(row.key, row.charges[0].key, { amount: value })}
@@ -725,6 +735,7 @@ export default function BankDayScreen() {
                     testID={`bank-day-charge-${index}-0`}
                     style={[styles.input, { flex: 1, borderColor: colors.border, backgroundColor: colors.muted, color: colors.foreground }]}
                   />
+                  ) : null}
                 </View>
                 {/* decimal-pad has no operators, so the expression readAmount
                     already understands (see lib/bankAmount.ts) had no way to
@@ -838,7 +849,7 @@ export default function BankDayScreen() {
                     withdrawal fee and a Fuliza access fee together — so
                     anything past the first gets its own full row below,
                     amount included. */}
-                {row.charges[0] && row.charges[0].amount.trim() !== '' ? (
+                {isOutgoing(row.kind) && row.charges[0] && row.charges[0].amount.trim() !== '' ? (
                   <>
                     <TextInput
                       value={row.charges[0].label}
@@ -858,7 +869,7 @@ export default function BankDayScreen() {
                     />
                   </>
                 ) : null}
-                {row.charges.slice(1).map((charge, extraIndex) => {
+                {chargesOf(row).slice(1).map((charge, extraIndex) => {
                   const chargeIndex = extraIndex + 1;
                   return (
                     <View key={charge.key} style={{ gap: 8 }}>
@@ -901,6 +912,7 @@ export default function BankDayScreen() {
                     </View>
                   );
                 })}
+                {isOutgoing(row.kind) ? (
                 <TouchableOpacity
                   onPress={() => addCharge(row.key)}
                   testID={`bank-day-add-charge-${index}`}
@@ -911,6 +923,7 @@ export default function BankDayScreen() {
                     Add another bank charge
                   </Text>
                 </TouchableOpacity>
+                ) : null}
               </View>
             ) : null}
           </View>

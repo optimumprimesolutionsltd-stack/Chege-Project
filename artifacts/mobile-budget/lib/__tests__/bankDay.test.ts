@@ -49,9 +49,9 @@ describe('the balance moves as the day is written', () => {
     expect(day).toContain("return (isOutgoing(row.kind) ? -amount : amount) - fees;");
   });
 
-  it('takes every charge off whichever way the line runs', () => {
-    // A fee on money in is still a fee, and a line can carry more than one.
-    expect(day).toContain('const fees = row.charges.reduce((total, charge) => total + chargeAmount(charge), 0);');
+  it('takes every charge off a line that goes out, and none off money in', () => {
+    // A line can carry more than one fee; money coming in carries none.
+    expect(day).toContain('const fees = chargesOf(row).reduce((total, charge) => total + chargeAmount(charge), 0);');
   });
 
   it('stops counting a line once it is saved', () => {
@@ -95,7 +95,7 @@ describe('saving leaves no batch behind', () => {
 
   it('posts every charge separately, after the line it belongs to', () => {
     const save = day.slice(day.indexOf('const saveRow ='));
-    expect(save.indexOf('for (const charge of row.charges) {')).toBeGreaterThan(save.indexOf('await createDeposit({'));
+    expect(save.indexOf('for (const charge of chargesOf(row)) {')).toBeGreaterThan(save.indexOf('await createDeposit({'));
     expect(day).toContain('description: charge.label.trim() || `Bank charge — ${narration}`,');
   });
 
@@ -127,7 +127,7 @@ describe('saving leaves no batch behind', () => {
   it('never offers to remove the first charge, only ones added after it', () => {
     // It is a permanent field, like Amount — clearing the text is how you
     // remove it. Only charges past the first came from "Add another".
-    expect(day).toContain('row.charges.slice(1).map((charge, extraIndex) => {');
+    expect(day).toContain('chargesOf(row).slice(1).map((charge, extraIndex) => {');
     expect(day).toContain("testID={`bank-day-charge-remove-${index}-${chargeIndex}`}");
     expect(day).not.toContain('bank-day-charge-remove-${index}-0');
   });
