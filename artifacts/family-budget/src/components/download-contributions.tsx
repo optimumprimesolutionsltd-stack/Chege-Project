@@ -361,6 +361,19 @@ export function DownloadContributions({
   };
 
   const download = () => {
+    if (mode === "grid") {
+      // Monthly grid is the expected-versus-given sheet, its own PDF. The server
+      // builds it for the last N months ending this month, so N runs from the
+      // chosen start to now; both modes used to download the ledger instead.
+      const [startYear, startMonth] = start.split("-").map(Number);
+      const now = new Date();
+      const months = Math.min(Math.max((now.getFullYear() - startYear) * 12 + (now.getMonth() + 1 - startMonth) + 1, 1), 12);
+      if (end !== options[0]?.key) {
+        toast({ title: "Runs to the current month", description: "The grid PDF always ends with this month, whatever the To month says." });
+      }
+      window.open(`/api/contributions/report.pdf?months=${months}`, "_blank", "noopener,noreferrer");
+      return;
+    }
     // The dated statement PDF for exactly what View shows. A server route, so
     // no print window to be blocked.
     window.open(
@@ -385,6 +398,18 @@ export function DownloadContributions({
         verifyUrl = undefined;
       }
 
+      if (mode === "grid") {
+        const report = buildReport(await fetchGrid());
+        if (!report || report.rows.length === 0) {
+          chatWindow?.close();
+          toast({ title: "Nothing to send", description: "There are no contributors in that range." });
+          return;
+        }
+        const gridUrl = `https://wa.me/?text=${encodeURIComponent(buildContributionWhatsAppText(report, verifyUrl))}`;
+        if (chatWindow) chatWindow.location.href = gridUrl;
+        else window.open(gridUrl, "_blank");
+        return;
+      }
       const share = await fetchStatementShare(budgetName, viewRange.from, viewRange.to);
       if (share.entries.length === 0) {
         chatWindow?.close();
