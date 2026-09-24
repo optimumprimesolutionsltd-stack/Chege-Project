@@ -24,6 +24,7 @@ import { canManageBankAccount, resolveBankAccountSelection } from "@/lib/bank-ac
 import { getProjectedBalanceAfterPosting } from "@/lib/bank-balance-utils";
 import { buildCategoryTree, type CategoryRow } from "@workspace/category-tree";
 import { CategorySearchInput, useCategorySearch } from "@/components/category-search";
+import { AmountCalcRow } from "@/components/amount-calc-row";
 import { BankPeriodPicker } from "@/components/bank-period-picker";
 import { inPeriod, nairobiToday, periodFor, summarisePeriod, type PeriodPreset } from "@/lib/bank-period";
 import { evaluateAmountExpression, isAmountExpression } from "@/lib/amount-expression";
@@ -34,6 +35,9 @@ import { GROUP_ATTRIBUTION } from "@/lib/attribution";
 
 // GROUP_ATTRIBUTION is represented as null — never implicitly attributed to the signed-in user.
 const JOINT_BANK_ID = null as null;
+
+/** Where the last bank-charge category is kept, so every fee after the first is one pick. */
+const CHARGE_CATEGORY_KEY = "jamvi:last-charge-category";
 
 function getBankEditDeepLink() {
   const editId = Number(new URLSearchParams(window.location.search).get("edit"));
@@ -255,6 +259,12 @@ export default function Bank() {
   // Default: The group (empty array = no named depositors selected)
   const [depositorIds, setDepositorIds] = useState<string[]>([]);
   const [depositorAmounts, setDepositorAmounts] = useState<Record<string, string>>({});
+  // The bank's own fee on a withdrawal or transfer: a second posting, filed
+  // under a category of its own.
+  const [chargeAmount, setChargeAmount] = useState("");
+  const [chargeCategory, setChargeCategory] = useState(() => {
+    try { return window.localStorage.getItem(CHARGE_CATEGORY_KEY) ?? ""; } catch { return ""; }
+  });
   const [incomeSourceId, setIncomeSourceId] = useState<number | null>(null);
   const [depositSourceKind, setDepositSourceKind] = useState<"income_source" | "other" | null>(null);
 
@@ -630,6 +640,7 @@ export default function Bank() {
    */
   const resetForNextEntry = () => {
     setAmount("");
+    setChargeAmount("");
     setDescription("");
     setDepositorAmounts({});
     setExpenseCategory("");
@@ -684,6 +695,7 @@ export default function Bank() {
       return;
     }
     setAmount("");
+    setChargeAmount("");
     setDescription("");
     setDate(new Date().toISOString().split("T")[0]);
     setDepositorIds(!isSharedWorkspace && user?.id ? [user.id] : (!canManageShared && user?.id ? [user.id] : []));
@@ -725,6 +737,11 @@ export default function Bank() {
       : tx.type === "deposit" ? "deposit" : "disbursement";
     setEditingTransaction(tx);
     setMode(transactionMode);
+    // The fee already recorded against this posting opens with it, so adding
+    // one does not silently stack a second fee on the first.
+    const feeOnThis = (account?.transactions ?? []).find((row) => row.chargeForTransactionId === tx.id);
+    setChargeAmount(feeOnThis ? String(feeOnThis.amount) : "");
+    if (feeOnThis?.expenseCategory) setChargeCategory(feeOnThis.expenseCategory);
     setAmount(String(tx.amount));
     setDescription(transactionMode === "transfer"
       ? tx.description.replace(/^Transfer (?:to|from) savings —\s*/, "")
@@ -766,6 +783,62 @@ export default function Bank() {
     const search = params.toString();
     window.history.replaceState(null, "", `${window.location.pathname}${search ? `?${search}` : ""}`);
   }, [account, bankEditId, openedDeepLinkId, user?.id]);
+
+  const chargeApplies = mode === "disbursement" || mode === "transfer" || mode === "bank_transfer";
+  const existingCharge = editingTransaction
+    ? (account?.transactions ?? []).find((row) => row.chargeForTransactionId === editingTransaction.id) ?? null
+    : null;
+  const parsedCharge = chargeAmount.trim() === "" ? 0 : readAmount(chargeAmount);
+  const chargeToPost = chargeApplies && parsedCharge !== null && parsedCharge > 0 ? parsedCharge : 0;
+  const knownCategoryNames = new Set((categories ?? []).map((row) => row.name.trim().toLocaleLowerCase()));
+
+  /**
+   * The bank's fee, as its own posting after the one it belongs to. Written by
+   * every branch of the submit handler, so a fee on a transfer is not accepted
+   * and then silently dropped. When editing, the fee already on the posting is
+   * updated, or removed when its field is cleared.
+   */
+  const postBankCharge = async (kind: string, parentId?: number) => {
+    if (!chargeApplies) return;
+    try {
+      if (existingCharge) {
+        if (chargeToPost <= 0) {
+          await deleteTx.mutateAsync({ id: existingCharge.id });
+          return;
+        }
+        await updateTx.mutateAsync({
+          id: existingCharge.id,
+          data: {
+            amount: chargeToPost,
+            description: existingCharge.description,
+            date,
+            expenseCategory: chargeCategory.trim(),
+            accountId: existingCharge.accountId ?? selectedAccountId ?? undefined,
+          },
+        });
+        return;
+      }
+      if (chargeToPost <= 0) return;
+      await createDisbursement.mutateAsync({
+        data: {
+          amount: chargeToPost,
+          description: `Bank charge — ${description.trim() || kind}`,
+          date,
+          expenseCategory: chargeCategory.trim(),
+          madeById: !isSharedWorkspace ? user?.id : mode === "disbursement" ? withdrawerId : null,
+          destinationKind: "category",
+          accountId: selectedAccountId ?? undefined,
+          ...(parentId === undefined ? {} : { chargeForTransactionId: parentId }),
+        },
+      });
+    } catch {
+      toast({
+        variant: "destructive",
+        title: "The bank charge was not saved",
+        description: "The main posting is saved. Add the charge on its own from Withdraw.",
+      });
+    }
+  };
 
   const handleSubmit = async (e?: React.FormEvent, { keepOpen = false }: { keepOpen?: boolean } = {}) => {
     e?.preventDefault();
@@ -825,6 +898,24 @@ export default function Bank() {
       return;
     }
 
+    // Checked before the first posting, so a bad charge cannot leave the main
+    // posting saved and the fee lost.
+    if (chargeApplies && chargeAmount.trim() !== "") {
+      if (parsedCharge === null || parsedCharge < 0) {
+        toast({ variant: "destructive", title: "Check the bank charge", description: "Use zero or more, with up to two decimal places." });
+        return;
+      }
+      if (parsedCharge > 0 && !chargeCategory.trim()) {
+        toast({ variant: "destructive", title: "Where does the charge go?", description: "Give the bank charge a category of its own." });
+        return;
+      }
+      if (parsedCharge > 0 && (categories ?? []).length > 0 && !knownCategoryNames.has(chargeCategory.trim().toLocaleLowerCase())) {
+        setChargeCategory("");
+        toast({ variant: "destructive", title: "That charge category is not in this budget", description: "Pick one from this budget for the charge." });
+        return;
+      }
+    }
+
     const isMultiDepositor = depositorIds.length > 1;
 
     if (mode === "deposit" && isSharedWorkspace && depositorIds.length === 0) {
@@ -874,6 +965,7 @@ export default function Bank() {
             id: editingTransaction.id,
             data: { ...data, transferDirection, accountId: editingTransaction.accountId ?? selectedAccountId },
           });
+          await postBankCharge("transfer");
           toast({ title: "Transfer updated" });
           finishEntry(false, { amount: total, direction: transferDirection === "to_savings" ? "out" : "in" });
           invalidate();
@@ -881,9 +973,11 @@ export default function Bank() {
         }
         if (transferDirection === "to_savings") {
           await transferToSavings.mutateAsync({ data });
+          await postBankCharge("transfer");
           toast({ title: "Moved to savings" });
         } else {
           await transferFromSavings.mutateAsync({ data });
+          await postBankCharge("transfer");
           toast({ title: "Moved to bank" });
         }
         finishEntry(keepOpen, { amount: total, direction: transferDirection === "to_savings" ? "out" : "in" });
@@ -904,6 +998,7 @@ export default function Bank() {
             date,
           },
         });
+        await postBankCharge("transfer");
         toast({ title: "Bank transfer recorded", description: "Both account balances were updated." });
         finishEntry(keepOpen, { amount: total, direction: "out" });
         invalidate();
@@ -940,6 +1035,7 @@ export default function Bank() {
             accountId: editingTransaction.accountId ?? selectedAccountId ?? undefined,
           },
         });
+        await postBankCharge(mode === "disbursement" ? "withdrawal" : "deposit", editingTransaction.id);
         toast({ title: "Transaction updated" });
       } else if (mode === "deposit") {
         if (isMultiDepositor) {
@@ -974,7 +1070,7 @@ export default function Bank() {
         }
         toast({ title: "Deposit recorded" });
       } else {
-        await createDisbursement.mutateAsync({
+        const createdWithdrawal = await createDisbursement.mutateAsync({
           data: {
             amount: total,
             description: description.trim() || lentToParty?.name || expenseCategory,
@@ -988,6 +1084,7 @@ export default function Bank() {
               : { expenseCategory, destinationKind: sentDestinationKind }),
           },
         });
+        await postBankCharge("withdrawal", createdWithdrawal.id);
         toast({ title: "Disbursement recorded" });
       }
       // Read before finishEntry, which clears the form. Asking after an edit
@@ -1049,7 +1146,7 @@ export default function Bank() {
   // the amount is still being typed. Incoming money is projected too: somebody
   // recording a day works down to the closing balance on their statement, and
   // a figure that only moves for withdrawals cannot be worked down to.
-  const projectedBalance = account &&
+  const projectedBalanceBeforeFee = account &&
     outgoingAmount !== null &&
     outgoingAmount > 0
     ? getProjectedBalanceAfterPosting(
@@ -1061,6 +1158,10 @@ export default function Bank() {
           : null,
       )
     : null;
+  // The fee comes off the balance too, whichever way the posting itself runs.
+  const projectedBalance = projectedBalanceBeforeFee === null || !chargeApplies
+    ? projectedBalanceBeforeFee
+    : projectedBalanceBeforeFee - chargeToPost + (existingCharge?.amount ?? 0);
 
   // Spending lands on a category that holds no subcategories: a category with
   // children is a heading, and its spending is theirs added up, so neither
@@ -1268,6 +1369,7 @@ export default function Bank() {
   );
   const reconcileSearch = useCategorySearch(categoryTree);
   const withdrawSearch = useCategorySearch(categoryTree);
+  const chargeSearch = useCategorySearch(categoryTree);
 
   // Reconciling compares Jamvi's balance with the statement's. A positive
   // difference means Jamvi holds more than the bank does: money left the
@@ -1805,6 +1907,55 @@ export default function Bank() {
                     </p>
                   </div>
                 )}
+                {chargeApplies ? (
+                  <div className="space-y-2 sm:col-span-2" data-testid="bank-charge-block">
+                    <label className="text-sm font-semibold text-foreground">
+                      Bank charge <span className="font-normal text-muted-foreground">(optional)</span>
+                    </label>
+                    <Input
+                      data-testid="input-bank-charge"
+                      value={chargeAmount}
+                      onChange={(event) => setChargeAmount(event.target.value)}
+                      placeholder="e.g. 50"
+                      className="h-12 bg-card"
+                    />
+                    <AmountCalcRow value={chargeAmount} onChange={setChargeAmount} testId="bank-charge" />
+                    {chargeToPost > 0 ? (
+                      <div className="space-y-2">
+                        <label className="text-sm font-semibold text-foreground">
+                          Charge category <span className="text-destructive">*</span>
+                        </label>
+                        <CategorySearchInput query={chargeSearch.query} onChange={chargeSearch.setQuery} testId="search-charge-category" />
+                        <select
+                          data-testid="select-charge-category"
+                          className="flex h-12 w-full rounded-md border border-input bg-card px-3 py-2 text-base"
+                          value={chargeCategory}
+                          onChange={(event) => {
+                            setChargeCategory(event.target.value);
+                            try { window.localStorage.setItem(CHARGE_CATEGORY_KEY, event.target.value); } catch { /* remembered only when storage allows */ }
+                          }}
+                        >
+                          <option value="">Choose a category</option>
+                          {chargeSearch.visible(chargeCategory).map((group) => (
+                            group.children.length > 0 ? (
+                              <optgroup key={group.name} label={group.name}>
+                                {group.children.map((child) => (
+                                  <option key={child} value={child}>{child}</option>
+                                ))}
+                              </optgroup>
+                            ) : (
+                              <option key={group.name} value={group.name}>{group.name}</option>
+                            )
+                          ))}
+                        </select>
+                        <p className="text-xs text-muted-foreground">
+                          Saved as a second posting of {formatKes(chargeToPost)} — spending, whichever way this one runs.
+                          Giving every fee the same category totals them for the month on its own.
+                        </p>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
                 {mode === "disbursement" && (withdrawalDestinationKind === "party" || isLendingOut) ? (
                   <div className="space-y-2 sm:col-span-2" data-testid="party-picker">
                     <label className="text-sm font-semibold text-foreground">{isLendingOut ? "Who are you lending to?" : "Who are you paying?"}</label>
