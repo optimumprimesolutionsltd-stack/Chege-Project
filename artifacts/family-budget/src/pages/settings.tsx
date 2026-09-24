@@ -162,6 +162,13 @@ export default function Settings() {
       (member.role === "owner" || member.role === "admin"),
   ) ?? false) && !isPrivateWorkspace;
   const myMembership = members?.find((member) => member.userId === user?.id);
+  // "/settings#invite" (the dashboard's Invite link) lands on the invite form.
+  // The form only exists once the members have loaded and the person is known
+  // to be a manager, so this waits for that rather than firing on first paint.
+  useEffect(() => {
+    if (!canManageShared || window.location.hash !== "#invite") return;
+    document.getElementById("invite")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [canManageShared]);
   const canLeaveGroup = Boolean(myMembership && myMembership.role !== "owner");
   const { data: categoryRecommendations, isLoading: isLoadingRecommendations, isError: hasRecommendationsError } = useGetBudgetCategoryRecommendations({
     query: { queryKey: getGetBudgetCategoryRecommendationsQueryKey(), enabled: !isPrivateWorkspace },
@@ -1341,7 +1348,7 @@ export default function Settings() {
           {canManageShared && <GroupInviteLinks groupName={group?.name} />}
           {canManageShared && <ReadOnlyLink groupName={group?.name} />}
           {canManageShared && (
-            <form onSubmit={handleAdd} noValidate className="space-y-3 border-t border-border/50 pt-4">
+            <form id="invite" onSubmit={handleAdd} noValidate className="scroll-mt-24 space-y-3 border-t border-border/50 pt-4">
               <div>
                 <p className="text-sm font-medium text-foreground">Invite people by email</p>
                 <p className="mt-1 text-xs text-muted-foreground">Paste multiple addresses separated by commas, spaces, or new lines. Each person must sign in with their invited email and accept.</p>

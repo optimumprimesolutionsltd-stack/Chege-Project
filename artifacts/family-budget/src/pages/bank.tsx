@@ -14,6 +14,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatKes, formatDate } from "@/lib/utils";
+import { movableOnDay, summariseDays } from "@/lib/move-day";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Trash2, Pencil, ArrowDownLeft, ArrowUpRight, Loader2, Landmark, TrendingUp, TrendingDown, Plus, Flag } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -145,6 +147,51 @@ export default function Bank() {
       !tx.savingsGoalId &&
       (tx.contributorSplits?.length ?? 0) === 0
     );
+
+  // Move every ordinary posting from one day onto another account: for the day
+  // somebody realises they recorded under the wrong bank. Runs the same update
+  // for each, so nothing else about an entry changes. A transfer, or a savings
+  // or expense-linked posting, cannot change accounts on its own and stays put.
+  const canMoveTx = (tx: EditableTransaction) =>
+    canManageAccount && tx.bankTransferId == null && tx.savingsGoalId == null && tx.expenseId == null;
+  const [moveDayOpen, setMoveDayOpen] = useState(false);
+  const [moveDayDate, setMoveDayDate] = useState<string | null>(null);
+  const [movingDay, setMovingDay] = useState(false);
+  const closeMoveDay = () => {
+    if (movingDay) return;
+    setMoveDayOpen(false);
+    setMoveDayDate(null);
+  };
+  const moveDayTo = async (targetAccountId: number, targetName: string) => {
+    if (!moveDayDate || movingDay) return;
+    const all = (account?.transactions ?? []) as EditableTransaction[];
+    const batch = movableOnDay(all, moveDayDate, canMoveTx);
+    const daySize = all.filter((tx) => tx.date.slice(0, 10) === moveDayDate).length;
+    setMovingDay(true);
+    let moved = 0;
+    let failure: string | null = null;
+    for (const tx of batch) {
+      try {
+        await updateTx.mutateAsync({ id: tx.id, data: { amount: tx.amount, date: tx.date, accountId: targetAccountId } });
+        moved += 1;
+      } catch (error) {
+        failure = error instanceof Error ? error.message : "Please try again.";
+        break;
+      }
+    }
+    invalidate();
+    setMovingDay(false);
+    setMoveDayOpen(false);
+    setMoveDayDate(null);
+    const left = daySize - moved;
+    toast({
+      variant: failure ? "destructive" : undefined,
+      title: failure ? "Only some were moved" : "Day moved",
+      description: `${moved} ${moved === 1 ? "entry" : "entries"} moved to ${targetName}.`
+        + (failure ? ` Stopped because: ${failure}` : "")
+        + (!failure && left > 0 ? ` ${left} stayed here - transfers and savings or expense-linked entries cannot move on their own.` : ""),
+    });
+  };
 
   const [mode, setMode] = useState<"deposit" | "disbursement" | "transfer" | "bank_transfer" | null>(null);
   const [amount, setAmount] = useState("");
@@ -2255,6 +2302,16 @@ export default function Bank() {
           <div className="flex items-center gap-2">
             <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Transactions</h2>
             <ListEditButton editor={txEditor} canManage={canManageAccount} label="Remove several transactions" />
+            {canManageAccount && !txEditor.editing && accounts.length > 1 ? (
+              <button
+                type="button"
+                onClick={() => setMoveDayOpen(true)}
+                className="text-xs font-semibold text-primary hover:underline"
+                data-testid="bank-move-day"
+              >
+                Move a day
+              </button>
+            ) : null}
           </div>
         <Card className="border-none shadow-md overflow-hidden">
           <div className="divide-y divide-border/50">
@@ -2341,6 +2398,48 @@ export default function Bank() {
             })}
           </div>
         </Card>
+        <Dialog open={moveDayOpen} onOpenChange={(open) => { if (!open) closeMoveDay(); }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{moveDayDate ? "Move to which account?" : "Which day was recorded under the wrong account?"}</DialogTitle>
+              <DialogDescription>
+                {moveDayDate
+                  ? `Every ordinary entry on ${formatDate(moveDayDate)} leaves ${selectedBankAccount?.name ?? "this account"} and goes to the one you pick. Both balances update.`
+                  : `Entries on ${selectedBankAccount?.name ?? "this account"}. Transfers and savings or expense-linked entries are left where they are.`}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="max-h-72 space-y-1 overflow-y-auto">
+              {movingDay ? (
+                <Loader2 className="mx-auto my-6 h-5 w-5 animate-spin" />
+              ) : moveDayDate ? (
+                accounts.filter((item) => item.id !== selectedAccountId).map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => void moveDayTo(item.id, item.name)}
+                    className="flex w-full items-center rounded-lg px-3 py-3 text-left text-sm hover:bg-muted"
+                    data-testid={`bank-move-day-to-${item.id}`}
+                  >
+                    {item.name}
+                  </button>
+                ))
+              ) : (
+                summariseDays((account?.transactions ?? []) as EditableTransaction[], canMoveTx).map((day) => (
+                  <button
+                    key={day.date}
+                    type="button"
+                    onClick={() => setMoveDayDate(day.date)}
+                    className="flex w-full items-center justify-between rounded-lg px-3 py-3 text-left text-sm hover:bg-muted"
+                    data-testid={`bank-move-day-${day.date}`}
+                  >
+                    <span>{formatDate(day.date)}</span>
+                    <span className="text-muted-foreground">{day.movable} {day.movable === 1 ? "entry" : "entries"}</span>
+                  </button>
+                ))
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
         <ListEditorFooter
           editor={txEditor}
           summary={`${(account?.transactions ?? []).filter((tx: EditableTransaction) => txEditor.isRemoving(tx.id)).length} marked for deletion. A withdrawal linked to an expense removes that expense too.`}

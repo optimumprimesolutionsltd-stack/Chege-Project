@@ -66,6 +66,9 @@ export default function IncomeStreamsReport() {
   // (the server refuses everybody else). A Personal budget is its owner's.
   const { data: pdfGroup } = useGetGroup();
   const canDownloadPdf = pdfGroup?.isPrivate !== false || pdfGroup?.role === "owner" || pdfGroup?.role === "admin";
+  // What the monthly PDF includes beyond its summary cards.
+  const [includeBudget, setIncludeBudget] = useState(true);
+  const [includeIncome, setIncludeIncome] = useState(true);
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadMessage, setDownloadMessage] = useState<string | null>(null);
   const { data: report, isLoading, isError, refetch } = useGetDashboardIncomeStreams(
@@ -202,7 +205,7 @@ export default function IncomeStreamsReport() {
     setIsDownloading(true);
     setDownloadMessage(null);
     try {
-      const reportPdf = await getDashboardMonthlyReportPdf({ month, year }, { responseType: "blob", cache: "no-store" });
+      const reportPdf = await getDashboardMonthlyReportPdf({ month, year, includeBudget, includeIncome }, { responseType: "blob", cache: "no-store" });
       const href = URL.createObjectURL(reportPdf);
       const anchor = document.createElement("a");
       anchor.href = href;
@@ -249,6 +252,18 @@ export default function IncomeStreamsReport() {
               <ArrowRight className="h-5 w-5" />
             </Button>
           </div>
+          {canDownloadPdf ? (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+            <label className="flex items-center gap-1.5">
+              <input type="checkbox" checked={includeBudget} onChange={(event) => setIncludeBudget(event.target.checked)} data-testid="checkbox-pdf-budget" />
+              Budget performance
+            </label>
+            <label className="flex items-center gap-1.5">
+              <input type="checkbox" checked={includeIncome} onChange={(event) => setIncludeIncome(event.target.checked)} data-testid="checkbox-pdf-income" />
+              Income-stream funding
+            </label>
+          </div>
+          ) : null}
           {canDownloadPdf ? <Button
             onClick={downloadPdf}
             disabled={isLoading || isDownloading}

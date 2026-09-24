@@ -43,6 +43,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis
 import {
    Wallet, Plus, TrendingUp, TrendingDown, Target, Loader2, X, ChevronLeft, ChevronRight, Building2, Link2, Receipt, BarChart3, Landmark, Home, Flag, BellRing, CalendarDays, Trash2,
   ArrowRightLeft,
+  UserPlus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -2909,6 +2910,20 @@ export default function Dashboard() {
                 {(summary?.totalBudget ?? 0) > 0 ? "Manage Budget" : "Create Budget"}
               </span>
             </Link>
+            {/* The setup guide's invite step retires once setup is done, which
+                left a group that keeps adding people with no way back to the
+                invite form from Home. Owners and admins of a shared group only. */}
+            {isSharedWorkspace && canManageBank ? (
+              <Link
+                href="/settings#invite"
+                data-testid="dashboard-invite-cta"
+                className="flex min-w-0 flex-col items-center justify-center gap-1.5 px-1 py-5 text-center text-xs font-medium text-foreground transition-colors hover:bg-muted/40 sm:px-3 sm:text-sm"
+              >
+                <UserPlus className="h-5 w-5" aria-hidden="true" />
+                <span className="block sm:hidden">Invite</span>
+                <span className="hidden max-w-full break-words sm:block">Invite a member</span>
+              </Link>
+            ) : null}
           </div>
           {sharedTransactionsLocked && (
             <p className="mx-4 mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100">
