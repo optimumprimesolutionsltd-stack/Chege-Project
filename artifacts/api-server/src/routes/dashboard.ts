@@ -32,7 +32,7 @@ import {
 } from "@workspace/api-zod";
 import { memberLedgerName } from "../lib/contributor-name";
 import { effectiveBudgets, totalBudget as sumBudget } from "@workspace/category-tree";
-import { getActiveGroupId } from "../lib/activeGroup";
+import { getActiveGroupId, requireGroupManager } from "../lib/activeGroup";
 import { buildContributionHistory, historyMonths } from "../lib/contribution-history";
 import { buildIncomeStreamTrend } from "../lib/income-stream-trend";
 import { createMonthlyReportPdf } from "../lib/monthly-report-pdf";
@@ -1799,6 +1799,10 @@ export function formatDayRangeLabel(from: string, to: string): string {
 router.get("/dashboard/monthly-report.pdf", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
+  // A PDF is a copy that leaves Jamvi and can be forwarded, so only an owner
+  // or admin may produce one. Members and viewers read the same figures
+  // on screen.
+  if (!requireGroupManager(req, res)) return;
 
   const now = nairobiNow();
   const parsed = GetDashboardMonthlyReportPdfQueryParams.safeParse(req.query);
