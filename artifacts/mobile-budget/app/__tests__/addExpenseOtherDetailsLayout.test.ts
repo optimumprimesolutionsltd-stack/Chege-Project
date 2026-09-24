@@ -57,7 +57,7 @@ describe('optional expense category layout', () => {
     );
     const bankStats = bankCard.slice(0, bankCard.indexOf('{bankAccount && bankAccount.balance === 0'));
 
-    expect(bankStats).toContain('`KES ${formatKES(bankAccount.balance)}`');
+    expect(bankStats).toContain('`KES ${formatExact(bankAccount.balance)}`');
     expect(bankStats).toContain('`+KES ${formatKES(monthlyDeposited)}`');
     expect(bankStats).toContain('`-KES ${formatKES(monthlyDisbursed)}`');
     expect(bankStats).not.toContain('shortKES(');
