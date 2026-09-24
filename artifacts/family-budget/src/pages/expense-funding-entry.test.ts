@@ -349,8 +349,8 @@ describe("expense funding amount entry", () => {
       expect(source).toContain("Choose a category for this expense. You can add a subcategory under it, or split it across several categories.");
     }
     // Only the parents are offered up front; the children follow underneath.
-    expect(dashboardSource).toContain("{categoryTree.map(group => <option key={group.name} value={group.name}>{group.name}</option>)}");
-    expect(expensesSource).toContain("{categoryTree.map(group => <option key={group.name} value={group.name}>{group.name}</option>)}");
+    expect(dashboardSource).toContain("{categorySearch.visible(selectedParentCategory).map(group => <option key={group.name} value={group.name}>{group.name}</option>)}");
+    expect(expensesSource).toContain("{categorySearch.visible(selectedParentCategory).map(group => <option key={group.name} value={group.name}>{group.name}</option>)}");
     // The phone renders chips rather than options, and its chips also carry a
     // subcategory count, so pin what it maps over rather than the exact
     // destructuring — the shape of the chip is that client's own business.
