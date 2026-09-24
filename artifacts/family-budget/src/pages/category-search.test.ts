@@ -6,7 +6,7 @@ const read = (p: string) => readFileSync(new URL(p, import.meta.url), "utf8").re
 // Web counterpart of the phone's category search box.
 describe("the web category lists have a search box", () => {
   it.each([
-    ["./bank.tsx", 2],
+    ["./bank.tsx", 3],
     ["./bank-day.tsx", 1],
     ["./expenses.tsx", 1],
     ["./dashboard.tsx", 1],
