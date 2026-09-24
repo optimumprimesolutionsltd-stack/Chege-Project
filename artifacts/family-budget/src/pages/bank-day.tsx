@@ -30,6 +30,7 @@ import {
 } from "@workspace/api-client-react";
 import { buildCategoryTree, type CategoryRow } from "@workspace/category-tree";
 import { CategorySearchInput, useCategorySearch } from "@/components/category-search";
+import { AmountCalcRow } from "@/components/amount-calc-row";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -134,17 +135,6 @@ function blankRow(chargeCategory = ""): DayRow {
 const SELECT_CLASS = "flex h-10 w-full rounded-md border border-input bg-card px-2 text-sm";
 const NEW_CATEGORY = "__new_category__";
 const NEW_PARTY = "__new_party__";
-
-/** "= KES 750" under a field that holds a sum, so the arithmetic is visible. */
-function SumPreview({ value }: { value: string }) {
-  if (!isAmountExpression(value)) return null;
-  const evaluated = readAmount(value);
-  return (
-    <p className="mt-1 text-xs text-muted-foreground">
-      {evaluated === null ? "Not a sum I can read." : `= KES ${formatKes(evaluated)}`}
-    </p>
-  );
-}
 
 /**
  * A category picker that can also make one on the spot, so a line is never
@@ -762,7 +752,7 @@ export default function BankDayPage() {
                   className="h-10 bg-card"
                   data-testid={`input-day-amount-${index}`}
                 />
-                <SumPreview value={row.amount} />
+                <AmountCalcRow value={row.amount} onChange={(next) => patchRow(row.key, { amount: next })} disabled={row.saved} testId={`day-amount-${index}`} />
               </div>
               {(isOutgoing(row.kind) && row.kind !== "lend") || row.kind === "borrowed" ? (
                 row.kind === "borrowed" ? (
@@ -847,7 +837,7 @@ export default function BankDayPage() {
                         className="h-9 bg-card"
                         data-testid={`input-day-charge-amount-${index}-${chargeIndex}`}
                       />
-                      <SumPreview value={charge.amount} />
+                      <AmountCalcRow value={charge.amount} onChange={(next) => patchCharge(row.key, charge.key, { amount: next })} disabled={row.saved} testId={`day-charge-${index}-${chargeIndex}`} />
                     </div>
                     <div className="sm:col-span-2">
                       <CategoryField

@@ -42,7 +42,7 @@ describe("web day of banking matches the phone", () => {
 
   it("reads sums in amount fields and shows the result", () => {
     expect(day).toContain("evaluateAmountExpression(value)");
-    expect(day).toContain("= KES ${formatKes(evaluated)}");
+    expect(readFileSync(new URL("../components/amount-calc-row.tsx", import.meta.url), "utf8")).toContain("= KES ${resolved.toLocaleString()}");
   });
 
   it("keeps the income-source choice on money in", () => {
