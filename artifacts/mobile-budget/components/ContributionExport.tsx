@@ -288,13 +288,20 @@ export function ContributionExport() {
   const downloadPdf = async () => {
     setBusy('pdf');
     try {
-      // The dated statement PDF for exactly what View shows.
+      // Monthly grid is the expected-versus-given sheet (its own PDF);
+      // Dated ledger is the entry-by-entry statement for exactly what View
+      // shows. Both modes used to download the ledger.
+      const isGrid = mode === 'grid';
       const pdfQuery = `${viewQuery}&includeEntries=${includeEntries}&includePerMemberTotals=${includePerMemberTotals}`;
-      const blob = (await customFetch(`/api/contributions/statement.pdf?${pdfQuery}`, {
-        responseType: 'blob',
-        cache: 'no-store',
-      })) as Blob;
-      const file = await writePdf(Paths.cache, `jamvi-contribution-ledger-${viewFrom}-to-${viewTo}.pdf`, blob);
+      const blob = (await customFetch(
+        isGrid ? `/api/contributions/report.pdf?months=${months}` : `/api/contributions/statement.pdf?${pdfQuery}`,
+        { responseType: 'blob', cache: 'no-store' },
+      )) as Blob;
+      const file = await writePdf(
+        Paths.cache,
+        isGrid ? `jamvi-contribution-grid-last-${months}-months.pdf` : `jamvi-contribution-ledger-${viewFrom}-to-${viewTo}.pdf`,
+        blob,
+      );
       if (!(await Sharing.isAvailableAsync())) {
         Alert.alert('Sharing is not available', 'This device cannot open the share sheet. The PDF was saved to the app, but there is no way to hand it off from here.');
         return;
@@ -345,12 +352,22 @@ export function ContributionExport() {
         verifyUrl = undefined;
       }
 
-      const statement = (await customFetch(`/api/contributions/statement?${viewQuery}`)) as ContributionStatement;
-      if (!statement.entries || statement.entries.length === 0) {
-        Alert.alert('Nothing in that range', 'Pick a different range.');
-        return;
+      let text: string;
+      if (mode === 'grid') {
+        const grid = (await refetch()).data;
+        if (!grid || grid.rows.length === 0) {
+          Alert.alert('Nothing to send', 'There are no contributors in this budget yet.');
+          return;
+        }
+        text = buildWhatsAppText(group?.name ?? 'Our group', grid, verifyUrl);
+      } else {
+        const statement = (await customFetch(`/api/contributions/statement?${viewQuery}`)) as ContributionStatement;
+        if (!statement.entries || statement.entries.length === 0) {
+          Alert.alert('Nothing in that range', 'Pick a different range.');
+          return;
+        }
+        text = buildStatementText(group?.name ?? 'Our group', statement, verifyUrl);
       }
-      const text = buildStatementText(group?.name ?? 'Our group', statement, verifyUrl);
 
       const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
       const opened = await Linking.canOpenURL(url);
@@ -469,6 +486,7 @@ export function ContributionExport() {
         />
       )}
 
+      {mode === 'ledger' ? (
       <View style={styles.sections}>
         <Pressable
           onPress={() => setIncludeEntries((on) => !on)}
@@ -495,6 +513,7 @@ export function ContributionExport() {
           <Text style={[styles.sectionToggleLabel, { color: colors.foreground }]}>By-member totals</Text>
         </Pressable>
       </View>
+      ) : null}
 
       <Pressable
         onPress={toggleView}
