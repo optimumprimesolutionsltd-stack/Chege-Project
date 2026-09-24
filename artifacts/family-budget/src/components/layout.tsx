@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@workspace/replit-auth-web';
-import { LayoutDashboard, Receipt, PieChart, Activity, LogOut, Menu, X, Settings, Target, Landmark, BarChart3, Plus, Search, CreditCard, HandCoins, UsersRound, FileText, Repeat, ListChecks } from 'lucide-react';
+import { LayoutDashboard, Receipt, PieChart, Activity, LogOut, Menu, X, Settings, Target, Landmark, BarChart3, Plus, Search, CreditCard, HandCoins, UsersRound, FileText, Repeat, ListChecks, ChevronDown } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,7 @@ import { BrandLogo } from '@/components/brand-logo';
 import { useQuery } from '@tanstack/react-query';
 import { daysUntil, type MemberEntitlements } from '@/lib/subscription-status';
 import { ViewerBanner } from '@/components/viewer-banner';
+import { readSimpleNav, SIMPLE_NAV_KEY, splitNav } from '@/lib/nav-plan';
 
 export type QuickLogAction = 'contribution' | 'expense' | 'income' | 'budget' | 'goal';
 
@@ -192,6 +193,75 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: '/settings', label: 'Settings', icon: Settings },
   ];
 
+  // Simple view: the everyday pages on show, the rest folded under "More".
+  const [simpleNav, setSimpleNavState] = useState(() =>
+    readSimpleNav(typeof window === 'undefined' ? undefined : window.localStorage));
+  const [moreOpen, setMoreOpen] = useState(false);
+  const setSimpleNav = (next: boolean) => {
+    setSimpleNavState(next);
+    try { window.localStorage.setItem(SIMPLE_NAV_KEY, next ? 'on' : 'off'); } catch { /* remembered only when storage allows */ }
+  };
+  const nav = splitNav(navItems, simpleNav, location);
+  const showMore = moreOpen || nav.moreOpenByDefault;
+
+  const renderNav = (variant: 'desktop' | 'mobile') => {
+    const big = variant === 'mobile';
+    const link = (item: (typeof navItems)[number]) => {
+      const isActive = location === item.href;
+      return (
+        <Link
+          key={item.href}
+          href={item.href}
+          className="block"
+          onClick={big ? () => setIsMobileMenuOpen(false) : undefined}
+        >
+          <div className={cn(
+            big
+              ? 'flex items-center gap-3 px-4 py-4 rounded-xl text-lg font-medium'
+              : 'flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium',
+            isActive
+              ? (big ? 'bg-sidebar-accent text-sidebar-accent-foreground' : 'bg-sidebar-accent text-sidebar-accent-foreground shadow-sm')
+              : (big ? 'text-sidebar-foreground/80' : 'text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'),
+          )}>
+            <item.icon className={cn(big ? 'w-6 h-6' : 'w-5 h-5', isActive ? 'text-sidebar-primary' : (big ? '' : 'text-sidebar-foreground/60'))} />
+            {item.label}
+          </div>
+        </Link>
+      );
+    };
+    return (
+      <>
+        {nav.main.map(link)}
+        {nav.more.length > 0 ? (
+          <>
+            <button
+              type="button"
+              onClick={() => setMoreOpen((open) => !open)}
+              aria-expanded={showMore}
+              data-testid={`nav-more-${variant}`}
+              className={cn(
+                'flex w-full items-center gap-3 rounded-xl px-4 font-medium text-sidebar-foreground/80 hover:bg-sidebar-accent/50',
+                big ? 'py-4 text-lg' : 'py-3',
+              )}
+            >
+              <ChevronDown className={cn(big ? 'w-6 h-6' : 'w-5 h-5', 'transition-transform', showMore && 'rotate-180')} />
+              {showMore ? 'Fewer' : 'More'}
+            </button>
+            {showMore ? nav.more.map(link) : null}
+          </>
+        ) : null}
+        <button
+          type="button"
+          onClick={() => setSimpleNav(!simpleNav)}
+          data-testid={`nav-simple-toggle-${variant}`}
+          className="w-full px-4 py-2 text-left text-xs text-sidebar-foreground/60 underline-offset-2 hover:underline"
+        >
+          {simpleNav ? 'Show every menu item' : 'Show fewer menu items'}
+        </button>
+      </>
+    );
+  };
+
   // overflow-x-hidden deliberately does not live on the wrapper below. Setting
   // either overflow axis to hidden computes the other to auto, which makes the
   // element a scroll container - and the sidebar's `sticky top-0` then sticks
@@ -227,22 +297,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             landed on the page in sidebar-foreground - light text on white,
             which is why they looked faded rather than obviously broken. */}
         <nav className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 space-y-1 mt-4">
-          {navItems.map((item) => {
-            const isActive = location === item.href;
-            return (
-              <Link key={item.href} href={item.href} className="block">
-                <div className={cn(
-                  "flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium",
-                  isActive 
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-sm" 
-                    : "text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-                )}>
-                  <item.icon className={cn("w-5 h-5", isActive ? "text-sidebar-primary" : "text-sidebar-foreground/60")} />
-                  {item.label}
-                </div>
-              </Link>
-            );
-          })}
+          {renderNav('desktop')}
         </nav>
 
         <div className="p-4 border-t border-sidebar-border mt-auto">
@@ -301,20 +356,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 onWorkspaceSwitchRequested={() => setIsMobileMenuOpen(false)}
               />
             </div>
-            {navItems.map((item) => {
-              const isActive = location === item.href;
-              return (
-                <Link key={item.href} href={item.href} className="block" onClick={() => setIsMobileMenuOpen(false)}>
-                  <div className={cn(
-                    "flex items-center gap-3 px-4 py-4 rounded-xl text-lg font-medium",
-                    isActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/80"
-                  )}>
-                    <item.icon className={cn("w-6 h-6", isActive ? "text-sidebar-primary" : "")} />
-                    {item.label}
-                  </div>
-                </Link>
-              );
-            })}
+            {renderNav('mobile')}
           </nav>
           <div className="shrink-0 border-t border-sidebar-border bg-sidebar p-6">
             <Button variant="outline" className="w-full h-12 text-lg border-sidebar-border text-sidebar-foreground bg-transparent hover:bg-sidebar-accent" onClick={logout}>
