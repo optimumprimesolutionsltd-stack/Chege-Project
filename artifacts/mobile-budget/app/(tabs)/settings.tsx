@@ -199,25 +199,33 @@ export default function SettingsScreen() {
   });
   const { data: group } = useGetGroup();
 
-  useEffect(() => {
-    if (params.openInvite !== '1' || !group || group.isPrivate) return;
-    setEditingAccess(true);
-    // Two frames: one for GROUP ACCESS to switch into its editing layout
-    // (the invite form adds height above where it used to measure), one for
-    // that layout to actually land before scrolling to it.
-    let second = 0;
-    const first = requestAnimationFrame(() => {
-      second = requestAnimationFrame(() => {
-        if (groupAccessTop.current != null) {
-          scrollRef.current?.scrollTo({ y: Math.max(groupAccessTop.current - 12, 0), animated: true });
-        }
+  // A plain useEffect here only fires when params.openInvite's VALUE changes.
+  // Expo Router keeps this screen mounted across tab switches, so tapping
+  // "Invite a member" on the homepage a second time re-navigates to the exact
+  // same `?openInvite=1` URL — same string, no dependency change, no re-run.
+  // useFocusEffect instead fires every time this screen is focused with the
+  // param present, so the deep link works on every tap, not just the first.
+  useFocusEffect(
+    React.useCallback(() => {
+      if (params.openInvite !== '1' || !group || group.isPrivate) return;
+      setEditingAccess(true);
+      // Two frames: one for GROUP ACCESS to switch into its editing layout
+      // (the invite form adds height above where it used to measure), one for
+      // that layout to actually land before scrolling to it.
+      let second = 0;
+      const first = requestAnimationFrame(() => {
+        second = requestAnimationFrame(() => {
+          if (groupAccessTop.current != null) {
+            scrollRef.current?.scrollTo({ y: Math.max(groupAccessTop.current - 12, 0), animated: true });
+          }
+        });
       });
-    });
-    return () => {
-      cancelAnimationFrame(first);
-      cancelAnimationFrame(second);
-    };
-  }, [params.openInvite, group]);
+      return () => {
+        cancelAnimationFrame(first);
+        cancelAnimationFrame(second);
+      };
+    }, [params.openInvite, group]),
+  );
 
   const {
     data: workspaces = [],

@@ -29,4 +29,19 @@ describe('opening straight to the invite section from ?openInvite=1', () => {
     expect(settings).toContain('<PageScrollView');
     expect(settings).toContain('ref={scrollRef}');
   });
+
+  // A plain useEffect keyed on params.openInvite only reruns when that
+  // string VALUE changes. Expo Router keeps this screen mounted across tab
+  // switches, so tapping "Invite a member" on the homepage a second time
+  // re-navigates to the identical `?openInvite=1` URL — same string, no
+  // dependency change, no rerun. Reported as: "it works but only once, the
+  // tab disappears." useFocusEffect reruns on every focus instead.
+  it('reruns on every visit, not just the first time the param appears', () => {
+    const block = settings.slice(
+      settings.indexOf("if (params.openInvite !== '1'") - 400,
+      settings.indexOf("}, [params.openInvite, group]),"),
+    );
+    expect(block).toContain('useFocusEffect(');
+    expect(block).not.toMatch(/\buseEffect\(/);
+  });
 });
