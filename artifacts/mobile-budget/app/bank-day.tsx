@@ -261,7 +261,8 @@ export default function BankDayScreen() {
   const projected = openingBalance + unsavedRows.reduce((total, row) => total + rowEffect(row), 0);
   const readyCount = unsavedRows.filter((row) => {
     const amount = readAmount(row.amount);
-    return amount !== null && amount > 0;
+    // Zero is a real amount, as it is on the Bank sheet.
+    return amount !== null && amount >= 0;
   }).length;
 
   const patchRow = (key: string, change: Partial<DayRow>) => {
@@ -303,7 +304,7 @@ export default function BankDayScreen() {
   /** What is wrong with a row, in the words somebody can act on. */
   const rowProblem = (row: DayRow): string | null => {
     const amount = readAmount(row.amount);
-    if (amount === null || amount <= 0) return 'Give it an amount.';
+    if (amount === null || amount < 0) return 'Give it an amount (zero is allowed).';
     // A loan out has no category, because it is not a cost — the same reason
     // (tabs)/bank.tsx leaves it out of expenseCategory entirely.
     if (isOutgoing(row.kind) && row.kind !== 'lend' && !row.category.trim()) return 'Give it a category.';
