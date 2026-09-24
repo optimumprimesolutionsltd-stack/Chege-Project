@@ -181,7 +181,7 @@ export default function BankStatementScreen() {
         <>
           <View style={[styles.balanceCard, { borderColor: colors.primary, backgroundColor: `${colors.primary}12` }]} testID="statement-balances">
             <View style={styles.balanceRow}>
-              <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>Opening balance</Text>
+              <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>Balance at the start</Text>
               <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>KES {formatKES(statement.openingBalance)}</Text>
             </View>
             <View style={styles.balanceRow}>
@@ -193,7 +193,7 @@ export default function BankStatementScreen() {
               <Text style={{ color: '#f87171', fontFamily: 'Inter_600SemiBold' }}>KES {formatKES(statement.totalOut)}</Text>
             </View>
             <View style={[styles.balanceRow, { marginTop: 4 }]}>
-              <Text style={{ color: colors.foreground, fontFamily: 'Inter_700Bold' }}>Closing balance</Text>
+              <Text style={{ color: colors.foreground, fontFamily: 'Inter_700Bold' }}>Balance at the end</Text>
               <Text testID="statement-closing" style={{ color: statement.closingBalance < 0 ? '#f87171' : colors.foreground, fontFamily: 'Inter_700Bold', fontSize: 18 }}>
                 KES {formatKES(statement.closingBalance)}
               </Text>

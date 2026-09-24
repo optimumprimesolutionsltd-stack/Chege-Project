@@ -780,7 +780,7 @@ export default function BankScreen() {
       });
       setOpeningBalanceModalVisible(false);
       await invalidateBalance();
-      Alert.alert('Opening balance saved', 'The current balance now includes this starting amount.');
+      Alert.alert('Starting balance saved', 'The balance now includes the money you started with.');
     } catch (err: unknown) {
       Alert.alert('Could not save opening balance', err instanceof Error ? err.message : 'Please try again.');
     } finally {
@@ -2224,7 +2224,7 @@ export default function BankScreen() {
             <ActivityIndicator color="#4ade80" style={{ marginTop: 16, marginBottom: 8 }} />
           ) : (
             <>
-              <Text style={styles.balanceLabel}>Closing balance</Text>
+              <Text style={styles.balanceLabel}>Balance now</Text>
               <Text style={styles.balance} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>KES {formatKES(periodSummary ? periodSummary.closing : data?.balance)}</Text>
               <View style={styles.statsRow}>
                 <View style={styles.statItem}>
@@ -2251,7 +2251,7 @@ export default function BankScreen() {
               </View>
               <View style={styles.openingBalanceRow}>
                 <View>
-                  <Text style={styles.openingBalanceLabel}>{periodSummary ? 'Balance at start of period' : 'Opening balance'}</Text>
+                  <Text style={styles.openingBalanceLabel}>{periodSummary ? 'Balance at the start' : 'Starting balance'}</Text>
                    <Text style={styles.openingBalanceValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>KES {formatKES(periodSummary ? periodSummary.opening : data?.openingBalance)}</Text>
                   {periodSummary && period ? (
                     <Text style={styles.openingBalanceDate}>
@@ -4744,7 +4744,7 @@ export default function BankScreen() {
                 Enter the money already in this Shared group’s bank account before the transactions shown below.
                 This does not create a transaction.
               </Text>
-              <Text style={[styles.label, { color: colors.mutedForeground }]}>Opening balance (KES)</Text>
+              <Text style={[styles.label, { color: colors.mutedForeground }]}>Starting balance (KES)</Text>
               <TextInput
                 value={openingBalanceDraft}
                 onChangeText={setOpeningBalanceDraft}

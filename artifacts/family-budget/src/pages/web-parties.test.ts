@@ -16,7 +16,7 @@ const phone = readFileSync(
 describe("creditors and debtors, on the laptop", () => {
   it("has a page and a way to reach it", () => {
     expect(app).toContain('<Route path="/parties" component={Parties} />');
-    expect(layout).toContain("{ href: '/parties', label: 'Creditors & debtors'");
+    expect(layout).toContain("{ href: '/parties', label: 'Who owes who'");
   });
 
   it("lists both directions, and those with neither", () => {

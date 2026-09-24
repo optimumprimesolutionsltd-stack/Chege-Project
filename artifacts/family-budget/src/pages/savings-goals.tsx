@@ -521,7 +521,7 @@ export default function SavingsGoals() {
       toast({
         variant: "destructive",
         title: "Amounts don't add up",
-        description: `Contributor portions total ${formatKes(splitTotal)} but the payment is ${formatKes(amount)}.`,
+        description: `The portions add up to ${formatKes(splitTotal)} but the payment is ${formatKes(amount)}.`,
       });
       return;
     }

@@ -210,7 +210,7 @@ export default function PassThroughScreen() {
         <View style={[styles.dropdown, { borderColor: colors.dropdownBorder, backgroundColor: colors.dropdownBackground }]}>
           {parties.length === 0 ? (
             <Text style={{ color: colors.dropdownMutedForeground, padding: 14, fontSize: 12 }}>
-              Nobody recorded yet. Add them under Settings, then Creditors and debtors.
+              Nobody recorded yet. Add them under Settings, then Who owes who.
             </Text>
           ) : (
             parties.map((party) => (

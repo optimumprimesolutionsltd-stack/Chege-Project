@@ -176,7 +176,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     ...(uses('bank') ? [{ href: '/bank', label: 'Bank accounts', icon: Landmark }] : []),
     // Beside the bank, since paying a creditor and being paid by a debtor both
     // happen there and the balances they move live here.
-    ...(uses('bank') ? [{ href: '/parties', label: 'Creditors & debtors', icon: HandCoins }] : []),
+    ...(uses('bank') ? [{ href: '/parties', label: 'Who owes who', icon: HandCoins }] : []),
     ...(uses('bank') ? [{ href: '/statement', label: 'Statement', icon: FileText }] : []),
     ...(uses('bank') ? [{ href: '/pass-through', label: 'Paid through you', icon: Repeat }] : []),
     ...(uses('bank') ? [{ href: '/bank-day', label: 'Enter a whole day', icon: ListChecks }] : []),

@@ -1899,7 +1899,7 @@ export default function SettingsScreen() {
               <View style={[styles.rowIcon, { backgroundColor: colors.primary + '18' }]}>
                 <Feather name="users" size={16} color={colors.primary} />
               </View>
-              <Text style={[styles.rowLabel, { color: colors.foreground }]} numberOfLines={1}>Creditors and debtors</Text>
+              <Text style={[styles.rowLabel, { color: colors.foreground }]} numberOfLines={1}>Who owes who</Text>
             </View>
             <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6, marginLeft: 12 }}>
               <Text style={[styles.rowValue, { color: colors.mutedForeground, flexShrink: 1 }]} numberOfLines={1}>

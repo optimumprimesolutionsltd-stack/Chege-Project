@@ -139,7 +139,7 @@ export default function BudgetScreen() {
   });
   const priorityTiers = tierConfig?.tiers ?? [1, 2, 3, 4, 5].map(priority => ({
     priority,
-    label: PRIORITY_LABELS[priority] ?? `Priority ${priority}`,
+    label: PRIORITY_LABELS[priority] ?? `Importance ${priority}`,
     description: PRIORITY_GUIDE[priority] ?? 'Spending grouped at this level of urgency.',
   }));
 
@@ -389,7 +389,7 @@ export default function BudgetScreen() {
       });
       await Promise.all([refetchTierConfig(), refreshAll()]);
       setTierEditorOpen(false);
-      Alert.alert('Priority tiers updated', 'Tier names, order, and their categories were updated together.');
+      Alert.alert('Importance groups updated', 'The names, the order and the categories in them were all updated.');
     } catch (error) {
       Alert.alert('Could not update tiers', error instanceof Error ? error.message : 'Please try again.');
     } finally {
@@ -983,7 +983,7 @@ export default function BudgetScreen() {
                 <View style={[styles.priorityGuide, { backgroundColor: colors.accent }]}>
                   <Feather name="info" size={15} color={colors.accentForeground} />
                   <Text style={[styles.priorityGuideText, { color: colors.accentForeground }]}>
-                     Tiers help you decide what to fund first when money is limited. Use Tier 1 first and Tier 5 last. {priorityTiers.find(tier => tier.priority === parseInt(formPriority, 10))?.description ?? ''}
+                     Importance helps you decide what to pay first when money is short. Start with 1 (must pay) and finish with 5 (can wait). {priorityTiers.find(tier => tier.priority === parseInt(formPriority, 10))?.description ?? ''}
                   </Text>
                 </View>
                 </>
@@ -1702,10 +1702,10 @@ export default function BudgetScreen() {
         <View style={styles.tierSection}>
           <Pressable style={styles.tierHeader} onPress={tierPanel.toggle}>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.tierTitle, { color: colors.foreground }]}>Priority tier report</Text>
+              <Text style={[styles.tierTitle, { color: colors.foreground }]}>What to pay first</Text>
               {tierPanel.open ? (
                 <Text style={[styles.tierSubtitle, { color: colors.mutedForeground }]}>
-                   Tiers help protect essential spending first: Tier 1 is most urgent and Tier 5 can wait.
+                   Pay the important things first: 1 is the most urgent and 5 can wait.
                 </Text>
               ) : (
                 <Text style={[styles.collapseSummary, { color: colors.mutedForeground }]}>
@@ -1748,7 +1748,7 @@ export default function BudgetScreen() {
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={[styles.tierName, { color: colors.foreground }]}>
-                         {priorityTiers.find(tier => tier.priority === row.tier)?.label ?? `Priority ${row.tier}`}
+                         {priorityTiers.find(tier => tier.priority === row.tier)?.label ?? `Importance ${row.tier}`}
                       </Text>
                       <Text style={[styles.tierDescription, { color: colors.mutedForeground }]}>
                          {priorityTiers.find(tier => tier.priority === row.tier)?.description ?? 'Spending grouped at this level of urgency.'}

@@ -504,7 +504,7 @@ function CategoryDialog({
             ) : null}
             {parentId !== "none" ? (
               <div className="space-y-1.5 rounded-xl border border-border/60 bg-muted/30 p-3" data-testid="inherited-tier-note">
-                <label className="text-sm font-semibold">Priority tier</label>
+                <label className="text-sm font-semibold">How important?</label>
                 <p className="text-xs text-muted-foreground">
                   Taken from the category this sits inside. A subcategory is part of whatever its parent is, so ranking
                   the two separately would only contradict itself.
@@ -512,7 +512,7 @@ function CategoryDialog({
               </div>
             ) : (
             <div className="space-y-1.5">
-              <label className="text-sm font-semibold">Priority tier</label>
+              <label className="text-sm font-semibold">How important?</label>
               <select
                 className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm"
                 value={priority}
@@ -524,9 +524,9 @@ function CategoryDialog({
                 ))}
               </select>
               <div className="rounded-xl bg-muted/60 px-3 py-2.5">
-                <p className="text-xs font-semibold text-foreground">How to use tiers</p>
+                <p className="text-xs font-semibold text-foreground">How to use importance</p>
                 <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-                  Tiers help you decide what to fund first when money is limited. Start with Tier 1, then work down to Tier 5. {tiers.find((tier) => tier.priority === Number(priority))?.description}
+                  Importance helps you decide what to pay first when money is short. Start with 1 (must pay) and finish with 5 (can wait). {tiers.find((tier) => tier.priority === Number(priority))?.description}
                 </p>
               </div>
             </div>
@@ -1440,10 +1440,10 @@ export default function Budget() {
                 className="flex min-w-0 flex-1 items-start gap-2 text-left"
               >
                 <span className="min-w-0">
-                  <span className="block font-display text-xl font-bold text-foreground">Priority tier report</span>
+                  <span className="block font-display text-xl font-bold text-foreground">What to pay first</span>
                   {reportPanel.open ? (
                     <span className="mt-1 block text-sm text-muted-foreground">
-                      Tiers help protect essential spending first when money is limited: Tier 1 is most urgent and Tier 5 can wait.
+                      Pay the important things first: 1 is the most urgent and 5 can wait.
                     </span>
                   ) : (
                     <span

@@ -1,5 +1,5 @@
 /**
- * Creditors and debtors: everybody money stands between you and.
+ * Who owes who: everybody money stands between you and.
  *
  * These existed already — a party with owedByUs is a creditor, one with
  * owedToUs is a debtor, and KCB is as much a creditor as Mwangi is. But they
@@ -271,7 +271,7 @@ export default function PartiesScreen() {
         <Pressable onPress={() => router.back()} testID="parties-back" accessibilityRole="button" accessibilityLabel="Go back">
           <Feather name="arrow-left" size={22} color={colors.foreground} />
         </Pressable>
-        <Text style={[styles.title, { color: colors.foreground }]}>Creditors and debtors</Text>
+        <Text style={[styles.title, { color: colors.foreground }]}>Who owes who</Text>
       </View>
       <Text style={[styles.sub, { color: colors.mutedForeground }]}>
         Everybody money stands between you and — people and institutions alike. A loan from a bank sits here the same

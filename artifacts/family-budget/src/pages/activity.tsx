@@ -278,7 +278,7 @@ export default function Activity() {
                   <CardContent className="pt-5">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0">
-                        <p className="font-semibold">Unattributed funding: {formatKes(unattributedFunding.total)}</p>
+                        <p className="font-semibold">Money with no source chosen: {formatKes(unattributedFunding.total)}</p>
                         <p className="mt-1 text-sm text-muted-foreground">No income source was selected, so this funding is kept separate from each member’s income plan.</p>
                       </div>
                       <button

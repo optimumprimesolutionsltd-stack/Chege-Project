@@ -1,5 +1,5 @@
 /**
- * Creditors and debtors: everybody money stands between you and.
+ * Who owes who: everybody money stands between you and.
  *
  * The phone got this screen in #285. The laptop had nowhere at all to see who
  * you owe or who owes you, let alone correct a balance typed wrong — and
@@ -238,7 +238,7 @@ export default function PartiesPage() {
   return (
     <div className="space-y-6 p-4 sm:p-6" data-testid="parties-page">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Creditors and debtors</h1>
+        <h1 className="text-2xl font-bold text-foreground">Who owes who</h1>
         <p className="text-sm text-muted-foreground">
           Everybody money stands between you and — people and institutions alike. A loan from a bank sits here the same
           way money owed to a neighbour does.
