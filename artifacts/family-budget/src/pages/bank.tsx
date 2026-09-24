@@ -24,6 +24,8 @@ import { canManageBankAccount, resolveBankAccountSelection } from "@/lib/bank-ac
 import { getProjectedBalanceAfterPosting } from "@/lib/bank-balance-utils";
 import { buildCategoryTree, type CategoryRow } from "@workspace/category-tree";
 import { CategorySearchInput, useCategorySearch } from "@/components/category-search";
+import { BankPeriodPicker } from "@/components/bank-period-picker";
+import { inPeriod, nairobiToday, periodFor, summarisePeriod, type PeriodPreset } from "@/lib/bank-period";
 import { evaluateAmountExpression, isAmountExpression } from "@/lib/amount-expression";
 import { workspaceLabel } from "@/lib/workspace-identity";
 import { useListEditor } from "@/hooks/use-list-editor";
@@ -113,10 +115,17 @@ export default function Bank() {
   const { data: group } = useGetGroup();
   const bankSelectionKey = group?.id ? `jamvi:bank-account:${group.id}` : null;
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
+  const [periodPreset, setPeriodPreset] = useState<PeriodPreset>("all");
+  const [periodFrom, setPeriodFrom] = useState("");
+  const [periodTo, setPeriodTo] = useState("");
   const { data: accounts = [], isLoading: accountsLoading } = useGetJointAccounts();
   const { data: account, isLoading } = useGetJointAccount(
     selectedAccountId ? { accountId: selectedAccountId } : undefined,
   );
+  // A period narrows the list and the figures to those dates. "All time"
+  // leaves the account exactly as the server reports it.
+  const period = periodFor(periodPreset, nairobiToday(), { from: periodFrom, to: periodTo });
+  const periodSummary = account && period ? summarisePeriod(account as never, period) : null;
   const { data: members } = useGetMembers();
   const { data: categories } = useGetBudgetCategories();
   const createDeposit = useCreateDeposit();
@@ -1350,11 +1359,20 @@ export default function Bank() {
                 <Landmark className="w-6 h-6 opacity-80" />
                 <p className="text-sm font-medium opacity-80">Closing balance</p>
               </div>
-                <p className="whitespace-nowrap font-display text-[clamp(1.8rem,8vw,2.25rem)] font-bold leading-tight" data-testid="bank-balance">{formatKes(account?.balance ?? 0)}</p>
+                <p className="whitespace-nowrap font-display text-[clamp(1.8rem,8vw,2.25rem)] font-bold leading-tight" data-testid="bank-balance">{formatKes(periodSummary ? periodSummary.closing : account?.balance ?? 0)}</p>
                 <div className="flex items-center justify-between gap-3 text-sm">
                   <span className="opacity-75">
-                    Opening balance: <span className="font-semibold">{formatKes(account?.openingBalance ?? 0)}</span>
-                    {account?.openingBalanceDate ? ` as of ${formatDate(account.openingBalanceDate)}` : ""}
+                    {periodSummary && period ? (
+                      <>
+                        Balance at start of period: <span className="font-semibold">{formatKes(periodSummary.opening)}</span>
+                        {` · ${formatDate(period.from)} to ${formatDate(period.to)}`}
+                      </>
+                    ) : (
+                      <>
+                        Opening balance: <span className="font-semibold">{formatKes(account?.openingBalance ?? 0)}</span>
+                        {account?.openingBalanceDate ? ` as of ${formatDate(account.openingBalanceDate)}` : ""}
+                      </>
+                    )}
                   </span>
                   {canManageAccount && (
                     <div className="flex flex-wrap gap-2">
@@ -1384,17 +1402,26 @@ export default function Bank() {
               <div className="flex gap-6 pt-2 border-t border-primary-foreground/20">
                 <div>
                   <p className="text-xs opacity-70 flex items-center gap-1"><TrendingUp className="w-3 h-3" /> Total In</p>
-                   <p className="whitespace-nowrap text-lg font-semibold font-mono">{formatKes(account?.totalDeposits ?? 0)}</p>
+                   <p className="whitespace-nowrap text-lg font-semibold font-mono">{formatKes(periodSummary ? periodSummary.totalIn : account?.totalDeposits ?? 0)}</p>
                 </div>
                 <div>
                   <p className="text-xs opacity-70 flex items-center gap-1"><TrendingDown className="w-3 h-3" /> Total Out</p>
-                   <p className="whitespace-nowrap text-lg font-semibold font-mono">{formatKes(account?.totalDisbursements ?? 0)}</p>
+                   <p className="whitespace-nowrap text-lg font-semibold font-mono">{formatKes(periodSummary ? periodSummary.totalOut : account?.totalDisbursements ?? 0)}</p>
                 </div>
               </div>
             </div>
           )}
         </CardContent>
       </Card>
+
+      <BankPeriodPicker
+        preset={periodPreset}
+        onPreset={setPeriodPreset}
+        from={periodFrom}
+        to={periodTo}
+        onFrom={setPeriodFrom}
+        onTo={setPeriodTo}
+      />
 
       {showReconcile && (
         <Card className="border-none shadow-md bg-accent/20" data-testid="bank-reconcile-card">
@@ -2364,9 +2391,12 @@ export default function Bank() {
               </button>
             ) : null}
           </div>
+        {period && !account.transactions.some((tx) => inPeriod(tx, period)) ? (
+          <p className="text-sm text-muted-foreground" data-testid="bank-period-empty">No transactions in this period.</p>
+        ) : null}
         <Card className="border-none shadow-md overflow-hidden">
           <div className="divide-y divide-border/50">
-            {account.transactions.map((tx) => {
+            {account.transactions.filter((tx) => inPeriod(tx, period)).map((tx) => {
               const isDeposit = tx.type === "deposit";
               const isTransfer = !!tx.savingsGoalId;
               const isBankTransfer = !!tx.bankTransferId;
