@@ -283,10 +283,10 @@ describe("expense funding amount entry", () => {
 
   it("keeps category choices visible, highlights the total, and exposes bank funding in both budgets", () => {
     expect(dashboardSource).toContain("Expense total (KES)");
-    expect(dashboardSource).toContain('data-testid="expense-total-dashboard"');
+    expect(dashboardSource).toContain('testId="expense-total-dashboard"');
     expect(dashboardSource).toContain("border-secondary/60 bg-secondary/10");
     expect(expensesSource).toContain("Expense total (KES)");
-    expect(expensesSource).toContain('data-testid={`expense-total-${mode}`}');
+    expect(expensesSource).toContain('testId={`expense-total-${mode}`}');
     expect(expensesSource).toContain("border-secondary/60 bg-secondary/10");
     const dashboardCategoryPicker = dashboardSource.indexOf('aria-label="Expense category"');
     const expensesCategoryPicker = expensesSource.indexOf('aria-label="Expense category"');
@@ -304,7 +304,7 @@ describe("expense funding amount entry", () => {
 
   it("places the expense date before amount, category, and funding controls in every form", () => {
     const dashboardDate = dashboardSource.indexOf('data-testid="expense-date-section-dashboard"');
-    const dashboardAmount = dashboardSource.indexOf('data-testid="expense-total-dashboard"');
+    const dashboardAmount = dashboardSource.indexOf('testId="expense-total-dashboard"');
     const dashboardCategory = dashboardSource.indexOf("2. What did this expense cover?");
     const dashboardFunding = dashboardSource.indexOf("3. How was this expense funded?");
     expect(dashboardDate).toBeGreaterThan(-1);
@@ -313,7 +313,7 @@ describe("expense funding amount entry", () => {
     expect(dashboardDate).toBeLessThan(dashboardFunding);
 
     const webDate = expensesSource.indexOf('data-testid={`expense-date-section-${mode}`}');
-    const webAmount = expensesSource.indexOf('data-testid={`expense-total-${mode}`}');
+    const webAmount = expensesSource.indexOf('testId={`expense-total-${mode}`}');
     const webCategory = expensesSource.indexOf("2. What did this expense cover?");
     const webFunding = expensesSource.indexOf("3. How was this expense funded?");
     expect(webDate).toBeGreaterThan(-1);
