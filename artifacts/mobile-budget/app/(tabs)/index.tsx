@@ -46,6 +46,7 @@ import {
   customFetch,
 } from '@workspace/api-client-react';
 import { formatExact } from '@/lib/formatExact';
+import { HomeAnswersCard } from '@/components/HomeAnswersCard';
 
 const MONTHS_SHORT = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -435,6 +436,13 @@ export default function DashboardScreen() {
           style={styles.headerRest}
         >
            <WorkspaceSetupGuide />
+
+          <HomeAnswersCard
+            balance={bankAccount?.balance}
+            spent={summary?.totalSpent}
+            budget={summary?.totalBudget}
+            hidden={isPrivate}
+          />
 
           {isSharedWorkspace && (
             <View style={[styles.overviewNavCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
