@@ -76,6 +76,7 @@ import { getCategoryAllocationStatus, getExpenseFundingStatus, getFundingRemaind
 import { buildCategoryTree, childrenFor, parentOf, type CategoryRow } from "@workspace/category-tree";
 import { CategorySearchInput, useCategorySearch } from "@/components/category-search";
 import { AmountField } from "@/components/amount-field";
+import { HomeAnswersCard } from "@/components/home-answers-card";
 import { DEFAULT_WORKSPACE_ACCENT } from "@/lib/workspace-accent";
 
 type QuickAction = "none" | "income" | "expense" | "goal";
@@ -2852,15 +2853,22 @@ export default function Dashboard() {
         </section>
       )}
 
+       {/* ── The three things anybody opening the app wants to know ── */}
+       <HomeAnswersCard
+         balance={bankAccount ? bankAccount.balance : null}
+         spent={summary?.totalSpent}
+         budget={summary?.totalBudget}
+       />
+
        {/* ── Quick Actions ── */}
         <Card id="dashboard-quick-actions" className="scroll-mt-6 overflow-hidden border-none shadow-md">
         <CardContent className="p-0">
           {/* Action buttons row */}
           <div className="grid grid-cols-2 divide-x divide-y divide-border/50 sm:grid-cols-6 sm:divide-y-0">
             {[
-               { key: "income" as const, label: "Bank Deposit", shortLabel: "Deposit",  icon: Building2, active: "bg-success/10", text: "text-success" },
-               { key: "expense" as const, label: "Log Expense",  shortLabel: "Expense",  icon: Receipt, active: "bg-warning/10", text: "text-warning" },
-               { key: "goal" as const,   label: "Save to Goal", shortLabel: "Save",     icon: Target, active: "bg-info/10", text: "text-info" },
+               { key: "income" as const, label: "I received money", shortLabel: "Money in",  icon: Building2, active: "bg-success/10", text: "text-success" },
+               { key: "expense" as const, label: "I spent money",  shortLabel: "Spent",  icon: Receipt, active: "bg-warning/10", text: "text-warning" },
+               { key: "goal" as const,   label: "I saved for a goal", shortLabel: "Saved",     icon: Target, active: "bg-info/10", text: "text-info" },
              ].map(({ key, label, shortLabel, icon: ActionIcon, active, text }) => (
               <button
                 key={key}
