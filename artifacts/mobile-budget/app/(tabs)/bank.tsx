@@ -67,7 +67,8 @@ import { canManageBankAccount, resolveBankAccountSelection } from '@/lib/bankAcc
 import { getProjectedBalanceAfterPosting } from '@/lib/bankBalance';
 import { evaluateAmountExpression, isAmountExpression } from '@/lib/amountExpression';
 import { parseBankAmount, parseBalanceFigure, readAmount, toMoney } from '@/lib/bankAmount';
-import { buildCategoryTree, type CategoryRow } from '@workspace/category-tree';
+import { buildCategoryTree, filterCategoryTree, type CategoryRow } from '@workspace/category-tree';
+import { CategorySearchBox } from '@/components/CategorySearchBox';
 import { workspaceBudgetName } from '@/lib/workspaceIdentity';
 import { formatDisplayDate } from '@/lib/displayFormat';
 
@@ -192,6 +193,8 @@ export default function BankScreen() {
     return periods;
   }, []);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
+  // One search box serves whichever category list is open.
+  const [categorySearch, setCategorySearch] = useState('');
   const [newCategoryName, setNewCategoryName] = useState('');
   // Which group a category added here joins, or null for a new top-level one.
   // It used to have no say: everything landed at the top level, which is how a
@@ -1935,6 +1938,10 @@ export default function BankScreen() {
     () => buildCategoryTree(categories as unknown as CategoryRow[]),
     [categories],
   );
+  const visibleCategoryTree = useMemo(
+    () => filterCategoryTree(categoryTree, categorySearch),
+    [categoryTree, categorySearch],
+  );
 
   // What is owed on each category that is a tracked debt, by name, so the
   // picker can say so. Without it a debt reads as an ordinary category and the
@@ -3282,7 +3289,7 @@ export default function BankScreen() {
                       </Text>
                       <TouchableOpacity
                         style={[styles.input, styles.pickerButton, { borderColor: colors.border, backgroundColor: colors.muted }]}
-                        onPress={() => setShowChargeCategoryPicker((open) => !open)}
+                        onPress={() => { setCategorySearch(''); setShowChargeCategoryPicker((open) => !open); }}
                         testID="bank-charge-category"
                       >
                         <Text style={{ flex: 1, color: chargeCategory ? colors.foreground : colors.mutedForeground, fontFamily: 'Inter_400Regular' }}>
@@ -3292,7 +3299,8 @@ export default function BankScreen() {
                       </TouchableOpacity>
                       {showChargeCategoryPicker && (
                         <View style={[styles.categoryDropdown, { borderColor: colors.dropdownBorder, backgroundColor: colors.dropdownBackground }]}>
-                          {categoryTree.map((group) => (
+                          <CategorySearchBox value={categorySearch} onChange={setCategorySearch} testID="charge-category-search" />
+{visibleCategoryTree.map((group) => (
                             <View key={`charge-group-${group.name}`}>
                               {group.children.length > 0 ? (
                                 <>
@@ -4224,7 +4232,7 @@ export default function BankScreen() {
                   </Text>
                   <TouchableOpacity
                     style={[styles.input, styles.pickerButton, { borderColor: colors.border, backgroundColor: colors.muted }]}
-                    onPress={() => setShowCategoryPicker(!showCategoryPicker)}
+                    onPress={() => { setCategorySearch(''); setShowCategoryPicker(!showCategoryPicker); }}
                     activeOpacity={0.7}
                     testID="bank-category-picker"
                   >
@@ -4246,7 +4254,8 @@ export default function BankScreen() {
                   </TouchableOpacity>
                   {showCategoryPicker && (
                     <View style={[styles.categoryDropdown, { borderColor: colors.dropdownBorder, backgroundColor: colors.dropdownBackground }]}>
-                      {categoryTree.map((group) => (
+                      <CategorySearchBox value={categorySearch} onChange={setCategorySearch} testID="withdraw-category-search" />
+{visibleCategoryTree.map((group) => (
                         <View key={`withdraw-group-${group.name}`}>
                           {group.children.length > 0 ? (
                             <>
@@ -4566,7 +4575,7 @@ export default function BankScreen() {
                       </Text>
                       <TouchableOpacity
                         style={[styles.input, styles.pickerButton, { borderColor: colors.border, backgroundColor: colors.muted }]}
-                        onPress={() => setShowReconcileCategoryPicker((open) => !open)}
+                        onPress={() => { setCategorySearch(''); setShowReconcileCategoryPicker((open) => !open); }}
                         testID="bank-reconcile-category"
                       >
                         <Text style={{ flex: 1, color: reconcileCategory ? colors.foreground : colors.mutedForeground, fontFamily: 'Inter_400Regular' }}>
@@ -4576,7 +4585,8 @@ export default function BankScreen() {
                       </TouchableOpacity>
                       {showReconcileCategoryPicker && (
                         <View style={[styles.categoryDropdown, { borderColor: colors.dropdownBorder, backgroundColor: colors.dropdownBackground }]}>
-                          {categoryTree.map((group) => (
+                          <CategorySearchBox value={categorySearch} onChange={setCategorySearch} testID="reconcile-category-search" />
+{visibleCategoryTree.map((group) => (
                             <View key={`reconcile-group-${group.name}`}>
                               {group.children.length > 0 ? (
                                 <>

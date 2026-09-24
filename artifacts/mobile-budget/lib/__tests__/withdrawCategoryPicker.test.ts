@@ -36,7 +36,7 @@ describe("adding a category while withdrawing", () => {
 // had offered.
 describe("the withdraw category picker", () => {
   it("shows subcategories under their heading", () => {
-    expect(mobile).toContain("{categoryTree.map((group) => (");
+    expect(mobile).toContain("{visibleCategoryTree.map((group) => (");
     expect(mobile).toContain("{group.name.toUpperCase()}");
     expect(mobile).toContain('key={`withdraw-child-${child}`}');
   });
