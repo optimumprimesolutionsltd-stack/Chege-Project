@@ -38,6 +38,7 @@ import { useAuth } from '@/lib/auth';
 import { handleLapsedError } from '@/lib/lapsedError';
 import { readAmount, toMoney } from '@/lib/bankAmount';
 import { AmountCalcRow } from '@/components/AmountCalcRow';
+import { balanceAsAt } from '@/lib/balanceAsAt';
 import { BankAccountPicker } from '@/components/BankAccountPicker';
 import { buildCategoryTree, type CategoryRow } from '@workspace/category-tree';
 import {
@@ -234,7 +235,9 @@ export default function BankDayScreen() {
   // The account has to be chosen before anything means anything, so default to
   // the one the balance query came back with rather than making it a step.
   const activeAccountId = selectedAccountId ?? accounts[0]?.id ?? null;
-  const openingBalance = account?.balance ?? 0;
+  // The account as it stood at the end of the chosen day, so changing the date
+  // changes the figure. Postings already saved on that day are in it.
+  const openingBalance = balanceAsAt(account, date);
 
   /** What one charge amounts to, blank or unparsable read as nothing yet. */
   const chargeAmount = (charge: ChargeItem): number => (charge.amount.trim() === '' ? 0 : readAmount(charge.amount) ?? 0);
@@ -613,7 +616,7 @@ export default function BankDayScreen() {
       {/* The figure somebody is working towards. */}
       <View style={[styles.balanceCard, { borderColor: colors.primary, backgroundColor: `${colors.primary}12` }]} testID="bank-day-balance">
         <View style={styles.balanceRow}>
-          <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>Balance now</Text>
+          <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>Balance on {new Date(`${date}T12:00:00`).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })}</Text>
           <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>KES {formatKES(openingBalance)}</Text>
         </View>
         <View style={styles.balanceRow}>

@@ -35,6 +35,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@workspace/replit-auth-web";
 import { evaluateAmountExpression, isAmountExpression } from "@/lib/amount-expression";
+import { balanceAsAt } from "@/lib/balance-as-at";
 
 type Party = { id: number; name: string; owedToUs?: number | null; owedByUs?: number | null };
 type Account = { id: number; name: string };
@@ -440,7 +441,9 @@ export default function BankDayPage() {
     [categories],
   );
 
-  const openingBalance = account?.balance ?? 0;
+  // The account as it stood at the end of the chosen day, so changing the date
+  // changes the figure. Postings already saved on that day are in it.
+  const openingBalance = balanceAsAt(account as never, date);
   const chargeAmount = (charge: ChargeItem): number => (charge.amount.trim() === "" ? 0 : readAmount(charge.amount) ?? 0);
   /** What each row moves, in the direction it moves it, every charge included. */
   const rowEffect = (row: DayRow): number => {
@@ -725,7 +728,7 @@ export default function BankDayPage() {
             <p className={projected < 0 ? "text-xl font-bold text-destructive" : "text-xl font-bold text-foreground"} data-testid="day-projected">
               {formatKes(projected)}
             </p>
-            <p className="text-xs text-muted-foreground">Now: {formatKes(openingBalance)}. Moves as you type, fees included.</p>
+            <p className="text-xs text-muted-foreground">On {new Date(`${date}T12:00:00`).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })}: {formatKes(openingBalance)}. Moves as you type, fees included.</p>
           </div>
         </CardContent>
       </Card>
