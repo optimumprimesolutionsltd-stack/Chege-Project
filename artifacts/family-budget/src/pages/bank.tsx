@@ -1068,7 +1068,7 @@ export default function Bank() {
             },
           });
         }
-        toast({ title: "Deposit recorded" });
+        toast({ title: "Money in recorded" });
       } else {
         const createdWithdrawal = await createDisbursement.mutateAsync({
           data: {
@@ -1740,7 +1740,7 @@ export default function Bank() {
             onClick={() => openMode("deposit")}
             className="h-12 px-6 rounded-xl flex-1"
           >
-            <ArrowDownLeft className="w-5 h-5 mr-2" /> Deposit
+            <ArrowDownLeft className="w-5 h-5 mr-2" /> Money in
           </Button>
           <Button
             data-testid="button-withdraw"
@@ -1750,7 +1750,7 @@ export default function Bank() {
             disabled={!canManageAccount}
             aria-describedby={!canManageAccount ? "bank-manager-guidance" : undefined}
           >
-            <ArrowUpRight className="w-5 h-5 mr-2" /> Withdraw
+            <ArrowUpRight className="w-5 h-5 mr-2" /> Money out
           </Button>
           <Button
             data-testid="button-transfer"
@@ -1777,7 +1777,7 @@ export default function Bank() {
           <CardHeader className="pb-2">
             <CardTitle className="text-xl font-display">
               {editingTransaction
-                ? `Edit ${mode === "deposit" ? "Deposit" : mode === "transfer" ? "Transfer" : "Withdrawal"}`
+                ? `Edit ${mode === "deposit" ? "money in" : mode === "transfer" ? "savings move" : "money out"}`
                 : mode === "deposit" ? "Add Money to Account" : mode === "transfer" ? "Move Money To or From Savings" : mode === "bank_transfer" ? "Move Money Between Your Accounts" : "Take Money Out"}
             </CardTitle>
             <CardDescription>
@@ -1873,7 +1873,7 @@ export default function Bank() {
                   ) : null}
                 </div>
                 <div className="space-y-2">
-                   <label className="text-sm font-semibold text-foreground">{mode === "deposit" ? "Deposit date" : "Date"}</label>
+                   <label className="text-sm font-semibold text-foreground">{mode === "deposit" ? "Date it came in" : "Date"}</label>
                   <Input
                     data-testid="input-date"
                     type="date"
@@ -2289,7 +2289,7 @@ export default function Bank() {
                   <>
                     <div className="space-y-2 sm:col-span-2">
                       <label className="text-sm font-semibold text-foreground">
-                        {isSharedWorkspace ? "Whose money is this?" : "Deposited by"}
+                        {isSharedWorkspace ? "Whose money is this?" : "Put in by"}
                         {canManageShared && <span className="font-normal text-muted-foreground text-xs ml-1">(select multiple to split)</span>}
                       </label>
                       {!isSharedWorkspace ? (

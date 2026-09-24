@@ -27,3 +27,21 @@ describe('plain words on screen', () => {
     expect(read('app/parties.tsx')).toContain('Who owes who');
   });
 });
+
+describe('the Bank buttons and labels say money in and money out', () => {
+  it('phone', () => {
+    const bank = read('app/(tabs)/bank.tsx');
+    expect(bank).toContain('>Money in</Text>');
+    expect(bank).toContain('>Money out</Text>');
+    expect(bank).toContain("'Put in by'");
+    expect(bank).not.toContain("'Deposited by'");
+    expect(bank).not.toContain("'Deposit date'");
+  });
+  it('web', () => {
+    const bank = read('../family-budget/src/pages/bank.tsx');
+    expect(bank).toContain('Money in\n');
+    expect(bank).toContain('"Put in by"');
+    expect(bank).not.toContain('"Deposited by"');
+    expect(bank).not.toContain('"Deposit date"');
+  });
+});

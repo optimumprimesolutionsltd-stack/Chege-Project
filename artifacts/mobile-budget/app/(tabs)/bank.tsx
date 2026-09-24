@@ -2229,7 +2229,7 @@ export default function BankScreen() {
               <View style={styles.statsRow}>
                 <View style={styles.statItem}>
                   <Feather name="arrow-down-circle" size={14} color="#4ade80" />
-                  <Text style={styles.statLabel}>Deposits</Text>
+                  <Text style={styles.statLabel}>Money in</Text>
                   <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>KES {formatKES(periodSummary ? periodSummary.totalIn : data?.totalDeposits)}</Text>
                 </View>
                 <View style={styles.statDivider} />
@@ -2337,7 +2337,7 @@ export default function BankScreen() {
                   testID="bank-deposit-action"
                 >
                   <Feather name="arrow-down-left" size={16} color="#0a1a10" />
-                  <Text numberOfLines={2} style={styles.actionBtnText}>Deposit</Text>
+                  <Text numberOfLines={2} style={styles.actionBtnText}>Money in</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.actionBtn, styles.actionBtnDisburse, (!canManageAccount || !hasBankAccounts) && styles.actionBtnDisabled]}
@@ -2348,7 +2348,7 @@ export default function BankScreen() {
                   testID="bank-withdraw-action"
                 >
                   <Feather name="arrow-up-right" size={16} color="#f87171" />
-                  <Text numberOfLines={2} style={[styles.actionBtnText, styles.actionBtnTextDisburse]}>Withdraw</Text>
+                  <Text numberOfLines={2} style={[styles.actionBtnText, styles.actionBtnTextDisburse]}>Money out</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.actionBtn, { backgroundColor: '#164e63' }, (!canManageAccount || !hasBankAccounts) && styles.actionBtnDisabled]}
@@ -2820,7 +2820,7 @@ export default function BankScreen() {
 
               <Text style={[styles.sheetTitle, { color: colors.foreground }]}>
                 {editingTransactionId !== null
-                  ? `Edit ${isDeposit ? 'Deposit' : isTransfer ? 'Savings Transfer' : 'Withdrawal'}`
+                  ? `Edit ${isDeposit ? 'money in' : isTransfer ? 'savings move' : 'money out'}`
                   : isDeposit ? 'Add Money to Account' : isTransfer ? 'Move Money To or From Savings' : isBankTransfer ? 'Move Money Between Your Accounts' : 'Take Money Out'}
               </Text>
 
@@ -2985,7 +2985,7 @@ export default function BankScreen() {
               ) : null}
                {/* Date stays beside the amount so every bank entry starts with its transaction date. */}
                <Text style={[styles.label, { color: colors.mutedForeground }]}>
-                 {isDeposit ? 'Deposit date' : 'Date'}
+                 {isDeposit ? 'Date it came in' : 'Date'}
                </Text>
                <Pressable
                  onPress={() => {
@@ -3602,7 +3602,7 @@ export default function BankScreen() {
               {isDeposit && !repayingParty && !isBorrowing && members.length > 0 && (
                 <>
                     <Text style={[styles.label, { color: colors.mutedForeground }]}>
-                    {isSharedWorkspace ? 'Whose money is this?' : 'Deposited by'}{' '}
+                    {isSharedWorkspace ? 'Whose money is this?' : 'Put in by'}{' '}
                     {canManageShared && <Text style={{ fontWeight: '400', fontSize: 11 }}>(tap multiple to split)</Text>}
                   </Text>
                   {!isSharedWorkspace ? (
@@ -4512,7 +4512,7 @@ export default function BankScreen() {
                   <ActivityIndicator color={isDeposit ? '#0a1a10' : '#fff'} />
                 ) : (
                   <Text style={[styles.submitText, !isDeposit && { color: '#fff' }]}>
-                    {editingTransactionId !== null ? 'Save Changes' : isDeposit ? 'Add Money' : 'Withdraw'}
+                    {editingTransactionId !== null ? 'Save Changes' : isDeposit ? 'Save money in' : 'Save money out'}
                   </Text>
                 )}
               </TouchableOpacity>
