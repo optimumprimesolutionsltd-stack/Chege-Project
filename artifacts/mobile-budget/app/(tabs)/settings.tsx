@@ -723,8 +723,8 @@ export default function SettingsScreen() {
       },
     ]);
   };
-  const handleRoleChange = async (member: GroupMember) => {
-    const role = member.role === 'admin' ? 'member' : 'admin';
+  const handleRoleChange = async (member: GroupMember, targetRole?: 'admin' | 'member') => {
+    const role = targetRole ?? (member.role === 'admin' ? 'member' : 'admin');
     setManagingMembers(true);
     try {
       await customFetch(`/api/members/${member.userId}`, {
@@ -1628,11 +1628,11 @@ export default function SettingsScreen() {
             >
               <View style={[styles.rowLeft, { minWidth: 120 }]}>
                 <View style={[styles.rowIcon, { backgroundColor: colors.primary + '18' }]}>
-                  <Feather name={member.role === 'admin' || member.role === 'owner' ? 'shield' : 'user'} size={15} color={colors.primary} />
+                  <Feather name={member.role === 'admin' || member.role === 'owner' ? 'shield' : member.role === 'viewer' ? 'eye' : 'user'} size={15} color={colors.primary} />
                 </View>
                 <View>
                   <Text style={[styles.rowLabel, { color: colors.foreground }]}>{member.userId === user?.id ? 'You' : member.userName ?? 'Member'}</Text>
-                  <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>{member.role === 'owner' ? 'Owner' : member.role === 'admin' ? 'Admin' : 'Member'}</Text>
+                  <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>{member.role === 'owner' ? 'Owner' : member.role === 'admin' ? 'Admin' : member.role === 'viewer' ? 'Viewer — read only' : 'Member'}</Text>
                 </View>
               </View>
               {canManageShared && editingAccess && member.role !== 'owner' && member.userId !== user?.id ? (
@@ -1649,16 +1649,35 @@ export default function SettingsScreen() {
                        </Text>
                      </Pressable>
                    ) : null}
-                   <Pressable
-                     disabled={managingMembers}
-                     onPress={() => handleRoleChange(member)}
-                     accessibilityRole="button"
-                     accessibilityLabel={`Change ${member.userName ?? 'member'} role to ${member.role === 'admin' ? 'member' : 'admin'}`}
-                   >
-                    <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 12 }}>
-                       {member.role === 'admin' ? 'Change to member' : 'Change to admin'}
-                    </Text>
-                  </Pressable>
+                   {member.role === 'viewer' ? (
+                     // A viewer read the group in for free on a read-only
+                     // link and has no recording access to give up — jumping
+                     // them straight to Admin the way the member<->admin
+                     // toggle below does for everyone else would skip past
+                     // Member, the tier that actually matches "give this
+                     // person an account that can record."
+                     <Pressable
+                       disabled={managingMembers}
+                       onPress={() => handleRoleChange(member, 'member')}
+                       accessibilityRole="button"
+                       accessibilityLabel={`Make ${member.userName ?? 'this viewer'} a member who can record`}
+                     >
+                       <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 12 }}>
+                         Make a member
+                       </Text>
+                     </Pressable>
+                   ) : (
+                     <Pressable
+                       disabled={managingMembers}
+                       onPress={() => handleRoleChange(member)}
+                       accessibilityRole="button"
+                       accessibilityLabel={`Change ${member.userName ?? 'member'} role to ${member.role === 'admin' ? 'member' : 'admin'}`}
+                     >
+                      <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 12 }}>
+                         {member.role === 'admin' ? 'Change to member' : 'Change to admin'}
+                      </Text>
+                    </Pressable>
+                   )}
                    <Pressable
                      disabled={managingMembers}
                      onPress={() => handleRemoveMember(member)}
