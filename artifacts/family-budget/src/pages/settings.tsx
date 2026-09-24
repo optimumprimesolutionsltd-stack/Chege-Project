@@ -1236,6 +1236,13 @@ export default function Settings() {
                             disabled={updateMemberRole.isPending || removeMember.isPending}
                             className="h-9 rounded-lg border border-border bg-background px-2 text-xs font-medium text-foreground"
                           >
+                            {(m.role as string) === "viewer" ? (
+                              // Joined on the read-only link: reads everything,
+                              // records nothing. Without its own option the
+                              // select had no match and fell back to showing
+                              // "Member", so a viewer looked like a full member.
+                              <option value="viewer" disabled>Viewer — read only</option>
+                            ) : null}
                             <option value="member">Member</option>
                             <option value="admin">Admin</option>
                           </select>
@@ -1254,7 +1261,7 @@ export default function Settings() {
                       </>
                     ) : (
                       <span className="text-xs bg-primary/10 text-primary font-medium px-2 py-1 rounded-full">
-                        {m.userId === user?.id ? `You · ${m.role === "owner" ? "Owner" : m.role === "admin" ? "Admin" : "Member"}` : m.role === "owner" ? "Owner · Protected" : m.role === "admin" ? "Admin" : "Member"}
+                        {m.userId === user?.id ? `You · ${m.role === "owner" ? "Owner" : m.role === "admin" ? "Admin" : (m.role as string) === "viewer" ? "Viewer" : "Member"}` : m.role === "owner" ? "Owner · Protected" : m.role === "admin" ? "Admin" : (m.role as string) === "viewer" ? "Viewer — read only" : "Member"}
                       </span>
                     )}
                   </div>

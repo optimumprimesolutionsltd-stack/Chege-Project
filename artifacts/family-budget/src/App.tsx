@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from '@workspace/replit-auth-web';
 import { applyAppearance, readAppearance } from '@/lib/appearance';
 import LoginPage from '@/pages/login';
 import { Layout } from '@/components/layout';
+import { PlanChoiceGate } from '@/components/plan-choice-gate';
 import Dashboard from '@/pages/dashboard';
 import Expenses from '@/pages/expenses';
 import Budget from '@/pages/budget';
@@ -114,6 +115,7 @@ class AppErrorBoundary extends Component<
 
 function AuthenticatedApp() {
   return (
+    <PlanChoiceGate>
     <Layout>
       <Switch>
         <Route path="/" component={Dashboard} />
@@ -138,6 +140,7 @@ function AuthenticatedApp() {
         <Route component={NotFound} />
       </Switch>
     </Layout>
+    </PlanChoiceGate>
   );
 }
 

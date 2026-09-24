@@ -15,6 +15,7 @@ import { workspaceLabel, workspaceNameClass } from "@/lib/workspace-identity";
 import { Input } from "@/components/ui/input";
 import { getBudgetIncomeCheck, getKnownIncomeTotal } from "@/lib/onboarding-budget-utils";
 import { budgetDurationLabels } from "@/lib/budget-plan";
+import { DEFAULT_WORKSPACE_ACCENT } from "@/lib/workspace-accent";
 
 const CHOOSER_STORAGE_PREFIX = "jamvi:budget-chooser:completed:";
 const ONBOARDING_DRAFT_STORAGE_PREFIX = "jamvi:onboarding-draft:";
@@ -217,7 +218,7 @@ function WorkspaceIdentity({
     "trending-up": TrendingUp,
     tool: Wrench,
   }[workspace.icon] ?? Users);
-  const accent = workspace.accentColor ?? "#003383";
+  const accent = DEFAULT_WORKSPACE_ACCENT;
 
   const photoUrl = workspace.isPrivate ? personalPhotoUrl : workspace.photoUrl;
   if (photoUrl) {

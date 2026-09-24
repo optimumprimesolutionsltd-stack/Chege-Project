@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { groupKindPresentation } from "@/components/group-kind";
 import { Check, Loader2, UsersRound, Wallet } from "lucide-react";
+import { DEFAULT_WORKSPACE_ACCENT } from "@/lib/workspace-accent";
 
 /**
  * Everything this person has, in one place.
@@ -63,7 +64,7 @@ function WorkspaceCard({
       <span
         aria-hidden="true"
         className="absolute inset-y-0 left-0 w-1.5"
-        style={{ backgroundColor: workspace.accentColor }}
+        style={{ backgroundColor: DEFAULT_WORKSPACE_ACCENT }}
       />
       <span className="ml-2 flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-muted text-lg">
         {workspace.photoUrl ? (

@@ -73,6 +73,7 @@ import { canManageBankAccount } from "@/lib/bank-access";
 import { DashboardAnnouncement, DashboardSummaryCards } from "@/components/dashboard-home-cards";
 import { getCategoryAllocationStatus, getExpenseFundingStatus, getFundingRemainder, getProjectedCategoryBalance } from "@/lib/expense-funding-utils";
 import { buildCategoryTree, childrenFor, parentOf, type CategoryRow } from "@workspace/category-tree";
+import { DEFAULT_WORKSPACE_ACCENT } from "@/lib/workspace-accent";
 
 type QuickAction = "none" | "income" | "expense" | "goal";
 const RECURRING_DASHBOARD_DRAFT_KEY = "jamvi-recurring-dashboard-draft";
@@ -2702,7 +2703,7 @@ export default function Dashboard() {
           color: category.color || "hsl(var(--primary))",
         }))
     : [];
-  const workspaceAccentColor = group?.accentColor ?? "#003383";
+  const workspaceAccentColor = DEFAULT_WORKSPACE_ACCENT;
   return (
     <div className="min-w-0 overflow-x-hidden space-y-6 pb-12 sm:space-y-8">
       <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/[0.06] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-primary">
