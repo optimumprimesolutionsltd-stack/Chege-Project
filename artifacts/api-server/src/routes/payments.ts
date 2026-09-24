@@ -166,17 +166,25 @@ paymentsRouter.post("/payments/stk-push", stkPushLimiter, stkPushPhoneLimiter, a
       message: push.customerMessage,
     });
   } catch (error) {
+    // sendStkPush and accessToken already throw Daraja's own wording (or a
+    // specific "could not authenticate" / status-code message) rather than
+    // anything generic, and neither ever includes a credential or PIN — see
+    // mpesa.ts. That detail was being logged and saved to resultDesc but
+    // then thrown away in favour of one hardcoded string here, so every
+    // failure looked identical to whoever hit it, whether the cause was a
+    // bad phone number, expired credentials, or Safaricom being down.
+    const detail = error instanceof Error ? error.message : "Could not reach M-Pesa.";
     await db
       .update(paymentsTable)
       .set({
         status: PAYMENT_STATUS.FAILED,
-        resultDesc: error instanceof Error ? error.message : "Could not reach M-Pesa.",
+        resultDesc: detail,
         updatedAt: new Date(),
       })
       .where(eq(paymentsTable.id, payment.id));
 
     req.log.error({ err: error, paymentId: payment.id }, "Could not start an M-Pesa payment");
-    res.status(502).json({ error: "Could not reach M-Pesa. Please try again." });
+    res.status(502).json({ error: detail });
   }
 });
 

@@ -180,6 +180,24 @@ describe("POST /api/payments/stk-push", () => {
     expect(sendStkPush).toHaveBeenCalledTimes(1);
   });
 
+  // sendStkPush and accessToken (mpesa.ts) already throw Daraja's own wording
+  // or a specific "could not authenticate" message, never anything containing
+  // a credential or PIN. That detail used to be logged and saved to
+  // resultDesc, then discarded in favour of one hardcoded string in the
+  // response — every failure looked identical to whoever hit it, whether the
+  // cause was a bad number, expired credentials, or Safaricom being down.
+  it("tells the caller what actually went wrong, not a generic string", async () => {
+    selectRows.current = [];
+    sendStkPush.mockRejectedValueOnce(new Error("Could not authenticate with M-Pesa (401)."));
+
+    const response = await request(appForPayments()).post("/api/payments/stk-push").send(body);
+
+    expect(response.status).toBe(502);
+    expect(response.body.error).toBe("Could not authenticate with M-Pesa (401).");
+    expect(updateSet).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "failed", resultDesc: "Could not authenticate with M-Pesa (401)." }),
+    );
+  });
 });
 
 describe("GET /api/payments/:id/status", () => {
