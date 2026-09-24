@@ -51,3 +51,26 @@ describe("Activity includes transfers, debt events and hand-recorded contributio
     expect(feed).toContain("id: `hand-contribution-${c.id}`");
   });
 });
+
+// An audit of what moves the bank balance found two more kinds left out:
+// withdrawals with no category, and merry-go-round payouts.
+describe("Activity includes uncategorised withdrawals and payouts", () => {
+  it("lists withdrawals that matched no other rule, as expenses under Uncategorised", () => {
+    expect(feed).toContain("const otherWithdrawals = isMonthlyReport ? [] :");
+    expect(feed).toContain("sql`${jointAccountTxTable.expenseCategory} IS NULL`");
+    expect(feed).toContain("isNull(jointAccountTxTable.savingsGoalId)");
+    expect(feed).toContain("isNull(jointAccountTxTable.settlesContributorId)");
+    expect(feed).toContain("id: `bank-other-${w.id}`");
+  });
+
+  it("lists payouts as neutral money out", () => {
+    expect(feed).toContain("const payoutRows = isMonthlyReport ? [] :");
+    expect(feed).toContain("id: `payout-${p.id}`");
+    expect(feed).toMatch(/id: `payout-\$\{p\.id\}`,[\s\S]*?type: "debt"/);
+  });
+
+  it("never lists a payout twice: its bank withdrawal is left out of both bank queries", () => {
+    const guard = "NOT EXISTS (SELECT 1 FROM group_payouts p WHERE p.transaction_id = ${jointAccountTxTable.id})";
+    expect(feed.split(guard).length - 1).toBe(2);
+  });
+});
