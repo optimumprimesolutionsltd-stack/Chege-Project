@@ -6,6 +6,7 @@ import { ACTIVITY_TYPE } from '@/lib/activityTypes';
 import { getExpenseActivityEditHref } from '@/lib/expenseEditLink';
 import { formatDisplayDate } from '@/lib/displayFormat';
 import { GROUP_ATTRIBUTION } from "@/lib/attribution";
+import { formatExact } from '@/lib/formatExact';
 
 export interface ActivityItem {
   id: string;
@@ -98,7 +99,7 @@ export default function ActivityCard({ item, colors }: Props) {
 
       <Text style={[styles.amount, { color: amountColor }]}>
         {goesOut ? '−' : '+'}
-        {item.amount.toLocaleString('en-KE', { maximumFractionDigits: 0 })}
+        {formatExact(item.amount)}
       </Text>
       {expenseEditHref ? <Feather name="edit-2" size={15} color={colors.primary} /> : null}
     </>

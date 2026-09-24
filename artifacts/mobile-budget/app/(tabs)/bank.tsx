@@ -28,6 +28,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useColors } from '@/hooks/useColors';
 import { useListEditor } from '@/hooks/useListEditor';
 import { movableOnDay, summariseDays } from '@/lib/moveDay';
+import { formatExact } from '@/lib/formatExact';
 import { BankPeriodBar } from '@/components/BankPeriodBar';
 import { inPeriod, nairobiToday, periodFor, summarisePeriod, type PeriodPreset } from '@/lib/bankPeriod';
 import { EditableName, ListEditButton, ListEditorFooter, RemoveRowButton } from '@/components/ListEditor';
@@ -85,7 +86,7 @@ const CHARGE_CATEGORY_KEY = 'jamvi:last-charge-category';
 
 function formatKES(n?: number | null): string {
   if (n === undefined || n === null) return '—';
-  return n.toLocaleString('en-KE', { maximumFractionDigits: 0 });
+  return formatExact(n);
 }
 
 function formatDateTime(s?: string | null): string {

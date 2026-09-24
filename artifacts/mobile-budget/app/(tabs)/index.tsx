@@ -45,6 +45,7 @@ import {
   useGetGroup,
   customFetch,
 } from '@workspace/api-client-react';
+import { formatExact } from '@/lib/formatExact';
 
 const MONTHS_SHORT = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -676,7 +677,7 @@ export default function DashboardScreen() {
                 <BankBalanceSkeleton />
               ) : (
                 <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65} style={[styles.bankBalance, { color: colors.info }]}>
-                  {bankAccount ? (isPrivate ? '••••' : `KES ${formatKES(bankAccount.balance)}`) : '—'}
+                  {bankAccount ? (isPrivate ? '••••' : `KES ${formatExact(bankAccount.balance)}`) : '—'}
                 </Text>
               )}
             </View>
@@ -684,14 +685,14 @@ export default function DashboardScreen() {
             <View style={styles.bankStat}>
               <Text style={[styles.bankStatLabel, { color: colors.mutedForeground }]}>IN THIS MONTH</Text>
               <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65} style={[styles.bankStatValue, { color: colors.success }]}>
-                {isPrivate ? '••••' : `+KES ${formatKES(monthlyDeposited)}`}
+                {isPrivate ? '••••' : `+KES ${formatExact(monthlyDeposited)}`}
               </Text>
             </View>
             <View style={[styles.bankStatDivider, { backgroundColor: colors.border }]} />
             <View style={styles.bankStat}>
               <Text style={[styles.bankStatLabel, { color: colors.mutedForeground }]}>OUT THIS MONTH</Text>
               <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65} style={[styles.bankStatValue, { color: colors.destructive }]}>
-                {isPrivate ? '••••' : `-KES ${formatKES(monthlyDisbursed)}`}
+                {isPrivate ? '••••' : `-KES ${formatExact(monthlyDisbursed)}`}
               </Text>
             </View>
           </View>
