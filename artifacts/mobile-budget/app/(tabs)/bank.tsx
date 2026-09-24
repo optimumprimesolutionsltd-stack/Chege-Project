@@ -27,6 +27,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useColors } from '@/hooks/useColors';
 import { useListEditor } from '@/hooks/useListEditor';
+import { movableOnDay, summariseDays } from '@/lib/moveDay';
 import { EditableName, ListEditButton, ListEditorFooter, RemoveRowButton } from '@/components/ListEditor';
 import { PageFlatList } from '@/components/PageScrollReset';
 import {
@@ -792,6 +793,50 @@ export default function BankScreen() {
     } catch (error: unknown) {
       Alert.alert('Could not move it', error instanceof Error ? error.message : 'Please try again.');
     }
+  };
+
+  // Move every ordinary posting from one day onto another account, for the
+  // day somebody realises they recorded under the wrong bank. Runs the same
+  // single-entry move for each, so nothing else about an entry changes, and
+  // says how many it left behind (transfers and savings/expense-linked
+  // postings cannot change accounts on their own).
+  const [moveDayOpen, setMoveDayOpen] = useState(false);
+  const [moveDayDate, setMoveDayDate] = useState<string | null>(null);
+  const [movingDay, setMovingDay] = useState(false);
+
+  const closeMoveDay = () => {
+    if (movingDay) return;
+    setMoveDayOpen(false);
+    setMoveDayDate(null);
+  };
+
+  const moveDayTo = async (targetAccountId: number, targetName: string) => {
+    if (!moveDayDate || movingDay) return;
+    const batch = movableOnDay(transactions, moveDayDate, canMoveTx);
+    const daySize = transactions.filter((tx) => tx.date.slice(0, 10) === moveDayDate).length;
+    setMovingDay(true);
+    let moved = 0;
+    let failure: string | null = null;
+    for (const tx of batch) {
+      try {
+        await updateTransaction({ id: tx.id, data: { amount: tx.amount, date: tx.date, accountId: targetAccountId } });
+        moved += 1;
+      } catch (error: unknown) {
+        failure = error instanceof Error ? error.message : 'Please try again.';
+        break;
+      }
+    }
+    await invalidateAccounts();
+    setMovingDay(false);
+    setMoveDayOpen(false);
+    setMoveDayDate(null);
+    const left = daySize - moved;
+    Alert.alert(
+      failure ? 'Only some were moved' : 'Day moved',
+      `${moved} ${moved === 1 ? 'entry' : 'entries'} moved to ${targetName}.`
+        + (failure ? ` Stopped because: ${failure}` : '')
+        + (!failure && left > 0 ? ` ${left} stayed here - transfers and savings or expense-linked entries cannot move on their own.` : ''),
+    );
   };
 
   const openMovePicker = (tx: Tx) => {
@@ -2277,6 +2322,19 @@ export default function BankScreen() {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <Text style={[styles.listHeader, { color: colors.mutedForeground }]}>TRANSACTIONS</Text>
               <ListEditButton editor={txEditor} canManage={canManageAccount} />
+              {canManageAccount && !txEditor.editing && accounts.length > 1 ? (
+                <TouchableOpacity
+                  onPress={() => setMoveDayOpen(true)}
+                  hitSlop={8}
+                  testID="bank-move-day"
+                  accessibilityRole="button"
+                  accessibilityLabel="Move a whole day to another account"
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 6 }}
+                >
+                  <Feather name="repeat" size={12} color={colors.primary} />
+                  <Text style={{ color: colors.primary, fontSize: 12, fontFamily: 'Inter_600SemiBold' }}>Move a day</Text>
+                </TouchableOpacity>
+              ) : null}
             </View>
           ) : null}
           </>
@@ -2471,6 +2529,58 @@ export default function BankScreen() {
             </ScrollView>
           </View>
         </KeyboardAvoidingView>
+      </Modal>
+
+      <Modal visible={moveDayOpen} transparent animationType="fade" onRequestClose={closeMoveDay}>
+        <TouchableWithoutFeedback onPress={closeMoveDay}>
+          <View style={{ flex: 1, justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.55)', padding: 20 }}>
+            <TouchableWithoutFeedback>
+              <View style={{ backgroundColor: colors.card, borderRadius: 16, padding: 16, maxHeight: '75%', gap: 8 }}>
+                <Text style={{ color: colors.foreground, fontSize: 16, fontFamily: 'Inter_700Bold' }}>
+                  {moveDayDate ? 'Move to which account?' : 'Which day was recorded under the wrong account?'}
+                </Text>
+                <Text style={{ color: colors.mutedForeground, fontSize: 12, lineHeight: 17 }}>
+                  {moveDayDate
+                    ? `Every ordinary entry on ${formatBankDate(moveDayDate)} leaves ${selectedAccount?.name ?? 'this account'} and goes to the one you pick. Both balances update.`
+                    : `Entries on ${selectedAccount?.name ?? 'this account'}. Transfers and savings or expense-linked entries are left where they are.`}
+                </Text>
+                <ScrollView style={{ flexGrow: 0 }}>
+                  {movingDay ? (
+                    <ActivityIndicator color={colors.primary} style={{ marginVertical: 16 }} />
+                  ) : moveDayDate ? (
+                    accounts.filter((account) => account.id !== selectedAccountId).map((account) => (
+                      <TouchableOpacity
+                        key={account.id}
+                        onPress={() => void moveDayTo(account.id, account.name)}
+                        style={{ paddingVertical: 13, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}
+                        testID={`bank-move-day-to-${account.id}`}
+                      >
+                        <Text style={{ color: colors.foreground, fontSize: 15 }}>{account.name}</Text>
+                      </TouchableOpacity>
+                    ))
+                  ) : (
+                    summariseDays(transactions, canMoveTx).map((day) => (
+                      <TouchableOpacity
+                        key={day.date}
+                        onPress={() => setMoveDayDate(day.date)}
+                        style={{ paddingVertical: 13, flexDirection: 'row', justifyContent: 'space-between', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}
+                        testID={`bank-move-day-${day.date}`}
+                      >
+                        <Text style={{ color: colors.foreground, fontSize: 15 }}>{formatBankDate(day.date)}</Text>
+                        <Text style={{ color: colors.mutedForeground, fontSize: 13 }}>
+                          {day.movable} {day.movable === 1 ? 'entry' : 'entries'}
+                        </Text>
+                      </TouchableOpacity>
+                    ))
+                  )}
+                </ScrollView>
+                <TouchableOpacity onPress={closeMoveDay} disabled={movingDay} style={{ alignSelf: 'flex-end', paddingVertical: 8 }}>
+                  <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold' }}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
       </Modal>
 
       <Modal

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-const source = readFileSync('components/ContributionExport.tsx', 'utf8');
+const source = readFileSync('components/ContributionExport.tsx', 'utf8').replace(/\r\n/g, '\n');
 const download = source.slice(source.indexOf('const downloadPdf'), source.indexOf('const shareToWhatsApp'));
 const share = source.slice(source.indexOf('const shareToWhatsApp'), source.indexOf('return (\n    <View style={[styles.card'));
 
