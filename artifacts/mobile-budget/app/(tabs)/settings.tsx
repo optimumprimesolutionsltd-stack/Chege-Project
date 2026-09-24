@@ -1104,15 +1104,15 @@ export default function SettingsScreen() {
                 {photoUrl ? (
                   <Image
                     source={{ uri: photoUrl }}
-                    style={[styles.rowIcon, { borderRadius: 10, borderWidth: 2, borderColor: workspace.accentColor }]}
+                    style={[styles.rowIcon, { borderRadius: 10, borderWidth: 2, borderColor: colors.primary }]}
                   />
                  ) : workspace.emoji ? (
-                    <View style={[styles.rowIcon, { backgroundColor: `${workspace.accentColor}24`, borderWidth: 1, borderColor: `${workspace.accentColor}66` }]}>
+                    <View style={[styles.rowIcon, { backgroundColor: `${colors.primary}24`, borderWidth: 1, borderColor: `${colors.primary}66` }]}>
                      <Text style={{ fontSize: 16 }}>{workspace.emoji}</Text>
                    </View>
                  ) : (
-                   <View style={[styles.rowIcon, { backgroundColor: `${workspace.accentColor}20` }]}>
-                     <Feather name={getSharedBudgetIcon(workspace.icon)} size={15} color={workspace.accentColor} />
+                   <View style={[styles.rowIcon, { backgroundColor: `${colors.primary}20` }]}>
+                     <Feather name={getSharedBudgetIcon(workspace.icon)} size={15} color={colors.primary} />
                   </View>
                 )}
                 <View style={{ flex: 1 }}>
@@ -1120,7 +1120,7 @@ export default function SettingsScreen() {
                   <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>{detail}</Text>
                 </View>
                 {selected ? (
-                   <Feather name="check-circle" size={19} color={workspace.accentColor} />
+                   <Feather name="check-circle" size={19} color={colors.primary} />
                 ) : (
                   <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
                 )}

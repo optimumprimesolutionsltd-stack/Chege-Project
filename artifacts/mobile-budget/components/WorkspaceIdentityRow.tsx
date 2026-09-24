@@ -30,7 +30,7 @@ export function WorkspaceIdentityRow({
   if (!group) return null;
 
   const isShared = group.isPrivate === false;
-  const accentColor = group.accentColor ?? colors.brandTeal;
+  const accentColor = colors.brandTeal;
   const photoUrl = workspaceIdentityPhotoUrl(group, user);
   const icon = (
     {

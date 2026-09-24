@@ -246,7 +246,7 @@ export default function DashboardScreen() {
   const displayName = user?.firstName?.trim() || '';
   const topPad = Platform.OS === 'web' ? 67 : insets.top;
   const isCurrentMonth = month === now.getMonth() + 1 && year === now.getFullYear();
-  const workspaceAccentColor = group?.accentColor ?? colors.brandBlue;
+  const workspaceAccentColor = colors.brandBlue;
   const workspaceIcon = (group?.icon ?? 'users') as keyof typeof Feather.glyphMap;
   const workspacePhotoUrl = isSharedWorkspace ? group?.photoUrl : user?.profileImageUrl;
   const canManageBudget = !isSharedWorkspace || group?.role === 'owner' || group?.role === 'admin';

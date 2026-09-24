@@ -344,22 +344,22 @@ export default function BudgetChooserScreen() {
         <Image
           source={{ uri: photoUrl }}
           accessibilityIgnoresInvertColors
-          style={[styles.workspacePhoto, { borderColor: workspace.accentColor ?? colors.primary }]}
+          style={[styles.workspacePhoto, { borderColor: colors.primary }]}
         />
       ) : personal ? (
         <View style={[styles.workspaceIcon, { backgroundColor: colors.accent }]}>
           <Feather name="lock" size={19} color={colors.accentForeground} />
         </View>
       ) : workspace.emoji ? (
-        <View style={[styles.workspaceIcon, { backgroundColor: `${workspace.accentColor ?? colors.primary}20` }]}>
+        <View style={[styles.workspaceIcon, { backgroundColor: `${colors.primary}20` }]}>
           <Text style={styles.workspaceEmoji}>{workspace.emoji}</Text>
         </View>
       ) : (
-        <View style={[styles.workspaceIcon, { backgroundColor: `${workspace.accentColor ?? colors.primary}20` }]}>
+        <View style={[styles.workspaceIcon, { backgroundColor: `${colors.primary}20` }]}>
           <Feather
             name={sharedWorkspaceIcon(workspace.icon)}
             size={19}
-            color={workspace.accentColor ?? colors.primary}
+            color={colors.primary}
           />
         </View>
       )}
