@@ -37,6 +37,7 @@ import {
 } from '@workspace/api-client-react';
 import { getCategoryIcon } from '@/lib/categoryIcons';
 import { WorkspaceIdentityRow } from '@/components/WorkspaceIdentityRow';
+import { ScreenHint } from '@/components/ScreenHint';
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -431,6 +432,7 @@ export default function ReportsScreen() {
       >
         <WorkspaceIdentityRow group={group} />
         <Text style={styles.headerTitle}>Reports</Text>
+        <ScreenHint light>See where your money came from and where it went.</ScreenHint>
           <View style={styles.headerControls}>
             <MonthPicker month={month} year={year} onChange={handleMonthChange} colors={colors} />
             {canDownloadPdf ? (

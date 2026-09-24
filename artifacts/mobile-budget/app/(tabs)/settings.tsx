@@ -67,6 +67,7 @@ import {
 import { WORKSPACE_NAME_STYLES, workspaceBudgetName, workspaceIdentityText, workspaceNameTextStyle } from '@/lib/workspaceIdentity';
 import { SHARED_GROUP_KINDS, sharedGroupKindDetails, type SharedGroupKind } from '@/lib/groupKinds';
 import { isMemberLimitError, MEMBER_LIMIT_PROMPT } from '@/lib/memberLimit';
+import { ScreenHint } from '@/components/ScreenHint';
 
 type GroupMember = {
   userId: string;
@@ -915,6 +916,7 @@ export default function SettingsScreen() {
       {/* Header */}
       <View style={[styles.header, { paddingTop: topPad + 12, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <Text style={[styles.headerTitle, { color: colors.foreground }]}>Settings</Text>
+        <ScreenHint>Your account, your budget and who can see it.</ScreenHint>
       </View>
 
       <PageScrollView

@@ -2678,7 +2678,7 @@ export default function Expenses() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-display font-bold text-foreground">Expenses</h1>
-          <p className="text-muted-foreground mt-1">Track where the money is going.</p>
+          <p className="text-muted-foreground mt-1">Everything you spent, and what it was for.</p>
         </div>
         <div className="flex w-full items-center justify-between gap-1 rounded-xl border border-input bg-card p-1 text-foreground shadow-sm sm:w-auto sm:justify-start">
           <Button variant="ghost" size="icon" onClick={handlePrevMonth} className="h-10 w-10 rounded-lg text-foreground/70 hover:bg-muted hover:text-foreground">

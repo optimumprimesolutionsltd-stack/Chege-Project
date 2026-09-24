@@ -240,8 +240,8 @@ export default function PartiesPage() {
       <div>
         <h1 className="text-2xl font-bold text-foreground">Who owes who</h1>
         <p className="text-sm text-muted-foreground">
-          Everybody money stands between you and — people and institutions alike. A loan from a bank sits here the same
-          way money owed to a neighbour does.
+          Money you owe, and money other people owe you, in one list. A loan from a bank sits here the same way money
+          owed to a neighbour does.
         </p>
       </div>
 

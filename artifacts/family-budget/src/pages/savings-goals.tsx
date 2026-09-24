@@ -786,7 +786,7 @@ export default function SavingsGoals() {
         <div>
           <h1 className="text-3xl font-display font-bold text-foreground">Savings Goals</h1>
           <p className="text-muted-foreground mt-1">
-            Track shared targets — holidays, emergency funds, and more.
+            Save up for something you want, like a trip, a phone or a rainy day.
           </p>
         </div>
         {mode === "none" && (
