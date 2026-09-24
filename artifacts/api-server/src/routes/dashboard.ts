@@ -15,6 +15,7 @@ import {
   incomeSourcesTable,
   contributionsTable,
   groupContributorsTable,
+  groupPayoutsTable,
 } from "@workspace/db";
 import { sql, eq, and, inArray, isNull } from "drizzle-orm";
 import {
@@ -428,6 +429,7 @@ router.get("/dashboard/activity", async (req, res): Promise<void> => {
       isNull(jointAccountTxTable.bankTransferId),
       isNull(jointAccountTxTable.expenseId),
       sql`${jointAccountTxTable.expenseCategory} IS NOT NULL`,
+      sql`NOT EXISTS (SELECT 1 FROM group_payouts p WHERE p.transaction_id = ${jointAccountTxTable.id})`,
     ))
     .orderBy(sql`${jointAccountTxTable.createdAt} DESC`)
     .limit(monthlyLimit);
@@ -457,6 +459,53 @@ router.get("/dashboard/activity", async (req, res): Promise<void> => {
       sql`${jointAccountTxTable.bankTransferId} IS NOT NULL`,
     ))
     .orderBy(sql`${jointAccountTxTable.createdAt} DESC`)
+    .limit(monthlyLimit);
+
+  // Withdrawals with no category ("Other"): not a transfer, not an expense, not
+  // a loan or repayment, not money moved to savings and not a payout. They
+  // moved the bank balance but matched none of the queries above, so they
+  // never appeared in Activity at all.
+  const otherWithdrawals = isMonthlyReport ? [] : await db
+    .select({
+      id: jointAccountTxTable.id,
+      amount: jointAccountTxTable.amount,
+      description: jointAccountTxTable.description,
+      madeById: jointAccountTxTable.madeById,
+      madeByName: usersTable.firstName,
+      date: jointAccountTxTable.date,
+    })
+    .from(jointAccountTxTable)
+    .leftJoin(usersTable, eq(jointAccountTxTable.madeById, usersTable.id))
+    .where(and(
+      eq(jointAccountTxTable.groupId, groupId),
+      eq(jointAccountTxTable.type, "disbursement"),
+      isNull(jointAccountTxTable.bankTransferId),
+      isNull(jointAccountTxTable.expenseId),
+      isNull(jointAccountTxTable.savingsGoalId),
+      sql`${jointAccountTxTable.expenseCategory} IS NULL`,
+      sql`NOT COALESCE(${jointAccountTxTable.isLending}, false)`,
+      // isNull() rather than raw SQL: this is a withdrawal filter, and the raw
+      // form is what borrowing-is-not-income counts as a money-in filter.
+      isNull(jointAccountTxTable.settlesContributorId),
+      sql`NOT EXISTS (SELECT 1 FROM group_payouts p WHERE p.transaction_id = ${jointAccountTxTable.id})`,
+    ))
+    .orderBy(sql`${jointAccountTxTable.createdAt} DESC`)
+    .limit(monthlyLimit);
+
+  // Merry-go-round payouts: money paid out to a member on their turn.
+  const payoutRows = isMonthlyReport ? [] : await db
+    .select({
+      id: groupPayoutsTable.id,
+      roundNumber: groupPayoutsTable.roundNumber,
+      amount: groupPayoutsTable.amount,
+      date: groupPayoutsTable.date,
+      note: groupPayoutsTable.note,
+      contributorName: groupContributorsTable.name,
+    })
+    .from(groupPayoutsTable)
+    .leftJoin(groupContributorsTable, eq(groupPayoutsTable.contributorId, groupContributorsTable.id))
+    .where(eq(groupPayoutsTable.groupId, groupId))
+    .orderBy(sql`${groupPayoutsTable.createdAt} DESC`)
     .limit(monthlyLimit);
 
   const debtRows = isMonthlyReport ? [] : await db
@@ -721,6 +770,27 @@ router.get("/dashboard/activity", async (req, res): Promise<void> => {
       category: displayExpenseCategory(w.category ?? ""),
       // Corrected on the Banking tab, where the balance follows it.
       date: String(w.date),
+    })),
+    ...otherWithdrawals.map((w) => ({
+      id: `bank-other-${w.id}`,
+      type: "expense",
+      amount: Number(w.amount),
+      description: w.description,
+      userName: w.madeById === null ? GROUP_ATTRIBUTION : (w.madeByName ?? "Unknown"),
+      category: displayExpenseCategory(""),
+      date: String(w.date),
+    })),
+    ...payoutRows.map((p) => ({
+      id: `payout-${p.id}`,
+      // Money out to a member, neither spending nor a contribution: shown
+      // neutrally, like a repayment.
+      type: "debt",
+      direction: "out" as const,
+      amount: Number(p.amount),
+      description: `Payout, round ${p.roundNumber}: ${p.contributorName ?? "member"}${p.note ? ` (${p.note})` : ""}`,
+      userName: GROUP_ATTRIBUTION,
+      category: null,
+      date: String(p.date),
     })),
     ...savingsContribs.map((s) => ({
       id: `savings-${s.id}`,
