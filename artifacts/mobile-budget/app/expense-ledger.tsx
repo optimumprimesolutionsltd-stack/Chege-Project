@@ -20,6 +20,7 @@ import {
 import { isoDay, longDay, monthStartIso, orderedRange } from '@/lib/dayRange';
 import { useColors } from '@/hooks/useColors';
 import { getExpenseEditHref } from '@/lib/expenseEditLink';
+import { groupByCategory, groupByItem } from '@/lib/groupExpenses';
 
 function formatKES(n?: number | null): string {
   if (n === undefined || n === null) return '—';
@@ -51,6 +52,17 @@ export default function ExpenseLedgerScreen() {
   const [to, setTo] = useState<string>(() => isoDay(new Date()));
   const [picker, setPicker] = useState<null | 'from' | 'to'>(null);
   const [search, setSearch] = useState('');
+  // How the entries are laid out: as a statement by day, or filed by what
+  // they were for. The filed views show a total per group, tap to open one.
+  const [view, setView] = useState<'date' | 'category' | 'item'>('date');
+  const [opened, setOpened] = useState<Set<string>>(new Set());
+  const toggleGroup = (key: string) =>
+    setOpened((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
 
   const [rangeFrom, rangeTo] = orderedRange(from, to);
 
@@ -66,6 +78,8 @@ export default function ExpenseLedgerScreen() {
   });
 
   const entries = data?.entries ?? [];
+  const categoryGroups = useMemo(() => groupByCategory(entries), [entries]);
+  const itemGroups = useMemo(() => groupByItem(entries), [entries]);
 
   // Days are already newest-first from the server; this only groups them so
   // each date is announced once rather than repeated down the column.
@@ -78,6 +92,36 @@ export default function ExpenseLedgerScreen() {
     }
     return grouped;
   }, [entries]);
+
+  const renderEntry = (entry: (typeof entries)[number], index: number) => {
+    // Only an expense can be opened; a standalone bank
+    // disbursement is not one, and has no form to open.
+    const href = entry.source === 'expense'
+      ? getExpenseEditHref({ id: Number(entry.id.replace('expense-', '')), date: entry.date })
+      : null;
+    return (
+      <Pressable
+        key={entry.id}
+        onPress={href ? () => router.push(href) : undefined}
+        disabled={!href}
+        accessibilityRole={href ? 'button' : 'text'}
+        accessibilityLabel={`${entry.description}, ${formatKES(entry.amount)} shillings on ${longDay(entry.date)}`}
+        testID={`expense-ledger-entry-${entry.id}`}
+        style={[styles.row, index > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderColor: colors.border }]}
+      >
+        <Text style={[styles.rowDate, { color: colors.mutedForeground }]}>{shortDay(entry.date)}</Text>
+        <View style={styles.rowText}>
+          <Text style={[styles.rowDesc, { color: colors.foreground }]} numberOfLines={1}>
+            {entry.description}
+          </Text>
+          <Text style={[styles.rowMeta, { color: colors.mutedForeground }]} numberOfLines={1}>
+            {entry.categories.join(' + ')} · {entry.payerName}
+          </Text>
+        </View>
+        <Text style={[styles.rowAmount, { color: colors.foreground }]}>{formatKES(entry.amount)}</Text>
+      </Pressable>
+    );
+  };
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background, paddingTop: insets.top }]}>
@@ -172,6 +216,28 @@ export default function ExpenseLedgerScreen() {
           </Text>
         </View>
 
+        <View style={[styles.segment, { borderColor: colors.border, backgroundColor: colors.muted }]} testID="expense-ledger-views">
+          {([
+            ['date', 'By date'],
+            ['category', 'By category'],
+            ['item', 'By item'],
+          ] as const).map(([value, label]) => {
+            const active = view === value;
+            return (
+              <Pressable
+                key={value}
+                onPress={() => setView(value)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+                testID={`expense-ledger-view-${value}`}
+                style={[styles.segmentButton, active && { backgroundColor: colors.primary }]}
+              >
+                <Text style={[styles.segmentText, { color: active ? colors.primaryForeground : colors.foreground }]}>{label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
         {isError ? (
           <Pressable
             onPress={() => refetch()}
@@ -193,40 +259,42 @@ export default function ExpenseLedgerScreen() {
                 : 'No expenses recorded between these dates.'}
             </Text>
           </View>
+        ) : view !== 'date' ? (
+          (view === 'category' ? categoryGroups : itemGroups).map((group) => {
+            const isOpen = opened.has(group.key);
+            return (
+              <View key={group.key} style={[styles.groupCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <Pressable
+                  onPress={() => toggleGroup(group.key)}
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: isOpen }}
+                  accessibilityLabel={`${group.label}, ${group.count} ${group.count === 1 ? 'entry' : 'entries'}, ${formatKES(group.total)} shillings`}
+                  testID={`expense-ledger-group-${group.key}`}
+                  style={styles.groupHeader}
+                >
+                  <View style={styles.rowText}>
+                    <Text style={[styles.rowDesc, { color: colors.foreground }]} numberOfLines={1}>{group.label}</Text>
+                    <Text style={[styles.rowMeta, { color: colors.mutedForeground }]}>
+                      {group.count} {group.count === 1 ? 'entry' : 'entries'}
+                    </Text>
+                  </View>
+                  <Text style={[styles.rowAmount, { color: colors.foreground }]}>{formatKES(group.total)}</Text>
+                  <Feather name={isOpen ? 'chevron-up' : 'chevron-down'} size={16} color={colors.mutedForeground} />
+                </Pressable>
+                {isOpen ? (
+                  <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderColor: colors.border, paddingHorizontal: 14 }}>
+                    {group.rows.map(renderEntry)}
+                  </View>
+                ) : null}
+              </View>
+            );
+          })
         ) : (
           days.map((day) => (
             <View key={day.date} style={styles.day}>
               <Text style={[styles.dayHeading, { color: colors.mutedForeground }]}>{longDay(day.date)}</Text>
               <View style={[styles.dayCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                {day.rows.map((entry, index) => {
-                  // Only an expense can be opened; a standalone bank
-                  // disbursement is not one, and has no form to open.
-                  const href = entry.source === 'expense'
-                    ? getExpenseEditHref({ id: Number(entry.id.replace('expense-', '')), date: entry.date })
-                    : null;
-                  return (
-                    <Pressable
-                      key={entry.id}
-                      onPress={href ? () => router.push(href) : undefined}
-                      disabled={!href}
-                      accessibilityRole={href ? 'button' : 'text'}
-                      accessibilityLabel={`${entry.description}, ${formatKES(entry.amount)} shillings on ${longDay(entry.date)}`}
-                      testID={`expense-ledger-entry-${entry.id}`}
-                      style={[styles.row, index > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderColor: colors.border }]}
-                    >
-                      <Text style={[styles.rowDate, { color: colors.mutedForeground }]}>{shortDay(entry.date)}</Text>
-                      <View style={styles.rowText}>
-                        <Text style={[styles.rowDesc, { color: colors.foreground }]} numberOfLines={1}>
-                          {entry.description}
-                        </Text>
-                        <Text style={[styles.rowMeta, { color: colors.mutedForeground }]} numberOfLines={1}>
-                          {entry.categories.join(' + ')} · {entry.payerName}
-                        </Text>
-                      </View>
-                      <Text style={[styles.rowAmount, { color: colors.foreground }]}>{formatKES(entry.amount)}</Text>
-                    </Pressable>
-                  );
-                })}
+                {day.rows.map(renderEntry)}
               </View>
             </View>
           ))
@@ -258,6 +326,11 @@ const styles = StyleSheet.create({
   day: { gap: 6 },
   dayHeading: { fontSize: 11, fontFamily: 'Inter_600SemiBold', textTransform: 'uppercase', letterSpacing: 0.4 },
   dayCard: { borderWidth: 1, borderRadius: 14, paddingHorizontal: 14 },
+  segment: { flexDirection: 'row', borderWidth: 1, borderRadius: 12, padding: 3, gap: 3 },
+  segmentButton: { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 9 },
+  segmentText: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
+  groupCard: { borderWidth: 1, borderRadius: 14, overflow: 'hidden' },
+  groupHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 13 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 11 },
   rowDate: { fontSize: 11, fontFamily: 'Inter_400Regular', width: 48 },
   rowText: { flex: 1, minWidth: 0 },
