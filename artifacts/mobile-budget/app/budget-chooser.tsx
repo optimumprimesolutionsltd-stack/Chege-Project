@@ -71,6 +71,8 @@ import {
   type MobileOnboardingMode,
 } from '@/lib/onboarding';
 import { applyMobileOnboardingToWorkspace, saveMobileOnboardingPreferences, saveMobileOnboardingProgress } from '@/lib/onboarding-api';
+import { usePrices } from '@/hooks/usePrices';
+import { kesLabel } from '@/lib/pricing';
 
 function sharedWorkspaceIcon(icon?: string | null): keyof typeof Feather.glyphMap {
   const icons: Record<string, keyof typeof Feather.glyphMap> = {
@@ -702,6 +704,7 @@ function ChoiceRow({ title, description, selected, onPress, colors, testID }: Ch
  * new person is not surprised later. Links to the full pricing / pay screen.
  */
 function TrialNote({ colors }: { colors: MobileColorPalette }) {
+  const prices = usePrices();
   return (
     <Pressable
       onPress={() => router.push('/subscription')}
@@ -714,7 +717,7 @@ function TrialNote({ colors }: { colors: MobileColorPalette }) {
       <View style={{ flex: 1 }}>
         <Text style={[styles.trialNoteTitle, { color: colors.foreground }]}>Free for your first 14 days</Text>
         <Text style={[styles.trialNoteText, { color: colors.mutedForeground }]}>
-          Then KES 100/month or KES 1,000/year — one subscription covers your Personal budget and every group.
+          Then {kesLabel(prices.monthly)}/month or {kesLabel(prices.annual)}/year — one subscription covers your Personal budget and every group.
           Nothing is ever deleted if you don't subscribe; recording just goes read-only until you do.
         </Text>
         <Text style={[styles.trialNoteLink, { color: colors.primary }]}>See what's included →</Text>

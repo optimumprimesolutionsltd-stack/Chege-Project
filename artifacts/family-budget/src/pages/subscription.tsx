@@ -7,6 +7,7 @@ import { formatKes } from "@/lib/utils";
 import { Loader2, Check, Smartphone } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { formatDeadline, statusLine, type MemberEntitlements } from "@/lib/subscription-status";
+import { usePrices } from "@/hooks/use-prices";
 
 type PaymentStatus = {
   status: "pending" | "succeeded" | "failed" | "timed_out";
@@ -16,11 +17,10 @@ type PaymentStatus = {
   currentPeriodEnd?: string | null;
 };
 
-const MONTHLY_KES = 100;
-const ANNUAL_KES = 1_000;
 
 export default function Subscription() {
   const { toast } = useToast();
+  const prices = usePrices();
   const queryClient = useQueryClient();
   const [interval, setInterval] = useState<"monthly" | "annual">("monthly");
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -147,7 +147,7 @@ export default function Subscription() {
     }
   };
 
-  const price = interval === "annual" ? ANNUAL_KES : MONTHLY_KES;
+  const price = interval === "annual" ? prices.annual : prices.monthly;
   const status = entitlements ? statusLine(entitlements) : null;
 
   return (
@@ -189,8 +189,8 @@ export default function Subscription() {
         <CardContent className="flex flex-col gap-5">
           <div className="grid grid-cols-2 gap-3" role="group" aria-label="Billing interval">
             {([
-              ["monthly", "Monthly", MONTHLY_KES, "every month"],
-              ["annual", "Annual", ANNUAL_KES, "2 months free"],
+              ["monthly", "Monthly", prices.monthly, "every month"],
+              ["annual", "Annual", prices.annual, "2 months free"],
             ] as const).map(([value, label, amount, note]) => (
               <button
                 key={value}

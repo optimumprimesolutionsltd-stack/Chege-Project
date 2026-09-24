@@ -5,6 +5,8 @@ import { CheckCircle2, Gift, Mail, ShieldCheck, UsersRound } from "lucide-react"
 import { useAuth } from "@workspace/replit-auth-web";
 import { Button } from "@/components/ui/button";
 import { appPath } from "@/lib/base-path";
+import { usePrices } from "@/hooks/use-prices";
+import { kesLabel } from "@/lib/pricing";
 
 type InvitationPreview = {
   groupName: string;
@@ -20,6 +22,7 @@ async function requestJson<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 export default function InvitePage() {
+  const prices = usePrices();
   const [, params] = useRoute("/invite/:token");
   const token = params?.token ?? "";
   const { isAuthenticated, user } = useAuth();
@@ -117,7 +120,7 @@ export default function InvitePage() {
               <div className="flex gap-3">
                 <Gift className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
                 <p className="text-sm leading-relaxed text-muted-foreground">
-                  <strong className="text-foreground">Free for your first 14 days.</strong> Then KES 100/month or KES 1,000/year — one subscription covers your own Personal budget and every group you're in. Nothing is ever deleted if you don&rsquo;t subscribe; recording just goes read-only until you do.
+                  <strong className="text-foreground">Free for your first 14 days.</strong> Then {kesLabel(prices.monthly)}/month or {kesLabel(prices.annual)}/year — one subscription covers your own Personal budget and every group you're in. Nothing is ever deleted if you don&rsquo;t subscribe; recording just goes read-only until you do.
                 </p>
               </div>
             </div>

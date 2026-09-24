@@ -9,6 +9,8 @@ import { useAuth } from '@/lib/auth';
 import { useEntitlements } from '@/hooks/useEntitlements';
 import { daysUntil } from '@/lib/subscription-status';
 import { recordPlanChoice, type PlanChoice } from '@/lib/planChoice';
+import { usePrices } from '@/hooks/usePrices';
+import { kesLabel } from '@/lib/pricing';
 
 /**
  * Compulsory, once per account: Jamvi is paid, so somebody on the free trial
@@ -21,6 +23,7 @@ export default function PlanChoiceScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { data: entitlements } = useEntitlements();
+  const prices = usePrices();
   const [busy, setBusy] = useState<PlanChoice | null>(null);
   const daysLeft = daysUntil(entitlements?.trialEndsAt ?? null);
 
@@ -46,7 +49,7 @@ export default function PlanChoiceScreen() {
       <Text style={[styles.body, { color: colors.mutedForeground }]}>
         Try everything free
         {daysLeft !== null && daysLeft > 0 ? ` for ${daysLeft} days` : ' for your first 14 days'}. After that it is
-        KES 100 a month or KES 1,000 a year — one subscription covers your Personal budget and every group you are in.
+        {kesLabel(prices.monthly)} a month or {kesLabel(prices.annual)} a year — one subscription covers your Personal budget and every group you are in.
         Nothing is ever deleted if you stop; recording just goes read-only.
       </Text>
 

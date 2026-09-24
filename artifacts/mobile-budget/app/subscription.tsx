@@ -18,10 +18,7 @@ import { customFetch } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
 import { useEntitlements, MEMBER_ENTITLEMENTS_KEY } from '@/hooks/useEntitlements';
 import { formatDeadline, statusLine } from '@/lib/subscription-status';
-
-// Prices are fixed; source of truth is @workspace/jamvi-pricing JAMVI_PACKAGE.
-const MONTHLY_KES = 100;
-const ANNUAL_KES = 1_000;
+import { usePrices } from '@/hooks/usePrices';
 
 const FEATURES = [
   'Your personal budget, income and expenses',
@@ -52,6 +49,7 @@ export default function SubscriptionScreen() {
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const { data: entitlements, isLoading } = useEntitlements();
+  const prices = usePrices();
 
   const [interval, setInterval] = useState<'monthly' | 'annual'>('monthly');
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -140,7 +138,7 @@ export default function SubscriptionScreen() {
     }
   };
 
-  const price = interval === 'annual' ? ANNUAL_KES : MONTHLY_KES;
+  const price = interval === 'annual' ? prices.annual : prices.monthly;
   const status = entitlements ? statusLine(entitlements) : null;
   const isActive = entitlements?.status === 'active';
 
@@ -186,8 +184,8 @@ export default function SubscriptionScreen() {
           <View style={styles.intervals}>
             {(
               [
-                ['monthly', 'Monthly', MONTHLY_KES, 'every month'],
-                ['annual', 'Annual', ANNUAL_KES, '2 months free'],
+                ['monthly', 'Monthly', prices.monthly, 'every month'],
+                ['annual', 'Annual', prices.annual, '2 months free'],
               ] as const
             ).map(([value, label, amount, note]) => {
               const on = interval === value;
