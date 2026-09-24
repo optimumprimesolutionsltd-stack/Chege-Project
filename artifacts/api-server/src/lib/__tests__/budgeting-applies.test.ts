@@ -85,7 +85,7 @@ describe("the mobile client states the same rule", () => {
 
   it("brings the Budget tab back once a real amount exists", () => {
     const tabs = readFileSync(
-      new URL("../../../../mobile-budget/app/(tabs)/_layout.tsx", import.meta.url),
+      new URL("../../../../mobile-budget/hooks/useTabFlags.ts", import.meta.url),
       "utf8",
     );
     expect(tabs).toContain("const showBudget = budgetSectionOn || hasBudgetedAmount;");
