@@ -136,6 +136,7 @@ type TxType = 'deposit' | 'disbursement' | 'transfer' | 'bank_transfer';
 type MemberIncomeSource = {
   id: number;
   name: string;
+  userId?: string | null;
 };
 
 function toCents(value: number): number {
@@ -3739,6 +3740,8 @@ export default function BankScreen() {
                           onPress={() => {
                             setIncomeSourceId(selected ? null : src.id);
                             setDepositSourceKind(selected ? null : 'income_source');
+                            // Nobody chosen yet: the stream's owner is the depositor.
+                            if (!selected && src.userId && depositorIds.length === 0) setDepositorIds([src.userId]);
                           }}
                           activeOpacity={0.7}
                         >
