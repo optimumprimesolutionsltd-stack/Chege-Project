@@ -56,6 +56,6 @@ describe('the Reports export sends the range it shows', () => {
   });
 
   it('re-exports when the dates change, not only when the month does', () => {
-    expect(reports).toContain('}, [month, year, customDates, dayFrom, dayTo]);');
+    expect(reports).toContain('}, [month, year, customDates, dayFrom, dayTo, includeBudget, includeIncome]);');
   });
 });

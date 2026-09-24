@@ -1781,6 +1781,10 @@ router.get("/dashboard/monthly-report.pdf", async (req, res): Promise<void> => {
   const monthEnd = new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
   const rangeFrom = dayRange?.from ?? monthStart;
   const rangeTo = dayRange?.to ?? monthEnd;
+  // zod's coerce.boolean() runs `Boolean(value)`, so the string "false" would
+  // coerce to true — read the raw query value instead of trusting `parsed`.
+  const includeBudget = req.query.includeBudget !== "false";
+  const includeIncome = req.query.includeIncome !== "false";
 
   const [group] = await db
     .select({ name: groupsTable.name })
@@ -1926,7 +1930,9 @@ router.get("/dashboard/monthly-report.pdf", async (req, res): Promise<void> => {
     totalSpent: totalActual,
     remaining: totalBudget - totalActual,
     expenseCount: Number(expenseTotal[0]?.count ?? 0),
+    includeBudget,
     categories: categoryRows,
+    includeIncome,
     totalFunding,
     incomeStreams: rawIncomeRows.map((row) => ({
       sourceName: row.sourceName,

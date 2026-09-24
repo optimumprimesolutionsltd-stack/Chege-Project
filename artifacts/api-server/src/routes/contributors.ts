@@ -830,6 +830,8 @@ router.get("/contributions/statement.pdf", async (req, res): Promise<void> => {
         : statement.contributors
             .map((row) => ({ name: row.name, total: statement.totalsByContributor[row.id] ?? 0 }))
             .filter((row) => row.total > 0),
+    includeEntries: req.query.includeEntries !== "false",
+    includePerMemberTotals: req.query.includePerMemberTotals !== "false",
   });
 
   const stamp = new Date();

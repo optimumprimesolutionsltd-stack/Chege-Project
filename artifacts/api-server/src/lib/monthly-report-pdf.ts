@@ -32,7 +32,11 @@ export type MonthlyReportPdfData = {
   totalSpent: number;
   remaining: number;
   expenseCount: number;
+  /** Whether to include the Budget performance table. Defaults to true. */
+  includeBudget?: boolean;
   categories: CategoryRow[];
+  /** Whether to include the Income-stream funding table. Defaults to true. */
+  includeIncome?: boolean;
   totalFunding: number;
   incomeStreams: IncomeStreamRow[];
   /** Bank fees for the month. Kept out of totalSpent - a fee is not spending
@@ -159,57 +163,61 @@ export function createMonthlyReportPdf(data: MonthlyReportPdfData): Promise<Buff
     });
     y += 78;
 
-    sectionTitle("Budget performance", "Budgeted categories and their actual spending for the selected month.");
-    const categoryColumns = [
-      { label: "Category", x: SIDE_MARGIN, width: 160 },
-      { label: "Budget", x: SIDE_MARGIN + 164, width: 94, align: "right" as const },
-      { label: "Spent", x: SIDE_MARGIN + 262, width: 94, align: "right" as const },
-      { label: "Remaining", x: SIDE_MARGIN + 360, width: 105, align: "right" as const },
-      { label: "Used", x: SIDE_MARGIN + 469, width: 42, align: "right" as const },
-    ];
-    tableHeader(categoryColumns);
-    if (data.categories.length === 0) {
-      tableRow([{ text: "No budget categories were set for this month.", x: SIDE_MARGIN, width: CONTENT_WIDTH, color: "#60736C" }], 28);
-    } else {
-      data.categories.forEach((category) => {
-        const remainingLabel = category.remaining < 0 ? `Over by ${formatKes(Math.abs(category.remaining))}` : formatKes(category.remaining);
-        tableRow([
-          { text: category.category, x: SIDE_MARGIN, width: 160 },
-          { text: formatKes(category.budgetAmount), x: SIDE_MARGIN + 164, width: 94, align: "right" },
-          { text: formatKes(category.spentAmount), x: SIDE_MARGIN + 262, width: 94, align: "right" },
-          { text: remainingLabel, x: SIDE_MARGIN + 360, width: 105, align: "right", color: category.remaining < 0 ? "#C44B3E" : "#31584A" },
-          { text: `${Math.round(category.percentUsed)}%`, x: SIDE_MARGIN + 469, width: 42, align: "right" },
-        ]);
-      });
+    if (data.includeBudget !== false) {
+      sectionTitle("Budget performance", "Budgeted categories and their actual spending for the selected month.");
+      const categoryColumns = [
+        { label: "Category", x: SIDE_MARGIN, width: 160 },
+        { label: "Budget", x: SIDE_MARGIN + 164, width: 94, align: "right" as const },
+        { label: "Spent", x: SIDE_MARGIN + 262, width: 94, align: "right" as const },
+        { label: "Remaining", x: SIDE_MARGIN + 360, width: 105, align: "right" as const },
+        { label: "Used", x: SIDE_MARGIN + 469, width: 42, align: "right" as const },
+      ];
+      tableHeader(categoryColumns);
+      if (data.categories.length === 0) {
+        tableRow([{ text: "No budget categories were set for this month.", x: SIDE_MARGIN, width: CONTENT_WIDTH, color: "#60736C" }], 28);
+      } else {
+        data.categories.forEach((category) => {
+          const remainingLabel = category.remaining < 0 ? `Over by ${formatKes(Math.abs(category.remaining))}` : formatKes(category.remaining);
+          tableRow([
+            { text: category.category, x: SIDE_MARGIN, width: 160 },
+            { text: formatKes(category.budgetAmount), x: SIDE_MARGIN + 164, width: 94, align: "right" },
+            { text: formatKes(category.spentAmount), x: SIDE_MARGIN + 262, width: 94, align: "right" },
+            { text: remainingLabel, x: SIDE_MARGIN + 360, width: 105, align: "right", color: category.remaining < 0 ? "#C44B3E" : "#31584A" },
+            { text: `${Math.round(category.percentUsed)}%`, x: SIDE_MARGIN + 469, width: 42, align: "right" },
+          ]);
+        });
+      }
+      y += 16;
     }
-    y += 16;
 
-    sectionTitle("Income-stream funding", "Personal expense portions, shared-bank deposits, and personal savings additions. Joint-bank expense portions are excluded.");
-    ensureRoom(53);
-    document.roundedRect(SIDE_MARGIN, y, CONTENT_WIDTH, 46, 6).fill("#EAF7F0");
-    document.font("Helvetica-Bold").fontSize(8).fillColor("#31584A").text("RECORDED PERSONAL FUNDING", SIDE_MARGIN + 12, y + 10);
-    document.font("Helvetica-Bold").fontSize(18).fillColor("#0A7A54").text(formatKes(data.totalFunding), SIDE_MARGIN + 12, y + 22);
-    y += 61;
-    const incomeColumns = [
-      { label: "Income stream", x: SIDE_MARGIN, width: 170 },
-      { label: "Owner", x: SIDE_MARGIN + 174, width: 110 },
-      { label: "Total", x: SIDE_MARGIN + 288, width: 92, align: "right" as const },
-      { label: "Share", x: SIDE_MARGIN + 384, width: 52, align: "right" as const },
-      { label: "Records", x: SIDE_MARGIN + 440, width: 71, align: "right" as const },
-    ];
-    tableHeader(incomeColumns);
-    if (data.incomeStreams.length === 0) {
-      tableRow([{ text: "No personal funding was recorded for this month.", x: SIDE_MARGIN, width: CONTENT_WIDTH, color: "#60736C" }], 28);
-    } else {
-      data.incomeStreams.forEach((stream) => {
-        tableRow([
-          { text: stream.sourceName, x: SIDE_MARGIN, width: 170, color: stream.sourceName === "Unattributed" ? "#A16408" : "#243D33" },
-          { text: stream.ownerName, x: SIDE_MARGIN + 174, width: 110 },
-          { text: formatKes(stream.total), x: SIDE_MARGIN + 288, width: 92, align: "right" },
-          { text: `${stream.sharePercent}%`, x: SIDE_MARGIN + 384, width: 52, align: "right" },
-          { text: String(stream.transactionCount), x: SIDE_MARGIN + 440, width: 71, align: "right" },
-        ]);
-      });
+    if (data.includeIncome !== false) {
+      sectionTitle("Income-stream funding", "Personal expense portions, shared-bank deposits, and personal savings additions. Joint-bank expense portions are excluded.");
+      ensureRoom(53);
+      document.roundedRect(SIDE_MARGIN, y, CONTENT_WIDTH, 46, 6).fill("#EAF7F0");
+      document.font("Helvetica-Bold").fontSize(8).fillColor("#31584A").text("RECORDED PERSONAL FUNDING", SIDE_MARGIN + 12, y + 10);
+      document.font("Helvetica-Bold").fontSize(18).fillColor("#0A7A54").text(formatKes(data.totalFunding), SIDE_MARGIN + 12, y + 22);
+      y += 61;
+      const incomeColumns = [
+        { label: "Income stream", x: SIDE_MARGIN, width: 170 },
+        { label: "Owner", x: SIDE_MARGIN + 174, width: 110 },
+        { label: "Total", x: SIDE_MARGIN + 288, width: 92, align: "right" as const },
+        { label: "Share", x: SIDE_MARGIN + 384, width: 52, align: "right" as const },
+        { label: "Records", x: SIDE_MARGIN + 440, width: 71, align: "right" as const },
+      ];
+      tableHeader(incomeColumns);
+      if (data.incomeStreams.length === 0) {
+        tableRow([{ text: "No personal funding was recorded for this month.", x: SIDE_MARGIN, width: CONTENT_WIDTH, color: "#60736C" }], 28);
+      } else {
+        data.incomeStreams.forEach((stream) => {
+          tableRow([
+            { text: stream.sourceName, x: SIDE_MARGIN, width: 170, color: stream.sourceName === "Unattributed" ? "#A16408" : "#243D33" },
+            { text: stream.ownerName, x: SIDE_MARGIN + 174, width: 110 },
+            { text: formatKes(stream.total), x: SIDE_MARGIN + 288, width: 92, align: "right" },
+            { text: `${stream.sharePercent}%`, x: SIDE_MARGIN + 384, width: 52, align: "right" },
+            { text: String(stream.transactionCount), x: SIDE_MARGIN + 440, width: 71, align: "right" },
+          ]);
+        });
+      }
     }
 
     y += 24;

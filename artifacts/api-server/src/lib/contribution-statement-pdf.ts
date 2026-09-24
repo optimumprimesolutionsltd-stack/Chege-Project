@@ -24,6 +24,12 @@ export type ContributionStatementPdfData = {
   total: number;
   /** Group ledger only: a total per member, shown after the entries. */
   perMemberTotals: Array<{ name: string; total: number }>;
+  /** Whether to list every dated entry. Defaults to true. */
+  includeEntries?: boolean;
+  /** Whether to include the by-member summary. Defaults to true; only ever
+   *  shown on the group ledger regardless, since a per-member statement has
+   *  no other members to summarise. */
+  includePerMemberTotals?: boolean;
 };
 
 const PAGE_WIDTH = 595.28;
@@ -112,7 +118,9 @@ export function createContributionStatementPdf(data: ContributionStatementPdfDat
       if (y + height <= BOTTOM_LIMIT) return;
       document.addPage();
       header(true);
-      drawColumnHeader();
+      // Only meaningful mid-entries — skipped entirely, there is no entry
+      // table header to repeat on the pages that follow.
+      if (data.includeEntries !== false) drawColumnHeader();
     };
 
     const columns = perMember
@@ -175,31 +183,33 @@ export function createContributionStatementPdf(data: ContributionStatementPdfDat
     );
     y += 30;
 
-    drawColumnHeader();
+    if (data.includeEntries !== false) {
+      drawColumnHeader();
 
-    if (data.entries.length === 0) {
-      row([{ text: "Nothing recorded for this period.", x: SIDE_MARGIN, width: CONTENT_WIDTH, color: "#60736C" }], 26);
-    } else {
-      let running = 0;
-      for (const entry of data.entries) {
-        running += entry.amount;
-        const typeLabel =
-          entry.source === "deposit" ? entry.bankName || "Bank deposit" : "Recorded";
-        row(
-          perMember
-            ? [
-                { text: formatDay(entry.date), x: columns[0].x, width: columns[0].width },
-                { text: typeLabel, x: columns[1].x, width: columns[1].width, color: "#60736C" },
-                { text: formatKes(entry.amount), x: columns[2].x, width: columns[2].width, align: "right" },
-                { text: formatKes(running), x: columns[3].x, width: columns[3].width, align: "right", bold: true },
-              ]
-            : [
-                { text: formatDay(entry.date), x: columns[0].x, width: columns[0].width },
-                { text: entry.name, x: columns[1].x, width: columns[1].width },
-                { text: typeLabel, x: columns[2].x, width: columns[2].width, color: "#60736C" },
-                { text: formatKes(entry.amount), x: columns[3].x, width: columns[3].width, align: "right" },
-              ],
-        );
+      if (data.entries.length === 0) {
+        row([{ text: "Nothing recorded for this period.", x: SIDE_MARGIN, width: CONTENT_WIDTH, color: "#60736C" }], 26);
+      } else {
+        let running = 0;
+        for (const entry of data.entries) {
+          running += entry.amount;
+          const typeLabel =
+            entry.source === "deposit" ? entry.bankName || "Bank deposit" : "Recorded";
+          row(
+            perMember
+              ? [
+                  { text: formatDay(entry.date), x: columns[0].x, width: columns[0].width },
+                  { text: typeLabel, x: columns[1].x, width: columns[1].width, color: "#60736C" },
+                  { text: formatKes(entry.amount), x: columns[2].x, width: columns[2].width, align: "right" },
+                  { text: formatKes(running), x: columns[3].x, width: columns[3].width, align: "right", bold: true },
+                ]
+              : [
+                  { text: formatDay(entry.date), x: columns[0].x, width: columns[0].width },
+                  { text: entry.name, x: columns[1].x, width: columns[1].width },
+                  { text: typeLabel, x: columns[2].x, width: columns[2].width, color: "#60736C" },
+                  { text: formatKes(entry.amount), x: columns[3].x, width: columns[3].width, align: "right" },
+                ],
+          );
+        }
       }
     }
 
@@ -214,7 +224,7 @@ export function createContributionStatementPdf(data: ContributionStatementPdfDat
     );
     y += 34;
 
-    if (!perMember && data.perMemberTotals.length > 0) {
+    if (!perMember && data.includePerMemberTotals !== false && data.perMemberTotals.length > 0) {
       ensureRoom(30);
       document.font("Helvetica-Bold").fontSize(11).fillColor("#103A2D").text("By member", SIDE_MARGIN, y);
       y += 18;

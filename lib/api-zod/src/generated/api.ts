@@ -938,7 +938,9 @@ export const GetDashboardMonthlyReportPdfQueryParams = zod.object({
   "month": zod.coerce.number().min(1).max(getDashboardMonthlyReportPdfQueryMonthMax).optional(),
   "year": zod.coerce.number().min(getDashboardMonthlyReportPdfQueryYearMin).max(getDashboardMonthlyReportPdfQueryYearMax).optional(),
   "from": zod.coerce.string().regex(getDashboardMonthlyReportPdfQueryFromRegExp).optional().describe('Start of an exact day range (YYYY-MM-DD). Given with `to`, the report covers those days instead of the whole month. Ignored unless both are present and well formed.'),
-  "to": zod.coerce.string().regex(getDashboardMonthlyReportPdfQueryToRegExp).optional().describe('End of the day range (YYYY-MM-DD), inclusive.')
+  "to": zod.coerce.string().regex(getDashboardMonthlyReportPdfQueryToRegExp).optional().describe('End of the day range (YYYY-MM-DD), inclusive.'),
+  "includeBudget": zod.coerce.boolean().optional().describe('Include the Budget performance section. Defaults to true.'),
+  "includeIncome": zod.coerce.boolean().optional().describe('Include the Income-stream funding section. Defaults to true.')
 })
 
 export const GetDashboardMonthlyReportPdfResponse = zod.unknown()
