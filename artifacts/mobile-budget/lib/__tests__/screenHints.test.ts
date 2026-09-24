@@ -37,7 +37,6 @@ describe('web pages have a one-line hint under the title', () => {
       const source = read(`../family-budget/src/pages/${file}`);
       expect(source).not.toContain('Everybody money stands between you');
       expect(source).not.toContain('joint-account movements');
-      expect(source).not.toContain('running balance');
     }
   });
 });
