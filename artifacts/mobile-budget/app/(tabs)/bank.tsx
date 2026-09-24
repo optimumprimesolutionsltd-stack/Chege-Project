@@ -2481,7 +2481,7 @@ export default function BankScreen() {
         animationType="slide"
         onRequestClose={closeAccountEditor}
       >
-        <KeyboardAvoidingView style={[styles.modalOverlay, { justifyContent: 'flex-end' }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView style={[styles.modalOverlay, { justifyContent: 'flex-end' }]} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <View style={[styles.sheet, { backgroundColor: colors.card, paddingBottom: insets.bottom + 20 }]}>
             <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
               <Text style={[styles.sheetTitle, { color: colors.foreground }]}>
@@ -4420,7 +4420,7 @@ export default function BankScreen() {
         <KeyboardAvoidingView
           style={{ flex: 1, justifyContent: 'flex-end' }}
           pointerEvents="box-none"
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
           <View style={[styles.sheet, { backgroundColor: colors.card, paddingBottom: insets.bottom + 20 }]}>
             <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
