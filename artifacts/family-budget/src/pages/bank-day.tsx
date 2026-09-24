@@ -57,6 +57,8 @@ type DayRow = {
   amount: string;
   category: string;
   partyId: string;
+  /** For ordinary money in: which income stream it came from ("none" = not said). */
+  incomeSourceId: string;
   description: string;
   saved: boolean;
   error: string | null;
@@ -93,6 +95,7 @@ function blankRow(): DayRow {
     amount: "",
     category: "",
     partyId: "none",
+    incomeSourceId: "none",
     description: "",
     saved: false,
     error: null,
@@ -122,6 +125,19 @@ export default function BankDayPage() {
       const response = await fetch("/api/contributors", { credentials: "include" });
       if (!response.ok) throw new Error("Could not load creditors and debtors.");
       return (await response.json()) as Party[];
+    },
+    staleTime: 30_000,
+  });
+
+  // Whose income streams to offer on money in: the person's own in a Personal
+  // budget, the group's in a shared one (deposits there go to the joint bank).
+  const { data: incomeSources = [] } = useQuery<{ id: number; name: string }[]>({
+    queryKey: ["income-sources", !isSharedWorkspace ? user?.id ?? "__me__" : "__group__"],
+    queryFn: async () => {
+      const url = !isSharedWorkspace && user?.id ? `/api/income-sources?userId=${encodeURIComponent(user.id)}` : "/api/income-sources";
+      const response = await fetch(url, { credentials: "include" });
+      if (!response.ok) throw new Error("Could not load income sources.");
+      return response.json();
     },
     staleTime: 30_000,
   });
@@ -195,6 +211,7 @@ export default function BankDayPage() {
           madeById: !isSharedWorkspace ? user?.id : null,
           ...(row.kind === "repaid" && party ? { settlesContributorId: party.id } : {}),
           ...(row.kind === "borrowed" ? { isBorrowing: true } : {}),
+          ...(row.kind === "money-in" && row.incomeSourceId !== "none" ? { incomeSourceId: Number(row.incomeSourceId) } : {}),
           accountId: activeAccountId ?? undefined,
         },
       });
@@ -394,6 +411,20 @@ export default function BankDayPage() {
                   <option value="none">Who…</option>
                   {parties.map((party) => (
                     <option key={party.id} value={String(party.id)}>{party.name}</option>
+                  ))}
+                </select>
+              ) : row.kind === "money-in" && incomeSources.length > 0 ? (
+                <select
+                  className="flex h-10 w-full rounded-md border border-input bg-card px-2 text-sm"
+                  value={row.incomeSourceId}
+                  disabled={row.saved}
+                  onChange={(event) => patchRow(row.key, { incomeSourceId: event.target.value })}
+                  aria-label="Where did this money come from?"
+                  data-testid={`select-day-income-source-${index}`}
+                >
+                  <option value="none">Where from? (optional)</option>
+                  {incomeSources.map((source) => (
+                    <option key={source.id} value={String(source.id)}>{source.name}</option>
                   ))}
                 </select>
               ) : <div />}
