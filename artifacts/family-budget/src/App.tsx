@@ -1,5 +1,5 @@
 import { Route, Switch, Router as WouterRouter } from 'wouter';
-import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
+import { MutationCache, QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Component, type ErrorInfo, type ReactNode, useEffect } from 'react';
@@ -35,8 +35,18 @@ import { BudgetChooser, hasCompletedBudgetChooser, hasSavedOnboardingDraft } fro
 import { hasFinishedOnboarding, shouldShowBudgetChooser } from '@/lib/budget-chooser-routing';
 import { getGetWorkspacesQueryKey, useGetWorkspaces } from '@workspace/api-client-react';
 import { routePath } from '@/lib/base-path';
+import { afterQuiet } from '@/lib/refresh-after-change';
 
-const queryClient = new QueryClient();
+// Any change made anywhere refreshes what every screen is showing. Screens each
+// listed the queries they thought a change touched, and the lists drifted:
+// renaming an income source on a deposit reached the bank but not Reports, which
+// kept showing the old name. Invalidating everything is cheap, since only the
+// screens on display reload, and it cannot fall behind a new report.
+const refreshEverything = afterQuiet(() => { void queryClient.invalidateQueries(); });
+
+const queryClient: QueryClient = new QueryClient({
+  mutationCache: new MutationCache({ onSuccess: () => refreshEverything() }),
+});
 
 function AppLoading({ message = 'Loading Jamvi…' }: { message?: string }) {
   return (

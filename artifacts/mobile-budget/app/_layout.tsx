@@ -9,7 +9,7 @@ import {
   recordAppLaunch,
   shouldShowFeedbackPrompt,
 } from '@/lib/feedbackPrompt';
-import { QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -46,6 +46,7 @@ import {
   isMobileBudgetChooserComplete,
   mobileBudgetEntryRedirect,
 } from '@/lib/workspace';
+import { afterQuiet } from '@/lib/refreshAfterChange';
 
 // How long to leave between checks, so a quick switch to WhatsApp and back
 // does not ask Expo about updates every few seconds.
@@ -120,7 +121,15 @@ setWorkspaceIdGetter(() => AsyncStorage.getItem(ACTIVE_WORKSPACE_STORAGE_KEY));
 
 SplashScreen.preventAutoHideAsync();
 
-const queryClient = new QueryClient({
+// Any change made anywhere refreshes what every screen is showing. Screens each
+// listed the queries they thought a change touched, and the lists drifted:
+// renaming an income source on a deposit reached the bank but not Reports, which
+// kept showing the old name. Invalidating everything is cheap, since only the
+// screens on display reload, and it cannot fall behind a new report.
+const refreshEverything = afterQuiet(() => { void queryClient.invalidateQueries(); });
+
+const queryClient: QueryClient = new QueryClient({
+  mutationCache: new MutationCache({ onSuccess: () => refreshEverything() }),
   queryCache: new QueryCache({
     onError: async (error) => {
       // When any query gets a 401, the session has expired.
