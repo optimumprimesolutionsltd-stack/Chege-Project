@@ -66,6 +66,7 @@ import { appPath } from "@/lib/base-path";
 import { workspaceLabel } from "@/lib/workspace-identity";
 import { buildCategoryTree, childrenFor, parentOf, type CategoryRow } from "@workspace/category-tree";
 import { CategorySearchInput, useCategorySearch } from "@/components/category-search";
+import { AmountField } from "@/components/amount-field";
 import { Trash2, Plus, ArrowLeft, ArrowRight, Loader2, Calendar, RefreshCw, Repeat, Pencil, TrendingUp, TrendingDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -1413,9 +1414,8 @@ export default function Expenses() {
 
           <div className="space-y-2 rounded-xl border border-secondary/60 bg-secondary/10 p-4">
             <label className="text-sm font-bold text-secondary-foreground">Amount (KES)</label>
-            <Input type="number" min="1" step="1" placeholder="e.g. 5000" value={form.amount}
-              onChange={(event) => form.setAmount(event.target.value)} required className="h-14 border-secondary/70 bg-background text-xl font-bold"
-              data-testid="normal-expense-amount" />
+            <AmountField value={form.amount} onChange={form.setAmount} className="h-14 border-secondary/70 bg-background text-xl font-bold"
+              testId="normal-expense-amount" />
           </div>
 
           <div className="space-y-2 rounded-xl border border-primary/35 bg-primary/5 p-4" data-testid="normal-expense-date-section">
@@ -1654,8 +1654,8 @@ export default function Expenses() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
         <div className="space-y-2 rounded-xl border border-secondary/60 bg-secondary/10 p-3">
           <label className="text-sm font-bold text-secondary-foreground">Expense total (KES)</label>
-          <Input type="number" placeholder="e.g. 5000" value={form.amount} onChange={e => form.setAmount(e.target.value)}
-            required min="1" className="h-14 border-secondary/70 bg-background text-xl font-bold shadow-sm focus-visible:ring-secondary" data-testid={`expense-total-${mode}`} />
+          <AmountField value={form.amount} onChange={form.setAmount}
+            className="h-14 border-secondary/70 bg-background text-xl font-bold shadow-sm focus-visible:ring-secondary" testId={`expense-total-${mode}`} />
         </div>
 
         <div className="space-y-2 md:col-span-2 rounded-xl border border-primary/35 bg-primary/[0.04] p-4">

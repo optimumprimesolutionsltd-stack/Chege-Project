@@ -75,6 +75,7 @@ import { DashboardAnnouncement, DashboardSummaryCards } from "@/components/dashb
 import { getCategoryAllocationStatus, getExpenseFundingStatus, getFundingRemainder, getProjectedCategoryBalance } from "@/lib/expense-funding-utils";
 import { buildCategoryTree, childrenFor, parentOf, type CategoryRow } from "@workspace/category-tree";
 import { CategorySearchInput, useCategorySearch } from "@/components/category-search";
+import { AmountField } from "@/components/amount-field";
 import { DEFAULT_WORKSPACE_ACCENT } from "@/lib/workspace-accent";
 
 type QuickAction = "none" | "income" | "expense" | "goal";
@@ -1501,17 +1502,12 @@ function ExpenseForm({
         <div className="space-y-4" data-testid="quick-expense-simple-form">
           <div className="space-y-1.5">
             <label className="text-sm font-semibold text-foreground">Amount (KES)</label>
-            <Input
-              type="number"
-              min="1"
-              step="1"
-              placeholder="e.g. 2500"
+            <AmountField
               value={amount}
-              onChange={(event) => setAmount(event.target.value)}
-              required
+              onChange={setAmount}
               autoFocus
               className="h-12 bg-card text-lg font-semibold"
-              data-testid="quick-expense-simple-amount"
+              testId="quick-expense-simple-amount"
             />
           </div>
           <div className="space-y-1.5">
@@ -1605,7 +1601,7 @@ function ExpenseForm({
        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="space-y-1.5 rounded-xl border border-secondary/60 bg-secondary/10 p-3">
           <label className="text-sm font-bold text-secondary-foreground">Expense total (KES)</label>
-           <Input type="number" placeholder="e.g. 2500" value={amount} onChange={e => setAmount(e.target.value)} min="1" required className="h-14 border-secondary/70 bg-background text-xl font-bold shadow-sm focus-visible:ring-secondary sm:h-12" autoFocus data-testid="expense-total-dashboard" />
+           <AmountField value={amount} onChange={setAmount} autoFocus className="h-14 border-secondary/70 bg-background text-xl font-bold shadow-sm focus-visible:ring-secondary sm:h-12" testId="expense-total-dashboard" />
         </div>
          {!isOtherCategory && (
            <div className="space-y-1.5 lg:col-span-1">

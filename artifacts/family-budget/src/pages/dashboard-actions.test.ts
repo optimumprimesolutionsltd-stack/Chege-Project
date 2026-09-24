@@ -107,7 +107,7 @@ describe("dashboard quick actions", () => {
   it("starts Dashboard quick expense log in Simple mode with one-category direct funding assumptions", () => {
     expect(expenseFormSource).toContain('useState<"simple" | "advanced">("simple")');
     expect(expenseFormSource).toContain('data-testid="quick-expense-simple-form"');
-    expect(expenseFormSource).toContain('data-testid="quick-expense-simple-amount"');
+    expect(expenseFormSource).toContain('testId="quick-expense-simple-amount"');
     expect(expenseFormSource).toContain('data-testid="quick-expense-simple-description"');
     expect(expenseFormSource).toContain('data-testid="quick-expense-simple-category"');
     expect(expenseFormSource).toContain('data-testid="quick-expense-simple-date-section"');
