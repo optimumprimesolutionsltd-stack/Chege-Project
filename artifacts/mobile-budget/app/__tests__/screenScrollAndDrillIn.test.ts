@@ -42,7 +42,7 @@ describe('the five bank actions fit their labels', () => {
   it('wraps a two-word label between its words rather than shrinking it', () => {
     // Shrinking to fit made "Between accounts" tiny beside one-word labels.
     // Two lines is fine; it was breaking mid-word that looked wrong.
-    for (const label of ['Deposit', 'Withdraw', 'To savings', 'Between accounts']) {
+    for (const label of ['Money in', 'Money out', 'To savings', 'Between accounts']) {
       expect(bank).toContain(`>${label}</Text>`);
     }
     expect((bank.match(/numberOfLines=\{2\} style=\{\[?styles\.actionBtnText/g) ?? []).length).toBe(4);
