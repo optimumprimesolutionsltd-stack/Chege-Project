@@ -170,6 +170,9 @@ function BudgetRow({
 export default function ReportsScreen() {
   const colors = useColors();
   const { data: group } = useGetGroup();
+  // A PDF is a copy that can be forwarded, so only an owner or admin makes one
+  // (the server refuses everybody else). A Personal budget is its owner's.
+  const canDownloadPdf = group?.isPrivate !== false || group?.role === 'owner' || group?.role === 'admin';
   const insets = useSafeAreaInsets();
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
@@ -430,6 +433,7 @@ export default function ReportsScreen() {
         <Text style={styles.headerTitle}>Reports</Text>
           <View style={styles.headerControls}>
             <MonthPicker month={month} year={year} onChange={handleMonthChange} colors={colors} />
+            {canDownloadPdf ? (
             <Pressable
               onPress={exportPdf}
               disabled={isLoading || isExporting}
@@ -442,6 +446,7 @@ export default function ReportsScreen() {
               {isExporting ? <ActivityIndicator color={colors.brandNavy} size="small" /> : <Feather name="download" size={16} color={colors.brandNavy} />}
               <Text style={styles.pdfButtonText}>{isExporting ? 'Creating…' : 'PDF'}</Text>
             </Pressable>
+            ) : null}
           </View>
           <Pressable
             onPress={() => setCustomDates((on) => !on)}
@@ -454,6 +459,7 @@ export default function ReportsScreen() {
             <Feather name={customDates ? 'check-square' : 'square'} size={14} color="#FFFFFF" />
             <Text style={styles.customDatesToggleText}>Exact dates</Text>
           </Pressable>
+          {canDownloadPdf ? (
           <View style={styles.pdfSectionsRow}>
             <Pressable
               onPress={() => setIncludeBudget((on) => !on)}
@@ -478,6 +484,7 @@ export default function ReportsScreen() {
               <Text style={styles.customDatesToggleText}>Income-stream funding</Text>
             </Pressable>
           </View>
+          ) : null}
           {customDates && (
             <View style={styles.dayRow}>
               {(['from', 'to'] as const).map((which) => (

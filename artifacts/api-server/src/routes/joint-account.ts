@@ -576,6 +576,8 @@ router.get("/joint-account/statement", async (req, res): Promise<void> => {
 router.get("/joint-account/statement.pdf", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
+  // Owners and admins only: see /dashboard/monthly-report.pdf.
+  if (!requireGroupManager(req, res)) return;
   const query = StatementQuery.safeParse(req.query);
   if (!query.success) { res.status(400).json({ error: "Give an account and a from and to date." }); return; }
   if (query.data.from > query.data.to) { res.status(400).json({ error: "The period ends before it starts." }); return; }

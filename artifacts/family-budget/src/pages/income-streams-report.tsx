@@ -5,6 +5,7 @@ import {
   getGetDashboardIncomeStreamsQueryKey,
   getGetDashboardPeriodTotalsQueryKey,
   getGetDashboardSummaryQueryKey,
+  useGetGroup,
   useGetDashboardCategoryBreakdown,
   useGetDashboardIncomeStreams,
   useGetDashboardPeriodTotals,
@@ -61,6 +62,10 @@ export default function IncomeStreamsReport() {
   const [customStartDate, setCustomStartDate] = useState(() => dateInputValue(new Date(now.getFullYear(), now.getMonth(), 1)));
   const [customEndDate, setCustomEndDate] = useState(today);
   const [expandedStreamId, setExpandedStreamId] = useState<number | "unattributed" | null>(null);
+  // A PDF is a copy that can be forwarded, so only an owner or admin makes one
+  // (the server refuses everybody else). A Personal budget is its owner's.
+  const { data: pdfGroup } = useGetGroup();
+  const canDownloadPdf = pdfGroup?.isPrivate !== false || pdfGroup?.role === "owner" || pdfGroup?.role === "admin";
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadMessage, setDownloadMessage] = useState<string | null>(null);
   const { data: report, isLoading, isError, refetch } = useGetDashboardIncomeStreams(
@@ -244,14 +249,14 @@ export default function IncomeStreamsReport() {
               <ArrowRight className="h-5 w-5" />
             </Button>
           </div>
-          <Button
+          {canDownloadPdf ? <Button
             onClick={downloadPdf}
             disabled={isLoading || isDownloading}
             className="h-10 w-full gap-2 rounded-xl sm:w-auto"
           >
             {isDownloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
             {isDownloading ? "Creating PDF" : "Monthly PDF"}
-          </Button>
+          </Button> : null}
         </div>
       </div>
       {downloadMessage && (

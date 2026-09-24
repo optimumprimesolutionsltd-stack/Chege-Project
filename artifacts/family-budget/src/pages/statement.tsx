@@ -9,7 +9,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2, FileDown } from "lucide-react";
-import { useGetJointAccounts } from "@workspace/api-client-react";
+import { useGetGroup, useGetJointAccounts } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -60,6 +60,10 @@ function defaultRange(): { from: string; to: string } {
 export default function StatementPage() {
   const { toast } = useToast();
   const { data: accountList = [] } = useGetJointAccounts();
+  // A PDF is a copy that can be forwarded, so only an owner or admin makes one
+  // (the server refuses everybody else). A Personal budget is its owner's.
+  const { data: pdfGroup } = useGetGroup();
+  const canDownloadPdf = pdfGroup?.isPrivate !== false || pdfGroup?.role === "owner" || pdfGroup?.role === "admin";
   const accounts = accountList as unknown as Account[];
 
   const initial = useMemo(defaultRange, []);
@@ -180,9 +184,11 @@ export default function StatementPage() {
             </Card>
           ) : null}
 
-          <Button type="button" onClick={openPdf} data-testid="button-statement-pdf">
-            <FileDown className="mr-2 h-4 w-4" /> Open as PDF
-          </Button>
+          {canDownloadPdf ? (
+            <Button type="button" onClick={openPdf} data-testid="button-statement-pdf">
+              <FileDown className="mr-2 h-4 w-4" /> Open as PDF
+            </Button>
+          ) : null}
 
           {statement.entries.length === 0 ? (
             <p className="text-sm text-muted-foreground" data-testid="statement-empty">

@@ -19,7 +19,7 @@ import DateTimePicker, { type DateTimePickerEvent } from '@react-native-communit
 import { useQuery } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
 import { PageScrollView } from '@/components/PageScrollReset';
-import { customFetch, useGetJointAccounts } from '@workspace/api-client-react';
+import { customFetch, useGetGroup, useGetJointAccounts } from '@workspace/api-client-react';
 import { shareStatementPdf } from '@/lib/shareStatementPdf';
 
 type Account = { id: number; name: string };
@@ -85,6 +85,11 @@ export default function BankStatementScreen() {
       customFetch<Statement>(`/api/joint-account/statement?accountId=${activeAccountId}&from=${from}&to=${to}`),
     enabled: activeAccountId !== null && from <= to,
   });
+
+  // Owners and admins only: a PDF is a copy that can be forwarded, and the
+  // server refuses everybody else.
+  const { data: group } = useGetGroup();
+  const canDownloadPdf = group?.isPrivate !== false || group?.role === 'owner' || group?.role === 'admin';
 
   const share = async () => {
     if (activeAccountId === null) return;
@@ -209,6 +214,7 @@ export default function BankStatementScreen() {
             </View>
           ) : null}
 
+          {canDownloadPdf ? (
           <TouchableOpacity
             onPress={() => void share()}
             disabled={sharing}
@@ -224,6 +230,7 @@ export default function BankStatementScreen() {
               </>
             )}
           </TouchableOpacity>
+          ) : null}
 
           {statement.entries.length === 0 ? (
             <Text style={{ color: colors.mutedForeground, marginTop: 24, fontSize: 13 }} testID="statement-empty">

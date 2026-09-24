@@ -246,14 +246,16 @@ function MemberCard({
           )}
         </div>
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={onOpenLedger}
-            className="text-sm font-semibold text-primary hover:underline"
-            data-testid={`open-contribution-ledger-${userId}`}
-          >
-            View statement (PDF) →
-          </button>
+          {canDownloadPdf ? (
+            <button
+              type="button"
+              onClick={onOpenLedger}
+              className="text-sm font-semibold text-primary hover:underline"
+              data-testid={`open-contribution-ledger-${userId}`}
+            >
+              View statement (PDF) →
+            </button>
+          ) : <span />}
           {canDownloadPdf ? (
             <DownloadMemberContribution
               budgetName={budgetName}
@@ -799,14 +801,16 @@ export default function Contributions() {
                 </p>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={openGroupLedger}
-              className="mt-4 text-sm font-semibold text-primary hover:underline"
-              data-testid="open-group-contribution-ledger"
-            >
-              View group ledger (PDF) →
-            </button>
+            {canManageContributions ? (
+              <button
+                type="button"
+                onClick={openGroupLedger}
+                className="mt-4 text-sm font-semibold text-primary hover:underline"
+                data-testid="open-group-contribution-ledger"
+              >
+                View group ledger (PDF) →
+              </button>
+            ) : null}
           </CardContent>
         </Card>
       )}
