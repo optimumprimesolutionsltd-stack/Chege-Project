@@ -1609,9 +1609,24 @@ export default function SettingsScreen() {
           {members.map((member, index) => (
             <View
               key={member.userId}
-              style={[styles.row, { borderBottomColor: colors.border, borderBottomWidth: index < members.length - 1 ? StyleSheet.hairlineWidth : 0 }]}
+              style={[
+                styles.row,
+                {
+                  borderBottomColor: colors.border,
+                  borderBottomWidth: index < members.length - 1 ? StyleSheet.hairlineWidth : 0,
+                  // The name/role column has flex: 1, so with the action
+                  // buttons (Make owner / Change to admin / Remove) claiming
+                  // their own natural width on the same line, it was
+                  // squeezed down to just a few characters wide — wrapping
+                  // "Jamvi" as "Jam"/"vi" instead of keeping it on one line.
+                  // Wrapping the row lets the buttons drop to their own line
+                  // instead, so the name column keeps its full width.
+                  flexWrap: 'wrap',
+                  rowGap: 8,
+                },
+              ]}
             >
-              <View style={styles.rowLeft}>
+              <View style={[styles.rowLeft, { minWidth: 120 }]}>
                 <View style={[styles.rowIcon, { backgroundColor: colors.primary + '18' }]}>
                   <Feather name={member.role === 'admin' || member.role === 'owner' ? 'shield' : 'user'} size={15} color={colors.primary} />
                 </View>
