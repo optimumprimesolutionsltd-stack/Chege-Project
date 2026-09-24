@@ -19,6 +19,9 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import * as Updates from 'expo-updates';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { usePathname } from 'expo-router';
+import { saveResumePoint } from '@/lib/resumeAfterUpdate';
 
 interface Props {
   message: string;
@@ -27,6 +30,7 @@ interface Props {
 
 export function UpdatePrompt({ message, onDismiss }: Props) {
   const insets = useSafeAreaInsets();
+  const pathname = usePathname();
   const [installing, setInstalling] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const slideAnim = useRef(new Animated.Value(400)).current;
@@ -69,6 +73,8 @@ export function UpdatePrompt({ message, onDismiss }: Props) {
     setError(null);
     try {
       await Updates.fetchUpdateAsync();
+      // The restart begins on Home. Note where they were so it can go back.
+      await saveResumePoint(pathname, AsyncStorage);
       await Updates.reloadAsync();
     } catch {
       setInstalling(false);

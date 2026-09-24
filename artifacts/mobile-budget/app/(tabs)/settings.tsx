@@ -22,6 +22,7 @@ import * as Updates from 'expo-updates';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { saveResumePoint } from '@/lib/resumeAfterUpdate';
 import {
   customFetch,
   requestPhotoUpload,
@@ -860,7 +861,7 @@ export default function SettingsScreen() {
       }
       await Updates.fetchUpdateAsync();
       Alert.alert('Update downloaded', 'Jamvi will restart now to use it.', [
-        { text: 'Restart now', onPress: () => void Updates.reloadAsync() },
+        { text: 'Restart now', onPress: () => void saveResumePoint('/settings', AsyncStorage).then(() => Updates.reloadAsync()) },
       ]);
     } catch (error) {
       Alert.alert(
