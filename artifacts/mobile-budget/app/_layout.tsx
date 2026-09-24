@@ -25,6 +25,8 @@ import { Stack, router, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useEntitlements } from '@/hooks/useEntitlements';
+import { readPlanChoice, shouldShowPlanChoice } from '@/lib/planChoice';
 import * as Updates from 'expo-updates';
 import {
   getGetWorkspacesQueryKey,
@@ -194,6 +196,19 @@ function RootLayoutNav() {
     },
   });
 
+  // Jamvi is paid: somebody still on the free trial who has never said what
+  // they intend is stopped once, on landing in the app proper, by a screen
+  // that asks. Never mid-onboarding — only once they reach the tabs.
+  const { data: entitlements } = useEntitlements();
+  useEffect(() => {
+    if (!isAuthenticated || !user?.id || user.needsDisplayName || !isTabsRoute) return;
+    let active = true;
+    void readPlanChoice(user.id, AsyncStorage).then((choice) => {
+      if (active && shouldShowPlanChoice(entitlements, choice)) router.replace('/plan-choice');
+    }).catch(() => {});
+    return () => { active = false; };
+  }, [isAuthenticated, user?.id, user?.needsDisplayName, isTabsRoute, entitlements]);
+
   // Keep Android's hardware back action inside Jamvi. A back press from a
   // tab returns to the beginning instead of closing the app unexpectedly;
   // a second press from Home requires an explicit exit choice.
@@ -346,6 +361,7 @@ function RootLayoutNav() {
       <Stack.Screen name="login" options={{ headerShown: false }} />
         <Stack.Screen name="profile-setup" options={{ gestureEnabled: false }} />
         <Stack.Screen name="budget-chooser" options={{ gestureEnabled: false }} />
+        <Stack.Screen name="plan-choice" options={{ gestureEnabled: false }} />
       <Stack.Screen
         name="add-expense"
         options={{
