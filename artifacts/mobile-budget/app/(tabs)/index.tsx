@@ -110,6 +110,17 @@ const SHARED_OVERVIEW_SHORTCUTS: Shortcut[] = [
   { icon: 'pie-chart',   label: 'Reports',       color: '#6C9FE6', bg: '#0A254E', route: '/(tabs)/reports',       description: 'Understand trends' },
 ];
 
+// Only reachable from Home through the setup guide's one-time "Invite a
+// member" step, which retires the moment setup is complete — leaving no way
+// back to the invite link from here at all, on a group that goes on adding
+// people long after setup is done. Owners/admins only, matching Settings'
+// own GROUP ACCESS gate; a member tapping it would land on a section that
+// does not exist for them.
+const INVITE_SHORTCUT: Shortcut = {
+  icon: 'user-plus', label: 'Invite', color: '#F97AC6', bg: '#3A0F2E',
+  route: '/(tabs)/settings?openInvite=1', description: 'Add a member',
+};
+
 export default function DashboardScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -240,6 +251,10 @@ export default function DashboardScreen() {
   const workspacePhotoUrl = isSharedWorkspace ? group?.photoUrl : user?.profileImageUrl;
   const canManageBudget = !isSharedWorkspace || group?.role === 'owner' || group?.role === 'admin';
   const canManageExpenses = !isSharedWorkspace || group?.role === 'owner' || group?.role === 'admin';
+  const canManageAccess = isSharedWorkspace && (group?.role === 'owner' || group?.role === 'admin');
+  const overviewShortcuts = canManageAccess
+    ? [...SHARED_OVERVIEW_SHORTCUTS, INVITE_SHORTCUT]
+    : SHARED_OVERVIEW_SHORTCUTS;
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   const editableUncategorizedExpenses = (expenses as HomeExpense[])
     .filter(isUncategorizedExpense)
@@ -428,7 +443,7 @@ export default function DashboardScreen() {
                 Quickly see what each part of your group helps you manage.
               </Text>
               <View style={styles.overviewNavGrid}>
-                {SHARED_OVERVIEW_SHORTCUTS.map((shortcut) => (
+                {overviewShortcuts.map((shortcut) => (
                   <Pressable
                     key={shortcut.label}
                     testID={`overview-shortcut-${shortcut.label.toLowerCase()}`}
