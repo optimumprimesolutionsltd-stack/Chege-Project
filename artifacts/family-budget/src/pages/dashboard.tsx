@@ -1120,7 +1120,7 @@ function ExpenseForm({
       return;
     }
     try {
-      if (!Number.isInteger(openingBalance) || openingBalance < 0) throw new Error("Opening balance must be zero or more whole shillings.");
+      if (!Number.isInteger(openingBalance) || openingBalance < 0) throw new Error("The starting balance must be zero or more whole shillings.");
       const created = await createBankAccount.mutateAsync({ data: { name, accountNumber: accountNumber || undefined, openingBalance } });
       setSelectedBankAccountId(created.id);
       setNewBankAccountName("");

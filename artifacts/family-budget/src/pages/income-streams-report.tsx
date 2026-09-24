@@ -538,7 +538,7 @@ export default function IncomeStreamsReport() {
           <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
             It combines personal portions of expenses, shared-bank deposits, and personal savings additions.
             Joint-bank expense portions are excluded because the money was already counted when it was deposited.
-            Money saved without a selected stream is shown as Unattributed.
+            Money saved without a selected stream is shown as Unattributed (no source chosen).
           </p>
         </div>
       </div>

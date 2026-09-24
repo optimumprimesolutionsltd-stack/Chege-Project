@@ -498,7 +498,7 @@ export default function Bank() {
       });
       setEditingOpeningBalance(false);
       toast({
-        title: "Opening balance saved",
+        title: "Starting balance saved",
         description: "The current balance now includes this starting amount.",
       });
       invalidate();
@@ -1085,7 +1085,7 @@ export default function Bank() {
           },
         });
         await postBankCharge("withdrawal", createdWithdrawal.id);
-        toast({ title: "Disbursement recorded" });
+        toast({ title: "Money out recorded" });
       }
       // Read before finishEntry, which clears the form. Asking after an edit
       // would move the balance a second time for one payment.
@@ -1474,19 +1474,19 @@ export default function Bank() {
             <div className="space-y-4">
               <div className="flex items-center gap-3">
                 <Landmark className="w-6 h-6 opacity-80" />
-                <p className="text-sm font-medium opacity-80">Closing balance</p>
+                <p className="text-sm font-medium opacity-80">Balance now</p>
               </div>
                 <p className="whitespace-nowrap font-display text-[clamp(1.8rem,8vw,2.25rem)] font-bold leading-tight" data-testid="bank-balance">{formatKes(periodSummary ? periodSummary.closing : account?.balance ?? 0)}</p>
                 <div className="flex items-center justify-between gap-3 text-sm">
                   <span className="opacity-75">
                     {periodSummary && period ? (
                       <>
-                        Balance at start of period: <span className="font-semibold">{formatKes(periodSummary.opening)}</span>
+                        Balance at the start: <span className="font-semibold">{formatKes(periodSummary.opening)}</span>
                         {` · ${formatDate(period.from)} to ${formatDate(period.to)}`}
                       </>
                     ) : (
                       <>
-                        Opening balance: <span className="font-semibold">{formatKes(account?.openingBalance ?? 0)}</span>
+                        Starting balance: <span className="font-semibold">{formatKes(account?.openingBalance ?? 0)}</span>
                         {account?.openingBalanceDate ? ` as of ${formatDate(account.openingBalanceDate)}` : ""}
                       </>
                     )}
@@ -1688,7 +1688,7 @@ export default function Bank() {
             <form onSubmit={handleOpeningBalanceSubmit} className="space-y-4">
               <div className="space-y-2">
                 <label className="text-sm font-semibold text-foreground" htmlFor="bank-opening-balance">
-                  Opening balance (KES)
+                  Starting balance (KES)
                 </label>
                 <Input
                   id="bank-opening-balance"

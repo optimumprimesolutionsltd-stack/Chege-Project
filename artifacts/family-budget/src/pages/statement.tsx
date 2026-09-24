@@ -211,7 +211,7 @@ export default function StatementPage() {
                       it is the figure every balance after it is built on. */}
                   <tr className="border-t border-border">
                     <td className="p-2" />
-                    <td className="p-2 font-semibold">Opening balance</td>
+                    <td className="p-2 font-semibold">Balance at the start</td>
                     <td className="p-2" />
                     <td className="p-2" />
                     <td className="p-2 text-right font-semibold">{formatKes(statement.openingBalance)}</td>
@@ -230,7 +230,7 @@ export default function StatementPage() {
                   ))}
                   <tr className="border-t border-border bg-muted/50">
                     <td className="p-2" />
-                    <td className="p-2 font-bold">Closing balance</td>
+                    <td className="p-2 font-bold">Balance at the end</td>
                     <td className="p-2 text-right font-bold">{formatKes(statement.totalIn)}</td>
                     <td className="p-2 text-right font-bold">{formatKes(statement.totalOut)}</td>
                     <td className="p-2 text-right font-bold">{formatKes(statement.closingBalance)}</td>

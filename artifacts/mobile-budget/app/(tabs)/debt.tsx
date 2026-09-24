@@ -235,7 +235,7 @@ export default function DebtScreen() {
                   style={({ pressed }) => [styles.strategyChip, { borderColor: colors.primary, alignSelf: 'flex-start', opacity: pressed ? 0.7 : 1 }]}
                 >
                   <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>
-                    Creditors and debtors
+                    Who owes who
                   </Text>
                 </Pressable>
               </View>

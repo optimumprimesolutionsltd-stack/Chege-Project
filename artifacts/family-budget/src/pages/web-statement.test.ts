@@ -27,8 +27,8 @@ describe("the account statement, on the laptop", () => {
 
   it("reads downwards from an opening balance to a closing one", () => {
     // A running balance means nothing in any other order.
-    expect(page).toContain("Opening balance");
-    expect(page).toContain("Closing balance");
+    expect(page).toContain("Balance at the start");
+    expect(page).toContain("Balance at the end");
     expect(page).toContain('data-testid="statement-table"');
   });
 

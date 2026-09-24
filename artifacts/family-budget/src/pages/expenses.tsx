@@ -835,7 +835,7 @@ export default function Expenses() {
       return;
     }
     try {
-      if (!Number.isInteger(openingBalance) || openingBalance < 0) throw new Error("Opening balance must be zero or more whole shillings.");
+      if (!Number.isInteger(openingBalance) || openingBalance < 0) throw new Error("The starting balance must be zero or more whole shillings.");
       const created = await createBankAccount.mutateAsync({ data: { name, accountNumber: accountNumber || undefined, openingBalance } });
       form.setAccountId(created.id);
       setNewBankAccountName("");
@@ -2834,7 +2834,7 @@ export default function Expenses() {
                       data-testid="expense-ledger-summary-joint"
                     >
                       <div className="flex items-center justify-between">
-                        <p className="text-sm font-semibold text-foreground">Joint / Unattributed</p>
+                        <p className="text-sm font-semibold text-foreground">Shared money, no payer chosen</p>
                         <p className="text-sm font-bold font-mono text-foreground">{formatKes(jointTotal)}</p>
                       </div>
                       <p className="text-xs text-muted-foreground">{jointExpenses.length} item{jointExpenses.length !== 1 ? "s" : ""} recorded without a payer</p>

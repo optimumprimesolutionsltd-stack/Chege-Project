@@ -997,7 +997,7 @@ export default function AddExpenseSheet() {
       return;
     }
     try {
-      if (!Number.isInteger(openingBalance) || openingBalance < 0) throw new Error('Opening balance must be zero or more whole shillings.');
+      if (!Number.isInteger(openingBalance) || openingBalance < 0) throw new Error('The starting balance must be zero or more whole shillings.');
       const created = await createBankAccount.mutateAsync({ data: { name, accountNumber: accountNumber || undefined, openingBalance } });
       setSelectedBankAccountId(created.id);
       setNewBankAccountName('');
@@ -1898,7 +1898,7 @@ export default function AddExpenseSheet() {
             )}
             {newCategoryAddToBudget && canManageCategories ? (
               <>
-              <Text style={[styles.categoryCreateHint, { color: colors.mutedForeground }]}>Priority: 1 is must-pay; 5 is flexible.</Text>
+              <Text style={[styles.categoryCreateHint, { color: colors.mutedForeground }]}>How important: 1 = must pay, 5 = can wait.</Text>
               <View style={styles.categoryPriorityRow}>
               {[1, 2, 3, 4, 5].map((priority) => (
                 <Pressable
@@ -1906,7 +1906,7 @@ export default function AddExpenseSheet() {
                   onPress={() => setNewCategoryPriority(String(priority))}
                   disabled={createCategory.isPending}
                   accessibilityRole="radio"
-                  accessibilityLabel={`Priority ${priority}`}
+                  accessibilityLabel={`Importance ${priority}`}
                   accessibilityState={{ checked: newCategoryPriority === String(priority), disabled: createCategory.isPending }}
                   style={[
                     styles.categoryPriorityChip,
@@ -2313,7 +2313,7 @@ export default function AddExpenseSheet() {
                     />
                     <TextInput
                        style={[styles.newSourceInput, styles.inlineAccountInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]}
-                       placeholder="Opening balance (KES)"
+                       placeholder="Starting balance (KES)"
                       keyboardType="number-pad"
                       placeholderTextColor={colors.mutedForeground}
                       value={newBankOpeningBalance}
