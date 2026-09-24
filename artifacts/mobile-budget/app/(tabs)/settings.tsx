@@ -788,28 +788,13 @@ export default function SettingsScreen() {
     const name = workspaceBudgetName(group);
     Alert.alert(
       `Delete "${name}"?`,
-      `This erases every expense, contribution, bank record, and goal in "${name}" for every member — not just you. Nobody, including you, can undo this. If you only want to stop being responsible for it, use "Make owner" on another member instead.`,
+      `This erases every expense, contribution, bank record, and goal in "${name}" for every member — not just you. Nobody, including you, can undo this. You'll be asked to confirm with a code sent to your email. If you only want to stop being responsible for it, use "Make owner" on another member instead.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Delete group',
+          text: 'Continue',
           style: 'destructive',
-          onPress: async () => {
-            setManagingMembers(true);
-            try {
-              await leaveMobileSharedWorkspace({
-                leave: () => customFetch('/api/group', { method: 'DELETE' }),
-                storage: AsyncStorage,
-                resetQueries: () => queryClient.resetQueries(),
-              });
-              router.replace('/budget-chooser');
-              Alert.alert('Group deleted', `"${name}" and everything in it is gone.`);
-            } catch (error) {
-              Alert.alert('Could not delete this group', error instanceof Error ? error.message : 'Please try again.');
-            } finally {
-              setManagingMembers(false);
-            }
-          },
+          onPress: () => router.push('/delete-group-code'),
         },
       ],
     );
