@@ -6,11 +6,13 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function formatKes(amount: number): string {
+  // Whole amounts stay whole ("Ksh 3,275"); amounts with cents keep them
+  // ("Ksh 0.50"). Rounding to 0 digits showed a 50-cent bank charge as "Ksh 0".
   return new Intl.NumberFormat('en-KE', {
     style: 'currency',
     currency: 'KES',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
+    minimumFractionDigits: Number.isInteger(amount) ? 0 : 2,
+    maximumFractionDigits: 2,
   }).format(amount);
 }
 
