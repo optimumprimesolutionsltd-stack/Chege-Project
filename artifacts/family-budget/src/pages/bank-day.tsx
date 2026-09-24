@@ -458,8 +458,10 @@ export default function BankDayPage() {
   const unsavedRows = rows.filter((row) => !row.saved);
   const projected = openingBalance + unsavedRows.reduce((total, row) => total + rowEffect(row), 0);
   const readyCount = unsavedRows.filter((row) => {
+    // Zero is a real amount: a line that turned out to be reversed still
+    // happened, and the Bank form already takes it.
     const amount = readAmount(row.amount);
-    return amount !== null && amount > 0;
+    return amount !== null && amount >= 0;
   }).length;
 
   const patchRow = (key: string, change: Partial<DayRow>) =>
@@ -498,7 +500,7 @@ export default function BankDayPage() {
   /** What is wrong with a row, in words somebody can act on. */
   const rowProblem = (row: DayRow): string | null => {
     const amount = readAmount(row.amount);
-    if (amount === null || amount <= 0) return "Give it an amount.";
+    if (amount === null || amount < 0) return "Give it an amount (zero is allowed).";
     // A loan out has no category, because it is not a cost.
     if (isOutgoing(row.kind) && row.kind !== "lend" && !row.category.trim()) return "Give it a category.";
     if ((row.kind === "pay-party" || row.kind === "repaid") && row.partyId === "none") return "Say who.";
