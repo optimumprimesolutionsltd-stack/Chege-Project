@@ -19,6 +19,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { DEFAULT_WORKSPACE_ACCENT } from "@/lib/workspace-accent";
 
 export function WorkspaceSwitcher({
   activeWorkspaceId,
@@ -118,7 +119,7 @@ export function WorkspaceSwitcher({
             .sort((a, b) => Number(b.isPrivate) - Number(a.isPrivate) || a.name.localeCompare(b.name))
             .map((workspace) => {
               const isActive = workspace.id === activeWorkspaceId;
-              const accentColor = workspace.accentColor ?? "#003383";
+              const accentColor = DEFAULT_WORKSPACE_ACCENT;
               const photoUrl = photoForWorkspace(workspace);
               const WIcon = {
                 users: Users,
@@ -181,7 +182,7 @@ export function WorkspaceSwitcher({
                   ) : (
                     <span
                       className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-white"
-                      style={{ backgroundColor: workspace.accentColor }}
+                      style={{ backgroundColor: DEFAULT_WORKSPACE_ACCENT }}
                     >
                       <WIcon className="h-5 w-5" />
                     </span>
@@ -221,15 +222,15 @@ export function WorkspaceSwitcher({
                 src={activePhotoUrl}
                 alt=""
                 className="h-8 w-8 shrink-0 rounded-lg border-2 object-cover"
-                style={{ borderColor: activeBrandedBudget.accentColor }}
+                style={{ borderColor: DEFAULT_WORKSPACE_ACCENT }}
               />
             ) : activeBrandedBudget.emoji ? (
               <span
                 aria-hidden="true"
                 className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border text-lg"
                 style={{
-                  backgroundColor: `${activeBrandedBudget.accentColor}24`,
-                  borderColor: `${activeBrandedBudget.accentColor}66`,
+                  backgroundColor: `${DEFAULT_WORKSPACE_ACCENT}24`,
+                  borderColor: `${DEFAULT_WORKSPACE_ACCENT}66`,
                 }}
               >
                 {activeBrandedBudget.emoji}
@@ -238,7 +239,7 @@ export function WorkspaceSwitcher({
               <span
                 aria-hidden="true"
                 className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white"
-              style={{ backgroundColor: activeBrandedBudget.accentColor }}
+              style={{ backgroundColor: DEFAULT_WORKSPACE_ACCENT }}
               >
                 <ActiveIcon className="h-4 w-4" />
               </span>
