@@ -105,11 +105,16 @@ services:
       # Safaricom Daraja — Lipa Na M-Pesa Online (STK Push) for subscriptions.
       # Absent = /payments/stk-push returns "not configured" and nobody can
       # subscribe; the read-only-on-lapse rule stays armed but never fires.
-      # MPESA_ENV defaults to sandbox, so production billing needs it set to
-      # "production" explicitly. MPESA_CALLBACK_URL is the public URL Safaricom
-      # POSTs the result to: https://jamvi.co.ke/api/mpesa/callback
+      # MPESA_ENV defaults to sandbox (see mpesaConfig() in mpesa.ts), so
+      # production billing needs it set to "production" explicitly, in the
+      # Render dashboard. `sync: false` here is load-bearing: without it, this
+      # entry's hardcoded `value: sandbox` overwrote the dashboard's
+      # "production" setting on every blueprint sync, silently reverting
+      # payments to sandbox no matter how many times it was set back.
+      # MPESA_CALLBACK_URL is the public URL Safaricom POSTs the result to:
+      # https://jamvi.co.ke/api/mpesa/callback
       - key: MPESA_ENV
-        value: sandbox
+        sync: false
       - key: MPESA_CONSUMER_KEY
         sync: false
       - key: MPESA_CONSUMER_SECRET
