@@ -49,3 +49,19 @@ describe("web matches mobile: PDF section checkboxes and the Invite link", () =>
     expect(settings).toContain('window.location.hash !== "#invite"');
   });
 });
+
+describe("web Move a day can also fix the date", () => {
+  const bank = read("../pages/bank.tsx");
+  it("offers a choice of what was wrong, and a date input", () => {
+    expect(bank).toContain('data-testid="bank-move-day-mode-account"');
+    expect(bank).toContain('data-testid="bank-move-day-mode-date"');
+    expect(bank).toContain('data-testid="bank-move-day-new-date"');
+  });
+  it("re-dates each ordinary entry, always sending the account", () => {
+    expect(bank).toContain("date: change.date ?? tx.date, accountId: change.accountId ?? selectedAccountId ?? undefined");
+  });
+  it("is available with a single account", () => {
+    expect(bank).toContain("{canManageAccount && !txEditor.editing ? (");
+    expect(bank).not.toContain("{canManageAccount && !txEditor.editing && accounts.length > 1 ? (");
+  });
+});

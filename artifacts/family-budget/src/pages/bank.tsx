@@ -176,12 +176,28 @@ export default function Bank() {
   const [moveDayOpen, setMoveDayOpen] = useState(false);
   const [moveDayDate, setMoveDayDate] = useState<string | null>(null);
   const [movingDay, setMovingDay] = useState(false);
+  // What to change about the day: the account it sits on, or the date it was
+  // recorded under (the same slip, just as common - a whole day keyed in on the
+  // wrong date).
+  const [moveDayMode, setMoveDayMode] = useState<"account" | "date" | null>(null);
+  const [moveDayNewDate, setMoveDayNewDate] = useState("");
   const closeMoveDay = () => {
     if (movingDay) return;
     setMoveDayOpen(false);
     setMoveDayDate(null);
+    setMoveDayMode(null);
+    setMoveDayNewDate("");
   };
-  const moveDayTo = async (targetAccountId: number, targetName: string) => {
+  const moveDayTo = (targetAccountId: number, targetName: string) =>
+    applyDayMove({ accountId: targetAccountId }, `moved to ${targetName}`);
+  const moveDayToDate = () => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(moveDayNewDate) || moveDayNewDate === moveDayDate) {
+      toast({ variant: "destructive", title: "Pick a different date", description: "Choose the date these entries should really be under." });
+      return Promise.resolve();
+    }
+    return applyDayMove({ date: moveDayNewDate }, `dated ${formatDate(moveDayNewDate)}`);
+  };
+  const applyDayMove = async (change: { accountId?: number; date?: string }, summary: string) => {
     if (!moveDayDate || movingDay) return;
     const all = (account?.transactions ?? []) as EditableTransaction[];
     const batch = movableOnDay(all, moveDayDate, canMoveTx);
@@ -191,7 +207,12 @@ export default function Bank() {
     let failure: string | null = null;
     for (const tx of batch) {
       try {
-        await updateTx.mutateAsync({ id: tx.id, data: { amount: tx.amount, date: tx.date, accountId: targetAccountId } });
+        // The account is always sent, so a date-only change cannot drop an
+        // entry back onto the default account.
+        await updateTx.mutateAsync({
+          id: tx.id,
+          data: { amount: tx.amount, date: change.date ?? tx.date, accountId: change.accountId ?? selectedAccountId ?? undefined },
+        });
         moved += 1;
       } catch (error) {
         failure = error instanceof Error ? error.message : "Please try again.";
@@ -202,13 +223,15 @@ export default function Bank() {
     setMovingDay(false);
     setMoveDayOpen(false);
     setMoveDayDate(null);
+    setMoveDayMode(null);
+    setMoveDayNewDate("");
     const left = daySize - moved;
     toast({
       variant: failure ? "destructive" : undefined,
-      title: failure ? "Only some were moved" : "Day moved",
-      description: `${moved} ${moved === 1 ? "entry" : "entries"} moved to ${targetName}.`
+      title: failure ? "Only some were changed" : "Day changed",
+      description: `${moved} ${moved === 1 ? "entry" : "entries"} ${summary}.`
         + (failure ? ` Stopped because: ${failure}` : "")
-        + (!failure && left > 0 ? ` ${left} stayed here - transfers and savings or expense-linked entries cannot move on their own.` : ""),
+        + (!failure && left > 0 ? ` ${left} stayed as they were - transfers and savings or expense-linked entries cannot be changed on their own.` : ""),
     });
   };
 
@@ -2321,7 +2344,7 @@ export default function Bank() {
           <div className="flex items-center gap-2">
             <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Transactions</h2>
             <ListEditButton editor={txEditor} canManage={canManageAccount} label="Remove several transactions" />
-            {canManageAccount && !txEditor.editing && accounts.length > 1 ? (
+            {canManageAccount && !txEditor.editing ? (
               <button
                 type="button"
                 onClick={() => setMoveDayOpen(true)}
@@ -2457,16 +2480,62 @@ export default function Bank() {
         <Dialog open={moveDayOpen} onOpenChange={(open) => { if (!open) closeMoveDay(); }}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>{moveDayDate ? "Move to which account?" : "Which day was recorded under the wrong account?"}</DialogTitle>
+              <DialogTitle>
+                {!moveDayDate
+                  ? "Which day needs fixing?"
+                  : moveDayMode === null
+                  ? "What was wrong with it?"
+                  : moveDayMode === "account"
+                  ? "Move to which account?"
+                  : "Which date should it be under?"}
+              </DialogTitle>
               <DialogDescription>
-                {moveDayDate
+                {!moveDayDate
+                  ? `Entries on ${selectedBankAccount?.name ?? "this account"}. Transfers and savings or expense-linked entries are left as they are.`
+                  : moveDayMode === "date"
+                  ? `Every ordinary entry on ${formatDate(moveDayDate)} is re-dated to the day you pick. Balances are as at today, so they may change.`
+                  : moveDayMode === "account"
                   ? `Every ordinary entry on ${formatDate(moveDayDate)} leaves ${selectedBankAccount?.name ?? "this account"} and goes to the one you pick. Both balances update.`
-                  : `Entries on ${selectedBankAccount?.name ?? "this account"}. Transfers and savings or expense-linked entries are left where they are.`}
+                  : `${formatDate(moveDayDate)} on ${selectedBankAccount?.name ?? "this account"}.`}
               </DialogDescription>
             </DialogHeader>
             <div className="max-h-72 space-y-1 overflow-y-auto">
               {movingDay ? (
                 <Loader2 className="mx-auto my-6 h-5 w-5 animate-spin" />
+              ) : moveDayDate && moveDayMode === null ? (
+                <>
+                  {accounts.length > 1 ? (
+                    <button
+                      type="button"
+                      onClick={() => setMoveDayMode("account")}
+                      className="flex w-full items-center rounded-lg px-3 py-3 text-left text-sm hover:bg-muted"
+                      data-testid="bank-move-day-mode-account"
+                    >
+                      Recorded under the wrong account
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => { setMoveDayNewDate(moveDayDate.slice(0, 10)); setMoveDayMode("date"); }}
+                    className="flex w-full items-center rounded-lg px-3 py-3 text-left text-sm hover:bg-muted"
+                    data-testid="bank-move-day-mode-date"
+                  >
+                    Recorded under the wrong date
+                  </button>
+                </>
+              ) : moveDayDate && moveDayMode === "date" ? (
+                <div className="space-y-3 pt-1">
+                  <input
+                    type="date"
+                    value={moveDayNewDate}
+                    onChange={(event) => setMoveDayNewDate(event.target.value)}
+                    className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                    data-testid="bank-move-day-new-date"
+                  />
+                  <Button type="button" className="w-full" onClick={() => void moveDayToDate()} data-testid="bank-move-day-date-save">
+                    Change the date
+                  </Button>
+                </div>
               ) : moveDayDate ? (
                 accounts.filter((item) => item.id !== selectedAccountId).map((item) => (
                   <button
