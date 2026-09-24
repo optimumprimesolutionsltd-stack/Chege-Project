@@ -84,6 +84,11 @@ function isOutgoing(kind: RowKind): boolean {
   return kind === "spend" || kind === "pay-party" || kind === "lend";
 }
 
+/** Only money going out can carry a bank charge; money coming in never does. */
+function chargesOf<T extends { kind: RowKind; charges: ChargeItem[] }>(row: T): ChargeItem[] {
+  return isOutgoing(row.kind) ? row.charges : [];
+}
+
 function formatKes(value?: number | null): string {
   if (value === null || value === undefined || Number.isNaN(value)) return "0";
   return value.toLocaleString("en-KE", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
@@ -405,7 +410,7 @@ export default function BankDayPage() {
   });
   // Whose income streams to offer on money in: the person's own in a Personal
   // budget, the group's in a shared one (deposits there go to the joint bank).
-  const { data: incomeSources = [] } = useQuery<{ id: number; name: string }[]>({
+  const { data: incomeSources = [] } = useQuery<{ id: number; name: string; userId?: string | null }[]>({
     queryKey: ["income-sources", !isSharedWorkspace ? user?.id ?? "__me__" : "__group__"],
     queryFn: async () => {
       const url = !isSharedWorkspace && user?.id ? `/api/income-sources?userId=${encodeURIComponent(user.id)}` : "/api/income-sources";
@@ -443,7 +448,7 @@ export default function BankDayPage() {
   /** What each row moves, in the direction it moves it, every charge included. */
   const rowEffect = (row: DayRow): number => {
     const amount = row.amount.trim() === "" ? 0 : readAmount(row.amount) ?? 0;
-    const fees = row.charges.reduce((total, charge) => total + chargeAmount(charge), 0);
+    const fees = chargesOf(row).reduce((total, charge) => total + chargeAmount(charge), 0);
     return (isOutgoing(row.kind) ? -amount : amount) - fees;
   };
   const unsavedRows = rows.filter((row) => !row.saved);
@@ -497,7 +502,7 @@ export default function BankDayPage() {
     if (row.kind === "borrowed" && row.partyId === "none" && !row.category.trim()) {
       return "Say what it was borrowed against, or from whom.";
     }
-    for (const charge of row.charges) {
+    for (const charge of chargesOf(row)) {
       if (charge.amount.trim() === "") continue;
       const fee = readAmount(charge.amount);
       if (fee === null || fee < 0) return "Check the bank charge.";
@@ -546,7 +551,11 @@ export default function BankDayPage() {
           amount,
           description: narration,
           date,
-          madeById,
+          // A source belongs to one member, and the server only accepts it
+          // when the deposit names that same member.
+          madeById: row.kind === "money-in" && row.incomeSourceId !== "none"
+            ? incomeSources.find((source) => String(source.id) === row.incomeSourceId)?.userId ?? madeById
+            : madeById,
           ...(row.kind === "repaid" && party ? { settlesContributorId: party.id } : {}),
           ...(row.kind === "borrowed" ? { isBorrowing: true } : {}),
           ...(row.kind === "money-in" && row.incomeSourceId !== "none" ? { incomeSourceId: Number(row.incomeSourceId) } : {}),
@@ -555,7 +564,7 @@ export default function BankDayPage() {
       });
     }
 
-    for (const charge of row.charges) {
+    for (const charge of chargesOf(row)) {
       const fee = chargeAmount(charge);
       if (fee <= 0) continue;
       await createDisbursement.mutateAsync({
@@ -825,6 +834,7 @@ export default function BankDayPage() {
               {/* Bank charges: a statement line often carries a withdrawal fee,
                   excise duty, a Fuliza fee. Each is its own posting, named and
                   filed under its own category. */}
+              {isOutgoing(row.kind) ? (
               <div className="space-y-2 sm:col-span-6" data-testid={`day-charges-${index}`}>
                 {row.charges.map((charge, chargeIndex) => (
                   <div key={charge.key} className="grid gap-2 sm:grid-cols-6">
@@ -877,6 +887,7 @@ export default function BankDayPage() {
                   </button>
                 ) : null}
               </div>
+              ) : null}
 
               {row.error ? <p className="text-xs text-destructive sm:col-span-6" data-testid={`day-row-error-${index}`}>{row.error}</p> : null}
               {row.saved ? <p className="text-xs text-emerald-600 sm:col-span-6">Saved.</p> : null}
