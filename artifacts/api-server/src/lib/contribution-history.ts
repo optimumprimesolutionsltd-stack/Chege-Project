@@ -1,3 +1,4 @@
+import { nairobiNow } from "./nairobiTime";
 /**
  * Turning contribution rows into a member-by-month grid.
  *
@@ -43,9 +44,9 @@ export interface ContributionHistory {
 }
 
 /** The months to report on, oldest first, ending with the one containing `now`. */
-export function historyMonths(monthsBack: number, now: Date = new Date()): HistoryMonth[] {
+export function historyMonths(monthsBack: number, now: Date = nairobiNow()): HistoryMonth[] {
   return Array.from({ length: monthsBack }, (_, index) => {
-    const date = new Date(now.getFullYear(), now.getMonth() - (monthsBack - 1 - index), 1);
+    const date = new Date(now.getUTCFullYear(), now.getUTCMonth() - (monthsBack - 1 - index), 1);
     return {
       month: date.getMonth() + 1,
       year: date.getFullYear(),
