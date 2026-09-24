@@ -14,6 +14,7 @@ import {
   groupsTable,
   incomeSourcesTable,
   contributionsTable,
+  groupContributorsTable,
 } from "@workspace/db";
 import { sql, eq, and, inArray, isNull } from "drizzle-orm";
 import {
@@ -431,6 +432,75 @@ router.get("/dashboard/activity", async (req, res): Promise<void> => {
     .orderBy(sql`${jointAccountTxTable.createdAt} DESC`)
     .limit(monthlyLimit);
 
+  // Events the feed used to leave out. Only the general (recent) feed carries
+  // them: the monthly report has its own attribution rules.
+  //
+  // Transfers between two of the group's own accounts (one row per leg, so the
+  // withdrawal leg stands for the pair), debt events (borrowed, lent, settled)
+  // and contributions recorded by hand rather than through a bank deposit.
+  const transferRows = isMonthlyReport ? [] : await db
+    .select({
+      id: jointAccountTxTable.id,
+      amount: jointAccountTxTable.amount,
+      description: jointAccountTxTable.description,
+      madeById: jointAccountTxTable.madeById,
+      madeByName: usersTable.firstName,
+      date: jointAccountTxTable.date,
+      fromName: sql<string | null>`(SELECT name FROM bank_accounts WHERE id = ${jointAccountTxTable.accountId})`,
+      toName: sql<string | null>`(SELECT name FROM bank_accounts WHERE id = ${jointAccountTxTable.bankTransferAccountId})`,
+    })
+    .from(jointAccountTxTable)
+    .leftJoin(usersTable, eq(jointAccountTxTable.madeById, usersTable.id))
+    .where(and(
+      eq(jointAccountTxTable.groupId, groupId),
+      eq(jointAccountTxTable.type, "disbursement"),
+      sql`${jointAccountTxTable.bankTransferId} IS NOT NULL`,
+    ))
+    .orderBy(sql`${jointAccountTxTable.createdAt} DESC`)
+    .limit(monthlyLimit);
+
+  const debtRows = isMonthlyReport ? [] : await db
+    .select({
+      id: jointAccountTxTable.id,
+      type: jointAccountTxTable.type,
+      amount: jointAccountTxTable.amount,
+      description: jointAccountTxTable.description,
+      isBorrowing: jointAccountTxTable.isBorrowing,
+      isLending: jointAccountTxTable.isLending,
+      madeById: jointAccountTxTable.madeById,
+      madeByName: usersTable.firstName,
+      date: jointAccountTxTable.date,
+    })
+    .from(jointAccountTxTable)
+    .leftJoin(usersTable, eq(jointAccountTxTable.madeById, usersTable.id))
+    .where(and(
+      eq(jointAccountTxTable.groupId, groupId),
+      // Money going out only. Borrowed money and repayments received are
+      // deposits, which the feed already lists (the ledger must not disagree
+      // with the bank), so listing them here too would show them twice.
+      eq(jointAccountTxTable.type, "disbursement"),
+      isNull(jointAccountTxTable.bankTransferId),
+      sql`(${jointAccountTxTable.isLending} OR ${jointAccountTxTable.settlesContributorId} IS NOT NULL)`,
+    ))
+    .orderBy(sql`${jointAccountTxTable.createdAt} DESC`)
+    .limit(monthlyLimit);
+
+  const handContributions = isMonthlyReport ? [] : await db
+    .select({
+      id: contributionsTable.id,
+      amount: contributionsTable.amount,
+      month: contributionsTable.month,
+      year: contributionsTable.year,
+      note: contributionsTable.note,
+      contributorName: groupContributorsTable.name,
+      createdAt: contributionsTable.createdAt,
+    })
+    .from(contributionsTable)
+    .leftJoin(groupContributorsTable, eq(contributionsTable.contributorId, groupContributorsTable.id))
+    .where(eq(contributionsTable.groupId, groupId))
+    .orderBy(sql`${contributionsTable.createdAt} DESC`)
+    .limit(monthlyLimit);
+
   // A monthly contribution report must use the same attribution units as the
   // summary above. A mixed expense or deposit therefore becomes one row per
   // funding portion instead of a misleading transaction-level total.
@@ -609,6 +679,38 @@ router.get("/dashboard/activity", async (req, res): Promise<void> => {
       category: null,
       // Deposits are reported in the month of their banking transaction, not entry time.
       date: String(d.date),
+    })),
+    ...transferRows.map((t) => ({
+      id: `transfer-${t.id}`,
+      type: "transfer",
+      direction: "out" as const,
+      amount: Number(t.amount),
+      description: `Transfer: ${t.fromName ?? "account"} → ${t.toName ?? "account"}`,
+      userName: t.madeById === null ? GROUP_ATTRIBUTION : (t.madeByName ?? "Unknown"),
+      category: null,
+      date: String(t.date),
+    })),
+    ...debtRows.map((d) => {
+      const label = d.isLending ? "Lent" : "Repayment made";
+      return {
+        id: `debt-${d.id}`,
+        type: "debt",
+        direction: "out" as const,
+        amount: Number(d.amount),
+        description: `${label}: ${d.description}`,
+        userName: d.madeById === null ? GROUP_ATTRIBUTION : (d.madeByName ?? "Unknown"),
+        category: null,
+        date: String(d.date),
+      };
+    }),
+    ...handContributions.map((c) => ({
+      id: `hand-contribution-${c.id}`,
+      type: "contribution",
+      amount: c.amount,
+      description: `Contribution for ${c.month}/${c.year}${c.note ? `: ${c.note}` : ""}`,
+      userName: c.contributorName ?? "Unknown",
+      category: null,
+      date: c.createdAt instanceof Date ? c.createdAt.toISOString() : String(c.createdAt),
     })),
     ...bankSpending.map((w) => ({
       id: `bank-spend-${w.id}`,
