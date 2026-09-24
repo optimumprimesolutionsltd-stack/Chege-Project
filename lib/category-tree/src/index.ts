@@ -117,3 +117,28 @@ export function totalBudget(rows: readonly BudgetRow[]): number {
     .filter((row) => !hasChildren(rows, row.id))
     .reduce((sum, row) => sum + row.budgetAmount, 0);
 }
+
+/**
+ * The part of a category tree that matches what someone typed, so a long list
+ * can be narrowed as they type.
+ *
+ * A parent whose own name matches keeps all its subcategories (typing "food"
+ * should show everything under Food); otherwise only the matching
+ * subcategories stay, under their parent. Case and surrounding spaces are
+ * ignored. An empty search returns the tree untouched.
+ */
+export function filterCategoryTree(tree: readonly CategoryGroup[], query: string): CategoryGroup[] {
+  const needle = query.trim().toLocaleLowerCase("en-US");
+  if (!needle) return tree as CategoryGroup[];
+  const hit = (name: string) => name.toLocaleLowerCase("en-US").includes(needle);
+  const out: CategoryGroup[] = [];
+  for (const group of tree) {
+    if (hit(group.name)) {
+      out.push(group);
+      continue;
+    }
+    const children = group.children.filter(hit);
+    if (children.length > 0) out.push({ name: group.name, children });
+  }
+  return out;
+}

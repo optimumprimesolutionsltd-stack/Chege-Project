@@ -59,7 +59,8 @@ import {
   ApiError,
 } from '@workspace/api-client-react';
 import { getCategoryIcon } from '@/lib/categoryIcons';
-import { buildCategoryTree, parentOf, type CategoryRow } from '@workspace/category-tree';
+import { buildCategoryTree, filterCategoryTree, parentOf, type CategoryRow } from '@workspace/category-tree';
+import { CategorySearchBox } from '@/components/CategorySearchBox';
 import { workspaceBudgetName } from '@/lib/workspaceIdentity';
 import { handleLapsedError } from '@/lib/lapsedError';
 import { evaluateAmountExpression, isAmountExpression } from '@/lib/amountExpression';
@@ -861,6 +862,7 @@ export default function AddExpenseSheet() {
   // children of another, so the picker rebuilds the parent/child split itself.
   // Both modes offer the parents; only Detailed goes on to offer the
   // subcategories underneath the parent that was chosen.
+  const [categorySearch, setCategorySearch] = useState('');
   const categoryTree = useMemo(
     () =>
       // The generated BudgetCategory type doesn't declare parentId (the
@@ -1600,7 +1602,8 @@ export default function AddExpenseSheet() {
             as one would only invite the tap the server refuses. */}
         {!categoriesQuery.isLoading && !categoriesQuery.isError && categoryTree.length > 0 ? (
           <View style={styles.quickGroups}>
-            {categoryTree.map((group) => (
+            <CategorySearchBox value={categorySearch} onChange={setCategorySearch} testID="category-search" />
+            {filterCategoryTree(categoryTree, categorySearch).map((group) => (
               <View key={`group-${group.name}`} testID={`category-group-${group.name}`} style={styles.quickGroup}>
                 {group.children.length > 0 ? (
                   <>

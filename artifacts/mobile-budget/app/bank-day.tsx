@@ -40,7 +40,8 @@ import { readAmount, toMoney } from '@/lib/bankAmount';
 import { AmountCalcRow } from '@/components/AmountCalcRow';
 import { balanceAsAt } from '@/lib/balanceAsAt';
 import { BankAccountPicker } from '@/components/BankAccountPicker';
-import { buildCategoryTree, type CategoryRow } from '@workspace/category-tree';
+import { buildCategoryTree, filterCategoryTree, type CategoryRow } from '@workspace/category-tree';
+import { CategorySearchBox } from '@/components/CategorySearchBox';
 import {
   customFetch,
   useCreateBudgetCategory,
@@ -971,6 +972,8 @@ function CategoryField({
   // server refuses one anyway.
   const [newParentId, setNewParentId] = useState<number | null>(null);
   const [newBudget, setNewBudget] = useState('');
+  const [search, setSearch] = useState('');
+  const visibleTree = filterCategoryTree(tree, search);
 
   const submitNewCategory = async () => {
     const name = newName.trim();
@@ -1014,7 +1017,7 @@ function CategoryField({
   return (
     <>
       <TouchableOpacity
-        onPress={() => setOpen((current) => !current)}
+        onPress={() => { setSearch(''); setOpen((current) => !current); }}
         testID={testID}
         style={[styles.field, { borderColor: colors.border, backgroundColor: colors.muted }]}
       >
@@ -1025,7 +1028,8 @@ function CategoryField({
         <View style={[styles.dropdown, { borderColor: colors.dropdownBorder, backgroundColor: colors.dropdownBackground }]}>
           {!adding ? (
             <>
-              {tree.map((group) => (
+              <CategorySearchBox value={search} onChange={setSearch} testID={`${testID}-search`} />
+              {visibleTree.map((group) => (
                 <View key={group.name}>
                   {group.children.length > 0 ? (
                     <>

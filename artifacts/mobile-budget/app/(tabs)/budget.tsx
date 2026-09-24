@@ -23,6 +23,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { isoDay, longDay, monthStartIso, orderedRange } from '@/lib/dayRange';
 import { effectiveBudgets } from '@workspace/category-tree';
+import { CategorySearchBox } from '@/components/CategorySearchBox';
 import { useColors } from '@/hooks/useColors';
 import { useCollapsed } from '@/hooks/useCollapsed';
 import { useListEditor } from '@/hooks/useListEditor';
@@ -748,6 +749,7 @@ export default function BudgetScreen() {
   // Parents first, each followed by its own subcategories. The list arrived in
   // priority order with children scattered among unrelated headings, so the
   // one screen for managing the tree was the one place that did not show it.
+  const [manageSearch, setManageSearch] = useState('');
   const orderedManagedCategories = useMemo(() => {
     const childrenOf = new Map<number, BudgetCategory[]>();
     for (const category of managedCategories) {
@@ -766,6 +768,22 @@ export default function BudgetScreen() {
     }
     return ordered;
   }, [managedCategories]);
+  // Narrowed by the search box: a row stays if it matches, if its parent does
+  // (typing a group shows everything under it), or if one of its own
+  // subcategories does (so the match is never orphaned from its heading).
+  const shownManagedCategories = useMemo(() => {
+    const needle = manageSearch.trim().toLocaleLowerCase();
+    if (!needle) return orderedManagedCategories;
+    const hit = (name: string) => name.toLocaleLowerCase().includes(needle);
+    return orderedManagedCategories.filter(({ category }) => {
+      if (hit(category.name)) return true;
+      const parent = orderedManagedCategories.find((row) => row.category.id === category.parentId);
+      if (parent && hit(parent.category.name)) return true;
+      return orderedManagedCategories.some(
+        (row) => row.category.parentId === category.id && hit(row.category.name),
+      );
+    });
+  }, [orderedManagedCategories, manageSearch]);
   const summaryBudgetCategories = activeCategories.filter(category => budgetFor(category) > 0);
   const openOverallLedger = () => {
     if (summaryBudgetCategories.length === 1) {
@@ -1079,10 +1097,17 @@ export default function BudgetScreen() {
                 <Feather name="x" size={22} color={colors.mutedForeground} />
               </Pressable>
             </View>
-            <ScrollView contentContainerStyle={styles.modalBody} showsVerticalScrollIndicator={false}>
+            <ScrollView contentContainerStyle={styles.modalBody} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+               {orderedManagedCategories.length > 0 ? (
+                <View style={{ marginHorizontal: -12 }}>
+                  <CategorySearchBox value={manageSearch} onChange={setManageSearch} testID="manage-category-search" />
+                </View>
+               ) : null}
                {orderedManagedCategories.length === 0 ? (
                 <Text style={[styles.manageEmpty, { color: colors.mutedForeground }]}>No budget categories yet.</Text>
-               ) : orderedManagedCategories.map(({ category, isChild }) => (
+               ) : shownManagedCategories.length === 0 ? (
+                <Text style={[styles.manageEmpty, { color: colors.mutedForeground }]}>No category matches that search.</Text>
+               ) : shownManagedCategories.map(({ category, isChild }) => (
                 <Pressable
                   key={category.id}
                   onPress={() => openEdit(category)}
