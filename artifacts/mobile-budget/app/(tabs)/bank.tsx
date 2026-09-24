@@ -28,6 +28,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useColors } from '@/hooks/useColors';
 import { useListEditor } from '@/hooks/useListEditor';
 import { movableOnDay, summariseDays } from '@/lib/moveDay';
+import { BankPeriodBar } from '@/components/BankPeriodBar';
+import { inPeriod, nairobiToday, periodFor, summarisePeriod, type PeriodPreset } from '@/lib/bankPeriod';
 import { EditableName, ListEditButton, ListEditorFooter, RemoveRowButton } from '@/components/ListEditor';
 import { PageFlatList } from '@/components/PageScrollReset';
 import {
@@ -215,6 +217,9 @@ export default function BankScreen() {
   // had got to, so the sheet can stay open and keep a tally of the sitting.
   const [sitting, setSitting] = useState<{ count: number; inflow: number; outflow: number } | null>(null);
   const [editingTransactionId, setEditingTransactionId] = useState<number | null>(null);
+  const [periodPreset, setPeriodPreset] = useState<PeriodPreset>('all');
+  const [periodFrom, setPeriodFrom] = useState('');
+  const [periodTo, setPeriodTo] = useState('');
   const [openingBalanceModalVisible, setOpeningBalanceModalVisible] = useState(false);
   const [openingBalanceDraft, setOpeningBalanceDraft] = useState('');
   const [openingBalanceDate, setOpeningBalanceDate] = useState(todayIso());
@@ -1880,6 +1885,11 @@ export default function BankScreen() {
   };
 
   const transactions: Tx[] = data?.transactions ?? [];
+  // A period narrows the list and the figures to those dates. "All time"
+  // leaves the account exactly as the server reports it.
+  const period = periodFor(periodPreset, nairobiToday(), { from: periodFrom, to: periodTo });
+  const periodSummary = data && period ? summarisePeriod(data as never, period) : null;
+  const shownTransactions = period ? transactions.filter((tx) => inPeriod(tx, period)) : transactions;
 
   // "Withdrawn" counted spending, savings transfers and moves between your own
   // accounts as one figure. The balance falls the same way for all three, but
@@ -1889,7 +1899,7 @@ export default function BankScreen() {
   const outgoing = useMemo(() => {
     let spent = 0;
     let moved = 0;
-    for (const tx of transactions) {
+    for (const tx of shownTransactions) {
       if (tx.type !== 'disbursement') continue;
       if (tx.bankTransferId != null || tx.savingsGoalId != null) {
         // Still yours, in another pot.
@@ -1899,7 +1909,7 @@ export default function BankScreen() {
       }
     }
     return { spent, moved };
-  }, [transactions]);
+  }, [shownTransactions]);
 
   // Panel-level edit mode: one Edit on a heading turns the list editable, one
   // Save at the foot applies every staged change.
@@ -2037,7 +2047,7 @@ export default function BankScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
 
       <PageFlatList
-        data={transactions}
+        data={shownTransactions}
         keyExtractor={(item) => String(item.id)}
         refreshControl={
           <RefreshControl
@@ -2213,12 +2223,12 @@ export default function BankScreen() {
           ) : (
             <>
               <Text style={styles.balanceLabel}>Closing balance</Text>
-              <Text style={styles.balance} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>KES {formatKES(data?.balance)}</Text>
+              <Text style={styles.balance} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>KES {formatKES(periodSummary ? periodSummary.closing : data?.balance)}</Text>
               <View style={styles.statsRow}>
                 <View style={styles.statItem}>
                   <Feather name="arrow-down-circle" size={14} color="#4ade80" />
                   <Text style={styles.statLabel}>Deposits</Text>
-                  <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>KES {formatKES(data?.totalDeposits)}</Text>
+                  <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>KES {formatKES(periodSummary ? periodSummary.totalIn : data?.totalDeposits)}</Text>
                 </View>
                 <View style={styles.statDivider} />
                 <View style={styles.statItem} testID="bank-stat-spent">
@@ -2239,9 +2249,13 @@ export default function BankScreen() {
               </View>
               <View style={styles.openingBalanceRow}>
                 <View>
-                  <Text style={styles.openingBalanceLabel}>Opening balance</Text>
-                   <Text style={styles.openingBalanceValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>KES {formatKES(data?.openingBalance)}</Text>
-                  {data?.openingBalanceDate && (
+                  <Text style={styles.openingBalanceLabel}>{periodSummary ? 'Balance at start of period' : 'Opening balance'}</Text>
+                   <Text style={styles.openingBalanceValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>KES {formatKES(periodSummary ? periodSummary.opening : data?.openingBalance)}</Text>
+                  {periodSummary && period ? (
+                    <Text style={styles.openingBalanceDate}>
+                      {formatDisplayDate(period.from)} to {formatDisplayDate(period.to)}
+                    </Text>
+                  ) : data?.openingBalanceDate && (
                     <Text style={styles.openingBalanceDate}>
                        As of {formatDisplayDate(data.openingBalanceDate)}
                     </Text>
@@ -2358,6 +2372,14 @@ export default function BankScreen() {
             </>
           )}
         </LinearGradient>
+          <BankPeriodBar
+            preset={periodPreset}
+            onPreset={setPeriodPreset}
+            from={periodFrom}
+            to={periodTo}
+            onFrom={setPeriodFrom}
+            onTo={setPeriodTo}
+          />
           {transactions.length > 0 ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <Text style={[styles.listHeader, { color: colors.mutedForeground }]}>TRANSACTIONS</Text>
@@ -2392,7 +2414,7 @@ export default function BankScreen() {
             <View style={styles.empty}>
               <Feather name="credit-card" size={40} color={colors.mutedForeground} />
                 <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
-                 {hasBankAccounts ? 'No transactions yet' : 'Create a bank account first'}
+                 {hasBankAccounts ? (period ? 'No transactions in this period' : 'No transactions yet') : 'Create a bank account first'}
                </Text>
               <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
                  {hasBankAccounts

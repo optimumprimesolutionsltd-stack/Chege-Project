@@ -40,6 +40,6 @@ describe('the account separates what was spent from what was moved', () => {
   });
 
   it('recomputes only when the transactions change', () => {
-    expect(bank).toContain('}, [transactions]);');
+    expect(bank).toContain('}, [shownTransactions]);');
   });
 });
