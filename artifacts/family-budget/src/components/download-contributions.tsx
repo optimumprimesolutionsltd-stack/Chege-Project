@@ -254,10 +254,15 @@ function StatementView({ from, to }: { from: string; to: string }) {
   );
 }
 
-function statementPdfUrl(from: string, to: string, userId?: string): string {
+type LedgerSections = { includeEntries: boolean; includePerMemberTotals: boolean };
+
+function statementPdfUrl(from: string, to: string, userId?: string, sections?: LedgerSections): string {
   const [start, end] = ordered(from, to);
   const params = new URLSearchParams({ from: start, to: end });
   if (userId) params.set("userId", userId);
+  // Only sent when something is switched off: the default is everything.
+  if (sections && !sections.includeEntries) params.set("includeEntries", "false");
+  if (sections && !sections.includePerMemberTotals) params.set("includePerMemberTotals", "false");
   return `/api/contributions/statement.pdf?${params.toString()}`;
 }
 
@@ -325,6 +330,9 @@ export function DownloadContributions({
   const [busy, setBusy] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [viewing, setViewing] = useState(false);
+  // What the downloaded ledger PDF includes; the on-screen report is unchanged.
+  const [includeEntries, setIncludeEntries] = useState(true);
+  const [includePerMemberTotals, setIncludePerMemberTotals] = useState(true);
   const [start, end] = ordered(fromKey, toKey);
 
   // The on-screen report always reads as a dated list. In grid mode the chosen
@@ -355,7 +363,11 @@ export function DownloadContributions({
   const download = () => {
     // The dated statement PDF for exactly what View shows. A server route, so
     // no print window to be blocked.
-    window.open(statementPdfUrl(viewRange.from, viewRange.to), "_blank", "noopener,noreferrer");
+    window.open(
+      statementPdfUrl(viewRange.from, viewRange.to, undefined, { includeEntries, includePerMemberTotals }),
+      "_blank",
+      "noopener,noreferrer",
+    );
   };
 
   const shareToWhatsApp = async () => {
@@ -459,6 +471,28 @@ export function DownloadContributions({
             </label>
           </>
         )}
+        {mode === "ledger" ? (
+          <div className="flex w-full flex-wrap gap-x-5 gap-y-1 text-sm">
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={includeEntries}
+                onChange={(event) => setIncludeEntries(event.target.checked)}
+                data-testid="checkbox-ledger-entries"
+              />
+              Dated entries
+            </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={includePerMemberTotals}
+                onChange={(event) => setIncludePerMemberTotals(event.target.checked)}
+                data-testid="checkbox-ledger-by-member"
+              />
+              By-member totals
+            </label>
+          </div>
+        ) : null}
         <div className="flex flex-wrap gap-2 sm:ml-auto">
           <Button
             onClick={() => setViewing((value) => !value)}
