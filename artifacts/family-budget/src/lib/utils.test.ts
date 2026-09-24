@@ -14,5 +14,8 @@ describe("display formatting", () => {
   it("keeps KES currency and amount together", () => {
     expect(formatKes(125000)).toContain("125,000");
     expect(formatKes(125000).toLowerCase()).toContain("ksh");
+    expect(formatKes(0.5)).toContain("0.50");
+    expect(formatKes(3275.4)).toContain("3,275.40");
+    expect(formatKes(3275)).not.toContain(".");
   });
 });
