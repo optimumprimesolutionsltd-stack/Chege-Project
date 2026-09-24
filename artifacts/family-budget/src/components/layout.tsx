@@ -375,12 +375,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
         {isQuickLogOpen && (
           <div
             role="menu"
-            aria-label="Quick log options"
+            aria-label="What do you want to add?"
             className="w-64 overflow-hidden rounded-2xl border border-border bg-card p-2 shadow-2xl"
           >
             <div className="px-3 pb-2 pt-2">
-              <p className="text-sm font-bold text-foreground">Quick log</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">Record money without leaving the page you are on.</p>
+              <p className="text-sm font-bold text-foreground">What do you want to add?</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">Write it down without leaving this page.</p>
             </div>
             {offeredQuickLogActions.includes('contribution') && (
             <button
@@ -393,8 +393,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 <HandCoins className="h-4 w-4" aria-hidden="true" />
               </span>
               <span>
-                <span className="block text-sm font-semibold text-foreground">Record contributions</span>
-                <span className="block text-xs text-muted-foreground">Tick who has paid this month</span>
+                <span className="block text-sm font-semibold text-foreground">Who paid this month</span>
+                <span className="block text-xs text-muted-foreground">Tick the people who have paid</span>
               </span>
             </button>
             )}
@@ -410,8 +410,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 <Receipt className="h-4 w-4" aria-hidden="true" />
               </span>
               <span>
-                <span className="block text-sm font-semibold text-foreground">Log expense</span>
-                <span className="block text-xs text-muted-foreground">Record spending now</span>
+                <span className="block text-sm font-semibold text-foreground">I spent money</span>
+                <span className="block text-xs text-muted-foreground">Write down something you bought</span>
               </span>
             </button>
             )}
@@ -426,8 +426,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 <Landmark className="h-4 w-4" aria-hidden="true" />
               </span>
               <span>
-                <span className="block text-sm font-semibold text-foreground">Bank deposit</span>
-                <span className="block text-xs text-muted-foreground">Record money received</span>
+                <span className="block text-sm font-semibold text-foreground">I received money</span>
+                <span className="block text-xs text-muted-foreground">Money that came into your bank account</span>
               </span>
             </button>
             )}
@@ -442,8 +442,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 <PieChart className="h-4 w-4" aria-hidden="true" />
               </span>
               <span>
-                <span className="block text-sm font-semibold text-foreground">Budget</span>
-                <span className="block text-xs text-muted-foreground">Plan monthly spending</span>
+                <span className="block text-sm font-semibold text-foreground">Plan my budget</span>
+                <span className="block text-xs text-muted-foreground">Decide what to spend each month</span>
               </span>
             </button>
             )}
@@ -459,8 +459,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 <Target className="h-4 w-4" aria-hidden="true" />
               </span>
               <span>
-                <span className="block text-sm font-semibold text-foreground">Save to goal</span>
-                <span className="block text-xs text-muted-foreground">Move money toward a goal</span>
+                <span className="block text-sm font-semibold text-foreground">I saved for a goal</span>
+                <span className="block text-xs text-muted-foreground">Put money toward something you want</span>
               </span>
             </button>
             )}
@@ -475,11 +475,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
           type="button"
           onClick={() => setIsQuickLogOpen((isOpen) => !isOpen)}
           aria-expanded={isQuickLogOpen}
-          aria-label={isQuickLogOpen ? 'Close quick log' : 'Open quick log'}
+          aria-label={isQuickLogOpen ? 'Close the add menu' : 'Add something'}
           className="h-12 rounded-full px-4 shadow-xl md:h-14 md:px-5"
         >
           {isQuickLogOpen ? <X className="mr-2 h-5 w-5" aria-hidden="true" /> : <Plus className="mr-2 h-5 w-5" aria-hidden="true" />}
-          <span className="text-sm font-bold">Quick log</span>
+          <span className="text-sm font-bold">Add</span>
         </Button>
       </div>
       )}

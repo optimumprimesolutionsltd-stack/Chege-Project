@@ -6,16 +6,16 @@ import { useRouter } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
 
 const MAIN_ACTIONS = [
-  { icon: 'plus-circle' as const, label: 'Expense', route: '/add-expense' },
-  { icon: 'credit-card' as const, label: 'Banking' },
-  { icon: 'target' as const, label: 'Save', route: '/(tabs)/goals?shortcut=contribute' },
-  { icon: 'bar-chart-2' as const, label: 'Budget', route: '/(tabs)/budget' },
+  { id: 'expense', icon: 'plus-circle' as const, label: 'I spent', route: '/add-expense' },
+  { id: 'banking', icon: 'credit-card' as const, label: 'Bank' },
+  { id: 'save', icon: 'target' as const, label: 'Save', route: '/(tabs)/goals?shortcut=contribute' },
+  { id: 'budget', icon: 'bar-chart-2' as const, label: 'Budget', route: '/(tabs)/budget' },
 ];
 
 const BANKING_ACTIONS = [
-  { icon: 'arrow-down-left' as const, label: 'Deposit', hint: 'Add money to a bank account', route: '/(tabs)/bank?shortcut=deposit' },
-  { icon: 'arrow-up-right' as const, label: 'Withdraw', hint: 'Take money out of a bank account', route: '/(tabs)/bank?shortcut=withdraw' },
-  { icon: 'repeat' as const, label: 'Transfer', hint: 'Move money between accounts or goals', route: '/(tabs)/bank?shortcut=bank-transfer' },
+  { id: 'deposit', icon: 'arrow-down-left' as const, label: 'Money in', hint: 'Money that came into your bank account', route: '/(tabs)/bank?shortcut=deposit' },
+  { id: 'withdraw', icon: 'arrow-up-right' as const, label: 'Money out', hint: 'Money you took out of your bank account', route: '/(tabs)/bank?shortcut=withdraw' },
+  { id: 'transfer', icon: 'repeat' as const, label: 'Move money', hint: 'Move money between your accounts or goals', route: '/(tabs)/bank?shortcut=bank-transfer' },
 ];
 
 /** Persistent action footer — rendered at the tab-layout level so it appears on every screen. */
@@ -38,14 +38,14 @@ export function GlobalFAB() {
 
       {bankingOpen && (
         <View style={[styles.bankingMenu, { bottom: footerBottom + 72, backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.bankingMenuTitle, { color: colors.foreground }]}>Banking</Text>
-          <Text style={[styles.bankingMenuSubtitle, { color: colors.mutedForeground }]}>Choose what you want to do with your money.</Text>
+          <Text style={[styles.bankingMenuTitle, { color: colors.foreground }]}>Your bank</Text>
+          <Text style={[styles.bankingMenuSubtitle, { color: colors.mutedForeground }]}>What did you do with your money?</Text>
           {BANKING_ACTIONS.map((action) => (
             <Pressable
               key={action.label}
-              testID={`global-banking-${action.label.toLowerCase()}`}
+              testID={`global-banking-${action.id}`}
               accessibilityRole="button"
-              accessibilityLabel={`Open Banking ${action.label}`}
+              accessibilityLabel={`${action.label}. ${action.hint}`}
               style={({ pressed }) => [styles.bankingMenuItem, { backgroundColor: pressed ? colors.muted : 'transparent' }]}
               onPress={() => openRoute(action.route)}
             >
@@ -64,13 +64,13 @@ export function GlobalFAB() {
 
       <View style={[styles.actionFooter, { bottom: footerBottom, backgroundColor: colors.card, borderColor: colors.border }]}>
         {MAIN_ACTIONS.map((action) => {
-          const isBanking = action.label === 'Banking';
+          const isBanking = action.id === 'banking';
           return (
             <Pressable
               key={action.label}
-              testID={`global-footer-${action.label.toLowerCase()}`}
+              testID={`global-footer-${action.id}`}
               accessibilityRole="button"
-              accessibilityLabel={isBanking ? 'Open Banking actions' : `Open ${action.label}`}
+              accessibilityLabel={isBanking ? 'Open bank actions: money in, money out, move money' : action.label}
               style={({ pressed }) => [
                 styles.actionItem,
                 { backgroundColor: isBanking && bankingOpen ? `${colors.primary}18` : 'transparent', opacity: pressed ? 0.7 : 1 },
