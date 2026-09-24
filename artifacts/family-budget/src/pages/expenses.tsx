@@ -65,6 +65,7 @@ import { formatKes, formatDate, formatMonthYear } from "@/lib/utils";
 import { appPath } from "@/lib/base-path";
 import { workspaceLabel } from "@/lib/workspace-identity";
 import { buildCategoryTree, childrenFor, parentOf, type CategoryRow } from "@workspace/category-tree";
+import { CategorySearchInput, useCategorySearch } from "@/components/category-search";
 import { Trash2, Plus, ArrowLeft, ArrowRight, Loader2, Calendar, RefreshCw, Repeat, Pencil, TrendingUp, TrendingDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -354,6 +355,7 @@ export default function Expenses() {
   // returns: the select offers the parents, and a second select underneath
   // offers the children of whichever parent is chosen. Mirrors the phone.
   const categoryTree = useMemo(() => buildCategoryTree((categories ?? []) as unknown as CategoryRow[]), [categories]);
+  const categorySearch = useCategorySearch(categoryTree);
   // A category holding subcategories is a heading: money lands on a
   // subcategory, never on the heading itself. The single-select forms
   // therefore offer what can be posted to, naming the parent for context.
@@ -1665,6 +1667,8 @@ export default function Expenses() {
           </div>
             <div className="space-y-2">
              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+               <div className="flex min-w-0 flex-1 flex-col gap-2">
+               <CategorySearchInput query={categorySearch.query} onChange={categorySearch.setQuery} testId={`${mode}-category-search`} />
                <select
                   className="flex h-[72px] min-w-0 flex-1 cursor-pointer rounded-md border-2 border-input bg-card px-6 py-4 text-base font-semibold leading-7 text-foreground shadow-sm transition-colors hover:border-primary/45 hover:bg-muted/35 focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
                  aria-label="Expense category"
@@ -1672,8 +1676,9 @@ export default function Expenses() {
                  onChange={e => chooseCategory(form, e.target.value)}
                >
                  <option value="">Select a category</option>
-                 {categoryTree.map(group => <option key={group.name} value={group.name}>{group.name}</option>)}
+                 {categorySearch.visible(selectedParentCategory).map(group => <option key={group.name} value={group.name}>{group.name}</option>)}
                </select>
+               </div>
                 {form.category.trim() && !isPrimaryOtherCategory && (
                  <div data-testid={`primary-category-allocation-${mode}`} className="sm:w-48">
                    <label htmlFor={`${mode}-primary-category-amount`} className="sr-only">

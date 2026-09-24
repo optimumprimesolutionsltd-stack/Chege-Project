@@ -23,6 +23,7 @@ import { useAuth } from "@workspace/replit-auth-web";
 import { canManageBankAccount, resolveBankAccountSelection } from "@/lib/bank-access";
 import { getProjectedBalanceAfterPosting } from "@/lib/bank-balance-utils";
 import { buildCategoryTree, type CategoryRow } from "@workspace/category-tree";
+import { CategorySearchInput, useCategorySearch } from "@/components/category-search";
 import { evaluateAmountExpression, isAmountExpression } from "@/lib/amount-expression";
 import { workspaceLabel } from "@/lib/workspace-identity";
 import { useListEditor } from "@/hooks/use-list-editor";
@@ -1241,6 +1242,8 @@ export default function Bank() {
     () => buildCategoryTree((categories ?? []) as unknown as CategoryRow[]),
     [categories],
   );
+  const reconcileSearch = useCategorySearch(categoryTree);
+  const withdrawSearch = useCategorySearch(categoryTree);
 
   // Reconciling compares Jamvi's balance with the statement's. A positive
   // difference means Jamvi holds more than the bank does: money left the
@@ -1443,6 +1446,8 @@ export default function Bank() {
                   took, or a posting you have not entered yet. Either way it is spending, so give it a category.
                 </p>
                 {(
+                  <>
+                  <CategorySearchInput query={reconcileSearch.query} onChange={reconcileSearch.setQuery} testId="search-reconcile-category" />
                   <select
                     data-testid="select-reconcile-category"
                     className="flex h-12 w-full rounded-md border border-input bg-card px-3 py-2 text-base"
@@ -1452,7 +1457,7 @@ export default function Bank() {
                     <option value="">Choose a category</option>
                     {/* A category holding subcategories is a heading and its
                         spending is theirs added up, so it is not offered. */}
-                    {categoryTree.map((group) => (
+                    {reconcileSearch.visible(reconcileCategory).map((group) => (
                       group.children.length > 0 ? (
                         <optgroup key={group.name} label={group.name}>
                           {group.children.map((child) => (
@@ -1464,6 +1469,7 @@ export default function Bank() {
                       )
                     ))}
                   </select>
+                  </>
                 )}
                 <Input
                   data-testid="input-reconcile-narration"
@@ -1816,6 +1822,9 @@ export default function Bank() {
                     <label className="text-sm font-semibold text-foreground">
                       Category <span className="text-destructive">*</span>
                     </label>
+                    <div className="mb-2">
+                      <CategorySearchInput query={withdrawSearch.query} onChange={withdrawSearch.setQuery} testId="search-expense-category" />
+                    </div>
                     <select
                       data-testid="select-expense-category"
                       required
@@ -1831,7 +1840,7 @@ export default function Bank() {
                       }}
                     >
                       <option value="" disabled>Choose a category...</option>
-                      {categoryTree.map((group) => (
+                      {withdrawSearch.visible(expenseCategory).map((group) => (
                         group.children.length > 0 ? (
                           <optgroup key={group.name} label={group.name}>
                             {group.children.map((child) => (

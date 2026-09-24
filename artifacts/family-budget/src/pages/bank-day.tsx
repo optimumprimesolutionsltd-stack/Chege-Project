@@ -29,6 +29,7 @@ import {
   getGetBudgetCategoriesQueryKey,
 } from "@workspace/api-client-react";
 import { buildCategoryTree, type CategoryRow } from "@workspace/category-tree";
+import { CategorySearchInput, useCategorySearch } from "@/components/category-search";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -173,6 +174,7 @@ function CategoryField({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const createCategory = useCreateBudgetCategory();
+  const search = useCategorySearch(tree);
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
   const [newParent, setNewParent] = useState("none");
@@ -238,6 +240,8 @@ function CategoryField({
   }
 
   return (
+    <div className="space-y-1.5">
+    <CategorySearchInput query={search.query} onChange={search.setQuery} testId={`${testId}-search`} />
     <select
       className={SELECT_CLASS}
       value={value}
@@ -249,11 +253,12 @@ function CategoryField({
       data-testid={testId}
     >
       <option value="">{placeholder}</option>
-      {tree.flatMap((group) => (group.children.length > 0 ? group.children : [group.name])).map((name) => (
+      {search.visible(value).flatMap((group) => (group.children.length > 0 ? group.children : [group.name])).map((name) => (
         <option key={name} value={name}>{name}</option>
       ))}
       <option value={NEW_CATEGORY}>＋ New category…</option>
     </select>
+    </div>
   );
 }
 

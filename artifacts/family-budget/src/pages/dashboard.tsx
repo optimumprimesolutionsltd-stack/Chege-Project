@@ -74,6 +74,7 @@ import { canManageBankAccount } from "@/lib/bank-access";
 import { DashboardAnnouncement, DashboardSummaryCards } from "@/components/dashboard-home-cards";
 import { getCategoryAllocationStatus, getExpenseFundingStatus, getFundingRemainder, getProjectedCategoryBalance } from "@/lib/expense-funding-utils";
 import { buildCategoryTree, childrenFor, parentOf, type CategoryRow } from "@workspace/category-tree";
+import { CategorySearchInput, useCategorySearch } from "@/components/category-search";
 import { DEFAULT_WORKSPACE_ACCENT } from "@/lib/workspace-accent";
 
 type QuickAction = "none" | "income" | "expense" | "goal";
@@ -925,6 +926,7 @@ function ExpenseForm({
   // returns. The select offers the parents; a second select underneath offers
   // the children of whichever parent is chosen. Mirrors the phone's picker.
   const categoryTree = useMemo(() => buildCategoryTree(categories as unknown as CategoryRow[]), [categories]);
+  const categorySearch = useCategorySearch(categoryTree);
   // A category holding subcategories is a heading: money lands on a
   // subcategory, never on the heading itself. The single-select form therefore
   // offers what can be posted to, naming the parent for context.
@@ -1625,6 +1627,7 @@ function ExpenseForm({
              </p>
            </div>
              <div className="space-y-2">
+              <CategorySearchInput query={categorySearch.query} onChange={categorySearch.setQuery} testId="dashboard-category-search" />
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <select
                  aria-label="Expense category"
@@ -1647,7 +1650,7 @@ function ExpenseForm({
                   className="h-[72px] w-full flex-1 rounded-xl border-2 border-input bg-card px-6 py-4 text-base font-semibold leading-7 text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
              >
                 <option value="">Select a category</option>
-               {categoryTree.map(group => <option key={group.name} value={group.name}>{group.name}</option>)}
+               {categorySearch.visible(selectedParentCategory).map(group => <option key={group.name} value={group.name}>{group.name}</option>)}
               </select>
                {category.trim() && !isPrimaryOtherCategory && (
                 <div data-testid="primary-category-allocation-dashboard" className="sm:w-48">

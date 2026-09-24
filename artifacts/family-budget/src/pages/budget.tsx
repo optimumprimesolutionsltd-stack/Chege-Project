@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { CategorySearchInput } from "@/components/category-search";
 import { ArrowLeft, ArrowRight, ArrowUp, ArrowDown, ChevronDown, ChevronUp, Loader2, Calendar, Target, Pencil, Trash2, Plus, SlidersHorizontal, WalletCards, ReceiptText } from "lucide-react";
 import { useCollapsed } from "@/hooks/use-collapsed";
 import { useListEditor } from "@/hooks/use-list-editor";
@@ -678,6 +679,7 @@ export default function Budget() {
   // prevent.
   const [categoryView, setCategoryView] = useState<"simple" | "advanced">("simple");
   const reportPanel = useCollapsed("budget-report");
+  const [categorySearch, setCategorySearch] = useState("");
   const [tierEditorOpen, setTierEditorOpen] = useState(false);
   const [tierDrafts, setTierDrafts] = useState<PriorityTier[]>([]);
   const [savingTiers, setSavingTiers] = useState(false);
@@ -980,6 +982,20 @@ export default function Budget() {
     allCategories.map(category => ({ id: category.id, parentId: category.parentId ?? null, budgetAmount: category.budgetAmount })),
   );
   const budgetFor = (category: BudgetCategory) => effectiveBudgetById.get(category.id) ?? category.budgetAmount;
+
+  // Typing narrows the tiers to categories that match, that sit under a
+  // matching group, or that hold a matching subcategory.
+  const matchesCategorySearch = (name: string) => {
+    const needle = categorySearch.trim().toLocaleLowerCase();
+    if (!needle) return true;
+    const hit = (value: string) => value.toLocaleLowerCase().includes(needle);
+    if (hit(name)) return true;
+    const row = allCategories.find(category => category.name === name);
+    if (!row) return false;
+    const parent = allCategories.find(category => category.id === row.parentId);
+    if (parent && hit(parent.name)) return true;
+    return allCategories.some(category => category.parentId === row.id && hit(category.name));
+  };
 
   const parentNameByChildName = new Map(
     childCategories.map(child => [
@@ -1465,6 +1481,9 @@ export default function Budget() {
                 </div>
               ) : null}
             </div>
+           {reportPanel.open ? (
+             <CategorySearchInput query={categorySearch} onChange={setCategorySearch} testId="budget-category-search" />
+           ) : null}
            {!reportPanel.open ? null : Array.from(new Set([
              1,
              2,
@@ -1473,8 +1492,8 @@ export default function Budget() {
              5,
              ...Object.keys(groupedBreakdown).map(Number),
            ])).sort((a, b) => a - b).map(priority => {
-            const breakdownItems = groupedBreakdown[priority] ?? [];
-            const unusedItems = unusedByPriority[priority] ?? [];
+            const breakdownItems = (groupedBreakdown[priority] ?? []).filter(item => matchesCategorySearch(item.category));
+            const unusedItems = (unusedByPriority[priority] ?? []).filter(item => matchesCategorySearch(item.name));
             if (breakdownItems.length === 0 && unusedItems.length === 0) return null;
 
              const groupTotal = breakdownItems.reduce((s, i) => s + i.budgetAmount, 0)
