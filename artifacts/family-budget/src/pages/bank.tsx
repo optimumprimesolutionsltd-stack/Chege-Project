@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { formatKes, formatDate } from "@/lib/utils";
 import { movableOnDay, summariseDays } from "@/lib/move-day";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Trash2, Pencil, ArrowDownLeft, ArrowUpRight, Loader2, Landmark, TrendingUp, TrendingDown, Plus, Flag } from "lucide-react";
+import { Repeat, Trash2, Pencil, ArrowDownLeft, ArrowUpRight, Loader2, Landmark, TrendingUp, TrendingDown, Plus, Flag } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@workspace/replit-auth-web";
@@ -154,6 +154,25 @@ export default function Bank() {
   // or expense-linked posting, cannot change accounts on its own and stays put.
   const canMoveTx = (tx: EditableTransaction) =>
     canManageAccount && tx.bankTransferId == null && tx.savingsGoalId == null && tx.expenseId == null;
+  // One entry to another account: the same update as Move a day, for a single
+  // wrong-account entry, so it need not be deleted and retyped.
+  const [movingTx, setMovingTx] = useState<EditableTransaction | null>(null);
+  const [movingOne, setMovingOne] = useState(false);
+  const moveOneTo = async (targetAccountId: number, targetName: string) => {
+    if (!movingTx || movingOne) return;
+    const tx = movingTx;
+    setMovingOne(true);
+    try {
+      await updateTx.mutateAsync({ id: tx.id, data: { amount: tx.amount, date: tx.date, accountId: targetAccountId } });
+      toast({ title: "Moved", description: `"${tx.description ?? "The entry"}" is now on ${targetName}.` });
+    } catch (error) {
+      toast({ variant: "destructive", title: "Could not move it", description: error instanceof Error ? error.message : "Please try again." });
+    } finally {
+      invalidate();
+      setMovingOne(false);
+      setMovingTx(null);
+    }
+  };
   const [moveDayOpen, setMoveDayOpen] = useState(false);
   const [moveDayDate, setMoveDayDate] = useState<string | null>(null);
   const [movingDay, setMovingDay] = useState(false);
@@ -2383,6 +2402,16 @@ export default function Bank() {
                     >
                       <Pencil className="w-4 h-4" />
                     </Button>}
+                    {!txEditor.editing && canMoveTx(tx) && accounts.length > 1 && <Button
+                      variant="ghost"
+                      size="icon"
+                      data-testid={`button-move-tx-${tx.id}`}
+                      aria-label="Move to another account"
+                      className="hover:bg-muted h-9 w-9"
+                      onClick={() => setMovingTx(tx)}
+                    >
+                      <Repeat className="w-4 h-4" />
+                    </Button>}
                     {!txEditor.editing && canManageAccount && <Button
                       variant="ghost"
                       size="icon"
@@ -2398,6 +2427,33 @@ export default function Bank() {
             })}
           </div>
         </Card>
+        <Dialog open={movingTx !== null} onOpenChange={(open) => { if (!open && !movingOne) setMovingTx(null); }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Move to which account?</DialogTitle>
+              <DialogDescription>
+                This takes "{movingTx?.description ?? "the entry"}" off {selectedBankAccount?.name ?? "this account"} and onto the one you choose. Both balances update.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="max-h-72 space-y-1 overflow-y-auto">
+              {movingOne ? (
+                <Loader2 className="mx-auto my-6 h-5 w-5 animate-spin" />
+              ) : (
+                accounts.filter((item) => item.id !== selectedAccountId).map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => void moveOneTo(item.id, item.name)}
+                    className="flex w-full items-center rounded-lg px-3 py-3 text-left text-sm hover:bg-muted"
+                    data-testid={`bank-move-tx-to-${item.id}`}
+                  >
+                    {item.name}
+                  </button>
+                ))
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
         <Dialog open={moveDayOpen} onOpenChange={(open) => { if (!open) closeMoveDay(); }}>
           <DialogContent>
             <DialogHeader>
