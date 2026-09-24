@@ -25,7 +25,13 @@ import {
   setActiveWorkspaceCookie,
 } from "../lib/activeGroup";
 import { resolvePhotoUrl, verifyPhotoObject } from "../lib/photoStorage";
-import { eraseGroupData } from "../lib/account-deletion";
+import {
+  confirmGroupDeletionCode,
+  eraseGroupData,
+  IncorrectDeletionCodeError,
+  requestGroupDeletionCode,
+} from "../lib/account-deletion";
+import { accountDeletionCodeLimiter, accountDeletionConfirmLimiter } from "../middlewares/rateLimit";
 
 const router = Router();
 
@@ -300,7 +306,13 @@ router.patch("/group", async (req, res): Promise<void> => {
  * budget — that has no group to hand off or dissolve; deleting it means
  * deleting the account.
  */
-router.delete("/group", async (req, res): Promise<void> => {
+/**
+ * Step one of deleting a group: emails the owner a 6-digit code. Nothing
+ * changes yet. Same approval as deleting an account (see
+ * lib/account-deletion.ts): deleting a group erases it for every member with
+ * no grace period, so it must not follow from one tap on an open session.
+ */
+router.post("/group/delete/request-code", accountDeletionCodeLimiter, async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
   if (req.group?.isPrivate) {
@@ -310,6 +322,42 @@ router.delete("/group", async (req, res): Promise<void> => {
     return;
   }
   if (!requireGroupOwner(req, res)) return;
+
+  const [group] = await db.select({ name: groupsTable.name }).from(groupsTable).where(eq(groupsTable.id, groupId)).limit(1);
+  try {
+    await requestGroupDeletionCode(req.user!.id, groupId, group?.name ?? "your group");
+    res.json({ sent: true });
+  } catch (error) {
+    res.status(502).json({ error: error instanceof Error ? error.message : "Could not send a confirmation code." });
+  }
+});
+
+/** Step two: spends the code and only then erases the group. */
+router.delete("/group", accountDeletionConfirmLimiter, async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  if (req.group?.isPrivate) {
+    res.status(403).json({
+      error: "A Personal budget can't be deleted on its own — delete your account if you want it gone.",
+    });
+    return;
+  }
+  if (!requireGroupOwner(req, res)) return;
+
+  const code = typeof req.body?.code === "string" ? req.body.code.trim() : "";
+  if (!/^\d{6}$/.test(code)) {
+    res.status(400).json({ error: "Enter the 6-digit code we emailed you." });
+    return;
+  }
+  try {
+    await confirmGroupDeletionCode(req.user!.id, groupId, code);
+  } catch (error) {
+    if (error instanceof IncorrectDeletionCodeError) {
+      res.status(400).json({ error: error.message });
+      return;
+    }
+    throw error;
+  }
 
   await db.transaction((tx) => eraseGroupData(tx, groupId));
 

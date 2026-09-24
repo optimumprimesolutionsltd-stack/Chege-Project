@@ -118,6 +118,13 @@ export default function Settings() {
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [deletionStep, setDeletionStep] = useState<"intro" | "code">("intro");
   const [deletionCode, setDeletionCode] = useState("");
+  // Deleting a group needs the same emailed-code approval as deleting an
+  // account: it erases everything for every member with no grace period.
+  const [confirmingDeleteGroup, setConfirmingDeleteGroup] = useState(false);
+  const [groupDeletionStep, setGroupDeletionStep] = useState<"intro" | "code">("intro");
+  const [groupDeletionCode, setGroupDeletionCode] = useState("");
+  const [sendingGroupCode, setSendingGroupCode] = useState(false);
+  const [confirmingGroupCode, setConfirmingGroupCode] = useState(false);
   const [sendingDeletionCode, setSendingDeletionCode] = useState(false);
   const [confirmingDeletionCode, setConfirmingDeletionCode] = useState(false);
   const { data: members, isLoading } = useGetMembers();
@@ -583,14 +590,41 @@ export default function Settings() {
     }
   };
 
-  const handleDeleteGroup = async () => {
-    if (!confirm(
-      `Delete "${budgetName}"? This erases every expense, contribution, bank record, and goal in it for every `
-      + "member — not just you. Nobody, including you, can undo this. If you only want to stop being responsible "
-      + 'for it, use "Make owner" on another member instead.',
-    )) return;
+  const closeDeleteGroup = () => {
+    setConfirmingDeleteGroup(false);
+    setGroupDeletionStep("intro");
+    setGroupDeletionCode("");
+  };
+
+  const requestGroupCode = async () => {
+    setSendingGroupCode(true);
     try {
-      const response = await fetch("/api/group", { method: "DELETE", credentials: "include" });
+      const response = await fetch("/api/group/delete/request-code", { method: "POST", credentials: "include" });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.error);
+      }
+      setGroupDeletionStep("code");
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Could not send a code",
+        description: error instanceof Error && error.message ? error.message : "Check your connection and try again.",
+      });
+    } finally {
+      setSendingGroupCode(false);
+    }
+  };
+
+  const confirmGroupDeletion = async () => {
+    setConfirmingGroupCode(true);
+    try {
+      const response = await fetch("/api/group", {
+        method: "DELETE",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: groupDeletionCode }),
+      });
       if (!response.ok) {
         const body = await response.json().catch(() => null);
         throw new Error(body?.error);
@@ -601,8 +635,9 @@ export default function Settings() {
       toast({
         variant: "destructive",
         title: "Could not delete this group",
-        description: error instanceof Error && error.message ? error.message : "Please try again.",
+        description: error instanceof Error && error.message ? error.message : "Check the code and try again.",
       });
+      setConfirmingGroupCode(false);
     }
   };
 
@@ -1334,7 +1369,8 @@ export default function Settings() {
                   <Button
                     variant="outline"
                     className="w-full border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive sm:w-auto sm:shrink-0"
-                    onClick={() => void handleDeleteGroup()}
+                    onClick={() => setConfirmingDeleteGroup(true)}
+                    data-testid="delete-group"
                   >
                     <Trash2 className="mr-2 h-4 w-4" />
                     Delete group
@@ -1589,6 +1625,85 @@ export default function Settings() {
                   className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 >
                   {confirmingDeletionCode ? "Deleting…" : "Delete my account"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </>
+          )}
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog open={confirmingDeleteGroup} onOpenChange={(open) => { if (!open) closeDeleteGroup(); }}>
+        <AlertDialogContent>
+          {groupDeletionStep === "intro" ? (
+            <>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete "{budgetName}"?</AlertDialogTitle>
+                <AlertDialogDescription asChild>
+                  <div className="space-y-2">
+                    <p>
+                      This erases every expense, contribution, bank record, and goal in it for every member — not just
+                      you. Nobody, including you, can undo this.
+                    </p>
+                    <p className="font-semibold text-foreground">
+                      You'll be asked to confirm with a code sent to your email.
+                    </p>
+                    <p>If you only want to stop being responsible for it, use "Make owner" on another member instead.</p>
+                  </div>
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel data-testid="keep-group">Keep the group</AlertDialogCancel>
+                <AlertDialogAction
+                  data-testid="confirm-delete-group"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    void requestGroupCode();
+                  }}
+                  disabled={sendingGroupCode}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  {sendingGroupCode ? "Sending code…" : "Continue"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </>
+          ) : (
+            <>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Confirm with the code we emailed you</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Enter the 6-digit code — this is what actually deletes "{budgetName}" for every member. Nothing
+                  happens without it, and it cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <Input
+                value={groupDeletionCode}
+                onChange={(event) => setGroupDeletionCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                placeholder="000000"
+                inputMode="numeric"
+                maxLength={6}
+                autoFocus
+                className="text-center text-2xl font-bold tracking-[0.5em]"
+                data-testid="delete-group-code-input"
+              />
+              <button
+                type="button"
+                onClick={() => void requestGroupCode()}
+                disabled={sendingGroupCode}
+                className="mx-auto block text-sm font-semibold text-primary hover:underline disabled:opacity-50"
+              >
+                {sendingGroupCode ? "Sending…" : "Resend code"}
+              </button>
+              <AlertDialogFooter>
+                <AlertDialogCancel data-testid="keep-group">Keep the group</AlertDialogCancel>
+                <AlertDialogAction
+                  data-testid="delete-group-confirm-code"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    void confirmGroupDeletion();
+                  }}
+                  disabled={confirmingGroupCode || groupDeletionCode.length !== 6}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  {confirmingGroupCode ? "Deleting…" : "Delete this group"}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </>

@@ -329,6 +329,92 @@ export async function confirmAccountDeletionCode(
   return requestAccountDeletion(userId, now);
 }
 
+/**
+ * The same emailed-code approval for deleting a whole group as for deleting
+ * an account. Deleting a group erases it for every member at once and, unlike
+ * an account, has no grace period, so a session left open on a shared device
+ * must not be able to do it from a tap.
+ *
+ * Codes share the account-deletion table, so the hash is scoped to the group:
+ * a code issued for one purpose can never confirm the other, or a different
+ * group.
+ */
+function hashGroupDeletionCode(groupId: number, code: string): string {
+  return crypto.createHash("sha256").update(`group:${groupId}:${code}`).digest("hex");
+}
+
+export async function requestGroupDeletionCode(
+  userId: string,
+  groupId: number,
+  groupName: string,
+  now: Date = new Date(),
+): Promise<void> {
+  const [user] = await db
+    .select({ email: usersTable.email, firstName: usersTable.firstName })
+    .from(usersTable)
+    .where(eq(usersTable.id, userId))
+    .limit(1);
+  if (!user?.email) {
+    throw new Error("This account has no email on file to send a code to.");
+  }
+
+  const code = generateDeletionCode();
+  await db.insert(accountDeletionCodesTable).values({
+    userId,
+    codeHash: hashGroupDeletionCode(groupId, code),
+    expiresAt: new Date(now.getTime() + DELETION_CODE_TTL_MS),
+  });
+
+  const greeting = user.firstName ? `Hi ${user.firstName},` : "Hi,";
+  const safeName = groupName.replace(/[<>&"]/g, "");
+  try {
+    await sendEmail({
+      from: fromAddress(),
+      to: [user.email],
+      subject: "Your Jamvi group-deletion code",
+      html: `<p>${greeting}</p><p>Use this code to confirm you want to delete the group "${safeName}" for every member:</p>`
+        + `<p style="font-size:28px;font-weight:700;letter-spacing:4px;">${code}</p>`
+        + `<p>It expires in 10 minutes. Deleting a group cannot be undone. If you did not ask to delete it, ignore this `
+        + `message — nothing happens without the code.</p>`,
+    });
+  } catch (error) {
+    if (error instanceof EmailNotConfiguredError) {
+      logger.error("Could not send a group-deletion code: no mailer is configured");
+    } else {
+      logger.error({ err: error }, "Could not send a group-deletion code");
+    }
+    throw new Error("Could not send a confirmation code. Try again shortly.");
+  }
+}
+
+/** Spends a group-deletion code. Single-use, and only for this group. */
+export async function confirmGroupDeletionCode(
+  userId: string,
+  groupId: number,
+  code: string,
+  now: Date = new Date(),
+): Promise<void> {
+  const [pending] = await db
+    .select({ id: accountDeletionCodesTable.id, codeHash: accountDeletionCodesTable.codeHash })
+    .from(accountDeletionCodesTable)
+    .where(and(
+      eq(accountDeletionCodesTable.userId, userId),
+      isNull(accountDeletionCodesTable.usedAt),
+      gt(accountDeletionCodesTable.expiresAt, now),
+    ))
+    .orderBy(desc(accountDeletionCodesTable.createdAt))
+    .limit(1);
+
+  if (!pending || pending.codeHash !== hashGroupDeletionCode(groupId, code)) {
+    throw new IncorrectDeletionCodeError();
+  }
+
+  await db
+    .update(accountDeletionCodesTable)
+    .set({ usedAt: now })
+    .where(eq(accountDeletionCodesTable.id, pending.id));
+}
+
 /** Every account whose grace period has run out and has not been erased yet. */
 export async function accountsDueForErasure(now: Date = new Date()): Promise<string[]> {
   const cutoff = new Date(now.getTime() - ACCOUNT_DELETION_GRACE_DAYS * DAY_MS);

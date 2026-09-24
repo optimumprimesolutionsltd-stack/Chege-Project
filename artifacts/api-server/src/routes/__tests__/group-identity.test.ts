@@ -50,9 +50,19 @@ const activeGroupExtraMocks = vi.hoisted(() => ({
   requireGroupOwner: vi.fn(),
   clearActiveWorkspaceCookie: vi.fn(),
 }));
-const accountDeletionMocks = vi.hoisted(() => ({
-  eraseGroupData: vi.fn().mockResolvedValue(undefined),
-}));
+const accountDeletionMocks = vi.hoisted(() => {
+  class IncorrectDeletionCodeError extends Error {
+    constructor() {
+      super("That code is incorrect or has expired.");
+    }
+  }
+  return {
+    eraseGroupData: vi.fn().mockResolvedValue(undefined),
+    confirmGroupDeletionCode: vi.fn().mockResolvedValue(undefined),
+    requestGroupDeletionCode: vi.fn().mockResolvedValue(undefined),
+    IncorrectDeletionCodeError,
+  };
+});
 
 vi.mock("../../lib/activeGroup", () => ({
   canRecordSharedTransactions: vi.fn().mockResolvedValue(true),
@@ -285,12 +295,34 @@ describe("DELETE /group", () => {
   it("erases the group when the owner deletes it", async () => {
     activeGroupExtraMocks.requireGroupOwner.mockReturnValue(true);
 
-    const response = await request(buildApp({ groupId: 9, role: "owner" })).delete("/group");
+    const response = await request(buildApp({ groupId: 9, role: "owner" })).delete("/group").send({ code: "123456" });
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ success: true });
+    expect(accountDeletionMocks.confirmGroupDeletionCode).toHaveBeenCalledWith(expect.anything(), 9, "123456");
     expect(accountDeletionMocks.eraseGroupData).toHaveBeenCalledWith({}, 9);
     expect(activeGroupExtraMocks.clearActiveWorkspaceCookie).toHaveBeenCalledOnce();
+  });
+
+  it("erases nothing without the emailed code", async () => {
+    activeGroupExtraMocks.requireGroupOwner.mockReturnValue(true);
+
+    const response = await request(buildApp({ groupId: 9, role: "owner" })).delete("/group");
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toMatch(/6-digit code/i);
+    expect(accountDeletionMocks.eraseGroupData).not.toHaveBeenCalled();
+  });
+
+  it("erases nothing when the code is wrong or expired", async () => {
+    activeGroupExtraMocks.requireGroupOwner.mockReturnValue(true);
+    accountDeletionMocks.confirmGroupDeletionCode.mockRejectedValueOnce(new accountDeletionMocks.IncorrectDeletionCodeError());
+
+    const response = await request(buildApp({ groupId: 9, role: "owner" })).delete("/group").send({ code: "000000" });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toMatch(/incorrect or has expired/i);
+    expect(accountDeletionMocks.eraseGroupData).not.toHaveBeenCalled();
   });
 
   it("refuses an admin, even though admins can otherwise manage the group", async () => {
