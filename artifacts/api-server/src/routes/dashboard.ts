@@ -37,6 +37,7 @@ import { buildContributionHistory, historyMonths } from "../lib/contribution-his
 import { buildIncomeStreamTrend } from "../lib/income-stream-trend";
 import { createMonthlyReportPdf } from "../lib/monthly-report-pdf";
 import { GROUP_ATTRIBUTION } from "../lib/attribution";
+import { nairobiNow } from "../lib/nairobiTime";
 
 const router = Router();
 const UNCATEGORIZED_CATEGORY = "Uncategorized";
@@ -69,10 +70,10 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
 
-  const now = new Date();
+  const now = nairobiNow();
   const parsed = GetDashboardSummaryQueryParams.safeParse(req.query);
-  const month = parsed.success && parsed.data.month != null ? Math.round(parsed.data.month) : now.getMonth() + 1;
-  const year = parsed.success && parsed.data.year != null ? Math.round(parsed.data.year) : now.getFullYear();
+  const month = parsed.success && parsed.data.month != null ? Math.round(parsed.data.month) : now.getUTCMonth() + 1;
+  const year = parsed.success && parsed.data.year != null ? Math.round(parsed.data.year) : now.getUTCFullYear();
 
   // The live total — never hardcoded, and never a plain SUM of every row.
   // A parent carries no budget of its own; it is the sum of its subcategories,
@@ -238,9 +239,9 @@ router.get("/dashboard/member-breakdown", async (req, res): Promise<void> => {
   if (groupId === null) return;
 
   const userId = (req.query.userId as string) ?? "";
-  const now = new Date();
-  const month = parseInt(req.query.month as string) || now.getMonth() + 1;
-  const year  = parseInt(req.query.year  as string) || now.getFullYear();
+  const now = nairobiNow();
+  const month = parseInt(req.query.month as string) || now.getUTCMonth() + 1;
+  const year  = parseInt(req.query.year  as string) || now.getUTCFullYear();
 
   if (!userId) { res.status(400).json({ error: "userId required" }); return; }
 
@@ -315,10 +316,10 @@ router.get("/dashboard/activity", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
 
-  const now = new Date();
+  const now = nairobiNow();
   const parsed = GetDashboardActivityQueryParams.safeParse(req.query);
-  const month = parsed.success && parsed.data.month != null ? Math.round(parsed.data.month) : now.getMonth() + 1;
-  const year = parsed.success && parsed.data.year != null ? Math.round(parsed.data.year) : now.getFullYear();
+  const month = parsed.success && parsed.data.month != null ? Math.round(parsed.data.month) : now.getUTCMonth() + 1;
+  const year = parsed.success && parsed.data.year != null ? Math.round(parsed.data.year) : now.getUTCFullYear();
   const isMonthlyReport = parsed.success && (parsed.data.month != null || parsed.data.year != null);
   const monthlyLimit = isMonthlyReport ? 500 : 10;
 
@@ -601,10 +602,10 @@ router.get("/dashboard/category-breakdown", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
 
-  const now = new Date();
+  const now = nairobiNow();
   const parsed = GetDashboardCategoryBreakdownQueryParams.safeParse(req.query);
-  const month = parsed.success && parsed.data.month != null ? Math.round(parsed.data.month) : now.getMonth() + 1;
-  const year = parsed.success && parsed.data.year != null ? Math.round(parsed.data.year) : now.getFullYear();
+  const month = parsed.success && parsed.data.month != null ? Math.round(parsed.data.month) : now.getUTCMonth() + 1;
+  const year = parsed.success && parsed.data.year != null ? Math.round(parsed.data.year) : now.getUTCFullYear();
 
   const categories = await db
     .select()
@@ -737,9 +738,9 @@ router.get("/dashboard/category-ledger", async (req, res): Promise<void> => {
     return;
   }
 
-  const now = new Date();
-  const month = parsed.data.month ?? now.getMonth() + 1;
-  const year = parsed.data.year ?? now.getFullYear();
+  const now = nairobiNow();
+  const month = parsed.data.month ?? now.getUTCMonth() + 1;
+  const year = parsed.data.year ?? now.getUTCFullYear();
   const { category } = parsed.data;
   const isBudgeted = rawIsBudgeted === "true";
 
@@ -875,9 +876,9 @@ router.get("/dashboard/expense-ledger", async (req, res): Promise<void> => {
     return;
   }
 
-  const now = new Date();
-  const month = parsed.data.month ?? now.getMonth() + 1;
-  const year = parsed.data.year ?? now.getFullYear();
+  const now = nairobiNow();
+  const month = parsed.data.month ?? now.getUTCMonth() + 1;
+  const year = parsed.data.year ?? now.getUTCFullYear();
   const [from, to] = askedFrom != null && askedTo != null
     ? (askedFrom <= askedTo ? [askedFrom, askedTo] : [askedTo, askedFrom])
     : [
@@ -1012,7 +1013,7 @@ router.get("/dashboard/spending-by-item", async (req, res): Promise<void> => {
   // "How much do I spend on rent" is not a question about one month, and a
   // default that only ever covered the current one would answer it wrongly
   // more often than not.
-  const today = new Date();
+  const today = nairobiNow();
   const defaultTo = today.toISOString().slice(0, 10);
   const defaultFrom = new Date(Date.UTC(today.getUTCFullYear() - 1, today.getUTCMonth(), 1))
     .toISOString()
@@ -1183,10 +1184,10 @@ router.get("/dashboard/income-streams", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
 
-  const now = new Date();
+  const now = nairobiNow();
   const parsed = GetDashboardIncomeStreamsQueryParams.safeParse(req.query);
-  const month = parsed.success && parsed.data.month != null ? Math.round(parsed.data.month) : now.getMonth() + 1;
-  const year = parsed.success && parsed.data.year != null ? Math.round(parsed.data.year) : now.getFullYear();
+  const month = parsed.success && parsed.data.month != null ? Math.round(parsed.data.month) : now.getUTCMonth() + 1;
+  const year = parsed.success && parsed.data.year != null ? Math.round(parsed.data.year) : now.getUTCFullYear();
 
   const result = await db.execute(sql`
     WITH funding AS (
@@ -1761,10 +1762,10 @@ router.get("/dashboard/monthly-report.pdf", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
 
-  const now = new Date();
+  const now = nairobiNow();
   const parsed = GetDashboardMonthlyReportPdfQueryParams.safeParse(req.query);
-  const month = parsed.success && parsed.data.month != null ? Math.round(parsed.data.month) : now.getMonth() + 1;
-  const year = parsed.success && parsed.data.year != null ? Math.round(parsed.data.year) : now.getFullYear();
+  const month = parsed.success && parsed.data.month != null ? Math.round(parsed.data.month) : now.getUTCMonth() + 1;
+  const year = parsed.success && parsed.data.year != null ? Math.round(parsed.data.year) : now.getUTCFullYear();
   // An explicit `?from=&to=` day range, else the whole month. The report could
   // only ever answer "this month"; over a range it is the same report for the
   // days asked for.
@@ -1955,11 +1956,11 @@ router.get("/dashboard/trends", async (req, res): Promise<void> => {
   if (groupId === null) return;
 
   const monthsBack = Math.min(Math.max(Number(req.query.months) || 6, 1), 12);
-  const now = new Date();
+  const now = nairobiNow();
   const results = [];
 
   for (let i = monthsBack - 1; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const d = new Date(now.getUTCFullYear(), now.getUTCMonth() - i, 1);
     const m = d.getMonth() + 1;
     const y = d.getFullYear();
 

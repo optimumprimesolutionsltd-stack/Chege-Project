@@ -1,3 +1,4 @@
+import { nairobiNow } from "./nairobiTime";
 /**
  * The entry-level contribution statement: shared types plus the pure helpers
  * for narrowing a statement to an explicit day range. The database load lives
@@ -102,8 +103,8 @@ export function filterStatementToRange(
  *  it. The caller caps this to the 12 the grid supports. */
 export function monthsToCover(fromIso: string): number {
   const [year, month] = fromIso.split("-").map(Number);
-  const now = new Date();
-  return (now.getFullYear() - (year ?? now.getFullYear())) * 12 + (now.getMonth() + 1 - (month ?? 1)) + 1;
+  const now = nairobiNow();
+  return (now.getUTCFullYear() - (year ?? now.getUTCFullYear())) * 12 + (now.getUTCMonth() + 1 - (month ?? 1)) + 1;
 }
 
 function daysInMonth(year: number, month: number): number {

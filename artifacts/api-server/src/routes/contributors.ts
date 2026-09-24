@@ -28,6 +28,7 @@ import { buildContributionGrid, gridMonths, type ContributionGrid, type GridEntr
 import { createContributionReportPdf } from "../lib/contribution-report-pdf";
 import { createContributionStatementPdf } from "../lib/contribution-statement-pdf";
 import { groupVerifyCode } from "../lib/contribution-verification";
+import { nairobiNow } from "../lib/nairobiTime";
 import {
   CONTRIBUTOR_NAME_MAX,
   contributorNameMessage,
@@ -703,8 +704,8 @@ router.get("/contributions/report.pdf", async (req, res): Promise<void> => {
     verifyUrl: verifyUrlFor(req, groupId),
   });
 
-  const now = new Date();
-  const filename = `jamvi-contributions-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}.pdf`;
+  const now = nairobiNow();
+  const filename = `jamvi-contributions-${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}.pdf`;
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
   res.setHeader("Cache-Control", "private, no-store");
@@ -834,12 +835,12 @@ router.get("/contributions/statement.pdf", async (req, res): Promise<void> => {
     includePerMemberTotals: req.query.includePerMemberTotals !== "false",
   });
 
-  const stamp = new Date();
+  const stamp = nairobiNow();
   const slug = member ? member.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") : "group";
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader(
     "Content-Disposition",
-    `inline; filename="jamvi-statement-${slug}-${stamp.getFullYear()}-${String(stamp.getMonth() + 1).padStart(2, "0")}.pdf"`,
+    `inline; filename="jamvi-statement-${slug}-${stamp.getUTCFullYear()}-${String(stamp.getUTCMonth() + 1).padStart(2, "0")}.pdf"`,
   );
   res.setHeader("Cache-Control", "private, no-store");
   res.send(pdf);

@@ -1,3 +1,4 @@
+import { nairobiNow } from "./nairobiTime";
 /**
  * Who has paid, month by month.
  *
@@ -59,9 +60,9 @@ export interface ContributionGrid {
   grandTotal: number;
 }
 
-export function gridMonths(monthsBack: number, now: Date = new Date()): GridMonth[] {
+export function gridMonths(monthsBack: number, now: Date = nairobiNow()): GridMonth[] {
   return Array.from({ length: monthsBack }, (_, index) => {
-    const date = new Date(now.getFullYear(), now.getMonth() - (monthsBack - 1 - index), 1);
+    const date = new Date(now.getUTCFullYear(), now.getUTCMonth() - (monthsBack - 1 - index), 1);
     return {
       month: date.getMonth() + 1,
       year: date.getFullYear(),
