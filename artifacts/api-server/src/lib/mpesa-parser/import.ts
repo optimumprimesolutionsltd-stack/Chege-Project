@@ -1,5 +1,5 @@
 import { parseMpesaMessage } from "./parser";
-import type { MpesaTransactionType } from "./types";
+import { MPESA_PARSER_VERSION, type MpesaTransactionType } from "./types";
 
 /** Most messages one paste may carry, so a mistake cannot become a huge request. */
 export const MAX_MESSAGES_PER_PASTE = 200;
@@ -36,7 +36,7 @@ export interface ImportItem {
   reason: string | null;
   receipt: string | null;
   direction: ImportDirection | null;
-  type: MpesaTransactionType | null;
+  type: MpesaTransactionType | "fuliza_notice" | null;
   amount: number | null;
   /** What the money went to, or came from, in words worth keeping as the note. */
   description: string | null;
@@ -106,8 +106,25 @@ const skipped = (index: number, reason: string, partial: Partial<ImportItem> = {
   ...partial,
 });
 
+// A Fuliza notice follows the payment it covered and carries that payment's
+// receipt code. Its first amount is the loan, not a second payment, so reading
+// it as one would count the same spending twice.
+const FULIZA_NOTICE = /^\s*([A-Z0-9]{8,15})\s+[Cc]onfirmed\.?\s*Fuliza\s+M-?PESA\s+amount\s+is\s+Ksh\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)/i;
+const ACCESS_FEE = /access\s+fee\s+charged\s+Ksh\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)/i;
+
 /** Turns one message into what the review list shows. Reads only what the parser found. */
 export function toImportItem(message: string, index: number): ImportItem {
+  const notice = message.match(FULIZA_NOTICE);
+  if (notice) {
+    const loan = Number(notice[2].replace(/,/g, ""));
+    const fee = message.match(ACCESS_FEE)?.[1];
+    return skipped(
+      index,
+      `A Fuliza loan notice (KES ${loan.toLocaleString("en-KE")}${fee ? `, access fee KES ${fee}` : ""}). ` +
+        "The payment it covered is a separate message, so this is not recorded on its own.",
+      { type: "fuliza_notice", receipt: notice[1].toUpperCase(), amount: Number.isFinite(loan) ? loan : null },
+    );
+  }
   const result = parseMpesaMessage(message);
   const tx = result.transaction;
   if (result.status !== "parsed" || !tx) {
@@ -159,4 +176,34 @@ export function toImportItem(message: string, index: number): ImportItem {
 /** Everything one paste holds, in the order it was pasted. */
 export function readPaste(text: string): ImportItem[] {
   return splitMpesaMessages(text).map((message, index) => toImportItem(message, index));
+}
+
+/**
+ * The text relayed when somebody sends a message so the parser can learn its
+ * format. Numbers are masked again here whatever the phone did, and the report
+ * carries what the parser made of the message, so whoever reads it can see
+ * straight away what was missed. Built from the message alone: nothing that
+ * says who sent it goes in.
+ */
+export function buildFormatReport(message: string): string {
+  const result = parseMpesaMessage(message);
+  const tx = result.transaction;
+  const seen = tx
+    ? [
+        `type=${tx.transactionType ?? "none"}`,
+        `amount=${tx.amount ?? "none"}`,
+        `counterparty=${tx.merchantOrCounterparty ?? "none"}`,
+        `date=${tx.date ?? "none"}`,
+        `fee=${tx.fee ?? "none"}`,
+        `confidence=${tx.confidence}`,
+      ].join(" ")
+    : `status=${result.status}`;
+  return [
+    "M-Pesa format report",
+    `Parser version: ${MPESA_PARSER_VERSION}`,
+    `Parser saw: ${seen}`,
+    ...(result.warnings.length > 0 ? [`Warnings: ${result.warnings.join(" | ")}`] : []),
+    "",
+    result.normalizedMessage,
+  ].join("\n");
 }

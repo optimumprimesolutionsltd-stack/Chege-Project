@@ -35,10 +35,14 @@ import { useAuth } from '@/lib/auth';
 import { formatExact } from '@/lib/formatExact';
 import {
   buildPostings,
+  chooseCategory as chooseLineCategory,
   initialChoices,
+  canReport,
   isRecordable,
   lineLabel,
+  messageFor,
   problemWith,
+  redactForReport,
   snippetFor,
   summarise,
   type Choice,
@@ -150,6 +154,47 @@ export default function MpesaImportScreen() {
   const [picking, setPicking] = useState<number | 'charge' | null>(null);
   const [saving, setSaving] = useState(false);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
+  // Sending a message Jamvi could not read, so its format can be learned.
+  const [reporting, setReporting] = useState<{ index: number; text: string } | null>(null);
+  const [sendingReport, setSendingReport] = useState(false);
+  const [reported, setReported] = useState<Set<number>>(new Set());
+
+  const openReport = (index: number) => {
+    const message = messageFor(text, index);
+    if (message) setReporting({ index, text: redactForReport(message) });
+  };
+
+  const sendReport = async () => {
+    if (!reporting || sendingReport) return;
+    setSendingReport(true);
+    try {
+      await customFetch('/api/mpesa/report-format', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: reporting.text }),
+      });
+      setReported((current) => new Set(current).add(reporting.index));
+      setReporting(null);
+      Alert.alert('Thank you', 'Jamvi will learn this kind of message.');
+    } catch (error: unknown) {
+      Alert.alert('Could not send it', error instanceof Error ? error.message : 'Please try again.');
+    } finally {
+      setSendingReport(false);
+    }
+  };
+
+  const reportLink = (item: PreviewLine) => {
+    if (!canReport(item)) return null;
+    return reported.has(item.index) ? (
+      <Text style={[styles.hint, { color: colors.success }]}>Sent. Thank you.</Text>
+    ) : (
+      <Pressable onPress={() => openReport(item.index)} accessibilityRole="button" testID={`mpesa-report-${item.index}`} hitSlop={6}>
+        <Text style={[styles.hint, { color: colors.primary, fontFamily: 'Inter_600SemiBold' }]}>
+          Send this message so Jamvi can learn it
+        </Text>
+      </Pressable>
+    );
+  };
 
   useEffect(() => {
     AsyncStorage.getItem(CHARGE_CATEGORY_KEY).then((stored) => stored && setChargeCategory(stored)).catch(() => {});
@@ -168,7 +213,7 @@ export default function MpesaImportScreen() {
         body: JSON.stringify({ text }),
       });
       setLines(response.lines);
-      setChoices(initialChoices(response.lines, history));
+      setChoices(initialChoices(response.lines, history, categories.map((row) => row.name)));
     } catch (error: unknown) {
       Alert.alert('Could not read them', error instanceof Error ? error.message : 'Please try again.');
     } finally {
@@ -184,7 +229,7 @@ export default function MpesaImportScreen() {
       setChargeCategory(name);
       AsyncStorage.setItem(CHARGE_CATEGORY_KEY, name).catch(() => {});
     } else if (picking !== null) {
-      setChoices((current) => ({ ...current, [picking]: { ...current[picking], category: name } }));
+      setChoices((current) => chooseLineCategory(lines ?? [], current, picking, name));
     }
     setPicking(null);
   };
@@ -339,7 +384,7 @@ export default function MpesaImportScreen() {
               onSelect={(id) => {
                 setSelectedAccountId(id);
                 // The suggestions come from this account's history, so start them again.
-                setChoices(initialChoices(lines, []));
+                setChoices(initialChoices(lines, [], categories.map((row) => row.name)));
               }}
               testIDPrefix="mpesa-import-account"
             />
@@ -372,6 +417,7 @@ export default function MpesaImportScreen() {
                           No name in the message: “{snippetFor(text, item.receipt)}…”
                         </Text>
                       ) : null}
+                      {reportLink(item)}
                     </View>
                     <Text style={[styles.amount, { color: out ? colors.destructive : colors.success }]}>
                       {out ? '−' : '+'}{formatExact(item.amount ?? 0)}
@@ -390,6 +436,11 @@ export default function MpesaImportScreen() {
                       </Text>
                       <Feather name="chevron-down" size={16} color={colors.mutedForeground} />
                     </Pressable>
+                  ) : null}
+                  {out && choice?.include && choice.auto && choice.category ? (
+                    <Text style={[styles.hint, { color: colors.mutedForeground }]} testID={`mpesa-line-suggested-${item.index}`}>
+                      Suggested by Jamvi. Tap to choose a different one.
+                    </Text>
                   ) : null}
                   {out && item.fee ? (
                     <Text style={[styles.hint, { color: colors.mutedForeground }]}>+ KES {formatExact(item.fee)} M-Pesa charge, saved on its own</Text>
@@ -430,6 +481,7 @@ export default function MpesaImportScreen() {
                           : item.alreadyRecorded.description
                         : item.reason}
                     </Text>
+                    {reportLink(item)}
                   </View>
                 ))}
               </View>
@@ -456,6 +508,39 @@ export default function MpesaImportScreen() {
           </Pressable>
         </View>
       ) : null}
+
+      <Modal visible={reporting !== null} animationType="slide" transparent onRequestClose={() => setReporting(null)}>
+        <View style={styles.sheetBackdrop}>
+          <View style={[styles.sheet, { backgroundColor: colors.card, borderColor: colors.border, padding: 16, gap: 10 }]}>
+            <Text style={[styles.sheetTitle, { color: colors.foreground }]}>Send this message</Text>
+            <Text style={[styles.hint, { color: colors.mutedForeground }]}>
+              This goes to the Jamvi team so we can teach the app this kind of message. It is not linked to you, and phone
+              numbers are hidden. Black out any names or other details you would rather not share, then send.
+            </Text>
+            <TextInput
+              value={reporting?.text ?? ''}
+              onChangeText={(value) => setReporting((current) => (current ? { ...current, text: value } : current))}
+              multiline
+              textAlignVertical="top"
+              autoCorrect={false}
+              style={[styles.pasteBox, { minHeight: 140, borderColor: colors.border, backgroundColor: colors.muted, color: colors.foreground }]}
+              testID="mpesa-report-text"
+            />
+            <Pressable
+              onPress={sendReport}
+              disabled={sendingReport || !reporting?.text.trim()}
+              style={[styles.primary, { backgroundColor: colors.primary, opacity: sendingReport ? 0.6 : 1 }]}
+              accessibilityRole="button"
+              testID="mpesa-report-send"
+            >
+              {sendingReport ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Send</Text>}
+            </Pressable>
+            <Pressable onPress={() => setReporting(null)} style={styles.secondary} accessibilityRole="button">
+              <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold' }}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
 
       <CategorySheet visible={picking !== null} categories={categories} onPick={chooseCategory} onClose={() => setPicking(null)} />
     </View>

@@ -18,7 +18,8 @@ export type PreviewLine = {
   alreadyRecorded: AlreadyRecorded | null;
 };
 
-export type Choice = { include: boolean; category: string };
+/** `auto` is true while the category is Jamvi's suggestion and the person has not chosen one. */
+export type Choice = { include: boolean; category: string; auto?: boolean };
 
 type PastPosting = { type: string; description: string; expenseCategory?: string | null };
 
@@ -53,19 +54,69 @@ export function suggestCategory(description: string, history: readonly PastPosti
 export const isRecordable = (line: PreviewLine): boolean =>
   line.status === 'ready' && !line.alreadyRecorded && line.amount !== null && line.direction !== null;
 
-/** Recordable lines start ticked; money out starts with the category it was filed under before. */
+// Kinds of payment whose category is obvious from the kind alone, and the words
+// a budget's own category for it is likely to use. Only a category that already
+// exists is ever suggested; nothing is created, and the person can change it.
+const KIND_DEFAULTS: Record<string, readonly string[]> = {
+  airtime_purchase: ['airtime', 'data', 'phone', 'communication', 'bundle'],
+  cash_withdrawal: ['cash', 'withdraw'],
+};
+
+/** A category from this budget that suits the kind of payment, or '' when none does. */
+export function defaultCategoryFor(line: PreviewLine, categoryNames: readonly string[]): string {
+  const words = line.type ? KIND_DEFAULTS[line.type] : undefined;
+  if (!words) return '';
+  for (const word of words) {
+    const match = categoryNames.find((name) => name.toLocaleLowerCase('en-KE').includes(word));
+    if (match) return match;
+  }
+  return '';
+}
+
+/**
+ * Recordable lines start ticked. Money out starts with a suggestion: the
+ * category that payee was filed under before, or failing that one that suits
+ * the kind of payment. It is only a starting point; every category can be
+ * changed by hand.
+ */
 export function initialChoices(
   lines: readonly PreviewLine[],
   history: readonly PastPosting[],
+  categoryNames: readonly string[] = [],
 ): Record<number, Choice> {
   const choices: Record<number, Choice> = {};
   for (const line of lines) {
-    choices[line.index] = {
-      include: isRecordable(line),
-      category: line.direction === 'out' && line.description ? suggestCategory(line.description, history) : '',
-    };
+    const suggested =
+      line.direction === 'out'
+        ? (line.description ? suggestCategory(line.description, history) : '') || defaultCategoryFor(line, categoryNames)
+        : '';
+    choices[line.index] = { include: isRecordable(line), category: suggested, auto: suggested !== '' };
   }
   return choices;
+}
+
+/**
+ * The person picks a category by hand. It is theirs from then on, and the same
+ * payee's other lines that still have none get it too, so twelve airtime top-ups
+ * take one choice, not twelve.
+ */
+export function chooseCategory(
+  lines: readonly PreviewLine[],
+  choices: Record<number, Choice>,
+  index: number,
+  category: string,
+): Record<number, Choice> {
+  const chosen = lines.find((line) => line.index === index);
+  const next: Record<number, Choice> = { ...choices, [index]: { ...choices[index], category, auto: false } };
+  if (!chosen?.description || !category) return next;
+  const payee = clean(chosen.description);
+  for (const line of lines) {
+    if (line.index === index || line.direction !== 'out' || !line.description) continue;
+    if (clean(line.description) !== payee) continue;
+    if (choices[line.index]?.category) continue;
+    next[line.index] = { ...choices[line.index], category, auto: true };
+  }
+  return next;
 }
 
 /** A line in words that find it in a long list: who, how much, and when. */
@@ -178,4 +229,43 @@ export function buildPostings(line: PreviewLine, choice: Choice, ctx: PostingCon
           }
         : null,
   };
+}
+
+/**
+ * The same split the server makes, so line N of the review list is message N
+ * of what was pasted. Kept in step with the server by a test.
+ */
+export function splitMessages(text: string): string[] {
+  const normalized = text.replace(/\r\n?/g, '\n').trim();
+  if (!normalized) return [];
+  return normalized
+    .split(/(?=\b(?=[A-Z0-9]*\d)[A-Z0-9]{8,15}\s+[Cc]onfirmed\b)/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .slice(0, 200);
+}
+
+/** The pasted message a review line came from, or null if it cannot be found. */
+export const messageFor = (pasted: string, index: number): string | null => splitMessages(pasted)[index] ?? null;
+
+/**
+ * Lines worth sending so Jamvi can learn the format: a message that could not
+ * be read at all, one of a kind Jamvi does not know, or one that read but named
+ * nobody. Not the kinds Jamvi understands and leaves for the person, and not a
+ * repeat.
+ */
+export function canReport(line: PreviewLine): boolean {
+  if (line.alreadyRecorded) return false;
+  if (line.status === 'skipped') return line.type === null || line.type === 'other';
+  return line.named === false;
+}
+
+const PHONE_PATTERNS = [
+  /\+?254[\s-]?(?:7\d{2}|1\d{2})[\s-]?\d{3}[\s-]?\d{3}/g,
+  /\b0(?:7\d{2}|1\d{2})[\s-]?\d{3}[\s-]?\d{3}\b/g,
+];
+
+/** Hides phone numbers before somebody sees the text they are about to send. */
+export function redactForReport(message: string): string {
+  return PHONE_PATTERNS.reduce((text, pattern) => text.replace(pattern, '<PHONE>'), message);
 }

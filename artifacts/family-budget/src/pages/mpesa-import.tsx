@@ -14,14 +14,19 @@ import { buildCategoryTree, type CategoryRow } from "@workspace/category-tree";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { CategorySearchInput, useCategorySearch } from "@/components/category-search";
 import { formatKes } from "@/lib/utils";
 import {
   buildPostings,
+  chooseCategory as chooseLineCategory,
   initialChoices,
+  canReport,
   isRecordable,
   lineLabel,
+  messageFor,
   problemWith,
+  redactForReport,
   snippetFor,
   summarise,
   type Choice,
@@ -76,6 +81,55 @@ export default function MpesaImportPage() {
   const [chargeCategory, setChargeCategory] = useState("");
   const [saving, setSaving] = useState(false);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
+  // Sending a message Jamvi could not read, so its format can be learned.
+  const [reporting, setReporting] = useState<{ index: number; text: string } | null>(null);
+  const [sendingReport, setSendingReport] = useState(false);
+  const [reported, setReported] = useState<Set<number>>(new Set());
+
+  const openReport = (index: number) => {
+    const message = messageFor(text, index);
+    if (message) setReporting({ index, text: redactForReport(message) });
+  };
+
+  const sendReport = async () => {
+    if (!reporting || sendingReport) return;
+    setSendingReport(true);
+    try {
+      const response = await fetch("/api/mpesa/report-format", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: reporting.text }),
+      });
+      if (!response.ok) {
+        const body = (await response.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error ?? "Could not send it right now.");
+      }
+      setReported((current) => new Set(current).add(reporting.index));
+      setReporting(null);
+      toast({ title: "Thank you", description: "Jamvi will learn this kind of message." });
+    } catch (error) {
+      toast({ variant: "destructive", title: "Could not send it", description: error instanceof Error ? error.message : "Please try again." });
+    } finally {
+      setSendingReport(false);
+    }
+  };
+
+  const reportLink = (item: PreviewLine) => {
+    if (!canReport(item)) return null;
+    return reported.has(item.index) ? (
+      <p className="text-xs text-success">Sent. Thank you.</p>
+    ) : (
+      <button
+        type="button"
+        onClick={() => openReport(item.index)}
+        className="text-xs font-semibold text-primary hover:underline"
+        data-testid={`mpesa-report-${item.index}`}
+      >
+        Send this message so Jamvi can learn it
+      </button>
+    );
+  };
 
   useEffect(() => {
     try {
@@ -102,7 +156,7 @@ export default function MpesaImportPage() {
       const body = (await response.json().catch(() => ({}))) as { lines?: PreviewLine[]; error?: string };
       if (!response.ok || !body.lines) throw new Error(body.error ?? "Could not read them.");
       setLines(body.lines);
-      setChoices(initialChoices(body.lines, history));
+      setChoices(initialChoices(body.lines, history, categories.map((row) => row.name)));
     } catch (error) {
       toast({ variant: "destructive", title: "Could not read them", description: error instanceof Error ? error.message : "Please try again." });
     } finally {
@@ -125,7 +179,7 @@ export default function MpesaImportPage() {
   const notImported = lines?.filter((item) => !isRecordable(item)) ?? [];
 
   const setCategory = (index: number, category: string) =>
-    setChoices((current) => ({ ...current, [index]: { ...current[index], category } }));
+    setChoices((current) => chooseLineCategory(lines ?? [], current, index, category));
 
   const saveAll = async () => {
     if (!lines || !accountId || saving) return;
@@ -198,6 +252,31 @@ export default function MpesaImportPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-5 p-4 sm:p-6" data-testid="mpesa-import-page">
+      <Dialog open={reporting !== null} onOpenChange={(open) => !open && setReporting(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Send this message</DialogTitle>
+            <DialogDescription>
+              This goes to the Jamvi team so we can teach the app this kind of message. It is not linked to you, and phone
+              numbers are hidden. Black out any names or other details you would rather not share, then send.
+            </DialogDescription>
+          </DialogHeader>
+          <textarea
+            value={reporting?.text ?? ""}
+            onChange={(event) => setReporting((current) => (current ? { ...current, text: event.target.value } : current))}
+            rows={7}
+            className="w-full rounded-xl border border-input bg-card p-3 text-sm"
+            data-testid="mpesa-report-text"
+          />
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" onClick={() => setReporting(null)}>Cancel</Button>
+            <Button onClick={sendReport} disabled={sendingReport || !reporting?.text.trim()} data-testid="mpesa-report-send">
+              {sendingReport ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <div>
         <h1 className="text-2xl font-bold text-foreground">Paste M-Pesa messages</h1>
         <p className="text-sm text-muted-foreground">Turn your M-Pesa messages into entries, without typing.</p>
@@ -236,7 +315,7 @@ export default function MpesaImportPage() {
               onChange={(event) => {
                 setSelectedAccountId(Number(event.target.value));
                 // The suggestions come from this account's history, so start them again.
-                setChoices(initialChoices(lines, []));
+                setChoices(initialChoices(lines, [], categories.map((row) => row.name)));
               }}
               data-testid="mpesa-import-account"
             >
@@ -282,6 +361,7 @@ export default function MpesaImportPage() {
                           No name in the message: “{snippetFor(text, item.receipt)}…”
                         </p>
                       ) : null}
+                      {reportLink(item)}
                     </div>
                     <p className={`font-display text-lg font-bold ${out ? "text-destructive" : "text-success"}`}>
                       {out ? "−" : "+"}{formatKes(item.amount ?? 0)}
@@ -305,6 +385,11 @@ export default function MpesaImportPage() {
                         ),
                       )}
                     </select>
+                  ) : null}
+                  {out && choice?.include && choice.auto && choice.category ? (
+                    <p className="text-xs text-muted-foreground" data-testid={`mpesa-line-suggested-${item.index}`}>
+                      Suggested by Jamvi. Change it if it is wrong.
+                    </p>
                   ) : null}
                   {out && item.fee ? <p className="text-xs text-muted-foreground">+ {formatKes(item.fee)} M-Pesa charge, saved on its own</p> : null}
                 </CardContent>
@@ -357,6 +442,7 @@ export default function MpesaImportPage() {
                           : item.alreadyRecorded.description
                         : item.reason}
                     </p>
+                    {reportLink(item)}
                   </CardContent>
                 </Card>
               ))}
