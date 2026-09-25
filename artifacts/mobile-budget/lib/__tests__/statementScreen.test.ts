@@ -93,3 +93,32 @@ describe('the statement section of the M-Pesa screen', () => {
     expect(shownFileName('statement.pdf')).toBe('statement.pdf');
   });
 });
+
+// Somebody works through a statement at their own pace: some now, the rest another day.
+describe('working through a statement over several visits', () => {
+  const screen = read('app/mpesa-import.tsx');
+
+  it('keeps what is still to do for a month, never the PDF or its password', () => {
+    expect(screen).toContain("key: 'mpesa-statement'");
+    expect(screen).toContain('maxAgeMs: STATEMENT_DRAFT_MAX_AGE_MS');
+    expect(screen).toContain('const STATEMENT_DRAFT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;');
+    const saved = screen.slice(screen.indexOf("key: 'mpesa-statement'"), screen.indexOf("key: 'mpesa-statement'") + 200);
+    expect(saved).not.toContain('statementPassword');
+    expect(saved).not.toContain('statementFile');
+  });
+
+  it('keeps the draft only while something is left to save', () => {
+    expect(screen).toContain('active: statementReading !== null && statementLeft > 0,');
+  });
+
+  it('marks what was saved as recorded, so the balance card stays honest, and offers to keep going', () => {
+    expect(screen).toContain("description: 'Saved from your statement'");
+    expect(screen).toContain('mpesa-import-keep-going');
+    expect(screen).toContain('Keep going ({statementLeft} left)');
+  });
+
+  it('asks again which entries are recorded when the statement comes back', () => {
+    expect(screen).toContain('markRecorded(saved.reading.lines)');
+  });
+});
+
