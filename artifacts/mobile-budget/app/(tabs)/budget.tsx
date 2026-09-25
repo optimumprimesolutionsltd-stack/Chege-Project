@@ -27,7 +27,7 @@ import { CategorySearchBox } from '@/components/CategorySearchBox';
 import { useColors } from '@/hooks/useColors';
 import { useCollapsed } from '@/hooks/useCollapsed';
 import { useListEditor } from '@/hooks/useListEditor';
-import { EditableName, ListEditButton, ListEditorFooter, RemoveRowButton } from '@/components/ListEditor';
+import { EditableName, EditPill, ListEditButton, ListEditorFooter, RemoveRowButton } from '@/components/ListEditor';
 import { PageScrollView } from '@/components/PageScrollReset';
 import {
   getGetDashboardCategoryBreakdownQueryKey,
@@ -519,6 +519,50 @@ export default function BudgetScreen() {
       setAddingIncomeSource(false);
     }
   };
+  // Income figures are only changed in edit mode: Edit at the top of the panel, Save at the bottom,
+  // so a stray tap or scroll can never change what somebody expects to earn.
+  const canEditAnyIncome = incomeSources.some((source) => canManageSharedIncome || source.userId === user?.id);
+  const [editingIncome, setEditingIncome] = useState(false);
+  const [incomeDrafts, setIncomeDrafts] = useState<Record<number, string>>({});
+  const [savingIncomeAmounts, setSavingIncomeAmounts] = useState(false);
+  const incomeAmount = (raw: string) => Math.max(0, Math.round(Number(raw) || 0));
+  const changedIncome = incomeSources.filter(
+    (source) => incomeDrafts[source.id] !== undefined && incomeAmount(incomeDrafts[source.id]) !== (source.expectedMonthlyAmount ?? 0),
+  );
+  const cancelIncomeEdit = () => {
+    setEditingIncome(false);
+    setIncomeDrafts({});
+    handleCancelEditIncomeSource();
+  };
+  const saveIncomeAmounts = async () => {
+    if (changedIncome.length === 0) {
+      cancelIncomeEdit();
+      return;
+    }
+    setSavingIncomeAmounts(true);
+    const failed: string[] = [];
+    for (const source of changedIncome) {
+      try {
+        await customFetch(`/api/income-sources/${source.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: source.name, isMain: source.isMain, expectedMonthlyAmount: incomeAmount(incomeDrafts[source.id]) }),
+        });
+      } catch {
+        failed.push(source.name);
+      }
+    }
+    await refreshIncomeSources();
+    setSavingIncomeAmounts(false);
+    if (failed.length > 0) {
+      Alert.alert('Some figures were not saved', `${failed.join(', ')} could not be saved. They are still here to try again.`);
+      setIncomeDrafts((current) => Object.fromEntries(Object.entries(current).filter(([id]) => failed.includes(incomeSources.find((source) => source.id === Number(id))?.name ?? ''))));
+      return;
+    }
+    setEditingIncome(false);
+    setIncomeDrafts({});
+  };
+
   const handleSaveExpectedIncome = async (source: IncomeSource, rawAmount: string) => {
     const expectedMonthlyAmount = Math.max(0, Math.round(Number(rawAmount) || 0));
     if (expectedMonthlyAmount === source.expectedMonthlyAmount) return;
@@ -1567,7 +1611,24 @@ export default function BudgetScreen() {
               <Text style={[styles.incomeTitle, { color: colors.foreground }]}>Income streams</Text>
               <Text style={[styles.incomeSubtitle, { color: colors.mutedForeground }]}>Add and manage the sources that fund your budget</Text>
             </View>
-            <Feather name="credit-card" size={19} color={colors.secondary} />
+            {canEditAnyIncome ? (
+              editingIncome ? (
+                <Pressable
+                  onPress={cancelIncomeEdit}
+                  disabled={savingIncomeAmounts}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Stop editing income streams without saving"
+                  testID="income-edit-cancel"
+                >
+                  <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold', fontSize: 12 }}>Cancel</Text>
+                </Pressable>
+              ) : (
+                <EditPill onPress={() => setEditingIncome(true)} accessibilityLabel="Edit income streams" testID="income-edit" />
+              )
+            ) : (
+              <Feather name="credit-card" size={19} color={colors.secondary} />
+            )}
           </View>
           <View style={[styles.incomeAddRow, { borderColor: colors.border, backgroundColor: colors.card }]}>
             <TextInput
@@ -1635,21 +1696,23 @@ export default function BudgetScreen() {
                         ) : null}
                       </View>
                       <View style={styles.incomeManagedActions}>
-                        <TextInput
-                          defaultValue={String(source.expectedMonthlyAmount ?? 0)}
-                          keyboardType="numeric"
-                          editable={canManageSharedIncome || source.userId === user?.id}
-                          onEndEditing={(event) => {
-                            if (canManageSharedIncome || source.userId === user?.id) {
-                              void handleSaveExpectedIncome(source, event.nativeEvent.text);
-                            }
-                          }}
-                          placeholder="Expected KES"
-                          placeholderTextColor={colors.mutedForeground}
-                          style={[styles.incomeExpectedInput, { borderColor: colors.border, color: colors.foreground }]}
-                          accessibilityLabel={`Expected monthly income for ${source.name}`}
-                        />
-                        {(canManageSharedIncome || source.userId === user?.id) ? (
+                        {editingIncome && (canManageSharedIncome || source.userId === user?.id) ? (
+                          <TextInput
+                            value={incomeDrafts[source.id] ?? String(source.expectedMonthlyAmount ?? 0)}
+                            onChangeText={(text) => setIncomeDrafts((current) => ({ ...current, [source.id]: text }))}
+                            keyboardType="numeric"
+                            editable={!savingIncomeAmounts}
+                            placeholder="Expected KES"
+                            placeholderTextColor={colors.mutedForeground}
+                            style={[styles.incomeExpectedInput, { borderColor: colors.primary, color: colors.foreground }]}
+                            accessibilityLabel={`Expected monthly income for ${source.name}`}
+                          />
+                        ) : (
+                          <Text style={[styles.incomeAmountText, { color: colors.foreground }]} accessibilityLabel={`Expected monthly income for ${source.name}`}>
+                            KES {formatKES(source.expectedMonthlyAmount ?? 0)}
+                          </Text>
+                        )}
+                        {editingIncome && (canManageSharedIncome || source.userId === user?.id) ? (
                           editingIncomeSourceId === source.id ? (
                             <View style={styles.incomeEditActions}>
                               <Pressable
@@ -1699,6 +1762,25 @@ export default function BudgetScreen() {
               </View>
             ))
           )}
+          {editingIncome ? (
+            <View style={styles.incomeFooter} testID="income-edit-footer">
+              <Pressable onPress={cancelIncomeEdit} disabled={savingIncomeAmounts} style={styles.incomeFooterCancel} accessibilityRole="button">
+                <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold' }}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => void saveIncomeAmounts()}
+                disabled={savingIncomeAmounts || changedIncome.length === 0}
+                style={[styles.incomeFooterSave, { backgroundColor: colors.primary, opacity: savingIncomeAmounts || changedIncome.length === 0 ? 0.5 : 1 }]}
+                accessibilityRole="button"
+                testID="income-save"
+              >
+                {savingIncomeAmounts ? <ActivityIndicator size="small" color="#fff" /> : null}
+                <Text style={{ color: '#fff', fontFamily: 'Inter_700Bold' }}>
+                  {changedIncome.length > 0 ? `Save ${changedIncome.length} ${changedIncome.length === 1 ? 'change' : 'changes'}` : 'Save changes'}
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
         </View>
 
         <View style={styles.tierSection}>
@@ -2096,6 +2178,10 @@ const styles = StyleSheet.create({
    incomeEmptyText: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 3 },
    incomeAddRow: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 12, padding: 8, marginBottom: 10 },
    incomeAddInput: { flex: 1, minWidth: 0, paddingHorizontal: 8, paddingVertical: 7, fontSize: 13, fontFamily: 'Inter_400Regular' },
+   incomeAmountText: { fontSize: 13, fontFamily: 'Inter_600SemiBold', textAlign: 'right', minWidth: 92 },
+   incomeFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 12, marginTop: 12 },
+   incomeFooterCancel: { paddingHorizontal: 14, paddingVertical: 12 },
+   incomeFooterSave: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 12, paddingHorizontal: 18, paddingVertical: 12 },
    incomeExpectedInput: { width: 92, borderWidth: 1, borderRadius: 8, paddingHorizontal: 7, paddingVertical: 6, fontSize: 11, fontFamily: 'Inter_400Regular', textAlign: 'right' },
    incomeAddButton: { width: 34, height: 34, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
    incomeGroup: { borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 8 },
