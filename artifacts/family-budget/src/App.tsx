@@ -25,6 +25,7 @@ import Parties from '@/pages/parties';
 import Statement from '@/pages/statement';
 import PassThrough from '@/pages/pass-through';
 import BankDay from '@/pages/bank-day';
+import MpesaImport from '@/pages/mpesa-import';
 import Parity from '@/pages/parity';
 import IncomeStreamsReport from '@/pages/income-streams-report';
 import SearchPage from '@/pages/search';
@@ -139,6 +140,7 @@ function AuthenticatedApp() {
         <Route path="/statement" component={Statement} />
         <Route path="/pass-through" component={PassThrough} />
         <Route path="/bank-day" component={BankDay} />
+        <Route path="/mpesa-import" component={MpesaImport} />
         <Route path="/reports" component={IncomeStreamsReport} />
         <Route path="/search" component={SearchPage} />
         <Route path="/subscription" component={Subscription} />

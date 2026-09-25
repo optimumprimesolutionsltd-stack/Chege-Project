@@ -37,6 +37,14 @@ export default function MoreScreen() {
       show: true,
     },
     {
+      key: 'mpesa',
+      icon: 'message-square',
+      title: 'Paste M-Pesa messages',
+      hint: 'Turn your M-Pesa messages into entries, without typing',
+      href: '/mpesa-import',
+      show: true,
+    },
+    {
       key: 'reports',
       icon: 'pie-chart',
       title: 'Reports',

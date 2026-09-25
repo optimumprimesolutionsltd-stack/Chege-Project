@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { formatKes, formatDate } from "@/lib/utils";
 import { movableOnDay, summariseDays } from "@/lib/move-day";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Link } from "wouter";
 import { Repeat, Trash2, Pencil, ArrowDownLeft, ArrowUpRight, Loader2, Landmark, TrendingUp, TrendingDown, Plus, Flag } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -1771,6 +1772,15 @@ export default function Bank() {
           >
             Between accounts
           </Button>
+          <Link href="/mpesa-import" className="block">
+            <Button
+              data-testid="button-mpesa-import"
+              variant="secondary"
+              className="h-12 w-full px-4 rounded-xl"
+            >
+              Paste M-Pesa messages
+            </Button>
+          </Link>
         </div>
       ) : (
         <Card ref={formCardRef} className="border-none shadow-md bg-accent/20">
