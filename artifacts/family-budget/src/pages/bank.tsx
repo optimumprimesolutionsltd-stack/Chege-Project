@@ -17,6 +17,7 @@ import { formatKes, formatDate } from "@/lib/utils";
 import { movableOnDay, summariseDays } from "@/lib/move-day";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Link } from "wouter";
+import { ALREADY_GONE_MESSAGE, ALREADY_GONE_TITLE, isNotFound } from "@/lib/stale-entry";
 import { Repeat, Trash2, Pencil, ArrowDownLeft, ArrowUpRight, Loader2, Landmark, TrendingUp, TrendingDown, Plus, Flag } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -409,8 +410,13 @@ export default function Bank() {
     noun: "transaction",
     remove: async (id) => {
       const tx = (account?.transactions ?? []).find((item: EditableTransaction) => item.id === id);
-      if (tx?.expenseId != null) await deleteExpense.mutateAsync({ id: tx.expenseId });
-      else await deleteTx.mutateAsync({ id });
+      try {
+        if (tx?.expenseId != null) await deleteExpense.mutateAsync({ id: tx.expenseId });
+        else await deleteTx.mutateAsync({ id });
+      } catch (error: unknown) {
+        // Already gone is what deleting it was for.
+        if (!isNotFound(error)) throw error;
+      }
     },
     afterSave: invalidate,
   });
@@ -1130,6 +1136,12 @@ export default function Bank() {
       toast({ title: deletesExpense ? "Expense deleted" : "Transaction deleted" });
       invalidate();
     } catch (error: unknown) {
+      // Not found means it is not in this budget: already deleted, or a list from another budget.
+      if (isNotFound(error)) {
+        void queryClient.invalidateQueries();
+        toast({ title: ALREADY_GONE_TITLE, description: ALREADY_GONE_MESSAGE });
+        return;
+      }
       toast({
         variant: "destructive",
         title: deletesExpense ? "Could not delete expense" : "Could not delete transaction",
