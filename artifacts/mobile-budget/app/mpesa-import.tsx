@@ -62,6 +62,7 @@ import { clearQueryClientCache } from '@/lib/queryPersist';
 import { ACTIVE_WORKSPACE_STORAGE_KEY } from '@/lib/workspace';
 import { formatExact } from '@/lib/formatExact';
 import { StatementReader, type ReaderJob } from '@/components/StatementReader';
+import { rememberMpesaCard } from '@/lib/mpesaCard';
 import { canReadStatements, chooseStatement, statementBase64, type ChosenStatement } from '@/lib/statementFile';
 import { shownFileName } from '@/lib/shownFileName';
 import { reconcile, statementLines, type StatementReading } from '@/lib/statementImport';
@@ -847,6 +848,7 @@ export default function MpesaImportScreen() {
         setStatementReading((current) => (current ? { ...current, lines: marked } : current));
       }
       setOutcome(result);
+      if (result.saved > 0) void rememberMpesaCard('done');
     }
     offerBalanceChanges(lines.filter((item) => savedIndexes.has(item.index)));
   };

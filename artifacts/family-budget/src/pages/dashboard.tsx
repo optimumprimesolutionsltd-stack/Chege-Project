@@ -69,6 +69,7 @@ import { SHARED_GROUP_KINDS, type SharedGroupKind } from "@/components/group-kin
 import { getActivityEditLink, getActivityRecordTarget, type ActivityEditItem } from "@/lib/activity-edit-utils";
 import { AskJamviPanel } from "@/components/ask-jamvi-panel";
 import { WorkspaceSetupGuide } from "@/components/workspace-setup-guide";
+import { MpesaImportCard } from "@/components/mpesa-import-card";
 import { appPath, routePath } from "@/lib/base-path";
 import { canManageBankAccount } from "@/lib/bank-access";
 import { DashboardAnnouncement, DashboardSummaryCards } from "@/components/dashboard-home-cards";
@@ -2805,7 +2806,8 @@ export default function Dashboard() {
         }
       />
 
-       <WorkspaceSetupGuide userId={user?.id} />
+       <MpesaImportCard />
+      <WorkspaceSetupGuide userId={user?.id} />
 
       <AskJamviPanel month={month} year={year} workspaceName={group?.name ?? undefined} />
 

@@ -14,6 +14,21 @@ export interface FaqEntry {
 
 export const FAQ_ENTRIES: readonly FaqEntry[] = [
   {
+    question: "Can Jamvi read my M-Pesa statement?",
+    answer:
+      "Yes. Choose your M-Pesa statement PDF and type the password M-Pesa sent with it, and Jamvi turns it into a list of payments with who each went to and a suggested category. The file and its password are read on your own phone or computer and are never uploaded. You check the list, change anything that is wrong, and save.",
+  },
+  {
+    question: "Can I paste my M-Pesa messages instead?",
+    answer:
+      "Yes. Select as many M-Pesa messages as you like in your Messages app, copy them and paste them into Jamvi, or share them straight to the Jamvi app on Android. Jamvi reads them to fill in the list and does not keep the messages. A message it cannot read can be sent to us so the next update understands it.",
+  },
+  {
+    question: "How does Jamvi handle Fuliza?",
+    answer:
+      "What a Fuliza loan paid for is recorded as an ordinary payment, and its access fee as a bank charge. The loan itself and its repayments are not counted as spending or income. Jamvi tells you what it left out, and shows how any difference from your statement's balance is made up.",
+  },
+  {
     question: "Is Jamvi a bank account?",
     answer:
       "No. Jamvi records contributions, expenses, and balances. It does not send, receive, or hold money, and it is not a payment service. You still use M-Pesa or your bank to move money; Jamvi is where you record, track, and share the history so everyone is on the same page.",

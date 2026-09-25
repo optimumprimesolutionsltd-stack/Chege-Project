@@ -289,6 +289,60 @@ export const GUIDES: readonly Guide[] = [
     },
   },
   {
+    slug: "/guides/import-mpesa-statement-budget",
+    title: "Turn Your M-Pesa Statement Into a Budget",
+    description:
+      "How to get an M-Pesa statement PDF, open it in Jamvi and have a month of payments sorted into categories in minutes, including how Fuliza is handled and how to check it matches your statement.",
+    label: "Import your M-Pesa statement",
+    readingMinutes: 5,
+    updated: "2026-09-26",
+    heading: "Turn your M-Pesa statement into a budget",
+    intro:
+      "Most of what you spend already passes through M-Pesa, so most of a budget is already written down there. Typing it in by hand is what makes people give up. Here is how to skip the typing.",
+    sections: [
+      {
+        heading: "Get your statement",
+        body: [
+          "Ask Safaricom for a statement from the M-Pesa menu on your phone or the My Safaricom app, choosing the period you want. It arrives as a PDF, protected with a password that Safaricom sends you.",
+          "You do not need to open it or tidy it up. Keep the file and the password together.",
+        ],
+      },
+      {
+        heading: "Open it in Jamvi",
+        body: [
+          "Open the M-Pesa import in Jamvi, choose the PDF and type the password. Jamvi reads the file on your own phone or computer. It is never uploaded, and neither is the password.",
+          "Prefer messages? Select your M-Pesa messages, copy them and paste them in, or share them to Jamvi on Android. Jamvi reads them to fill in the list and does not keep them.",
+        ],
+      },
+      {
+        heading: "Check the list, then save",
+        body: [
+          "Every payment appears with who it went to and a suggested category, based on what you chose before. Tap to change any of them. Entries are marked as changed by you, still Jamvi's suggestion, or needing you, and you can filter by each, so you always know what you have checked.",
+          "Nothing is recorded until you save, and you can save some now and come back to the rest later. Anything already recorded is recognised and never counted twice.",
+        ],
+      },
+      {
+        heading: "How Fuliza is handled",
+        body: [
+          "What a Fuliza loan paid for is recorded as an ordinary payment, so your spending shows what you actually bought. The loan itself and its repayments are not spending or income, so they are left out, and Jamvi tells you how many it left out.",
+        ],
+      },
+      {
+        heading: "Does it match your statement?",
+        body: [
+          "Jamvi checks that the statement adds up before it will use it, and after you choose what to save it compares the result with the statement's opening and closing balance. If there is a difference, it lists what makes it up, such as Fuliza repayments or entries you did not tick, so nothing disappears quietly.",
+        ],
+      },
+    ],
+    takeaway:
+      "Get the statement PDF, open it in Jamvi, check the suggestions and save. It is read on your device, Fuliza is handled properly, and the result is checked against your statement's own balance.",
+    related: {
+      slug: "/pricing",
+      label: "Jamvi pricing",
+      blurb: "One simple price covers your own budget and every group you are part of. Free for your first days.",
+    },
+  },
+  {
     slug: "/guides/how-to-budget-in-kenya",
     title: "How to Budget in Kenya: A Practical Guide",
     description:

@@ -47,6 +47,7 @@ import {
 } from '@workspace/api-client-react';
 import { formatExact } from '@/lib/formatExact';
 import { HomeAnswersCard } from '@/components/HomeAnswersCard';
+import { MpesaImportCard } from '@/components/MpesaImportCard';
 
 const MONTHS_SHORT = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -435,6 +436,8 @@ export default function DashboardScreen() {
           colors={['#05255E', colors.brandBlue]}
           style={styles.headerRest}
         >
+          <MpesaImportCard />
+
            <WorkspaceSetupGuide />
 
           <HomeAnswersCard
