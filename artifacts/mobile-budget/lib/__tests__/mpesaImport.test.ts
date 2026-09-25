@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildPostings,
   canReport,
+  chooseIncomeSource,
   initialChoices,
   isRecordable,
   lineLabel,
@@ -11,6 +12,7 @@ import {
   snippetFor,
   splitMessages,
   suggestCategory,
+  suggestIncomeSource,
   summarise,
   type PostingContext,
   type PreviewLine,
@@ -185,5 +187,55 @@ describe('masked numbers in what is about to be sent', () => {
     expect(shown).not.toMatch(/0722|0733|744/);
     expect(shown.match(/<PHONE>/g)).toHaveLength(3);
     expect(shown).toContain('SAMPLE PERSON');
+  });
+});
+
+describe('where money in came from', () => {
+  const history = [
+    { type: 'deposit', description: 'Received from Sample Person', incomeSourceId: 4 },
+    { type: 'deposit', description: ' received  from sample person ', incomeSourceId: 4 },
+    { type: 'deposit', description: 'Received from Sample Person', incomeSourceId: 5 },
+    { type: 'disbursement', description: 'Received from Sample Person', incomeSourceId: 6 },
+  ];
+  const sources = [{ id: 4, userId: 'u2' }, { id: 5, userId: 'u1' }];
+  const money = (over: Partial<PreviewLine>) => line({ direction: 'in', description: 'Received from Sample Person', ...over });
+
+  it('suggests the source that sender was most often tagged with', () => {
+    expect(suggestIncomeSource('RECEIVED FROM SAMPLE PERSON', history)).toBe(4);
+    expect(suggestIncomeSource('Someone New', history)).toBeNull();
+    expect(suggestIncomeSource('', history)).toBeNull();
+  });
+
+  it('starts money in with the suggestion, marked as automatic', () => {
+    const choices = initialChoices([money({ index: 0 })], history);
+    expect(choices[0].incomeSourceId).toBe(4);
+    expect(choices[0].sourceAuto).toBe(true);
+  });
+
+  it('records the source and names the member it belongs to', () => {
+    const built = buildPostings(money({}), { include: true, category: '', incomeSourceId: 4 }, { ...ctx, incomeSources: sources });
+    expect(built?.main).toMatchObject({ incomeSourceId: 4, madeById: 'u2' });
+  });
+
+  it('records no source when none is chosen, and none for a debt', () => {
+    const none = buildPostings(money({}), { include: true, category: '' }, { ...ctx, incomeSources: sources });
+    expect(none?.main).not.toHaveProperty('incomeSourceId');
+    expect(none?.main.madeById).toBe('u1');
+    const debt = buildPostings(
+      money({}),
+      { include: true, category: '', incomeSourceId: 4, debt: { kind: 'repaid', partyId: 3 } },
+      { ...ctx, incomeSources: sources },
+    );
+    expect(debt?.main).not.toHaveProperty('incomeSourceId');
+  });
+
+  it('a choice carries to the same sender lines that have none, and never overwrites one', () => {
+    const lines = [money({ index: 0 }), money({ index: 1 }), money({ index: 2, description: 'Someone Else' })];
+    const start = { 0: { include: true, category: '' }, 1: { include: true, category: '', incomeSourceId: 5 }, 2: { include: true, category: '' } };
+    const next = chooseIncomeSource(lines, start, 0, 4);
+    expect(next[0].incomeSourceId).toBe(4);
+    expect(next[0].sourceAuto).toBeFalsy();
+    expect(next[1].incomeSourceId).toBe(5);
+    expect(next[2].incomeSourceId ?? null).toBeNull();
   });
 });

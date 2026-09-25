@@ -65,6 +65,7 @@ import {
   buildPostings,
   categoryPath,
   chooseCategory as chooseLineCategory,
+  chooseIncomeSource,
   initialChoices,
   canReport,
   isRecordable,
@@ -323,9 +324,19 @@ export default function MpesaImportScreen() {
   const accountId = selectedAccountId ?? guessedAccount;
   const { data: account } = useGetJointAccount(accountId ? { accountId } : undefined);
   const history = useMemo(
-    () => ((account?.transactions ?? []) as Array<{ type: string; description: string; expenseCategory?: string | null }>),
+    () => ((account?.transactions ?? []) as Array<{ type: string; description: string; expenseCategory?: string | null; incomeSourceId?: number | null }>),
     [account],
   );
+  // Where money in can be said to have come from: the person's own sources in a
+  // Personal budget, everybody's in a shared group (each names its owner).
+  const { data: incomeSources = [] } = useQuery<Array<{ id: number; name: string; userId?: string | null }>>({
+    queryKey: ['income-sources', !isShared ? user?.id ?? '__me__' : '__group__'],
+    queryFn: () =>
+      customFetch<Array<{ id: number; name: string; userId?: string | null }>>(
+        !isShared && user?.id ? `/api/income-sources?userId=${user.id}` : '/api/income-sources',
+      ),
+    staleTime: 30_000,
+  });
 
   const [text, setText] = useState('');
   const [reading, setReading] = useState(false);
@@ -600,6 +611,7 @@ export default function MpesaImportScreen() {
           isShared,
           today: todayIso(),
           chargeCategory,
+          incomeSources,
         });
         if (!built) continue;
         try {
@@ -868,6 +880,40 @@ export default function MpesaImportScreen() {
                     <Text style={[styles.hint, { color: colors.mutedForeground }]} testID={`mpesa-line-suggested-${item.index}`}>
                       Suggested by Jamvi. Tap to choose a different one.
                     </Text>
+                  ) : null}
+                  {item.direction === 'in' && choice?.include && !choice.debt && incomeSources.length > 0 ? (
+                    <View style={{ gap: 6 }} testID={`mpesa-line-source-${item.index}`}>
+                      <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0 }]}>Where did this come from? (optional)</Text>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
+                        {[{ id: null as number | null, name: 'Not sure' }, ...incomeSources].map((source) => {
+                          const on = (choice.incomeSourceId ?? null) === source.id;
+                          return (
+                            <Pressable
+                              key={source.id ?? 'none'}
+                              onPress={() => setChoices((current) => chooseIncomeSource(lines ?? [], current, item.index, source.id))}
+                              accessibilityRole="button"
+                              accessibilityState={{ selected: on }}
+                              testID={`mpesa-line-source-${item.index}-${source.id ?? 'none'}`}
+                              style={{
+                                paddingHorizontal: 12,
+                                paddingVertical: 7,
+                                borderRadius: 999,
+                                borderWidth: 1,
+                                borderColor: on ? colors.primary : colors.border,
+                                backgroundColor: on ? `${colors.primary}22` : colors.muted,
+                              }}
+                            >
+                              <Text style={{ color: on ? colors.primary : colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>{source.name}</Text>
+                            </Pressable>
+                          );
+                        })}
+                      </ScrollView>
+                      {choice.sourceAuto && choice.incomeSourceId ? (
+                        <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0 }]} testID={`mpesa-line-source-suggested-${item.index}`}>
+                          Suggested by Jamvi. Tap another to change it.
+                        </Text>
+                      ) : null}
+                    </View>
                   ) : null}
                   {choice?.include && canLinkDebt(item) && parties.length > 0 ? (
                     (() => {
