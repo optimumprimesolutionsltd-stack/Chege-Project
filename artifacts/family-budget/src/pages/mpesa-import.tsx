@@ -20,7 +20,9 @@ import {
   buildPostings,
   initialChoices,
   isRecordable,
+  lineLabel,
   problemWith,
+  snippetFor,
   summarise,
   type Choice,
   type PreviewLine,
@@ -113,7 +115,7 @@ export default function MpesaImportPage() {
     if (!lines) return null;
     for (const item of lines) {
       const problem = problemWith(item, choices[item.index]);
-      if (problem) return `${item.description ?? "A payment"}: ${problem}`;
+      if (problem) return `${lineLabel(item)}: ${problem}`;
     }
     if (summary && summary.fees > 0 && !chargeCategory.trim()) return "Choose a category for the M-Pesa charges.";
     return null;
@@ -275,6 +277,11 @@ export default function MpesaImportPage() {
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-semibold text-foreground">{item.description}</p>
                       <p className="text-xs text-muted-foreground">{item.date ?? "No date on it, so today"} · {out ? "Money out" : "Money in"}</p>
+                      {item.named === false && snippetFor(text, item.receipt) ? (
+                        <p className="text-xs italic text-muted-foreground" data-testid={`mpesa-line-snippet-${item.index}`}>
+                          No name in the message: “{snippetFor(text, item.receipt)}…”
+                        </p>
+                      ) : null}
                     </div>
                     <p className={`font-display text-lg font-bold ${out ? "text-destructive" : "text-success"}`}>
                       {out ? "−" : "+"}{formatKes(item.amount ?? 0)}
@@ -345,7 +352,9 @@ export default function MpesaImportPage() {
                     </p>
                     <p className="text-sm text-muted-foreground">
                       {item.alreadyRecorded
-                        ? `Already recorded${item.alreadyRecorded.date ? ` on ${item.alreadyRecorded.date}` : ""}: ${item.alreadyRecorded.description}`
+                        ? item.alreadyRecorded.date
+                          ? `Already recorded on ${item.alreadyRecorded.date}: ${item.alreadyRecorded.description}`
+                          : item.alreadyRecorded.description
                         : item.reason}
                     </p>
                   </CardContent>

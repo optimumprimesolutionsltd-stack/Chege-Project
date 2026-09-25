@@ -70,3 +70,14 @@ describe('the web page matches the phone', () => {
     expect(read('../family-budget/src/pages/bank.tsx')).toContain('data-testid="button-mpesa-import"');
   });
 });
+
+describe('clearer messages when something needs fixing', () => {
+  const phone = read('app/mpesa-import.tsx');
+  const web = read('../family-budget/src/pages/mpesa-import.tsx');
+  it.each([['phone', phone], ['web', web]])('%s names the line, and the message that was pasted twice reads plainly', (_name, source) => {
+    expect(source).toContain('${lineLabel(item)}: ${problem}');
+    expect(source).toContain('item.alreadyRecorded.description');
+    expect(source).toContain('snippetFor(text, item.receipt)');
+    expect(source).not.toContain('Already recorded${item.alreadyRecorded.date ?');
+  });
+});

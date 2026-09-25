@@ -40,6 +40,8 @@ export interface ImportItem {
   amount: number | null;
   /** What the money went to, or came from, in words worth keeping as the note. */
   description: string | null;
+  /** False when the message named nobody, so the description is only a generic label. */
+  named: boolean;
   /** YYYY-MM-DD as printed on the message; null when the message carried none. */
   date: string | null;
   /** The M-Pesa "transaction cost" — a bank charge of its own. */
@@ -97,6 +99,7 @@ const skipped = (index: number, reason: string, partial: Partial<ImportItem> = {
   type: null,
   amount: null,
   description: null,
+  named: false,
   date: null,
   fee: null,
   mpesaBalance: null,
@@ -145,6 +148,7 @@ export function toImportItem(message: string, index: number): ImportItem {
     type: tx.transactionType,
     amount: tx.amount,
     description: describe(tx.transactionType, tx.merchantOrCounterparty, tx.accountReference),
+    named: Boolean(tx.merchantOrCounterparty),
     date: tx.date,
     // Only an outgoing payment carries a cost worth recording.
     fee: direction === "out" && tx.fee && tx.fee > 0 ? tx.fee : null,

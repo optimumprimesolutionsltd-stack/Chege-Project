@@ -10,6 +10,8 @@ export type PreviewLine = {
   type: string | null;
   amount: number | null;
   description: string | null;
+  /** False when the message named nobody, so the description is only a generic label. */
+  named?: boolean;
   date: string | null;
   fee: number | null;
   mpesaBalance: number | null;
@@ -64,6 +66,25 @@ export function initialChoices(
     };
   }
   return choices;
+}
+
+/** A line in words that find it in a long list: who, how much, and when. */
+export function lineLabel(line: PreviewLine): string {
+  const money = line.amount === null ? "" : `KES ${line.amount.toLocaleString("en-KE")}`;
+  const detail = [money, line.date].filter(Boolean).join(", ");
+  return `${line.description ?? "A payment"}${detail ? ` (${detail})` : ""}`;
+}
+
+/**
+ * The start of the message a line came from, taken from what was pasted on
+ * this device. Shown only for a line the parser could not name, so it can be
+ * recognised; it never leaves the phone.
+ */
+export function snippetFor(pasted: string, receipt: string | null, length = 90): string | null {
+  if (!receipt) return null;
+  const at = pasted.indexOf(receipt);
+  if (at < 0) return null;
+  return pasted.slice(at, at + length * 2).replace(/\s+/g, " ").trim().slice(0, length);
 }
 
 /** Why a ticked line cannot be saved yet, or null when it can. */
