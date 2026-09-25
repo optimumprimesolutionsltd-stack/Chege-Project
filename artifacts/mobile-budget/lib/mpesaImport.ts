@@ -1,6 +1,13 @@
 import type { DebtLink } from './mpesaDebts';
 
-export type AlreadyRecorded = { date: string | null; description: string };
+export type AlreadyRecorded = {
+  date: string | null;
+  description: string;
+  /** The category it was recorded under, when it is spending. */
+  category?: string | null;
+  /** True for ordinary spending, whose category can be changed without touching anything else. */
+  editable?: boolean;
+};
 
 /** One line of the review list, as the API's preview returns it. */
 export type PreviewLine = {
@@ -442,4 +449,22 @@ export function categoryPath(
   const row = rows.find((candidate) => candidate.name === name);
   const parent = row?.parentId ? rows.find((candidate) => candidate.id === row.parentId) : undefined;
   return parent ? `${parent.name} › ${name}` : name;
+}
+
+/** Entries this budget already has whose category the person can change. */
+export const recategorisable = (lines: readonly PreviewLine[]): PreviewLine[] =>
+  lines.filter((line) => line.alreadyRecorded?.editable === true && line.receipt !== null && line.direction === 'out');
+
+/** What to send to change categories: only entries given a category that differs from the one they have. */
+export function categoryChanges(
+  lines: readonly PreviewLine[],
+  chosen: Record<number, string>,
+): Array<{ receipt: string; category: string }> {
+  const changes: Array<{ receipt: string; category: string }> = [];
+  for (const line of recategorisable(lines)) {
+    const category = (chosen[line.index] ?? '').trim();
+    if (!category || category === line.alreadyRecorded?.category) continue;
+    changes.push({ receipt: line.receipt as string, category });
+  }
+  return changes;
 }

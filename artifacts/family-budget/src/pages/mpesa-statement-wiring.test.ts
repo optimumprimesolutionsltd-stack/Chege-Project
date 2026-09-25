@@ -74,3 +74,10 @@ describe("telling what has been looked at (web)", () => {
   });
 });
 
+describe("changing the category of what is already recorded (web)", () => {
+  it("offers it on recorded spending, and asks before changing anything", () => {
+    expect(page).toContain("mpesa-recat-apply");
+    expect(page).toContain("Only the category changes.");
+    expect(page).toContain('"/api/mpesa/import/recategorise"');
+  });
+});

@@ -28,7 +28,9 @@ import {
   isRecordable,
   lineLabel,
   messageFor,
+  categoryChanges,
   problemWith,
+  recategorisable,
   reviewCounts,
   reviewStatus,
   type ReviewView,
@@ -123,6 +125,9 @@ export default function MpesaImportPage() {
   const [reading, setReading] = useState(false);
   const [lines, setLines] = useState<PreviewLine[] | null>(null);
   const [choices, setChoices] = useState<Record<number, Choice>>({});
+  // Categories chosen for entries already recorded, keyed by the line.
+  const [recat, setRecat] = useState<Record<number, string>>({});
+  const [recategorising, setRecategorising] = useState(false);
   // Which of the entries to show: all, or only those still to look at, changed by you, or needing you.
   const [view, setView] = useState<ReviewView>("all");
   const [chargeCategory, setChargeCategory] = useState("");
@@ -232,9 +237,9 @@ export default function MpesaImportPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ receipts: codes }),
     });
-    const body = (await response.json().catch(() => ({}))) as { recorded?: Array<{ receipt: string; date: string; description: string }>; error?: string };
+    const body = (await response.json().catch(() => ({}))) as { recorded?: Array<{ receipt: string; date: string; description: string; category?: string | null; editable?: boolean }>; error?: string };
     if (!response.ok || !body.recorded) throw new Error(body.error ?? "Could not check what is already recorded.");
-    const recorded = new Map(body.recorded.map((row) => [row.receipt, { date: row.date, description: row.description }]));
+    const recorded = new Map(body.recorded.map((row) => [row.receipt, { date: row.date, description: row.description, category: row.category ?? null, editable: row.editable === true }]));
     return all.map((line) => {
       const existing = line.receipt ? recorded.get(line.receipt) : undefined;
       return existing ? { ...line, alreadyRecorded: existing } : line;
@@ -412,6 +417,43 @@ export default function MpesaImportPage() {
 
   const setCategory = (index: number, category: string) =>
     setChoices((current) => chooseLineCategory(lines ?? [], current, index, category));
+
+  // Changing the category of entries already recorded: nothing else about them is touched.
+  const pendingChanges = useMemo(() => categoryChanges(lines ?? [], recat), [lines, recat]);
+  const applyRecategorise = async () => {
+    if (pendingChanges.length === 0 || recategorising) return;
+    if (!window.confirm(`Change ${pendingChanges.length} ${pendingChanges.length === 1 ? "category" : "categories"}?\n\nOnly the category changes. Their amounts, dates and everything else stay as they are.`)) return;
+    setRecategorising(true);
+    try {
+      const response = await fetch("/api/mpesa/import/recategorise", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ changes: pendingChanges }),
+      });
+      const body = (await response.json().catch(() => ({}))) as { updated?: number; skipped?: string[]; error?: string };
+      if (!response.ok || body.updated === undefined) throw new Error(body.error ?? "Could not change them.");
+      const skipped = body.skipped ?? [];
+      const done = new Set(pendingChanges.filter((change) => !skipped.includes(change.receipt)).map((change) => change.receipt));
+      const next = (lines ?? []).map((item) =>
+        item.receipt && done.has(item.receipt) && item.alreadyRecorded
+          ? { ...item, alreadyRecorded: { ...item.alreadyRecorded, category: recat[item.index] } }
+          : item,
+      );
+      setLines(next);
+      setStatementReading((current) => (current ? { ...current, lines: next } : current));
+      setRecat({});
+      void queryClient.invalidateQueries();
+      toast({
+        title: `${body.updated} ${body.updated === 1 ? "category" : "categories"} changed`,
+        description: skipped.length > 0 ? `${skipped.length} could not be changed (they are not plain spending).` : undefined,
+      });
+    } catch (error) {
+      toast({ variant: "destructive", title: "Could not change them", description: error instanceof Error ? error.message : "Please try again." });
+    } finally {
+      setRecategorising(false);
+    }
+  };
 
   const saveAll = async () => {
     if (!lines || !accountId || saving) return;
@@ -992,10 +1034,30 @@ export default function MpesaImportPage() {
                           : item.alreadyRecorded.description
                         : item.reason}
                     </p>
+                    {item.alreadyRecorded?.editable && item.direction === "out" ? (
+                      <div className="mt-2 space-y-1">
+                        <p className="text-xs text-muted-foreground">Now in: {item.alreadyRecorded.category || "no category"}</p>
+                        <select
+                          className={SELECT_CLASS}
+                          value={recat[item.index] ?? ""}
+                          onChange={(event) => setRecat((current) => ({ ...current, [item.index]: event.target.value }))}
+                          aria-label={`Change the category of ${item.receipt}`}
+                          data-testid={`mpesa-recat-${item.index}`}
+                        >
+                          <option value="">Change its category</option>
+                          {categories.map((row) => <option key={row.name} value={row.name}>{row.name}</option>)}
+                        </select>
+                      </div>
+                    ) : null}
                     {reportLink(item)}
                   </CardContent>
                 </Card>
               ))}
+              {pendingChanges.length > 0 ? (
+                <Button onClick={applyRecategorise} disabled={recategorising} className="h-12 w-full" data-testid="mpesa-recat-apply">
+                  {recategorising ? <Loader2 className="h-4 w-4 animate-spin" /> : `Change ${pendingChanges.length} ${pendingChanges.length === 1 ? "category" : "categories"}`}
+                </Button>
+              ) : null}
             </div>
           ) : null}
 

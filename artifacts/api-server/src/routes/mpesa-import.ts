@@ -1,13 +1,61 @@
 import { Router } from "express";
 import { z } from "zod";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { db, jointAccountTxTable } from "@workspace/db";
-import { getActiveGroupId } from "../lib/activeGroup";
+import { getActiveGroupId, requireGroupManager } from "../lib/activeGroup";
+import { canonicalExpenseCategoryName } from "../lib/categoryNames";
+import { headingAmong, postingToHeadingError } from "../lib/category-headings";
+import { budgetCategoriesTable } from "@workspace/db";
 import { buildFormatReport, readPaste, type ImportItem } from "../lib/mpesa-parser/import";
 import { feedbackLimiter } from "../middlewares/rateLimit";
 import { EmailNotConfiguredError, sendEmail } from "../lib/email";
 
 const router = Router();
+
+/**
+ * What is said about an entry this budget already has: enough to show it and, for
+ * plain spending, to offer a different category. Only ordinary spending can have
+ * its category changed here: not a loan out, a transfer, a savings move, a charge
+ * or an entry linked to an expense.
+ */
+const recordedColumns = {
+  receipt: jointAccountTxTable.mpesaReceipt,
+  date: jointAccountTxTable.date,
+  description: jointAccountTxTable.description,
+  type: jointAccountTxTable.type,
+  category: jointAccountTxTable.expenseCategory,
+  isLending: jointAccountTxTable.isLending,
+  bankTransferId: jointAccountTxTable.bankTransferId,
+  expenseId: jointAccountTxTable.expenseId,
+  savingsGoalId: jointAccountTxTable.savingsGoalId,
+  chargeFor: jointAccountTxTable.chargeForTransactionId,
+};
+
+type RecordedRow = {
+  receipt: string | null;
+  date: string | Date;
+  description: string;
+  type: string;
+  category: string | null;
+  isLending: boolean | null;
+  bankTransferId: string | null;
+  expenseId: number | null;
+  savingsGoalId: number | null;
+  chargeFor: number | null;
+};
+
+const describeRecorded = (row: RecordedRow) => ({
+  date: String(row.date),
+  description: row.description,
+  category: row.category ?? null,
+  editable:
+    row.type === "disbursement" &&
+    !row.isLending &&
+    row.bankTransferId === null &&
+    row.expenseId === null &&
+    row.savingsGoalId === null &&
+    row.chargeFor === null,
+});
 
 const previewSchema = z.object({
   text: z.string().trim().min(1, "Paste at least one M-Pesa message.").max(100_000, "That is too much text to read at once."),
@@ -40,11 +88,7 @@ router.post("/mpesa/import/preview", async (req, res): Promise<void> => {
     .filter((code): code is string => Boolean(code));
 
   const recorded = receipts.length === 0 ? [] : await db
-    .select({
-      receipt: jointAccountTxTable.mpesaReceipt,
-      date: jointAccountTxTable.date,
-      description: jointAccountTxTable.description,
-    })
+    .select(recordedColumns)
     .from(jointAccountTxTable)
     .where(and(eq(jointAccountTxTable.groupId, groupId), inArray(jointAccountTxTable.mpesaReceipt, receipts)));
   const byReceipt = new Map(recorded.map((row) => [row.receipt, row]));
@@ -59,7 +103,7 @@ router.post("/mpesa/import/preview", async (req, res): Promise<void> => {
     return {
       ...item,
       alreadyRecorded: existing
-        ? { date: String(existing.date), description: existing.description }
+        ? describeRecorded(existing)
         : repeatedInPaste
           ? { date: null, description: "You pasted this one twice, so only the first copy is used." }
           : null,
@@ -95,17 +139,98 @@ router.post("/mpesa/import/check-receipts", async (req, res): Promise<void> => {
 
   const codes = [...new Set(parsed.data.receipts)];
   const recorded = await db
-    .select({
-      receipt: jointAccountTxTable.mpesaReceipt,
-      date: jointAccountTxTable.date,
-      description: jointAccountTxTable.description,
-    })
+    .select(recordedColumns)
     .from(jointAccountTxTable)
     .where(and(eq(jointAccountTxTable.groupId, groupId), inArray(jointAccountTxTable.mpesaReceipt, codes)));
 
-  res.json({
-    recorded: recorded.map((row) => ({ receipt: row.receipt, date: String(row.date), description: row.description })),
+  res.json({ recorded: recorded.map((row) => ({ receipt: row.receipt, ...describeRecorded(row) })) });
+});
+
+const recategoriseSchema = z.object({
+  changes: z
+    .array(
+      z.object({
+        receipt: z.string().trim().regex(/^[A-Z0-9]{8,15}$/, "That is not a receipt code."),
+        category: z.string().trim().min(1, "Choose a category.").max(80),
+      }),
+    )
+    .min(1)
+    .max(2_000),
+});
+
+/**
+ * Changes only the category of entries this budget already has from M-Pesa, found
+ * by receipt code, so a month recorded one way can be made to match another
+ * without deleting anything. Nothing else about an entry is touched, and only
+ * ordinary spending qualifies. A group manager's job, as editing any recorded
+ * spending is.
+ */
+router.post("/mpesa/import/recategorise", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  if (!requireGroupManager(req, res)) return;
+
+  const parsed = recategoriseSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Send the receipts and categories to change." });
+    return;
+  }
+
+  // One category per receipt: the last one sent wins, so a receipt is never changed twice.
+  const wanted = new Map<string, string>();
+  for (const change of parsed.data.changes) {
+    const name = canonicalExpenseCategoryName(change.category);
+    if (!name) {
+      res.status(400).json({ error: "Choose a valid budget category." });
+      return;
+    }
+    wanted.set(change.receipt, name);
+  }
+
+  const names = [...new Set(wanted.values())];
+  const known = await db
+    .select({ name: budgetCategoriesTable.name })
+    .from(budgetCategoriesTable)
+    .where(and(eq(budgetCategoriesTable.groupId, groupId), inArray(budgetCategoriesTable.name, names)));
+  const knownNames = new Set(known.map((row) => row.name));
+  for (const name of names) {
+    if (!knownNames.has(name)) {
+      res.status(400).json({ error: `"${name}" is not a category in this budget.` });
+      return;
+    }
+    const heading = await headingAmong(groupId, [name]);
+    if (heading) {
+      res.status(400).json({ error: postingToHeadingError(heading) });
+      return;
+    }
+  }
+
+  let updated = 0;
+  const skipped: string[] = [];
+  await db.transaction(async (tx) => {
+    for (const [receipt, category] of wanted) {
+      const rows = await tx
+        .update(jointAccountTxTable)
+        .set({ expenseCategory: category })
+        .where(
+          and(
+            eq(jointAccountTxTable.groupId, groupId),
+            eq(jointAccountTxTable.mpesaReceipt, receipt),
+            eq(jointAccountTxTable.type, "disbursement"),
+            eq(jointAccountTxTable.isLending, false),
+            isNull(jointAccountTxTable.bankTransferId),
+            isNull(jointAccountTxTable.expenseId),
+            isNull(jointAccountTxTable.savingsGoalId),
+            isNull(jointAccountTxTable.chargeForTransactionId),
+          ),
+        )
+        .returning({ id: jointAccountTxTable.id });
+      if (rows.length > 0) updated += 1;
+      else skipped.push(receipt);
+    }
   });
+
+  res.json({ updated, skipped });
 });
 
 const reportSchema = z.object({

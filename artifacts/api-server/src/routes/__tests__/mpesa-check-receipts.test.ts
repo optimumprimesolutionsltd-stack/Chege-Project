@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const route = readFileSync("src/routes/mpesa-import.ts", "utf8").replace(/\r\n/g, "\n");
-const block = route.slice(route.indexOf('router.post("/mpesa/import/check-receipts"'), route.indexOf("const reportSchema"));
+const block = route.slice(route.indexOf('router.post("/mpesa/import/check-receipts"'), route.indexOf("const recategoriseSchema"));
 
 // A statement is read on the person's own device; the server is only asked which
 // of its receipt codes this budget already has.
