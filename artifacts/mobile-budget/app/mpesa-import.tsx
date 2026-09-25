@@ -169,6 +169,11 @@ function CategorySheet({
             </Pressable>
           </View>
           <CategorySearchBox value={search} onChange={setSearch} testID="mpesa-category-search" />
+          {tree.some((group) => group.children.length > 0) ? (
+            <Text style={[styles.hint, { color: colors.mutedForeground, paddingHorizontal: 16 }]} testID="mpesa-category-hint">
+              The names in capitals are groups. Pick one of the categories under them.
+            </Text>
+          ) : null}
           <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: 340 }} testID="mpesa-category-list">
             {tree.map((group) => (
               <View key={group.name}>

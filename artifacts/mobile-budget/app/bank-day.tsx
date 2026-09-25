@@ -36,6 +36,7 @@ import { useColors } from '@/hooks/useColors';
 import { PageScrollView } from '@/components/PageScrollReset';
 import { useAuth } from '@/lib/auth';
 import { handleLapsedError } from '@/lib/lapsedError';
+import { useDraft } from '@/lib/draft';
 import { readAmount, toMoney } from '@/lib/bankAmount';
 import { AmountCalcRow } from '@/components/AmountCalcRow';
 import { balanceAsAt } from '@/lib/balanceAsAt';
@@ -180,6 +181,22 @@ export default function BankDayScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
   const [rows, setRows] = useState<DayRow[]>([blankRow()]);
+  // A day half written survives an update restart or a crash: the lines not yet
+  // saved, the date and the account come back as they were left.
+  const { restored, dismiss: dismissRestored, discard: discardDraft } = useDraft<{
+    date: string;
+    accountId: number | null;
+    rows: DayRow[];
+  }>({
+    key: 'bank-day',
+    value: { date, accountId: selectedAccountId, rows: rows.filter((row) => !row.saved) },
+    active: rows.some((row) => !row.saved && (row.amount.trim() !== '' || row.description.trim() !== '')),
+    onRestore: (saved) => {
+      setDate(saved.date);
+      if (saved.accountId) setSelectedAccountId(saved.accountId);
+      if (saved.rows.length > 0) setRows(saved.rows);
+    },
+  });
   const [openRow, setOpenRow] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   // The category every fee on this day goes to, remembered across sittings so
@@ -586,6 +603,27 @@ export default function BankDayScreen() {
 
   return (
     <PageScrollView style={{ backgroundColor: colors.background }} contentContainerStyle={{ padding: 16, paddingBottom: 48 }}>
+      {restored ? (
+        <View style={[styles.balanceCard, { borderColor: colors.primary, backgroundColor: `${colors.primary}12`, marginBottom: 12 }]} testID="bank-day-restored">
+          <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>Picked up where you left off</Text>
+          <Text style={{ color: colors.mutedForeground, fontSize: 12, marginTop: 2 }}>The lines you had not saved were kept.</Text>
+          <View style={{ flexDirection: 'row', gap: 16, marginTop: 8 }}>
+            <Pressable onPress={dismissRestored} accessibilityRole="button" testID="bank-day-restored-ok">
+              <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>Keep going</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                discardDraft();
+                setRows([blankRow()]);
+              }}
+              accessibilityRole="button"
+              testID="bank-day-restored-reset"
+            >
+              <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold' }}>Start over</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
       <View style={styles.headerRow}>
         <Pressable onPress={() => router.back()} testID="bank-day-back" accessibilityRole="button" accessibilityLabel="Go back">
           <Feather name="arrow-left" size={22} color={colors.foreground} />
