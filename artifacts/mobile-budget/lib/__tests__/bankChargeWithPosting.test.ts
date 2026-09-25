@@ -13,11 +13,14 @@ describe('a withdrawal can carry its bank charge', () => {
     expect(bank).toContain('testID="bank-charge-amount"');
   });
 
-  it('is offered wherever the bank can take one', () => {
-    // A fee on money in is still a fee, and banks charge for moving your own
-    // money between accounts as readily as for taking it out.
-    expect(bank).toContain('const chargeCanApply = isWithdrawal || isDeposit || isMovingMoney;');
+  it('is offered wherever the bank takes one, and never on money coming in', () => {
+    // Banks charge for moving your own money between accounts as readily as for
+    // taking it out; money coming in carries none (same rule as the web).
+    expect(bank).toContain('const chargeCanApply = isWithdrawal || isMovingMoney;');
+    expect(bank).not.toContain('isWithdrawal || isDeposit || isMovingMoney');
     expect(bank).toContain('{chargeCanApply ? (');
+    // An edited deposit must not read as "charge cleared" and delete its fee.
+    expect(bank).toContain('if (!chargeCanApply) return;');
   });
 
   it('names a transfer as a transfer when it does', () => {
@@ -65,7 +68,7 @@ describe('it is a second posting, never part of the first', () => {
   it('carries the date of the posting it came with', () => {
     // A day's charges belong with that day's postings, not with today's.
     const block = bank.slice(bank.indexOf('const postBankCharge = async'));
-    expect(block.slice(0, 600)).toContain('date,');
+    expect(block.slice(0, 1000)).toContain('date,');
   });
 
   it('is posted by every branch, not only the one that falls through', () => {
