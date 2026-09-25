@@ -165,3 +165,12 @@ describe('the sheets on the M-Pesa screen clear the phone navigation bar', () =>
   });
 });
 
+describe('moves between your own accounts (phone)', () => {
+  const screen = read('app/mpesa-import.tsx');
+  it('offers it on each entry, hints at money passing through M-Pesa, and saves a transfer', () => {
+    expect(screen).toContain('mpesa-line-move-${item.index}');
+    expect(screen).toContain('throughMpesaHints(lines ?? [])');
+    expect(screen).toContain("built.kind === 'transfer'");
+    expect(screen).toContain('transferBankToBank({ data: built.main as never })');
+  });
+});

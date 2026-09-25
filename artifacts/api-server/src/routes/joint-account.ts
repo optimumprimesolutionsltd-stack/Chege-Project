@@ -246,6 +246,14 @@ const BankToBankTransferInput = z.object({
   amount: NonNegativeBankAmount,
   narration: z.string().trim().min(1).max(200),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  /**
+   * A transfer that came from an M-Pesa message or statement carries its receipt
+   * on the M-Pesa account's side only, and says which account that is. Both sides
+   * cannot hold the same receipt (it is unique in a budget), and one is enough
+   * for the same message to be recognised the next time.
+   */
+  mpesaReceipt: z.string().trim().regex(/^[A-Z0-9]{8,15}$/).optional(),
+  mpesaAccountId: z.number().int().positive().optional(),
 });
 const AccountInput = z.object({
   name: z.string().trim().min(1).max(80),
@@ -1126,10 +1134,18 @@ router.post("/joint-account/transfers/bank-to-bank", async (req, res): Promise<v
     res.status(400).json({ error: "Enter two different bank accounts, a positive whole-KES amount, date, and narration." });
     return;
   }
-  const { sourceAccountId, destinationAccountId, amount, narration, date } = parsed.data;
+  const { sourceAccountId, destinationAccountId, amount, narration, date, mpesaReceipt, mpesaAccountId } = parsed.data;
   if (sourceAccountId === destinationAccountId) {
     res.status(400).json({ error: "Choose two different bank accounts." });
     return;
+  }
+  if (mpesaReceipt) {
+    if (mpesaAccountId !== sourceAccountId && mpesaAccountId !== destinationAccountId) {
+      res.status(400).json({ error: "Say which of the two accounts the M-Pesa receipt belongs to." });
+      return;
+    }
+    const clash = await alreadyRecorded(groupId, mpesaReceipt);
+    if (clash) { res.status(409).json(clash); return; }
   }
 
   const transferId = randomUUID();
@@ -1148,12 +1164,14 @@ router.post("/joint-account/transfers/bank-to-bank", async (req, res): Promise<v
         description: narration, date, madeById: null, incomeSourceId: null,
         expenseCategory: null, bankTransferId: transferId,
         bankTransferAccountId: destination.id,
+        mpesaReceipt: mpesaReceipt && mpesaAccountId === source.id ? mpesaReceipt : null,
       },
       {
         groupId, accountId: destination.id, type: "deposit", amount,
         description: narration, date, madeById: null, incomeSourceId: null,
         expenseCategory: null, bankTransferId: transferId,
         bankTransferAccountId: source.id,
+        mpesaReceipt: mpesaReceipt && mpesaAccountId === destination.id ? mpesaReceipt : null,
       },
     ]).returning();
     return { outgoing, incoming };

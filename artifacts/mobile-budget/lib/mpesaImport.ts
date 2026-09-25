@@ -42,6 +42,12 @@ export type Choice = {
   incomeSourceId?: number | null;
   /** True while that source is Jamvi's suggestion and the person has not chosen one. */
   sourceAuto?: boolean;
+  /**
+   * The other of the person's own accounts, when this line is only money moving
+   * between two of them through M-Pesa (a bank paying into M-Pesa, or M-Pesa paying
+   * out to another bank). Neither income nor spending.
+   */
+  transferTo?: number | null;
 };
 
 type PastPosting = { type: string; description: string; expenseCategory?: string | null; incomeSourceId?: number | null };
@@ -259,6 +265,8 @@ export function snippetFor(pasted: string, receipt: string | null, length = 90):
 /** Why a ticked line cannot be saved yet, or null when it can. */
 export function problemWith(line: PreviewLine, choice: Choice | undefined): string | null {
   if (!choice?.include || !isRecordable(line)) return null;
+  // Money moved between the person's own accounts is not spending, so it needs no category.
+  if (choice.transferTo) return null;
   // Money lent is not spending, so it needs no category; paying a debt back does.
   if (line.direction === 'out' && choice.debt?.kind !== 'lend' && !choice.category.trim()) return 'Choose what it was for.';
   return null;
@@ -278,7 +286,7 @@ export function reviewStatus(line: PreviewLine, choice: Choice | undefined): Rev
   if (problemWith(line, choice)) return 'needs';
   const setByHand = Boolean(choice.category.trim()) && choice.auto === false;
   const sourceByHand = choice.incomeSourceId != null && choice.sourceAuto === false;
-  if (!choice.include || setByHand || sourceByHand || choice.debt) return 'changed';
+  if (!choice.include || setByHand || sourceByHand || choice.debt || choice.transferTo) return 'changed';
   return 'suggested';
 }
 
@@ -295,14 +303,20 @@ export function reviewCounts(lines: readonly PreviewLine[], choices: Record<numb
   return counts;
 }
 
-export type Summary = { count: number; moneyIn: number; moneyOut: number; fees: number; missingCategory: number };
+export type Summary = { count: number; moneyIn: number; moneyOut: number; fees: number; missingCategory: number; moves: number };
 
 export function summarise(lines: readonly PreviewLine[], choices: Record<number, Choice>): Summary {
-  const summary: Summary = { count: 0, moneyIn: 0, moneyOut: 0, fees: 0, missingCategory: 0 };
+  const summary: Summary = { count: 0, moneyIn: 0, moneyOut: 0, fees: 0, missingCategory: 0, moves: 0 };
   for (const line of lines) {
     const choice = choices[line.index];
     if (!choice?.include || !isRecordable(line) || line.amount === null) continue;
     summary.count += 1;
+    if (choice.transferTo) {
+      // A move between the person's own accounts is neither money in nor money out; only its charge is a cost.
+      summary.moves += 1;
+      if (line.direction === 'out') summary.fees += line.fee ?? 0;
+      continue;
+    }
     if (line.direction === 'in') summary.moneyIn += line.amount;
     else {
       summary.moneyOut += line.amount;
@@ -338,6 +352,34 @@ export function buildPostings(line: PreviewLine, choice: Choice, ctx: PostingCon
   const date = line.date ?? ctx.today;
   const description = line.description ?? 'M-Pesa';
   const receipt = line.receipt ?? undefined;
+
+  // Between the person's own accounts: a transfer, with the receipt on the M-Pesa side, and any charge as before.
+  if (choice.transferTo) {
+    const out = line.direction === 'out';
+    return {
+      kind: 'transfer' as const,
+      main: {
+        sourceAccountId: out ? ctx.accountId : choice.transferTo,
+        destinationAccountId: out ? choice.transferTo : ctx.accountId,
+        amount: line.amount,
+        narration: description,
+        date,
+        ...(receipt ? { mpesaReceipt: receipt, mpesaAccountId: ctx.accountId } : {}),
+      },
+      fee:
+        out && line.fee && line.fee > 0 && ctx.chargeCategory.trim()
+          ? {
+              amount: line.fee,
+              description: `Bank charge — ${description}`,
+              date,
+              madeById: ctx.isShared ? null : ctx.userId,
+              expenseCategory: ctx.chargeCategory.trim(),
+              destinationKind: 'category' as const,
+              accountId: ctx.accountId,
+            }
+          : null,
+    };
+  }
 
   if (line.direction === 'in') {
     // A source is only for income: a repayment or a loan is not, so it takes none.
@@ -467,4 +509,29 @@ export function categoryChanges(
     changes.push({ receipt: line.receipt as string, category });
   }
   return changes;
+}
+
+/** Sets, or with null clears, the other account of a move between the person's own accounts. Not a debt, so any debt link goes. */
+export function chooseTransfer(choices: Record<number, Choice>, index: number, accountId: number | null): Record<number, Choice> {
+  const current = choices[index];
+  if (!current) return choices;
+  return { ...choices, [index]: { ...current, transferTo: accountId, ...(accountId ? { debt: null, incomeSourceId: null, sourceAuto: false } : {}) } };
+}
+
+/**
+ * Lines that look like money passing through M-Pesa between the person's own accounts:
+ * a payment in from a bank, and a payment out of the same amount the same day.
+ * Only a hint: nothing is decided for the person.
+ */
+export function throughMpesaHints(lines: readonly PreviewLine[]): Set<number> {
+  const hints = new Set<number>();
+  const fromBank = lines.filter((line) => line.type === 'bank_receipt' && line.amount !== null && isRecordable(line));
+  for (const incoming of fromBank) {
+    hints.add(incoming.index);
+    const partner = lines.find(
+      (line) => line.direction === 'out' && line.amount === incoming.amount && line.date === incoming.date && isRecordable(line) && !hints.has(line.index),
+    );
+    if (partner) hints.add(partner.index);
+  }
+  return hints;
 }
