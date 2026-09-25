@@ -339,3 +339,26 @@ describe('money moving between the own accounts of a person', () => {
     expect(throughMpesaHints([other]).size).toBe(0);
   });
 });
+
+describe('hinting at money passing through M-Pesa when only some of it is sent on', () => {
+  const fromBank = line({ index: 0, direction: 'in', type: 'bank_receipt', amount: 3000, date: '2026-09-01', description: 'Received from Sample Bank', receipt: 'TESTWIDE01' });
+  const smaller = line({ index: 1, direction: 'out', type: 'paybill_payment', amount: 2500, date: '2026-09-01', description: 'Sample Kcb Bank (Acc 1)', receipt: 'TESTWIDE02' });
+  const shop = line({ index: 2, direction: 'out', type: 'paybill_payment', amount: 800, date: '2026-09-01', description: 'Sample Electricity Company', receipt: 'TESTWIDE03' });
+  const person = line({ index: 3, direction: 'out', type: 'person_payment', amount: 500, date: '2026-09-01', description: 'Sample Person', receipt: 'TESTWIDE04' });
+  const otherDay = line({ index: 4, direction: 'out', type: 'paybill_payment', amount: 2500, date: '2026-09-02', description: 'Sample Kcb Bank', receipt: 'TESTWIDE05' });
+  const bigger = line({ index: 5, direction: 'out', type: 'paybill_payment', amount: 4000, date: '2026-09-01', description: 'Sample Equity Bank', receipt: 'TESTWIDE06' });
+
+  it('hints at a smaller payment to a bank the same day, the rest having stayed in M-Pesa', () => {
+    expect([...throughMpesaHints([fromBank, smaller])].sort()).toEqual([0, 1]);
+  });
+
+  it('leaves everyday spending, other days and bigger amounts alone', () => {
+    expect([...throughMpesaHints([fromBank, shop, person, otherDay, bigger])]).toEqual([0]);
+  });
+
+  it('still hints at an exact match of any kind', () => {
+    const exact = line({ index: 6, direction: 'out', type: 'person_payment', amount: 3000, date: '2026-09-01', description: 'Sample Person', receipt: 'TESTWIDE07' });
+    expect(throughMpesaHints([fromBank, exact]).has(6)).toBe(true);
+  });
+});
+

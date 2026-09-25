@@ -518,20 +518,27 @@ export function chooseTransfer(choices: Record<number, Choice>, index: number, a
   return { ...choices, [index]: { ...current, transferTo: accountId, ...(accountId ? { debt: null, incomeSourceId: null, sourceAuto: false } : {}) } };
 }
 
+/** Words in a payee that say it is a bank: a payment to one is likely a move between the person"s own accounts. */
+const BANK_WORDS = /\b(bank|equity|kcb|co-?op(erative)?|absa|ncba|stanbic|dtb|i&m|family|sidian|gulf|hf|nba|diamond|standard chartered|citi|hfc|ecobank|uba|prime bank|credit bank|victoria|guaranty|gtb|m-?oriental|paramount|spire)\b/i;
+
 /**
  * Lines that look like money passing through M-Pesa between the person"s own accounts:
- * a payment in from a bank, and a payment out of the same amount the same day.
- * Only a hint: nothing is decided for the person.
+ * a payment in from a bank, and, the same day, a payment out of the same amount, or a
+ * smaller one to a bank (some was sent on and some stayed in M-Pesa, or went on charges).
+ * Only a hint: nothing is decided for the person, and a payment out is only hinted when
+ * it is a paybill or matches the amount exactly, so everyday spending is left alone.
  */
 export function throughMpesaHints(lines: readonly PreviewLine[]): Set<number> {
   const hints = new Set<number>();
   const fromBank = lines.filter((line) => line.type === "bank_receipt" && line.amount !== null && isRecordable(line));
   for (const incoming of fromBank) {
     hints.add(incoming.index);
-    const partner = lines.find(
-      (line) => line.direction === "out" && line.amount === incoming.amount && line.date === incoming.date && isRecordable(line) && !hints.has(line.index),
-    );
-    if (partner) hints.add(partner.index);
+    for (const line of lines) {
+      if (line.direction !== "out" || line.amount === null || line.date !== incoming.date || !isRecordable(line) || hints.has(line.index)) continue;
+      const sameAmount = line.amount === incoming.amount;
+      const toABank = line.type === "paybill_payment" && line.amount <= (incoming.amount as number) && BANK_WORDS.test(line.description ?? "");
+      if (sameAmount || toABank) hints.add(line.index);
+    }
   }
   return hints;
 }
