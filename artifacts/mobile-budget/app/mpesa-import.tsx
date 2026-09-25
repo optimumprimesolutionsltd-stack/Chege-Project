@@ -31,6 +31,8 @@ import { CategorySearchBox } from '@/components/CategorySearchBox';
 import { PageScrollView } from '@/components/PageScrollReset';
 import { ScreenHint } from '@/components/ScreenHint';
 import { useColors } from '@/hooks/useColors';
+import { canReceiveShares } from '@/lib/shareIntent';
+import { onSharedMessages, takeSharedMessages } from '@/lib/sharedMessages';
 import { useAuth } from '@/lib/auth';
 import { formatExact } from '@/lib/formatExact';
 import {
@@ -200,8 +202,8 @@ export default function MpesaImportScreen() {
     AsyncStorage.getItem(CHARGE_CATEGORY_KEY).then((stored) => stored && setChargeCategory(stored)).catch(() => {});
   }, []);
 
-  const readMessages = async () => {
-    if (!text.trim()) {
+  const readMessages = async (pasted: string = text) => {
+    if (!pasted.trim()) {
       Alert.alert('Paste your messages', 'Copy them from your Messages app, then paste them here.');
       return;
     }
@@ -210,7 +212,7 @@ export default function MpesaImportScreen() {
       const response = await customFetch<{ lines: PreviewLine[] }>('/api/mpesa/import/preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text: pasted }),
       });
       setLines(response.lines);
       setChoices(initialChoices(response.lines, history, categories.map((row) => row.name), chargeCategory));
@@ -220,6 +222,26 @@ export default function MpesaImportScreen() {
       setReading(false);
     }
   };
+
+  // Messages shared from another app: added to what is here and read at once, whether
+  // they arrived as the screen opened or while it was already open.
+  const textRef = React.useRef(text);
+  textRef.current = text;
+  const readRef = React.useRef(readMessages);
+  readRef.current = readMessages;
+  useEffect(() => {
+    const takeShared = () => {
+      const shared = takeSharedMessages();
+      if (!shared) return;
+      const combined = textRef.current.trim() ? `${textRef.current}\n\n${shared}` : shared;
+      setText(combined);
+      void readRef.current(combined);
+    };
+    takeShared();
+    return onSharedMessages(takeShared);
+    // The refs above always hold the latest reader and text; re-subscribing on every change would drop shares.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const toggle = (index: number, include: boolean) =>
     setChoices((current) => ({ ...current, [index]: { ...current[index], include } }));
@@ -351,6 +373,11 @@ export default function MpesaImportScreen() {
                 </View>
               ))}
             </View>
+            {canReceiveShares ? (
+              <Text style={[styles.hint, { color: colors.primary }]} testID="mpesa-share-hint">
+                Faster: select the messages, tap Share, and choose Jamvi. They arrive here already read.
+              </Text>
+            ) : null}
             <TextInput
               value={text}
               onChangeText={setText}
@@ -366,7 +393,7 @@ export default function MpesaImportScreen() {
               Jamvi reads your messages to fill in this list. They are not saved.
             </Text>
             <Pressable
-              onPress={readMessages}
+              onPress={() => readMessages()}
               disabled={reading}
               style={[styles.primary, { backgroundColor: colors.primary, opacity: reading ? 0.6 : 1 }]}
               accessibilityRole="button"

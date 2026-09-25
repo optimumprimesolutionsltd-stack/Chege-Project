@@ -38,6 +38,8 @@ import {
 } from '@workspace/api-client-react';
 import { ApiError } from '@workspace/api-client-react';
 import { AuthProvider, useAuth, AUTH_TOKEN_KEY } from '@/lib/auth';
+import { useSharedText } from '@/lib/shareIntent';
+import { looksLikeMpesa, queueSharedMessages } from '@/lib/sharedMessages';
 import { AppearanceProvider } from '@/hooks/useAppearance';
 import { hydrateQueryClient, startPersistingQueryClient } from '@/lib/queryPersist';
 import {
@@ -217,6 +219,21 @@ function RootLayoutNav() {
       if (route) router.push(route as never);
     });
   }, [isAuthenticated, checkingChooser, isTabsHome]);
+
+  // Messages shared to Jamvi from another app (Android's Share button) open
+  // the paste screen with them read, once the person is signed in and settled.
+  // Anything that is not an M-Pesa message is ignored rather than opened for.
+  const { text: sharedText, clear: clearSharedText } = useSharedText();
+  useEffect(() => {
+    if (!sharedText || !isAuthenticated || checkingChooser) return;
+    clearSharedText();
+    if (!looksLikeMpesa(sharedText)) {
+      Alert.alert('Not an M-Pesa message', 'Share M-Pesa messages to Jamvi and it will turn them into entries.');
+      return;
+    }
+    queueSharedMessages(sharedText);
+    router.navigate('/mpesa-import');
+  }, [sharedText, isAuthenticated, checkingChooser, clearSharedText]);
 
   // Jamvi is paid: somebody still on the free trial who has never said what
   // they intend is stopped once, on landing in the app proper, by a screen
