@@ -178,3 +178,12 @@ describe('sending a message so its format can be learned', () => {
     expect(shown.match(/<PHONE>/g)).toHaveLength(3);
   });
 });
+
+describe('masked numbers in what is about to be sent', () => {
+  it('are hidden too: M-Pesa prints 0722***443, which is still a number', () => {
+    const shown = redactForReport('from SAMPLE PERSON 0722***443 and 0733+++555 and +254744***666');
+    expect(shown).not.toMatch(/0722|0733|744/);
+    expect(shown.match(/<PHONE>/g)).toHaveLength(3);
+    expect(shown).toContain('SAMPLE PERSON');
+  });
+});
