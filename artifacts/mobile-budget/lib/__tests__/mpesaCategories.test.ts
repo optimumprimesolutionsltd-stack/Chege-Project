@@ -130,3 +130,45 @@ describe('a Fuliza access fee is recorded as a bank charge', () => {
     expect(canReport(fee())).toBe(false);
   });
 });
+
+// "Still can't see categories": the picker only ever said "no category matches
+// that", so nobody could tell loading from failed from genuinely empty.
+describe('the category picker says what is wrong and can fix it', () => {
+  const phone = read('app/mpesa-import.tsx');
+  const web = read('../family-budget/src/pages/mpesa-import.tsx');
+
+  it('loads the budget categories itself, the way the day of banking does, not through a prop', () => {
+    const sheet = phone.slice(phone.indexOf('function CategorySheet'), phone.indexOf('export default function MpesaImportScreen'));
+    expect(sheet).toContain('useGetBudgetCategories()');
+    expect(sheet).not.toContain('categories: CategoryRow[];');
+    expect(phone).toContain('<CategorySheet visible={picking !== null} budgetName={group?.name}');
+  });
+
+  it('tells loading, failed and empty apart, and names the budget that has none', () => {
+    expect(phone).toContain("'Loading your categories…'");
+    expect(phone).toContain("'Could not load your categories.'");
+    expect(phone).toContain('has no categories yet. Add one below.');
+    expect(phone).toContain("'No category matches that.'");
+    expect(phone).toContain('testID="mpesa-category-retry"');
+  });
+
+  it('lets a category be added right there, and used at once', () => {
+    expect(phone).toContain('useCreateBudgetCategory()');
+    expect(phone).toContain('testID="mpesa-category-add"');
+    expect(phone).toContain('Add and use it');
+    expect(phone).toContain('await queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });');
+  });
+
+  it('suggests again when the categories or history arrive after the messages were read', () => {
+    expect(phone).toContain('}, [categoryList, account]);');
+    expect(phone).toContain('refreshSuggestions(lines, current, history, categories.map((row) => row.name), chargeCategory)');
+  });
+
+  it('the web page says so when there are no categories, and points to Budget', () => {
+    expect(web).toContain('data-testid="mpesa-no-categories"');
+    expect(web).toContain('has no categories yet.');
+    expect(web).toContain('Add categories in Budget');
+    expect(web).toContain('categoriesLoading');
+    expect(web).toContain('categoriesError');
+  });
+});

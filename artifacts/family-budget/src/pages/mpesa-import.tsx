@@ -66,7 +66,7 @@ export default function MpesaImportPage() {
 
   const { data: accountList = [] } = useGetJointAccounts();
   const accounts = accountList as unknown as Array<{ id: number; name: string }>;
-  const { data: categoryList = [] } = useGetBudgetCategories();
+  const { data: categoryList = [], isLoading: categoriesLoading, isError: categoriesError, refetch: refetchCategories } = useGetBudgetCategories();
   const categories = categoryList as unknown as CategoryRow[];
   const categoryTree = useMemo(() => buildCategoryTree(categories), [categories]);
   const search = useCategorySearch(categoryTree);
@@ -394,6 +394,28 @@ export default function MpesaImportPage() {
                   Money in {formatKes(summary.moneyIn)} · money out {formatKes(summary.moneyOut)}
                   {summary.fees > 0 ? ` · M-Pesa charges ${formatKes(summary.fees)}` : ""}
                 </p>
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {/* A payment needs a category, so say plainly when there are none to choose from. */}
+          {categories.length === 0 ? (
+            <Card data-testid="mpesa-no-categories">
+              <CardContent className="space-y-2 p-4 text-sm">
+                <p className="font-semibold text-foreground">
+                  {categoriesLoading
+                    ? "Loading your categories…"
+                    : categoriesError
+                      ? "Could not load your categories."
+                      : `${group?.name ? `“${group.name}”` : "This budget"} has no categories yet.`}
+                </p>
+                {categoriesError ? (
+                  <Button size="sm" variant="outline" onClick={() => void refetchCategories()}>Try again</Button>
+                ) : !categoriesLoading ? (
+                  <p className="text-muted-foreground">
+                    Payments need one to be saved under. <Link href="/budget" className="font-semibold text-primary underline">Add categories in Budget</Link>, then paste again.
+                  </p>
+                ) : null}
               </CardContent>
             </Card>
           ) : null}
