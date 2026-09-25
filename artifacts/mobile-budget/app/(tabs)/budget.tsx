@@ -1607,12 +1607,13 @@ export default function BudgetScreen() {
 
         <View style={styles.incomeSection}>
           <View style={styles.incomeHeader}>
-            <View>
+            <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={[styles.incomeTitle, { color: colors.foreground }]}>Income streams</Text>
               <Text style={[styles.incomeSubtitle, { color: colors.mutedForeground }]}>Add and manage the sources that fund your budget</Text>
             </View>
             {canEditAnyIncome ? (
-              editingIncome ? (
+              <View style={{ flexShrink: 0, marginLeft: 8 }}>
+              {editingIncome ? (
                 <Pressable
                   onPress={cancelIncomeEdit}
                   disabled={savingIncomeAmounts}
@@ -1625,7 +1626,8 @@ export default function BudgetScreen() {
                 </Pressable>
               ) : (
                 <EditPill onPress={() => setEditingIncome(true)} accessibilityLabel="Edit income streams" testID="income-edit" />
-              )
+              )}
+              </View>
             ) : (
               <Feather name="credit-card" size={19} color={colors.secondary} />
             )}
