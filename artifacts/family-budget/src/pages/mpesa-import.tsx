@@ -20,6 +20,7 @@ import { CategorySearchInput, useCategorySearch } from "@/components/category-se
 import { formatKes } from "@/lib/utils";
 import {
   buildPostings,
+  categoryPath,
   chooseCategory as chooseLineCategory,
   initialChoices,
   canReport,
@@ -406,6 +407,10 @@ export default function MpesaImportPage() {
       <div>
         <h1 className="text-2xl font-bold text-foreground">Paste M-Pesa messages</h1>
         <p className="text-sm text-muted-foreground">Turn your M-Pesa messages into entries, without typing.</p>
+        {/* Which budget these land in: the one switched to last, which may not be the one with the categories. */}
+        <p className="mt-2 text-sm text-foreground" data-testid="mpesa-budget-row">
+          These will be saved in <span className="font-semibold" data-testid="mpesa-budget-name">{group?.name ?? "…"}</span>. Use the budget switcher to change it.
+        </p>
       </div>
 
       {!lines ? (
@@ -549,6 +554,11 @@ export default function MpesaImportPage() {
                         ),
                       )}
                     </select>
+                  ) : null}
+                  {out && choice?.include && choice.category && categoryPath(choice.category, categories) !== choice.category ? (
+                    <p className="text-xs text-muted-foreground" data-testid={`mpesa-line-path-${item.index}`}>
+                      Filed under {categoryPath(choice.category, categories)}
+                    </p>
                   ) : null}
                   {out && choice?.include && choice.auto && choice.category ? (
                     <p className="text-xs text-muted-foreground" data-testid={`mpesa-line-suggested-${item.index}`}>
