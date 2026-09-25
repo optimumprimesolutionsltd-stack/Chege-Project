@@ -3,6 +3,8 @@ import {
   buildPostings,
   canReport,
   categoryChanges,
+  chooseTransfer,
+  throughMpesaHints,
   chooseIncomeSource,
   initialChoices,
   isRecordable,
@@ -98,7 +100,7 @@ describe('summarise', () => {
       1: { include: true, category: '' },
       2: { include: false, category: '' },
     });
-    expect(summary).toEqual({ count: 2, moneyIn: 3500, moneyOut: 3000, fees: 25, missingCategory: 0 });
+    expect(summary).toEqual({ count: 2, moneyIn: 3500, moneyOut: 3000, fees: 25, missingCategory: 0, moves: 0 });
   });
 });
 
@@ -224,7 +226,7 @@ describe('where money in came from', () => {
   it('records no source when none is chosen, and none for a debt', () => {
     const none = buildPostings(money({}), { include: true, category: '' }, { ...ctx, incomeSources: sources });
     expect(none?.main).not.toHaveProperty('incomeSourceId');
-    expect(none?.main.madeById).toBe('u1');
+    expect((none?.main as { madeById?: string }).madeById).toBe('u1');
     const debt = buildPostings(
       money({}),
       { include: true, category: '', incomeSourceId: 4, debt: { kind: 'repaid', partyId: 3 } },
@@ -297,5 +299,43 @@ describe('changing the category of what is already recorded', () => {
   it('sends only the entries given a different category', () => {
     const lines = [recorded({ index: 0 }), recorded({ index: 1, receipt: 'TESTREC002' }), recorded({ index: 2, receipt: 'TESTREC003' })];
     expect(categoryChanges(lines, { 0: 'Food', 1: 'Old', 2: '  ' })).toEqual([{ receipt: 'TESTREC001', category: 'Food' }]);
+  });
+});
+
+describe('money moving between the own accounts of a person', () => {
+  const inFromBank = line({ index: 0, direction: 'in', type: 'bank_receipt', amount: 7000, date: '2026-09-01', description: 'Received from Sample Bank', receipt: 'TESTBANK01' });
+  const outToBank = line({ index: 1, direction: 'out', type: 'paybill_payment', amount: 7000, date: '2026-09-01', description: 'Other Sample Bank', receipt: 'TESTBANK02', fee: 25 });
+
+  it('records money in from a bank as a transfer into the M-Pesa account, with the receipt on that side', () => {
+    const built = buildPostings(inFromBank, { include: true, category: '', transferTo: 4 }, ctx);
+    expect(built?.kind).toBe('transfer');
+    expect(built?.main).toMatchObject({ sourceAccountId: 4, destinationAccountId: 9, amount: 7000, mpesaReceipt: 'TESTBANK01', mpesaAccountId: 9 });
+    expect(built?.fee).toBeNull();
+  });
+
+  it('records money out to a bank as a transfer out of the M-Pesa account, and keeps the charge', () => {
+    const built = buildPostings(outToBank, { include: true, category: '', transferTo: 4 }, ctx);
+    expect(built?.kind).toBe('transfer');
+    expect(built?.main).toMatchObject({ sourceAccountId: 9, destinationAccountId: 4, mpesaReceipt: 'TESTBANK02', mpesaAccountId: 9 });
+    expect(built?.fee).toMatchObject({ amount: 25, expenseCategory: 'Bank charges' });
+  });
+
+  it('needs no category, and counts as neither money in nor money out', () => {
+    expect(problemWith(outToBank, { include: true, category: '', transferTo: 4 })).toBeNull();
+    const summary = summarise([inFromBank, outToBank], { 0: { include: true, category: '', transferTo: 4 }, 1: { include: true, category: '', transferTo: 4 } });
+    expect(summary).toMatchObject({ count: 2, moneyIn: 0, moneyOut: 0, fees: 25, moves: 2, missingCategory: 0 });
+  });
+
+  it('counts as something the person set, and clears a debt link or source', () => {
+    expect(reviewStatus(outToBank, { include: true, category: '', transferTo: 4 })).toBe('changed');
+    const next = chooseTransfer({ 1: { include: true, category: '', debt: { kind: 'lend', partyId: 3 } } }, 1, 4);
+    expect(next[1]).toMatchObject({ transferTo: 4, debt: null });
+    expect(chooseTransfer(next, 1, null)[1].transferTo).toBeNull();
+  });
+
+  it('hints at money passing through M-Pesa: a bank paying in and the same amount going out that day', () => {
+    const other = line({ index: 2, direction: 'out', amount: 500, date: '2026-09-01', receipt: 'TESTOTHER1' });
+    expect([...throughMpesaHints([inFromBank, outToBank, other])].sort()).toEqual([0, 1]);
+    expect(throughMpesaHints([other]).size).toBe(0);
   });
 });

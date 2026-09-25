@@ -21,6 +21,7 @@ import {
   getGetBudgetCategoriesQueryKey,
   useCreateBudgetCategory,
   useCreateDeposit,
+  useTransferBankToBank,
   useCreateDisbursement,
   useGetBudgetCategories,
   useGetGroup,
@@ -73,6 +74,8 @@ import {
   categoryPath,
   chooseCategory as chooseLineCategory,
   chooseIncomeSource,
+  chooseTransfer,
+  throughMpesaHints,
   initialChoices,
   canReport,
   isRecordable,
@@ -332,6 +335,7 @@ export default function MpesaImportScreen() {
   const categories = categoryList as unknown as CategoryRow[];
   const { mutateAsync: createDeposit } = useCreateDeposit();
   const { mutateAsync: createDisbursement } = useCreateDisbursement();
+  const { mutateAsync: transferBankToBank } = useTransferBankToBank();
 
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
   // M-Pesa is usually its own account: start on one that says so.
@@ -738,6 +742,8 @@ export default function MpesaImportScreen() {
     queryFn: () => customFetch<PartyLite[]>('/api/contributors'),
     staleTime: 30_000,
   });
+  const transferHints = useMemo(() => throughMpesaHints(lines ?? []), [lines]);
+  const otherAccounts = accounts.filter((option) => option.id !== accountId);
   const debtCategories = useMemo(
     () =>
       (categoryList as unknown as Array<{ id: number; name: string; debtBalance?: number | null }>)
@@ -821,6 +827,17 @@ export default function MpesaImportScreen() {
         try {
           if (built.kind === 'deposit') {
             await createDeposit({ data: built.main as never });
+          } else if (built.kind === 'transfer') {
+            // Between the person's own accounts: one transfer, and its charge (if any) on the M-Pesa side.
+            const moved = await transferBankToBank({ data: built.main as never });
+            if (built.fee) {
+              const mpesaLeg = built.main.sourceAccountId === accountId ? moved.outgoing : moved.incoming;
+              try {
+                await createDisbursement({ data: { ...built.fee, chargeForTransactionId: mpesaLeg.id } as never });
+              } catch {
+                result.failed.push({ what: `${item.description} charge`, why: 'The move saved, but its charge did not.' });
+              }
+            }
           } else {
             const created = await createDisbursement({ data: built.main as never });
             if (built.fee) {
@@ -1119,6 +1136,7 @@ export default function MpesaImportScreen() {
                 <Text style={[styles.hint, { color: colors.mutedForeground }]}>
                   Money in KES {formatExact(summary.moneyIn)} · money out KES {formatExact(summary.moneyOut)}
                   {summary.fees > 0 ? ` · M-Pesa charges KES ${formatExact(summary.fees)}` : ''}
+                  {summary.moves > 0 ? ` · ${summary.moves} between your own accounts` : ''}
                 </Text>
               </View>
             ) : null}
@@ -1207,7 +1225,7 @@ export default function MpesaImportScreen() {
                     </Text>
                     <Switch value={!!choice?.include} onValueChange={(value) => toggle(item.index, value)} accessibilityLabel={`Save ${item.description}`} />
                   </View>
-                  {out && choice?.include && choice.debt?.kind !== 'lend' ? (
+                  {out && choice?.include && choice.debt?.kind !== 'lend' && !choice.transferTo ? (
                     <Pressable
                       onPress={() => setPicking(item.index)}
                       style={[styles.categoryButton, { borderColor: choice.category ? colors.border : colors.destructive, backgroundColor: colors.muted }]}
@@ -1220,12 +1238,12 @@ export default function MpesaImportScreen() {
                       <Feather name="chevron-down" size={16} color={colors.mutedForeground} />
                     </Pressable>
                   ) : null}
-                  {out && choice?.include && choice.auto && choice.category ? (
+                  {out && choice?.include && !choice.transferTo && choice.auto && choice.category ? (
                     <Text style={[styles.hint, { color: colors.mutedForeground }]} testID={`mpesa-line-suggested-${item.index}`}>
                       Suggested by Jamvi. Tap to choose a different one.
                     </Text>
                   ) : null}
-                  {item.direction === 'in' && choice?.include && !choice.debt && incomeSources.length > 0 ? (
+                  {item.direction === 'in' && choice?.include && !choice.debt && !choice.transferTo && incomeSources.length > 0 ? (
                     <View style={{ gap: 6 }} testID={`mpesa-line-source-${item.index}`}>
                       <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0 }]}>Where did this come from? (optional)</Text>
                       <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
@@ -1259,7 +1277,40 @@ export default function MpesaImportScreen() {
                       ) : null}
                     </View>
                   ) : null}
-                  {choice?.include && canLinkDebt(item) && parties.length > 0 ? (
+                  {choice?.include && !choice.debt && otherAccounts.length > 0 ? (
+                    <View style={{ gap: 6 }} testID={`mpesa-line-move-${item.index}`}>
+                      <Text style={[styles.hint, { color: transferHints.has(item.index) ? colors.primary : colors.mutedForeground, marginTop: 0, fontFamily: transferHints.has(item.index) ? 'Inter_600SemiBold' : undefined }]}>
+                        {transferHints.has(item.index)
+                          ? 'Looks like money passing through M-Pesa between your own accounts. Is it?'
+                          : 'Is this money moving between your own accounts?'}
+                      </Text>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
+                        {[{ id: null as number | null, name: 'No' }, ...otherAccounts.map((option) => ({ id: option.id as number | null, name: `${out ? 'To' : 'From'} ${option.name}` }))].map((option) => {
+                          const on = (choice.transferTo ?? null) === option.id;
+                          return (
+                            <Pressable
+                              key={option.id ?? 'no'}
+                              onPress={() => setChoices((current) => chooseTransfer(current, item.index, option.id))}
+                              accessibilityRole="button"
+                              accessibilityState={{ selected: on }}
+                              testID={`mpesa-line-move-${item.index}-${option.id ?? 'no'}`}
+                              style={{
+                                paddingHorizontal: 12,
+                                paddingVertical: 7,
+                                borderRadius: 999,
+                                borderWidth: 1,
+                                borderColor: on ? colors.primary : colors.border,
+                                backgroundColor: on ? `${colors.primary}22` : colors.muted,
+                              }}
+                            >
+                              <Text style={{ color: on ? colors.primary : colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>{option.name}</Text>
+                            </Pressable>
+                          );
+                        })}
+                      </ScrollView>
+                    </View>
+                  ) : null}
+                  {choice?.include && !choice.transferTo && canLinkDebt(item) && parties.length > 0 ? (
                     (() => {
                       const linked = choice.debt ? parties.find((party) => party.id === choice.debt!.partyId) : undefined;
                       const guess = !choice.debt && item.direction ? matchParty(item.original ?? item.description, parties) : null;
