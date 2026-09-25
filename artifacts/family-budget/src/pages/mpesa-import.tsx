@@ -29,6 +29,9 @@ import {
   lineLabel,
   messageFor,
   problemWith,
+  reviewCounts,
+  reviewStatus,
+  type ReviewView,
   redactForReport,
   refreshSuggestions,
   snippetFor,
@@ -120,6 +123,8 @@ export default function MpesaImportPage() {
   const [reading, setReading] = useState(false);
   const [lines, setLines] = useState<PreviewLine[] | null>(null);
   const [choices, setChoices] = useState<Record<number, Choice>>({});
+  // Which of the entries to show: all, or only those still to look at, changed by you, or needing you.
+  const [view, setView] = useState<ReviewView>("all");
   const [chargeCategory, setChargeCategory] = useState("");
   const [saving, setSaving] = useState(false);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
@@ -365,8 +370,11 @@ export default function MpesaImportPage() {
   }, [lines, choices]);
   const showProblem = () => {
     if (firstProblemIndex === null) return;
-    document.querySelector(`[data-testid="mpesa-line-${firstProblemIndex}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    // The entry may be hidden by a filter: show everything first, then go to it.
+    setView("all");
+    window.setTimeout(() => document.querySelector(`[data-testid="mpesa-line-${firstProblemIndex}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 80);
   };
+  const review = useMemo(() => (lines ? reviewCounts(lines, choices) : null), [lines, choices]);
   const firstProblem = useMemo(() => {
     if (!lines) return null;
     for (const item of lines) {
@@ -719,12 +727,50 @@ export default function MpesaImportPage() {
 
           {recordable.length > 0 ? <CategorySearchInput query={search.query} onChange={search.setQuery} testId="mpesa-category-search" /> : null}
 
-          {recordable.map((item) => {
+          {review && review.all > 0 ? (
+            <Card data-testid="mpesa-review">
+              <CardContent className="space-y-2 p-4">
+                <p className="text-sm text-foreground" data-testid="mpesa-review-counts">
+                  {review.changed} changed by you · {review.suggested} still Jamvi's suggestion{review.needs > 0 ? ` · ${review.needs} need${review.needs === 1 ? "s" : ""} you` : ""}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {([
+                    ["all", "All"],
+                    ["needs", "Needs you"],
+                    ["changed", "Changed by you"],
+                    ["suggested", "Suggested"],
+                  ] as Array<[ReviewView, string]>).map(([key, label]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setView(key)}
+                      aria-pressed={view === key}
+                      data-testid={`mpesa-review-${key}`}
+                      className={`rounded-full border px-3 py-1.5 text-sm font-semibold ${view === key ? "border-primary bg-primary/10 text-primary" : "border-border bg-muted text-foreground"}`}
+                    >
+                      {label} ({review[key]})
+                    </button>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {recordable.filter((item) => view === "all" || reviewStatus(item, choices[item.index]) === view).map((item) => {
             const choice = choices[item.index];
             const out = item.direction === "out";
+            const status = reviewStatus(item, choice);
             return (
               <Card key={item.index} className={choice?.include ? "" : "opacity-55"} data-testid={`mpesa-line-${item.index}`}>
                 <CardContent className="space-y-3 p-4">
+                  {status ? (
+                    <p
+                      className={`text-xs font-semibold ${status === "needs" ? "text-destructive" : status === "changed" ? "text-primary" : "text-muted-foreground"}`}
+                      data-testid={`mpesa-line-status-${item.index}`}
+                    >
+                      {status === "needs" ? "Needs you" : status === "changed" ? "You changed this" : "Suggested by Jamvi"}
+                    </p>
+                  ) : null}
                   <div className="flex items-center gap-3">
                     <input
                       type="checkbox"
