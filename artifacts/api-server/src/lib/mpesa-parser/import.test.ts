@@ -45,6 +45,11 @@ describe("splitMpesaMessages", () => {
 });
 
 describe("toImportItem: money out", () => {
+  it("says whether the message named anybody", () => {
+    expect(toImportItem(SEND_PERSON, 0).named).toBe(true);
+    expect(toImportItem("TESTNONAME1 Confirmed. Ksh50.00 paid on 2/9/26 at 9:50 AM. New M-PESA balance is Ksh0.00.", 0).named).toBe(false);
+  });
+
   it("reads a payment to a person", () => {
     expect(toImportItem(SEND_PERSON, 0)).toMatchObject({
       status: "ready", direction: "out", type: "person_payment", receipt: "TESTSEND1",
@@ -122,7 +127,7 @@ describe("the preview route", () => {
   it("marks what this budget already holds, by receipt, within this budget only", () => {
     expect(route).toContain("eq(jointAccountTxTable.groupId, groupId)");
     expect(route).toContain("inArray(jointAccountTxTable.mpesaReceipt, receipts)");
-    expect(route).toContain("The same message appears twice");
+    expect(route).toContain("You pasted this one twice");
   });
 
   it("neither logs nor stores what was pasted", () => {

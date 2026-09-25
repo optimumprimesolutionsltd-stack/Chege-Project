@@ -3,7 +3,9 @@ import {
   buildPostings,
   initialChoices,
   isRecordable,
+  lineLabel,
   problemWith,
+  snippetFor,
   suggestCategory,
   summarise,
   type PostingContext,
@@ -122,5 +124,25 @@ describe('buildPostings', () => {
   it('builds nothing for a line with no amount or direction', () => {
     expect(buildPostings(line({ amount: null }), { include: true, category: '' }, ctx)).toBeNull();
     expect(buildPostings(line({ direction: null }), { include: true, category: '' }, ctx)).toBeNull();
+  });
+});
+
+describe('finding a line in a long list', () => {
+  it('labels a line with who, how much and when', () => {
+    expect(lineLabel(line({ description: 'M-Pesa payment', amount: 1250, date: '2026-09-23' }))).toBe('M-Pesa payment (KES 1,250, 2026-09-23)');
+    expect(lineLabel(line({ description: null, amount: null, date: null }))).toBe('A payment');
+  });
+
+  it('shows the start of the message a line came from, from the pasted text', () => {
+    const pasted = 'TESTA1 Confirmed. Ksh10.00 sent to X. TESTNONAME1 Confirmed. Ksh50.00 paid on 2/9/26 at 9:50 AM.   New M-PESA balance is Ksh0.00.';
+    const snippet = snippetFor(pasted, 'TESTNONAME1');
+    expect(snippet?.startsWith('TESTNONAME1 Confirmed. Ksh50.00 paid on 2/9/26')).toBe(true);
+    expect(snippet).not.toContain('  ');
+    expect(snippet!.length).toBeLessThanOrEqual(90);
+  });
+
+  it('shows nothing when the receipt is not in the pasted text', () => {
+    expect(snippetFor('nothing here', 'TESTNONAME1')).toBeNull();
+    expect(snippetFor('anything', null)).toBeNull();
   });
 });

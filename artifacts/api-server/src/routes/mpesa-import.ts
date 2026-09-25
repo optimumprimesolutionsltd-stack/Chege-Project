@@ -54,7 +54,7 @@ router.post("/mpesa/import/preview", async (req, res): Promise<void> => {
       alreadyRecorded: existing
         ? { date: String(existing.date), description: existing.description }
         : repeatedInPaste
-          ? { date: null, description: "The same message appears twice in what you pasted." }
+          ? { date: null, description: "You pasted this one twice, so only the first copy is used." }
           : null,
     };
   });

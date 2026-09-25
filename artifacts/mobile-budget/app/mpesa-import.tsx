@@ -37,7 +37,9 @@ import {
   buildPostings,
   initialChoices,
   isRecordable,
+  lineLabel,
   problemWith,
+  snippetFor,
   summarise,
   type Choice,
   type PreviewLine,
@@ -192,7 +194,7 @@ export default function MpesaImportScreen() {
     if (!lines) return null;
     for (const item of lines) {
       const problem = problemWith(item, choices[item.index]);
-      if (problem) return `${item.description ?? 'A payment'}: ${problem}`;
+      if (problem) return `${lineLabel(item)}: ${problem}`;
     }
     if (summary && summary.fees > 0 && !chargeCategory.trim()) return 'Choose a category for the M-Pesa charges.';
     return null;
@@ -365,6 +367,11 @@ export default function MpesaImportScreen() {
                       <Text style={[styles.hint, { color: colors.mutedForeground }]}>
                         {item.date ?? 'No date on it, so today'} · {out ? 'Money out' : 'Money in'}
                       </Text>
+                      {item.named === false && snippetFor(text, item.receipt) ? (
+                        <Text style={[styles.hint, { color: colors.mutedForeground, fontStyle: 'italic' }]} testID={`mpesa-line-snippet-${item.index}`}>
+                          No name in the message: “{snippetFor(text, item.receipt)}…”
+                        </Text>
+                      ) : null}
                     </View>
                     <Text style={[styles.amount, { color: out ? colors.destructive : colors.success }]}>
                       {out ? '−' : '+'}{formatExact(item.amount ?? 0)}
@@ -418,7 +425,9 @@ export default function MpesaImportScreen() {
                     </Text>
                     <Text style={[styles.hint, { color: colors.mutedForeground }]}>
                       {item.alreadyRecorded
-                        ? `Already recorded${item.alreadyRecorded.date ? ` on ${item.alreadyRecorded.date}` : ''}: ${item.alreadyRecorded.description}`
+                        ? item.alreadyRecorded.date
+                          ? `Already recorded on ${item.alreadyRecorded.date}: ${item.alreadyRecorded.description}`
+                          : item.alreadyRecorded.description
                         : item.reason}
                     </Text>
                   </View>
