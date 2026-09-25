@@ -62,3 +62,15 @@ describe("the red message names its entry (web)", () => {
     expect(page).toContain('data-testid="mpesa-first-problem"');
   });
 });
+
+describe("telling what has been looked at (web)", () => {
+  it("tags each entry, counts them and filters by them", () => {
+    expect(page).toContain("mpesa-line-status-${item.index}");
+    expect(page).toContain("mpesa-review-counts");
+    expect(page).toContain('view === "all" || reviewStatus(item, choices[item.index]) === view');
+  });
+  it("shows everything before jumping to an entry a filter may hide", () => {
+    expect(page).toContain('setView("all");');
+  });
+});
+

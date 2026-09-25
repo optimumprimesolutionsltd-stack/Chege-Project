@@ -78,6 +78,9 @@ import {
   lineLabel,
   messageFor,
   problemWith,
+  reviewCounts,
+  reviewStatus,
+  type ReviewView,
   redactForReport,
   refreshSuggestions,
   snippetFor,
@@ -357,6 +360,8 @@ export default function MpesaImportScreen() {
   const [statementReading, setStatementReading] = useState<StatementReading | null>(null);
   const [lines, setLines] = useState<PreviewLine[] | null>(null);
   const [choices, setChoices] = useState<Record<number, Choice>>({});
+  // Which of the entries to show: all, or only those still to look at, changed by you, or needing you.
+  const [view, setView] = useState<ReviewView>('all');
   const [chargeCategory, setChargeCategory] = useState('');
   const [picking, setPicking] = useState<number | 'charge' | null>(null);
   const [saving, setSaving] = useState(false);
@@ -703,8 +708,11 @@ export default function MpesaImportScreen() {
   const lineTops = React.useRef<Record<number, number>>({});
   const showProblem = () => {
     if (firstProblemIndex === null) return;
-    scrollRef.current?.scrollTo({ y: Math.max(0, (lineTops.current[firstProblemIndex] ?? 0) - 12), animated: true });
+    // The entry may be hidden by a filter: show everything first, then go to it.
+    setView('all');
+    setTimeout(() => scrollRef.current?.scrollTo({ y: Math.max(0, (lineTops.current[firstProblemIndex] ?? 0) - 12), animated: true }), 80);
   };
+  const review = useMemo(() => (lines ? reviewCounts(lines, choices) : null), [lines, choices]);
   const firstProblem = useMemo(() => {
     if (!lines) return null;
     for (const item of lines) {
@@ -1062,11 +1070,59 @@ export default function MpesaImportScreen() {
               </View>
             ) : null}
 
-            {recordable.map((item) => {
+            {review && review.all > 0 ? (
+              <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]} testID="mpesa-review">
+                <Text style={[styles.hint, { color: colors.foreground, marginTop: 0 }]} testID="mpesa-review-counts">
+                  {review.changed} changed by you · {review.suggested} still Jamvi's suggestion{review.needs > 0 ? ` · ${review.needs} need${review.needs === 1 ? 's' : ''} you` : ''}
+                </Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+                  {([
+                    ['all', 'All'],
+                    ['needs', 'Needs you'],
+                    ['changed', 'Changed by you'],
+                    ['suggested', 'Suggested'],
+                  ] as Array<[ReviewView, string]>).map(([key, label]) => {
+                    const on = view === key;
+                    return (
+                      <Pressable
+                        key={key}
+                        onPress={() => setView(key)}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: on }}
+                        testID={`mpesa-review-${key}`}
+                        style={{
+                          paddingHorizontal: 12,
+                          paddingVertical: 7,
+                          borderRadius: 999,
+                          borderWidth: 1,
+                          borderColor: on ? colors.primary : colors.border,
+                          backgroundColor: on ? `${colors.primary}22` : colors.muted,
+                        }}
+                      >
+                        <Text style={{ color: on ? colors.primary : colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>
+                          {label} ({review[key]})
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            ) : null}
+
+            {recordable.filter((item) => view === 'all' || reviewStatus(item, choices[item.index]) === view).map((item) => {
               const choice = choices[item.index];
               const out = item.direction === 'out';
+              const status = reviewStatus(item, choice);
               return (
                 <View key={item.index} style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, opacity: choice?.include ? 1 : 0.55 }]} testID={`mpesa-line-${item.index}`} onLayout={(event) => { lineTops.current[item.index] = event.nativeEvent.layout.y; }}>
+                  {status ? (
+                    <Text
+                      style={[styles.hint, { marginTop: 0, fontFamily: 'Inter_600SemiBold', color: status === 'needs' ? colors.destructive : status === 'changed' ? colors.primary : colors.mutedForeground }]}
+                      testID={`mpesa-line-status-${item.index}`}
+                    >
+                      {status === 'needs' ? 'Needs you' : status === 'changed' ? 'You changed this' : 'Suggested by Jamvi'}
+                    </Text>
+                  ) : null}
                   <View style={styles.lineTop}>
                     <View style={{ flex: 1, minWidth: 0 }}>
                       <Pressable

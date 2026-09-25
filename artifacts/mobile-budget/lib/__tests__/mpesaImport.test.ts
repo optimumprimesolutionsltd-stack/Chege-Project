@@ -9,6 +9,8 @@ import {
   messageFor,
   problemWith,
   redactForReport,
+  reviewCounts,
+  reviewStatus,
   snippetFor,
   splitMessages,
   suggestCategory,
@@ -239,3 +241,40 @@ describe('where money in came from', () => {
     expect(next[2].incomeSourceId ?? null).toBeNull();
   });
 });
+
+describe('what the person has looked at', () => {
+  const out = line({ index: 0, description: 'Sample Shop' });
+  const money = line({ index: 1, direction: 'in', description: 'Received from Sample Person', receipt: 'TESTRECV1' });
+
+  it('says a line still needing a category needs the person', () => {
+    expect(reviewStatus(out, { include: true, category: '' })).toBe('needs');
+  });
+
+  it('leaves a line as Jamvi suggested until the person touches it', () => {
+    expect(reviewStatus(out, { include: true, category: 'Food', auto: true })).toBe('suggested');
+    expect(reviewStatus(money, { include: true, category: '' })).toBe('suggested');
+  });
+
+  it('says a line the person set, changed, unticked or linked to a debt is theirs', () => {
+    expect(reviewStatus(out, { include: true, category: 'Food', auto: false })).toBe('changed');
+    expect(reviewStatus(out, { include: false, category: 'Food', auto: true })).toBe('changed');
+    expect(reviewStatus(out, { include: true, category: '', debt: { kind: 'lend', partyId: 3 } })).toBe('changed');
+    expect(reviewStatus(money, { include: true, category: '', incomeSourceId: 4, sourceAuto: false })).toBe('changed');
+    expect(reviewStatus(money, { include: true, category: '', incomeSourceId: 4, sourceAuto: true })).toBe('suggested');
+  });
+
+  it('is not part of the review for a line that cannot be recorded', () => {
+    expect(reviewStatus(line({ status: 'skipped' }), { include: true, category: '' })).toBeNull();
+    expect(reviewStatus(line({ alreadyRecorded: { date: '2026-09-02', description: 'x' } }), { include: true, category: 'Food' })).toBeNull();
+  });
+
+  it('counts them for the summary and the filters', () => {
+    const counts = reviewCounts([out, money, line({ index: 2, receipt: 'TESTSEND2' })], {
+      0: { include: true, category: 'Food', auto: false },
+      1: { include: true, category: '' },
+      2: { include: true, category: '' },
+    });
+    expect(counts).toEqual({ all: 3, needs: 1, changed: 1, suggested: 1 });
+  });
+});
+

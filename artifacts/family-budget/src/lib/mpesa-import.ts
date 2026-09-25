@@ -257,6 +257,37 @@ export function problemWith(line: PreviewLine, choice: Choice | undefined): stri
   return null;
 }
 
+/**
+ * Where a line stands in the person"s review of the list:
+ * `needs` cannot be saved until something is chosen; `changed` is something they
+ * set or changed themselves (a category, a debt, a source, or unticking it);
+ * `suggested` is still exactly what Jamvi suggested and has not been touched.
+ * Lines that cannot be recorded at all are not part of the review.
+ */
+export type ReviewStatus = "needs" | "changed" | "suggested";
+
+export function reviewStatus(line: PreviewLine, choice: Choice | undefined): ReviewStatus | null {
+  if (!isRecordable(line) || !choice) return null;
+  if (problemWith(line, choice)) return "needs";
+  const setByHand = Boolean(choice.category.trim()) && choice.auto === false;
+  const sourceByHand = choice.incomeSourceId != null && choice.sourceAuto === false;
+  if (!choice.include || setByHand || sourceByHand || choice.debt) return "changed";
+  return "suggested";
+}
+
+export type ReviewView = "all" | ReviewStatus;
+
+export function reviewCounts(lines: readonly PreviewLine[], choices: Record<number, Choice>): Record<ReviewView, number> {
+  const counts: Record<ReviewView, number> = { all: 0, needs: 0, changed: 0, suggested: 0 };
+  for (const line of lines) {
+    const status = reviewStatus(line, choices[line.index]);
+    if (!status) continue;
+    counts.all += 1;
+    counts[status] += 1;
+  }
+  return counts;
+}
+
 export type Summary = { count: number; moneyIn: number; moneyOut: number; fees: number; missingCategory: number };
 
 export function summarise(lines: readonly PreviewLine[], choices: Record<number, Choice>): Summary {

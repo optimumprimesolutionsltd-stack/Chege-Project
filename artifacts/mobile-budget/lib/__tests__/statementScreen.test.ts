@@ -130,3 +130,16 @@ describe('the red message names its entry (phone)', () => {
     expect(screen).toContain('testID="mpesa-first-problem"');
   });
 });
+
+describe('telling what has been looked at (phone)', () => {
+  const screen = read('app/mpesa-import.tsx');
+  it('tags each entry, counts them and filters by them', () => {
+    expect(screen).toContain('mpesa-line-status-${item.index}');
+    expect(screen).toContain('mpesa-review-counts');
+    expect(screen).toContain("view === 'all' || reviewStatus(item, choices[item.index]) === view");
+  });
+  it('shows everything before jumping to an entry a filter may hide', () => {
+    expect(screen).toContain("setView('all');");
+  });
+});
+
