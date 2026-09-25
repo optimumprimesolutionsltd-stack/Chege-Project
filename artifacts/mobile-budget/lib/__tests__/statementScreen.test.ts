@@ -174,3 +174,17 @@ describe('moves between your own accounts (phone)', () => {
     expect(screen).toContain('transferBankToBank({ data: built.main as never })');
   });
 });
+
+describe('savings goals and contributions (phone)', () => {
+  const screen = read('app/mpesa-import.tsx');
+  it('offers savings on each entry, and saves it as a savings transfer', () => {
+    expect(screen).toContain('mpesa-line-savings-${item.index}');
+    expect(screen).toContain("built.kind === 'savings'");
+    expect(screen).toContain('transferBankToSavings({ data: built.main as never })');
+    expect(screen).toContain('transferSavingsToBank({ data: built.main as never })');
+  });
+  it('offers a member contribution in a shared group only', () => {
+    expect(screen).toContain("isShared && item.direction === 'in' && choice?.include");
+    expect(screen).toContain('mpesa-line-contribution-${item.index}');
+  });
+});

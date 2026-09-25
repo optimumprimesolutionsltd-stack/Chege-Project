@@ -21,7 +21,10 @@ import {
   getGetBudgetCategoriesQueryKey,
   useCreateBudgetCategory,
   useCreateDeposit,
+  useGetSavingsGoals,
   useTransferBankToBank,
+  useTransferBankToSavings,
+  useTransferSavingsToBank,
   useCreateDisbursement,
   useGetBudgetCategories,
   useGetGroup,
@@ -75,7 +78,12 @@ import {
   categoryPath,
   chooseCategory as chooseLineCategory,
   chooseIncomeSource,
+  canUseSavings,
+  chooseContribution,
+  chooseSavings,
   chooseTransfer,
+  destinationOf,
+  isMove,
   throughMpesaHints,
   initialChoices,
   canReport,
@@ -337,6 +345,10 @@ export default function MpesaImportScreen() {
   const { mutateAsync: createDeposit } = useCreateDeposit();
   const { mutateAsync: createDisbursement } = useCreateDisbursement();
   const { mutateAsync: transferBankToBank } = useTransferBankToBank();
+  const { mutateAsync: transferBankToSavings } = useTransferBankToSavings();
+  const { mutateAsync: transferSavingsToBank } = useTransferSavingsToBank();
+  const { data: savingsGoalList = [] } = useGetSavingsGoals();
+  const savingsGoals = savingsGoalList as unknown as Array<{ id: number; name: string; isCompleted?: boolean }>;
 
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
   // M-Pesa is usually its own account: start on one that says so.
@@ -848,6 +860,18 @@ export default function MpesaImportScreen() {
         try {
           if (built.kind === 'deposit') {
             await createDeposit({ data: built.main as never });
+          } else if (built.kind === 'savings') {
+            // Into or out of a savings goal, with any charge on the M-Pesa side.
+            const moved = built.direction === 'out'
+              ? await transferBankToSavings({ data: built.main as never })
+              : await transferSavingsToBank({ data: built.main as never });
+            if (built.fee) {
+              try {
+                await createDisbursement({ data: { ...built.fee, chargeForTransactionId: (moved as { id: number }).id } as never });
+              } catch {
+                result.failed.push({ what: `${item.description} charge`, why: 'The move saved, but its charge did not.' });
+              }
+            }
           } else if (built.kind === 'transfer') {
             // Between the person's own accounts: one transfer, and its charge (if any) on the M-Pesa side.
             const moved = await transferBankToBank({ data: built.main as never });
@@ -1263,7 +1287,7 @@ export default function MpesaImportScreen() {
                     </Text>
                     <Switch value={!!choice?.include} onValueChange={(value) => toggle(item.index, value)} accessibilityLabel={`Save ${item.description}`} />
                   </View>
-                  {out && choice?.include && choice.debt?.kind !== 'lend' && !choice.transferTo ? (
+                  {out && choice?.include && choice.debt?.kind !== 'lend' && !isMove(choice) ? (
                     <Pressable
                       onPress={() => setPicking(item.index)}
                       style={[styles.categoryButton, { borderColor: choice.category ? colors.border : colors.destructive, backgroundColor: colors.muted }]}
@@ -1276,7 +1300,7 @@ export default function MpesaImportScreen() {
                       <Feather name="chevron-down" size={16} color={colors.mutedForeground} />
                     </Pressable>
                   ) : null}
-                  {out && choice?.include && !choice.transferTo && choice.category && item.description && rules[payeeKey(item.description)] !== choice.category ? (
+                  {out && choice?.include && !isMove(choice) && choice.category && item.description && rules[payeeKey(item.description)] !== choice.category ? (
                     <Pressable
                       onPress={() => setChoices((current) => ({ ...current, [item.index]: { ...current[item.index], remember: !current[item.index]?.remember } }))}
                       accessibilityRole="checkbox"
@@ -1290,12 +1314,12 @@ export default function MpesaImportScreen() {
                       </Text>
                     </Pressable>
                   ) : null}
-                  {out && choice?.include && !choice.transferTo && choice.auto && choice.category ? (
+                  {out && choice?.include && !isMove(choice) && choice.auto && choice.category ? (
                     <Text style={[styles.hint, { color: colors.mutedForeground }]} testID={`mpesa-line-suggested-${item.index}`}>
                       Suggested by Jamvi. Tap to choose a different one.
                     </Text>
                   ) : null}
-                  {item.direction === 'in' && choice?.include && !choice.debt && !choice.transferTo && incomeSources.length > 0 ? (
+                  {item.direction === 'in' && choice?.include && !choice.debt && !isMove(choice) && !choice.contributorId && incomeSources.length > 0 ? (
                     <View style={{ gap: 6 }} testID={`mpesa-line-source-${item.index}`}>
                       <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0 }]}>Where did this come from? (optional)</Text>
                       <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
@@ -1329,7 +1353,7 @@ export default function MpesaImportScreen() {
                       ) : null}
                     </View>
                   ) : null}
-                  {choice?.include && !choice.debt && otherAccounts.length > 0 ? (
+                  {choice?.include && !choice.debt && !choice.contributorId && otherAccounts.length > 0 ? (
                     <View style={{ gap: 6 }} testID={`mpesa-line-move-${item.index}`}>
                       <Text style={[styles.hint, { color: transferHints.has(item.index) ? colors.primary : colors.mutedForeground, marginTop: 0, fontFamily: transferHints.has(item.index) ? 'Inter_600SemiBold' : undefined }]}>
                         {transferHints.has(item.index)
@@ -1362,14 +1386,60 @@ export default function MpesaImportScreen() {
                       </ScrollView>
                     </View>
                   ) : null}
-                  {choice?.include && !choice.transferTo && item.type === 'bank_receipt' && parties.length === 0 ? (
+                  {choice?.include && destinationOf(choice) !== 'debt' && destinationOf(choice) !== 'contribution' && canUseSavings(item) && savingsGoals.length > 0 ? (
+                    <View style={{ gap: 6 }} testID={`mpesa-line-savings-${item.index}`}>
+                      <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0 }]}>
+                        {out ? 'Is this going into savings?' : 'Is this coming out of savings?'}
+                      </Text>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
+                        {[{ id: null as number | null, name: 'No' }, ...savingsGoals.map((goal) => ({ id: goal.id as number | null, name: goal.name }))].map((option) => {
+                          const on = (choice.savingsGoalId ?? null) === option.id;
+                          return (
+                            <Pressable
+                              key={option.id ?? 'no'}
+                              onPress={() => setChoices((current) => chooseSavings(current, item.index, option.id))}
+                              accessibilityRole="button"
+                              accessibilityState={{ selected: on }}
+                              testID={`mpesa-line-savings-${item.index}-${option.id ?? 'no'}`}
+                              style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, borderWidth: 1, borderColor: on ? colors.primary : colors.border, backgroundColor: on ? `${colors.primary}22` : colors.muted }}
+                            >
+                              <Text style={{ color: on ? colors.primary : colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>{option.name}</Text>
+                            </Pressable>
+                          );
+                        })}
+                      </ScrollView>
+                    </View>
+                  ) : null}
+                  {isShared && item.direction === 'in' && choice?.include && !isMove(choice) && destinationOf(choice) !== 'debt' && parties.length > 0 ? (
+                    <View style={{ gap: 6 }} testID={`mpesa-line-contribution-${item.index}`}>
+                      <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0 }]}>Is this a member's contribution? Whose?</Text>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
+                        {[{ id: null as number | null, name: 'No' }, ...parties.map((person) => ({ id: person.id as number | null, name: person.name }))].map((option) => {
+                          const on = (choice.contributorId ?? null) === option.id;
+                          return (
+                            <Pressable
+                              key={option.id ?? 'no'}
+                              onPress={() => setChoices((current) => chooseContribution(current, item.index, option.id))}
+                              accessibilityRole="button"
+                              accessibilityState={{ selected: on }}
+                              testID={`mpesa-line-contribution-${item.index}-${option.id ?? 'no'}`}
+                              style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, borderWidth: 1, borderColor: on ? colors.primary : colors.border, backgroundColor: on ? `${colors.primary}22` : colors.muted }}
+                            >
+                              <Text style={{ color: on ? colors.primary : colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>{option.name}</Text>
+                            </Pressable>
+                          );
+                        })}
+                      </ScrollView>
+                    </View>
+                  ) : null}
+                  {choice?.include && !isMove(choice) && item.type === 'bank_receipt' && parties.length === 0 ? (
                     <Pressable onPress={() => router.push('/parties' as never)} accessibilityRole="button" testID={`mpesa-line-add-business-${item.index}`}>
                       <Text style={[styles.hint, { color: colors.primary, marginTop: 0, fontFamily: 'Inter_600SemiBold' }]}>
                         Money to or from a company you own? Add it in Who owes who, then come back and choose it here.
                       </Text>
                     </Pressable>
                   ) : null}
-                  {choice?.include && !choice.transferTo && canLinkDebt(item, parties) && parties.length > 0 ? (
+                  {choice?.include && !isMove(choice) && !choice.contributorId && canLinkDebt(item, parties) && parties.length > 0 ? (
                     (() => {
                       const linked = choice.debt ? parties.find((party) => party.id === choice.debt!.partyId) : undefined;
                       const guess = !choice.debt && item.direction ? matchParty(item.original ?? item.description, parties) : null;

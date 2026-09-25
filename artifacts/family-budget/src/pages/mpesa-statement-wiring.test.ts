@@ -99,3 +99,16 @@ describe("moves between your own accounts (web)", () => {
     expect(page).toContain("transferBankToBank.mutateAsync");
   });
 });
+
+describe("savings goals and contributions (web)", () => {
+  it("offers savings on each entry, and saves it as a savings transfer", () => {
+    expect(page).toContain("mpesa-line-savings-select-${item.index}");
+    expect(page).toContain('built.kind === "savings"');
+    expect(page).toContain("transferBankToSavings.mutateAsync");
+    expect(page).toContain("transferSavingsToBank.mutateAsync");
+  });
+  it("offers a member contribution in a shared group only", () => {
+    expect(page).toContain('isShared && item.direction === "in" && choice?.include');
+    expect(page).toContain("mpesa-line-contribution-select-${item.index}");
+  });
+});
