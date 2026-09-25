@@ -67,6 +67,7 @@ import { workspaceLabel } from "@/lib/workspace-identity";
 import { buildCategoryTree, childrenFor, parentOf, type CategoryRow } from "@workspace/category-tree";
 import { CategorySearchInput, useCategorySearch } from "@/components/category-search";
 import { AmountField } from "@/components/amount-field";
+import { groupExpensesByCategory, groupExpensesByItem } from "@/lib/expense-groups";
 import { Trash2, Plus, ArrowLeft, ArrowRight, Loader2, Calendar, RefreshCw, Repeat, Pencil, TrendingUp, TrendingDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -408,6 +409,8 @@ export default function Expenses() {
     canManageExpenses || (expense.date === today && isSelfFundedPersonalExpense(expense, user?.id));
   // The client remains compatible with older generated API types while the
   // optional allocation field rolls out server-side.
+  // How the ledger is laid out: by date, or filed by category or by item.
+  const [ledgerView, setLedgerView] = useState<"date" | "category" | "item">("date");
   const visibleExpenses = (expenses as Expense[] | undefined)?.filter((expense) => {
     if (ledgerFilter.payerId === "__joint__" && expense.paidById !== null) return false;
     if (ledgerFilter.payerId && ledgerFilter.payerId !== "__joint__" && expense.paidById !== ledgerFilter.payerId) return false;
@@ -3018,9 +3021,25 @@ export default function Expenses() {
           </p>
         </div>
       ) : (
+        <>
+        <div className="flex flex-wrap gap-2" role="group" aria-label="How to list expenses" data-testid="expense-ledger-views">
+          {([["date", "By date"], ["category", "By category"], ["item", "By item"]] as const).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setLedgerView(value)}
+              aria-pressed={ledgerView === value}
+              data-testid={`expense-ledger-view-${value}`}
+              className={`rounded-full border px-4 py-1.5 text-sm font-semibold ${ledgerView === value ? "border-primary bg-primary text-primary-foreground" : "border-input bg-card text-foreground hover:bg-muted"}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
         <Card id={ledgerFilter.payerId || ledgerFilter.category ? undefined : "expense-ledger"} className="scroll-mt-6 border-none shadow-md overflow-hidden">
           <div className="divide-y divide-border/50">
-            {visibleExpenses.map((expense) => (
+            {(() => {
+            const renderRow = (expense: Expense) => (
               <div key={expense.id}>
                 <div className="p-4 hover:bg-muted/20 transition-colors sm:flex sm:items-start sm:justify-between sm:gap-4 sm:p-5">
                     <div className="flex items-start gap-4 min-w-0">
@@ -3089,13 +3108,29 @@ export default function Expenses() {
                     </div>
                 </div>
               </div>
-            ))}
+            );
+            if (ledgerView === "date") return visibleExpenses.map(renderRow);
+            const groups = ledgerView === "category" ? groupExpensesByCategory(visibleExpenses) : groupExpensesByItem(visibleExpenses);
+            return groups.map((group) => (
+              <details key={group.key} className="group" data-testid={`expense-group-${group.key}`}>
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-4 hover:bg-muted/30 sm:px-5">
+                  <span className="min-w-0">
+                    <span className="block truncate font-semibold text-foreground">{group.label}</span>
+                    <span className="block text-xs text-muted-foreground">{group.count} {group.count === 1 ? "entry" : "entries"} — tap to see them</span>
+                  </span>
+                  <span className="font-display text-lg font-bold text-foreground">{formatKes(group.total)}</span>
+                </summary>
+                <div className="divide-y divide-border/50 border-t border-border/50 bg-muted/10">{group.rows.map(renderRow)}</div>
+              </details>
+            ));
+            })()}
           </div>
           <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/50 bg-muted/30 px-4 py-3 sm:px-5">
             <span className="text-sm text-muted-foreground">{visibleExpenses.length} expense{visibleExpenses.length !== 1 ? "s" : ""}</span>
             <span className="font-display font-bold text-primary">{formatKes(visibleExpenses.reduce((s, e) => s + e.amount, 0))}</span>
           </div>
         </Card>
+        </>
       )}
       <Dialog open={editingId !== null} onOpenChange={(open) => !open && cancelEdit()}>
         <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-2xl">
