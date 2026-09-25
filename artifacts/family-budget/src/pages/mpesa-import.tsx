@@ -82,6 +82,8 @@ import { readStatementPages, StatementPasswordError } from "@/lib/statement-file
 import { rememberMpesaCard } from "@/lib/mpesa-card";
 import { savePosting, type PostingApi } from "@/lib/save-posting";
 import { parseStoredRules, payeeKey, payeeName, rulesStorageKey, withRule, withoutRule, type PayeeRules } from "@/lib/payee-learning";
+import { saveDebtLinks } from "@/lib/debt-reversal";
+import type { DebtEntryLink } from "@/lib/debt-links";
 import { reconcile, statementLines, type StatementReading } from "@/lib/statement-import";
 import { checkRunningBalance, readStatementRows, resolveDirections } from "@/lib/statement-table";
 
@@ -510,6 +512,8 @@ export default function MpesaImportPage() {
     setSaving(true);
     const result: Outcome = { saved: 0, repeats: 0, failed: [] };
     const savedIndexes = new Set<number>();
+    // Who each debt entry was for, kept so deleting it can offer to put that person's balance back.
+    const debtLinks: DebtEntryLink[] = [];
     try {
       for (const item of lines) {
         const choice = choices[item.index];
@@ -525,6 +529,7 @@ export default function MpesaImportPage() {
         if (!built) continue;
         try {
           const posted = await savePosting(built, postingApi, accountId);
+          if (choice.debt && posted.id) debtLinks.push({ transactionId: posted.id, partyId: choice.debt.partyId, kind: choice.debt.kind });
           if (posted.feeFailed) result.failed.push({ what: `${item.description} charge`, why: "The entry saved, but its charge did not." });
           result.saved += 1;
           savedIndexes.add(item.index);
@@ -555,6 +560,7 @@ export default function MpesaImportPage() {
       }
       if (kept !== rules) keepRules(kept);
     }
+    void saveDebtLinks(debtLinks);
     void offerBalanceChanges(lines.filter((item) => savedIndexes.has(item.index)));
   };
 

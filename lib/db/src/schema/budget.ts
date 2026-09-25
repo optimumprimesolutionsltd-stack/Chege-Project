@@ -534,3 +534,25 @@ export const savingsGoalContributionsTable = pgTable("savings_goal_contributions
 ]);
 
 export type SavingsGoalContribution = typeof savingsGoalContributionsTable.$inferSelect;
+
+/**
+ * Which person a debt entry was for, and what kind of debt entry it is.
+ *
+ * A side table on purpose: the columns on the transaction that name a person
+ * already mean things to the dashboard and reports, and a borrowed deposit
+ * carrying one would be counted as money repaid to us. This changes no existing
+ * figure. It is read when an entry is deleted, so its balance change can be put
+ * back, and it disappears with the entry.
+ */
+export const debtEntryLinksTable = pgTable("debt_entry_links", {
+  transactionId: integer("transaction_id").primaryKey().references(() => jointAccountTxTable.id, { onDelete: "cascade" }),
+  groupId: integer("group_id").notNull().references(() => groupsTable.id, { onDelete: "cascade" }),
+  partyId: integer("party_id").notNull().references(() => groupContributorsTable.id, { onDelete: "cascade" }),
+  kind: text("kind").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("debt_entry_links_group_idx").on(table.groupId, table.partyId),
+  check("debt_entry_links_kind_check", sql`${table.kind} IN ('pay-back', 'lend', 'repaid', 'borrowed')`),
+]);
+
+export type DebtEntryLink = typeof debtEntryLinksTable.$inferSelect;

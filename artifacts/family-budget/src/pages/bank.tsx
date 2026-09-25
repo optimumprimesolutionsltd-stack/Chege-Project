@@ -18,6 +18,8 @@ import { movableOnDay, summariseDays } from "@/lib/move-day";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Link } from "wouter";
 import { ALREADY_GONE_MESSAGE, ALREADY_GONE_TITLE, isNotFound } from "@/lib/stale-entry";
+import { fetchDebtLinks, offerDebtReversal } from "@/lib/debt-reversal";
+import type { DebtEntryLink } from "@/lib/debt-links";
 import { Repeat, Trash2, Pencil, ArrowDownLeft, ArrowUpRight, Loader2, Landmark, TrendingUp, TrendingDown, Plus, Flag } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -406,19 +408,31 @@ export default function Bank() {
     remove: async (id) => { await deleteAccount.mutateAsync({ id }); },
     afterSave: invalidate,
   });
+  const deletedForReversal = useRef<Array<{ entry: EditableTransaction; links: DebtEntryLink[] }>>([]);
   const txEditor = useListEditor({
     noun: "transaction",
     remove: async (id) => {
       const tx = (account?.transactions ?? []).find((item: EditableTransaction) => item.id === id);
+      // Who a debt entry was for, read before it goes, so its balance can be offered back afterwards.
+      const links = tx ? await fetchDebtLinks([id]) : [];
       try {
         if (tx?.expenseId != null) await deleteExpense.mutateAsync({ id: tx.expenseId });
         else await deleteTx.mutateAsync({ id });
+        if (tx) deletedForReversal.current.push({ entry: tx, links });
       } catch (error: unknown) {
         // Already gone is what deleting it was for.
         if (!isNotFound(error)) throw error;
       }
     },
-    afterSave: invalidate,
+    afterSave: async () => {
+      invalidate();
+      const gone = deletedForReversal.current.splice(0);
+      await offerDebtReversal(
+        gone.map((item) => ({ id: item.entry.id, type: item.entry.type, amount: item.entry.amount, expenseCategory: item.entry.expenseCategory })),
+        gone.flatMap((item) => item.links),
+        queryClient,
+      );
+    },
   });
 
   const [showReconcile, setShowReconcile] = useState(false);
@@ -1128,6 +1142,7 @@ export default function Bank() {
       ? `Delete this expense from "${budgetName}"? Its bank funding transaction will also be removed.`
       : `Delete this transaction from "${budgetName}"?`)) return;
     try {
+      const links = await fetchDebtLinks([tx.id]);
       if (deletesExpense) {
         await deleteExpense.mutateAsync({ id: tx.expenseId! });
       } else {
@@ -1135,6 +1150,7 @@ export default function Bank() {
       }
       toast({ title: deletesExpense ? "Expense deleted" : "Transaction deleted" });
       invalidate();
+      void offerDebtReversal([{ id: tx.id, type: tx.type, amount: tx.amount, expenseCategory: tx.expenseCategory }], links, queryClient);
     } catch (error: unknown) {
       // Not found means it is not in this budget: already deleted, or a list from another budget.
       if (isNotFound(error)) {
