@@ -14,7 +14,7 @@ import {
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   customFetch,
@@ -35,6 +35,16 @@ import { PageScrollView } from '@/components/PageScrollReset';
 import { ScreenHint } from '@/components/ScreenHint';
 import { useColors } from '@/hooks/useColors';
 import { canReceiveShares } from '@/lib/shareIntent';
+import {
+  balanceChanges,
+  canLinkDebt,
+  DEBT_LABEL,
+  debtKindsFor,
+  matchParty,
+  suggestDebtKind,
+  type DebtKind,
+  type PartyLite,
+} from '@/lib/mpesaDebts';
 import {
   applyNicknames,
   canNickname,
@@ -236,6 +246,7 @@ export default function MpesaImportScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const { data: group } = useGetGroup();
   const isShared = group?.isPrivate === false;
 
@@ -417,6 +428,24 @@ export default function MpesaImportScreen() {
     return null;
   }, [lines, choices, summary, chargeCategory]);
 
+  // Who owes who, and the categories that track a debt: a payment to or from a
+  // person can be a debt or a loan, and paying a debt's category pays it down.
+  const { data: parties = [] } = useQuery<PartyLite[]>({
+    queryKey: ['parties'],
+    queryFn: () => customFetch<PartyLite[]>('/api/contributors'),
+    staleTime: 30_000,
+  });
+  const debtCategories = useMemo(
+    () =>
+      (categoryList as unknown as Array<{ id: number; name: string; debtBalance?: number | null }>)
+        .filter((row) => row.debtBalance !== null && row.debtBalance !== undefined)
+        .map((row) => ({ id: row.id, name: row.name, debtBalance: row.debtBalance })),
+    [categoryList],
+  );
+  const [debtFor, setDebtFor] = useState<{ index: number; partyId: number | null; kind: DebtKind | null } | null>(null);
+  const setDebt = (index: number, debt: { kind: DebtKind; partyId: number } | null) =>
+    setChoices((current) => ({ ...current, [index]: { ...current[index], debt } }));
+
   const recordable = lines?.filter(isRecordable) ?? [];
   const notImported = lines?.filter((item) => !isRecordable(item)) ?? [];
 
@@ -428,6 +457,7 @@ export default function MpesaImportScreen() {
     }
     setSaving(true);
     const result: Outcome = { saved: 0, repeats: 0, failed: [] };
+    const savedIndexes = new Set<number>();
     try {
       for (const item of lines) {
         const choice = choices[item.index];
@@ -454,6 +484,7 @@ export default function MpesaImportScreen() {
             }
           }
           result.saved += 1;
+          savedIndexes.add(item.index);
         } catch (error: unknown) {
           const message = error instanceof Error ? error.message : 'It was not saved.';
           if (/already recorded/i.test(message)) result.repeats += 1;
@@ -464,6 +495,41 @@ export default function MpesaImportScreen() {
       setSaving(false);
       setOutcome(result);
     }
+    offerBalanceChanges(lines.filter((item) => savedIndexes.has(item.index)));
+  };
+
+  /**
+   * Once, at the end, for everything that was saved. Asked and never applied by
+   * itself: the entries can be edited or deleted afterwards, and a balance moved
+   * behind somebody's back would be left quietly wrong.
+   */
+  const offerBalanceChanges = (saved: PreviewLine[]) => {
+    const changes = balanceChanges(saved, choices, parties, debtCategories);
+    if (changes.length === 0) return;
+    Alert.alert(
+      changes.length === 1 ? 'Update this balance too?' : `Update ${changes.length} balances too?`,
+      `${changes.map((change) => `· ${change.label}`).join('\n')}\n\nThe entries are already saved either way.`,
+      [
+        { text: 'Not now', style: 'cancel' },
+        {
+          text: 'Update',
+          onPress: async () => {
+            try {
+              for (const change of changes) {
+                await customFetch(change.endpoint, {
+                  method: change.method,
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(change.body),
+                });
+              }
+              await queryClient.invalidateQueries({ queryKey: ['parties'] });
+            } catch (error: unknown) {
+              Alert.alert('Some balances did not update', error instanceof Error ? error.message : 'Please try again.');
+            }
+          },
+        },
+      ],
+    );
   };
 
   if (outcome) {
@@ -614,7 +680,7 @@ export default function MpesaImportScreen() {
                     </Text>
                     <Switch value={!!choice?.include} onValueChange={(value) => toggle(item.index, value)} accessibilityLabel={`Save ${item.description}`} />
                   </View>
-                  {out && choice?.include ? (
+                  {out && choice?.include && choice.debt?.kind !== 'lend' ? (
                     <Pressable
                       onPress={() => setPicking(item.index)}
                       style={[styles.categoryButton, { borderColor: choice.category ? colors.border : colors.destructive, backgroundColor: colors.muted }]}
@@ -631,6 +697,48 @@ export default function MpesaImportScreen() {
                     <Text style={[styles.hint, { color: colors.mutedForeground }]} testID={`mpesa-line-suggested-${item.index}`}>
                       Suggested by Jamvi. Tap to choose a different one.
                     </Text>
+                  ) : null}
+                  {choice?.include && canLinkDebt(item) && parties.length > 0 ? (
+                    (() => {
+                      const linked = choice.debt ? parties.find((party) => party.id === choice.debt!.partyId) : undefined;
+                      const guess = !choice.debt && item.direction ? matchParty(item.original ?? item.description, parties) : null;
+                      const guessKind = guess && item.direction ? suggestDebtKind(item.direction, guess) : null;
+                      return (
+                        <>
+                          {choice.debt && linked ? (
+                            <Pressable
+                              onPress={() => setDebtFor({ index: item.index, partyId: linked.id, kind: choice.debt!.kind })}
+                              accessibilityRole="button"
+                              testID={`mpesa-line-debt-${item.index}`}
+                            >
+                              <Text style={[styles.hint, { color: colors.primary, fontFamily: 'Inter_600SemiBold' }]}>
+                                {DEBT_LABEL[choice.debt.kind]}: {linked.name} · tap to change
+                              </Text>
+                            </Pressable>
+                          ) : guess && guessKind ? (
+                            <Pressable
+                              onPress={() => setDebt(item.index, { kind: guessKind, partyId: guess.id })}
+                              accessibilityRole="button"
+                              testID={`mpesa-line-debt-guess-${item.index}`}
+                            >
+                              <Text style={[styles.hint, { color: colors.primary, fontFamily: 'Inter_600SemiBold' }]}>
+                                Looks like {guess.name}. {DEBT_LABEL[guessKind]}? Tap to set
+                              </Text>
+                            </Pressable>
+                          ) : (
+                            <Pressable
+                              onPress={() => setDebtFor({ index: item.index, partyId: guess?.id ?? null, kind: null })}
+                              accessibilityRole="button"
+                              testID={`mpesa-line-debt-open-${item.index}`}
+                            >
+                              <Text style={[styles.hint, { color: colors.primary, fontFamily: 'Inter_600SemiBold' }]}>
+                                Is this a debt or loan?
+                              </Text>
+                            </Pressable>
+                          )}
+                        </>
+                      );
+                    })()
                   ) : null}
                   {out && item.fee ? (
                     <Text style={[styles.hint, { color: colors.mutedForeground }]}>+ KES {formatExact(item.fee)} M-Pesa charge, saved on its own</Text>
@@ -698,6 +806,73 @@ export default function MpesaImportScreen() {
           </Pressable>
         </View>
       ) : null}
+
+      <Modal visible={debtFor !== null} animationType="slide" transparent onRequestClose={() => setDebtFor(null)}>
+        <View style={styles.sheetBackdrop}>
+          <View style={[styles.sheet, { backgroundColor: colors.card, borderColor: colors.border, padding: 16, gap: 10 }]}>
+            <Text style={[styles.sheetTitle, { color: colors.foreground }]}>Is this a debt or loan?</Text>
+            <Text style={[styles.hint, { color: colors.mutedForeground }]}>
+              Choose who, and what it is. Jamvi will offer to update what you owe or are owed once everything is saved.
+            </Text>
+            <ScrollView style={{ maxHeight: 160 }}>
+              {parties.map((party) => {
+                const on = debtFor?.partyId === party.id;
+                return (
+                  <Pressable
+                    key={party.id}
+                    onPress={() => setDebtFor((current) => (current ? { ...current, partyId: party.id } : current))}
+                    style={[styles.option, on && { backgroundColor: `${colors.primary}18` }]}
+                    accessibilityRole="button"
+                    testID={`mpesa-debt-party-${party.id}`}
+                  >
+                    <Text style={{ color: colors.foreground, fontFamily: on ? 'Inter_600SemiBold' : 'Inter_400Regular' }}>{party.name}</Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+            {(() => {
+              const line = lines?.find((candidate) => candidate.index === debtFor?.index);
+              if (!line?.direction) return null;
+              return debtKindsFor(line.direction).map((kind) => {
+                const on = debtFor?.kind === kind;
+                return (
+                  <Pressable
+                    key={kind}
+                    onPress={() => setDebtFor((current) => (current ? { ...current, kind } : current))}
+                    style={[styles.categoryButton, { borderColor: on ? colors.primary : colors.border, backgroundColor: on ? `${colors.primary}18` : colors.muted }]}
+                    accessibilityRole="button"
+                    testID={`mpesa-debt-kind-${kind}`}
+                  >
+                    <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>{DEBT_LABEL[kind]}</Text>
+                  </Pressable>
+                );
+              });
+            })()}
+            <Pressable
+              onPress={() => {
+                if (debtFor?.partyId && debtFor.kind) setDebt(debtFor.index, { kind: debtFor.kind, partyId: debtFor.partyId });
+                setDebtFor(null);
+              }}
+              disabled={!debtFor?.partyId || !debtFor.kind}
+              style={[styles.primary, { backgroundColor: colors.primary, opacity: debtFor?.partyId && debtFor.kind ? 1 : 0.5 }]}
+              accessibilityRole="button"
+              testID="mpesa-debt-save"
+            >
+              <Text style={styles.primaryText}>Save</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                if (debtFor) setDebt(debtFor.index, null);
+                setDebtFor(null);
+              }}
+              style={styles.secondary}
+              accessibilityRole="button"
+            >
+              <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold' }}>No, it is not a debt or loan</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
 
       <Modal visible={naming !== null} animationType="slide" transparent onRequestClose={() => setNaming(null)}>
         <View style={styles.sheetBackdrop}>

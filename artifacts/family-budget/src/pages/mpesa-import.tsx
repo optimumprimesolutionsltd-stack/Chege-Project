@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { CheckCircle2, Loader2, Pencil } from "lucide-react";
 import {
@@ -34,6 +35,16 @@ import {
   type PreviewLine,
 } from "@/lib/mpesa-import";
 import {
+  balanceChanges,
+  canLinkDebt,
+  DEBT_LABEL,
+  debtKindsFor,
+  matchParty,
+  suggestDebtKind,
+  type DebtKind,
+  type PartyLite,
+} from "@/lib/mpesa-debts";
+import {
   applyNicknames,
   canNickname,
   nicknameStorageKey,
@@ -60,6 +71,7 @@ const SELECT_CLASS = "flex h-11 w-full rounded-md border border-input bg-card px
  */
 export default function MpesaImportPage() {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const { user } = useAuth();
   const { data: group } = useGetGroup();
   const isShared = group?.isPrivate === false;
@@ -212,6 +224,28 @@ export default function MpesaImportPage() {
     return null;
   }, [lines, choices, summary, chargeCategory]);
 
+  // Who owes who, and the categories that track a debt: a payment to or from a
+  // person can be a debt or a loan, and paying a debt's category pays it down.
+  const { data: parties = [] } = useQuery<PartyLite[]>({
+    queryKey: ["parties"],
+    queryFn: async () => {
+      const response = await fetch("/api/contributors", { credentials: "include" });
+      if (!response.ok) return [];
+      return (await response.json()) as PartyLite[];
+    },
+    staleTime: 30_000,
+  });
+  const debtCategories = useMemo(
+    () =>
+      (categoryList as unknown as Array<{ id: number; name: string; debtBalance?: number | null }>)
+        .filter((row) => row.debtBalance !== null && row.debtBalance !== undefined)
+        .map((row) => ({ id: row.id, name: row.name, debtBalance: row.debtBalance })),
+    [categoryList],
+  );
+  const [debtEditing, setDebtEditing] = useState<{ index: number; partyId: string; kind: DebtKind | "" } | null>(null);
+  const setDebt = (index: number, debt: { kind: DebtKind; partyId: number } | null) =>
+    setChoices((current) => ({ ...current, [index]: { ...current[index], debt } }));
+
   const recordable = lines?.filter(isRecordable) ?? [];
   const notImported = lines?.filter((item) => !isRecordable(item)) ?? [];
 
@@ -226,6 +260,7 @@ export default function MpesaImportPage() {
     }
     setSaving(true);
     const result: Outcome = { saved: 0, repeats: 0, failed: [] };
+    const savedIndexes = new Set<number>();
     try {
       for (const item of lines) {
         const choice = choices[item.index];
@@ -252,6 +287,7 @@ export default function MpesaImportPage() {
             }
           }
           result.saved += 1;
+          savedIndexes.add(item.index);
         } catch (error) {
           const message = error instanceof Error ? error.message : "It was not saved.";
           if (/already recorded/i.test(message)) result.repeats += 1;
@@ -261,6 +297,35 @@ export default function MpesaImportPage() {
     } finally {
       setSaving(false);
       setOutcome(result);
+    }
+    void offerBalanceChanges(lines.filter((item) => savedIndexes.has(item.index)));
+  };
+
+  /**
+   * Once, at the end, for everything that was saved. Asked and never applied by
+   * itself: the entries can be edited or deleted afterwards, and a balance moved
+   * behind somebody's back would be left quietly wrong.
+   */
+  const offerBalanceChanges = async (saved: PreviewLine[]) => {
+    const changes = balanceChanges(saved, choices, parties, debtCategories);
+    if (changes.length === 0) return;
+    const question =
+      `${changes.length === 1 ? "Update this balance too?" : `Update ${changes.length} balances too?`}\n\n` +
+      `${changes.map((change) => `· ${change.label}`).join("\n")}\n\nThe entries are already saved either way.`;
+    if (!window.confirm(question)) return;
+    try {
+      for (const change of changes) {
+        const response = await fetch(change.endpoint, {
+          method: change.method,
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(change.body),
+        });
+        if (!response.ok) throw new Error("A balance could not be updated.");
+      }
+      await queryClient.invalidateQueries({ queryKey: ["parties"] });
+    } catch (error) {
+      toast({ variant: "destructive", title: "Some balances did not update", description: error instanceof Error ? error.message : "Please try again." });
     }
   };
 
@@ -466,7 +531,7 @@ export default function MpesaImportPage() {
                       {out ? "−" : "+"}{formatKes(item.amount ?? 0)}
                     </p>
                   </div>
-                  {out && choice?.include ? (
+                  {out && choice?.include && choice.debt?.kind !== "lend" ? (
                     <select
                       className={`${SELECT_CLASS} ${choice.category ? "" : "border-destructive"}`}
                       value={choice.category}
@@ -489,6 +554,88 @@ export default function MpesaImportPage() {
                     <p className="text-xs text-muted-foreground" data-testid={`mpesa-line-suggested-${item.index}`}>
                       Suggested by Jamvi. Change it if it is wrong.
                     </p>
+                  ) : null}
+                  {choice?.include && canLinkDebt(item) && parties.length > 0 ? (
+                    (() => {
+                      const linked = choice.debt ? parties.find((party) => party.id === choice.debt!.partyId) : undefined;
+                      const guess = !choice.debt && item.direction ? matchParty(item.original ?? item.description, parties) : null;
+                      const guessKind = guess && item.direction ? suggestDebtKind(item.direction, guess) : null;
+                      if (debtEditing?.index === item.index) {
+                        return (
+                          <div className="space-y-2 rounded-lg border border-border p-3" data-testid={`mpesa-debt-editor-${item.index}`}>
+                            <select
+                              className={SELECT_CLASS}
+                              value={debtEditing.partyId}
+                              onChange={(event) => setDebtEditing({ ...debtEditing, partyId: event.target.value })}
+                              aria-label="Who is it?"
+                              data-testid={`mpesa-debt-party-${item.index}`}
+                            >
+                              <option value="">Who is it?</option>
+                              {parties.map((party) => <option key={party.id} value={party.id}>{party.name}</option>)}
+                            </select>
+                            <select
+                              className={SELECT_CLASS}
+                              value={debtEditing.kind}
+                              onChange={(event) => setDebtEditing({ ...debtEditing, kind: event.target.value as DebtKind })}
+                              aria-label="What is it?"
+                              data-testid={`mpesa-debt-kind-${item.index}`}
+                            >
+                              <option value="">What is it?</option>
+                              {item.direction ? debtKindsFor(item.direction).map((kind) => <option key={kind} value={kind}>{DEBT_LABEL[kind]}</option>) : null}
+                            </select>
+                            <div className="flex flex-wrap gap-2">
+                              <Button
+                                size="sm"
+                                disabled={!debtEditing.partyId || !debtEditing.kind}
+                                onClick={() => {
+                                  if (debtEditing.partyId && debtEditing.kind) setDebt(item.index, { kind: debtEditing.kind, partyId: Number(debtEditing.partyId) });
+                                  setDebtEditing(null);
+                                }}
+                                data-testid={`mpesa-debt-save-${item.index}`}
+                              >
+                                Save
+                              </Button>
+                              <Button size="sm" variant="ghost" onClick={() => { setDebt(item.index, null); setDebtEditing(null); }}>No, it is not a debt or loan</Button>
+                              <Button size="sm" variant="outline" onClick={() => setDebtEditing(null)}>Cancel</Button>
+                            </div>
+                          </div>
+                        );
+                      }
+                      if (choice.debt && linked) {
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => setDebtEditing({ index: item.index, partyId: String(linked.id), kind: choice.debt!.kind })}
+                            className="text-left text-xs font-semibold text-primary hover:underline"
+                            data-testid={`mpesa-line-debt-${item.index}`}
+                          >
+                            {DEBT_LABEL[choice.debt.kind]}: {linked.name} · change
+                          </button>
+                        );
+                      }
+                      if (guess && guessKind) {
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => setDebt(item.index, { kind: guessKind, partyId: guess.id })}
+                            className="text-left text-xs font-semibold text-primary hover:underline"
+                            data-testid={`mpesa-line-debt-guess-${item.index}`}
+                          >
+                            Looks like {guess.name}. {DEBT_LABEL[guessKind]}? Click to set
+                          </button>
+                        );
+                      }
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => setDebtEditing({ index: item.index, partyId: guess ? String(guess.id) : "", kind: "" })}
+                          className="text-left text-xs font-semibold text-primary hover:underline"
+                          data-testid={`mpesa-line-debt-open-${item.index}`}
+                        >
+                          Is this a debt or loan?
+                        </button>
+                      );
+                    })()
                   ) : null}
                   {out && item.fee ? <p className="text-xs text-muted-foreground">+ {formatKes(item.fee)} M-Pesa charge, saved on its own</p> : null}
                 </CardContent>
