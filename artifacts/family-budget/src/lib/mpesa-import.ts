@@ -308,9 +308,12 @@ export function canReport(line: PreviewLine): boolean {
   return line.named === false;
 }
 
+// Includes the masked form M-Pesa prints (0722***443), which is still a number.
 const PHONE_PATTERNS = [
   /\+?254[\s-]?(?:7\d{2}|1\d{2})[\s-]?\d{3}[\s-]?\d{3}/g,
   /\b0(?:7\d{2}|1\d{2})[\s-]?\d{3}[\s-]?\d{3}\b/g,
+  /\+?254(?:7\d{2}|1\d{2})[*+xX•.]{2,5}\d{3}\b/g,
+  /\b0(?:7\d{2}|1\d{2})[*+xX•.]{2,5}\d{3}\b/g,
 ];
 
 /** Hides phone numbers before somebody sees the text they are about to send. */

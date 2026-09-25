@@ -5,6 +5,7 @@ import { db, jointAccountTxTable } from "@workspace/db";
 import { getActiveGroupId } from "../lib/activeGroup";
 import { buildFormatReport, readPaste, type ImportItem } from "../lib/mpesa-parser/import";
 import { feedbackLimiter } from "../middlewares/rateLimit";
+import { EmailNotConfiguredError, sendEmail } from "../lib/email";
 
 const router = Router();
 
@@ -94,20 +95,43 @@ router.post("/mpesa/report-format", feedbackLimiter, async (req, res): Promise<v
     return;
   }
 
-  const url = process.env.FEEDBACK_CRM_URL;
-  const key = process.env.FEEDBACK_CRM_KEY;
-  if (!url || !key) {
+  const report = buildFormatReport(parsed.data.message);
+
+  // The feedback CRM when it is set up, and otherwise (or if it cannot be
+  // reached) an email to the Jamvi inbox, which needs nothing more than the mail
+  // setup the app already has. Either way, nothing about who sent it goes along,
+  // and nothing is logged or kept here.
+  if (await sendToCrm(report)) {
+    res.status(201).json({ ok: true, via: "crm" });
+    return;
+  }
+  const emailed = await sendByEmail(report);
+  if (emailed === "sent") {
+    res.status(201).json({ ok: true, via: "email" });
+    return;
+  }
+  if (emailed === "not-configured") {
     res.status(503).json({ error: "Sending is not set up yet. Please try again later." });
     return;
   }
+  res.status(502).json({ error: "Could not send it right now. Please try again." });
+});
 
+const escapeHtml = (value: string) =>
+  value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+/** True when the feedback CRM took it. False when it is not set up or could not be reached. */
+async function sendToCrm(report: string): Promise<boolean> {
+  const url = process.env.FEEDBACK_CRM_URL;
+  const key = process.env.FEEDBACK_CRM_KEY;
+  if (!url || !key) return false;
   try {
     const upstream = await fetch(url, {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
       body: JSON.stringify({
         product: "jamvi",
-        message: buildFormatReport(parsed.data.message),
+        message: report,
         rating: null,
         // A stable label, not a person: format reports are not attributable.
         submittedBy: "mpesa-format-report",
@@ -115,15 +139,24 @@ router.post("/mpesa/report-format", feedbackLimiter, async (req, res): Promise<v
         context: "mpesa-format",
       }),
     });
-    if (!upstream.ok) {
-      res.status(502).json({ error: "Could not send it right now. Please try again." });
-      return;
-    }
-    res.status(201).json({ ok: true });
+    return upstream.ok;
   } catch {
-    // Not logged: the request carries a message a person chose to share.
-    res.status(502).json({ error: "Could not send it right now. Please try again." });
+    return false;
   }
-});
+}
+
+async function sendByEmail(report: string): Promise<"sent" | "not-configured" | "failed"> {
+  try {
+    await sendEmail({
+      from: process.env.INVITATION_FROM_EMAIL?.trim() || "Jamvi <info@jamvi.co.ke>",
+      to: [process.env.MPESA_REPORT_TO?.trim() || "info@jamvi.co.ke"],
+      subject: "M-Pesa format report",
+      html: `<pre style="font-family:monospace;white-space:pre-wrap">${escapeHtml(report)}</pre>`,
+    });
+    return "sent";
+  } catch (error) {
+    return error instanceof EmailNotConfiguredError ? "not-configured" : "failed";
+  }
+}
 
 export default router;

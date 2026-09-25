@@ -214,3 +214,63 @@ describe("sending a message so its format can be learned", () => {
     expect(route).not.toMatch(/console\.|logger\.|req\.log/);
   });
 });
+
+// From a real phone: M-Pesa prints the sender's number with its middle hidden,
+// and the parser could not read the name in front of it.
+describe("a masked phone number", () => {
+  const RECEIVED =
+    "TESTMASK1 Confirmed.You have received Ksh250.00 from SAMPLE PERSON 0722***443 on 21/9/26 at 4:57 PM New M-PESA balance is Ksh9,354.70. Invest & earn daily interest with ZIIDI on https://saf.cx/xxxx";
+
+  it("no longer hides the name of who money came from", () => {
+    const item = toImportItem(RECEIVED, 0);
+    expect(item).toMatchObject({
+      status: "ready", direction: "in", type: "person_receipt", amount: 250, date: "2026-09-21", named: true,
+    });
+    expect(item.description).toBe("Received from Sample Person");
+  });
+
+  it.each([
+    ["stars", "0722***443"],
+    ["plus signs, as some copies show them", "0722+++443"],
+    ["crosses", "0722xxx443"],
+    ["an international masked number", "+254722***443"],
+  ])("reads %s", (_name, masked) => {
+    const item = toImportItem(RECEIVED.replace("0722***443", masked), 0);
+    expect(item.named).toBe(true);
+    expect(item.description).toBe("Received from Sample Person");
+  });
+
+  it("reads a payment to a person whose number is masked", () => {
+    const item = toImportItem(
+      "TESTMASK2 Confirmed. Ksh70.00 sent to SAMPLE PERSON 0722***443 on 2/9/26 at 9:50 AM. New M-PESA balance is Ksh0.00. Transaction cost, Ksh0.00.",
+      0,
+    );
+    expect(item).toMatchObject({ status: "ready", direction: "out", type: "person_payment", named: true });
+    expect(item.description).toBe("Sample Person");
+  });
+
+  it("is masked out of a report before anyone reads it", () => {
+    const report = buildFormatReport(RECEIVED);
+    expect(report).not.toContain("0722***443");
+    expect(report).toContain("<PHONE>");
+  });
+});
+
+describe("sending a report when the CRM is not set up", () => {
+  const route = readFileSync(new URL("../../routes/mpesa-import.ts", import.meta.url), "utf8");
+
+  it("falls back to an email to the Jamvi inbox, and says so only when neither is set up", () => {
+    expect(route).toContain("await sendToCrm(report)");
+    expect(route).toContain("await sendByEmail(report)");
+    expect(route).toContain('to: [process.env.MPESA_REPORT_TO?.trim() || "info@jamvi.co.ke"]');
+    expect(route).toContain('if (emailed === "not-configured")');
+    expect(route).toContain("Sending is not set up yet.");
+  });
+
+  it("escapes the message in the email and adds nothing about who sent it", () => {
+    expect(route).toContain("escapeHtml(report)");
+    expect(route).toContain('.replace(/</g, "&lt;")');
+    expect(route).not.toContain("req.user");
+    expect(route).not.toMatch(/console\.|logger\.|req\.log/);
+  });
+});
