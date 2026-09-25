@@ -61,6 +61,12 @@ import { useDraft } from '@/lib/draft';
 import { clearQueryClientCache } from '@/lib/queryPersist';
 import { ACTIVE_WORKSPACE_STORAGE_KEY } from '@/lib/workspace';
 import { formatExact } from '@/lib/formatExact';
+import { StatementReader, type ReaderJob } from '@/components/StatementReader';
+import { canReadStatements, chooseStatement, statementBase64, type ChosenStatement } from '@/lib/statementFile';
+import { shownFileName } from '@/lib/shownFileName';
+import { reconcile, statementLines, type StatementReading } from '@/lib/statementImport';
+import { checkRunningBalance, readStatementRows, resolveDirections } from '@/lib/statementTable';
+import type { ReaderMessage } from '@/lib/statementReaderHtml';
 import {
   buildPostings,
   categoryPath,
@@ -340,6 +346,12 @@ export default function MpesaImportScreen() {
 
   const [text, setText] = useState('');
   const [reading, setReading] = useState(false);
+  // A statement PDF: read on this phone, with its password used only here.
+  const [statementFile, setStatementFile] = useState<ChosenStatement | null>(null);
+  const [statementPassword, setStatementPassword] = useState('');
+  const [readerJob, setReaderJob] = useState<ReaderJob | null>(null);
+  const [statementNote, setStatementNote] = useState<string | null>(null);
+  const [statementReading, setStatementReading] = useState<StatementReading | null>(null);
   const [lines, setLines] = useState<PreviewLine[] | null>(null);
   const [choices, setChoices] = useState<Record<number, Choice>>({});
   const [chargeCategory, setChargeCategory] = useState('');
@@ -367,6 +379,8 @@ export default function MpesaImportScreen() {
     },
   });
   const startOver = () => {
+    setStatementNote(null);
+    setStatementReading(null);
     discardDraft();
     pendingChoicesRef.current = null;
     setText('');
@@ -527,6 +541,82 @@ export default function MpesaImportScreen() {
     }
   };
 
+  const pickStatement = async () => {
+    try {
+      const chosen = await chooseStatement();
+      if (chosen) setStatementFile(chosen);
+    } catch (error: unknown) {
+      Alert.alert('Could not open that file', error instanceof Error ? error.message : 'Please try again.');
+    }
+  };
+
+  const readStatement = async () => {
+    if (!statementFile || readerJob) return;
+    setReading(true);
+    try {
+      setReaderJob({ base64: await statementBase64(statementFile.uri), password: statementPassword });
+    } catch (error: unknown) {
+      setReading(false);
+      Alert.alert('Could not read the statement', error instanceof Error ? error.message : 'Please try again.');
+    }
+  };
+
+  // The hidden page has read the PDF (or said why it could not): turn it into the same list a paste makes.
+  const onStatementRead = async (result: ReaderMessage) => {
+    if (result.type === 'ready') return;
+    setReaderJob(null);
+    try {
+      if (result.type === 'error') {
+        if (result.name === 'PasswordException') {
+          Alert.alert(
+            result.code === 2 ? 'Wrong password' : 'Password needed',
+            result.code === 2 ? 'That did not open the statement. Try again.' : 'Type the password M-Pesa sent with the statement.',
+          );
+          return;
+        }
+        throw new Error('Jamvi could not open this file. Is it the M-Pesa statement PDF?');
+      }
+      const rows = resolveDirections(readStatementRows(result.pages));
+      if (rows.length === 0) throw new Error('Jamvi could not find the payments in this file. Is it the M-Pesa statement PDF?');
+      if (!checkRunningBalance(rows).ok) {
+        throw new Error('This statement does not add up, so Jamvi will not risk recording wrong amounts. Paste your messages instead.');
+      }
+      const reading = statementLines(rows);
+      const codes = [...new Set(reading.lines.map((line) => line.receipt).filter((code): code is string => Boolean(code)))];
+      let recorded = new Map<string, { date: string | null; description: string }>();
+      if (codes.length > 0) {
+        const body = await customFetch<{ recorded: Array<{ receipt: string; date: string; description: string }> }>('/api/mpesa/import/check-receipts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ receipts: codes }),
+        });
+        recorded = new Map(body.recorded.map((row) => [row.receipt, { date: row.date, description: row.description }]));
+      }
+      const checked = reading.lines.map((line) => {
+        const existing = line.receipt ? recorded.get(line.receipt) : undefined;
+        return existing ? { ...line, alreadyRecorded: existing } : line;
+      });
+      const known = parseStoredNicknames(await AsyncStorage.getItem(nicknamesKey).catch(() => null));
+      setNicknames(known);
+      const shown = applyNicknames(checked, known);
+      const left = [
+        reading.loanDraws > 0 ? `${reading.loanDraws} Fuliza loans` : null,
+        reading.loanRepayments > 0 ? `${reading.loanRepayments} loan repayments` : null,
+      ].filter(Boolean);
+      setStatementNote(
+        `Read ${shown.length} entries from your statement. It adds up.${left.length > 0 ? ` Left out because they are not spending or income: ${left.join(' and ')}. What a Fuliza loan paid for is recorded as a normal payment.` : ''}`,
+      );
+      setLines(shown);
+      setStatementReading({ ...reading, lines: shown });
+      setChoices(initialChoices(shown, history, categories.map((row) => row.name), chargeCategory));
+      setStatementPassword('');
+    } catch (error: unknown) {
+      Alert.alert('Could not read the statement', error instanceof Error ? error.message : 'Please try again.');
+    } finally {
+      setReading(false);
+    }
+  };
+
   // Messages shared from another app: added to what is here and read at once, whether
   // they arrived as the screen opened or while it was already open.
   const textRef = React.useRef(text);
@@ -559,6 +649,12 @@ export default function MpesaImportScreen() {
     }
     setPicking(null);
   };
+
+  // Would saving these leave the account moved as far as the statement says M-Pesa moved?
+  const balanceCheck = useMemo(
+    () => (statementReading && lines ? reconcile({ ...statementReading, lines }, (line) => choices[line.index]?.include === true) : null),
+    [statementReading, lines, choices],
+  );
 
   const summary = useMemo(() => (lines ? summarise(lines, choices) : null), [lines, choices]);
   const firstProblem = useMemo(() => {
@@ -798,8 +894,47 @@ export default function MpesaImportScreen() {
               accessibilityRole="button"
               testID="mpesa-import-read"
             >
-              {reading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Read my messages</Text>}
+              {reading && !readerJob ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Read my messages</Text>}
             </Pressable>
+
+            {canReadStatements ? (
+              <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]} testID="mpesa-statement">
+                <Text style={[styles.summaryLine, { color: colors.foreground }]}>Or use your M-Pesa statement</Text>
+                <Text style={[styles.hint, { color: colors.mutedForeground }]}>
+                  Choose the statement PDF and type its password. Jamvi reads it here on your phone. The file and the password are not uploaded or saved.
+                </Text>
+                <Pressable
+                  onPress={pickStatement}
+                  style={[styles.secondary, { borderColor: colors.border, borderWidth: 1, borderRadius: 12 }]}
+                  accessibilityRole="button"
+                  testID="mpesa-statement-choose"
+                >
+                  <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>
+                    {statementFile ? shownFileName(statementFile.name) : 'Choose the statement PDF'}
+                  </Text>
+                </Pressable>
+                <TextInput
+                  value={statementPassword}
+                  onChangeText={setStatementPassword}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  placeholder="Statement password"
+                  placeholderTextColor={colors.mutedForeground}
+                  style={[styles.pasteBox, { minHeight: 48, borderColor: colors.border, backgroundColor: colors.muted, color: colors.foreground }]}
+                  testID="mpesa-statement-password"
+                />
+                <Pressable
+                  onPress={readStatement}
+                  disabled={!statementFile || reading}
+                  style={[styles.primary, { backgroundColor: colors.primary, opacity: !statementFile || reading ? 0.6 : 1 }]}
+                  accessibilityRole="button"
+                  testID="mpesa-statement-read"
+                >
+                  {readerJob ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Read my statement</Text>}
+                </Pressable>
+              </View>
+            ) : null}
           </>
         ) : (
           <>
@@ -814,6 +949,36 @@ export default function MpesaImportScreen() {
               }}
               testIDPrefix="mpesa-import-account"
             />
+
+            {statementNote ? (
+              <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]} testID="mpesa-statement-note">
+                <Text style={[styles.hint, { color: colors.foreground, marginTop: 0 }]}>{statementNote}</Text>
+              </View>
+            ) : null}
+
+            {balanceCheck ? (
+              <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]} testID="mpesa-statement-balance">
+                <Text style={[styles.summaryLine, { color: colors.foreground }]}>
+                  {Math.abs(balanceCheck.gap) < 0.005 ? 'Matches your statement' : 'Will not match your statement exactly'}
+                </Text>
+                <Text style={[styles.hint, { color: colors.mutedForeground }]}>
+                  Your statement went from KES {formatExact(balanceCheck.opening)} to KES {formatExact(balanceCheck.closing)}, a change of KES {formatExact(balanceCheck.statementChange)}. Saving these moves this account by KES {formatExact(balanceCheck.savedChange)}.
+                </Text>
+                {Math.abs(balanceCheck.gap) >= 0.005 ? (
+                  <>
+                    <Text style={[styles.hint, { color: colors.foreground }]}>The difference of KES {formatExact(balanceCheck.gap)} is:</Text>
+                    {balanceCheck.parts.map((part) => (
+                      <Text key={part.label} style={[styles.hint, { color: colors.mutedForeground, marginTop: 2 }]}>
+                        • {part.label}: KES {formatExact(part.amount)}
+                      </Text>
+                    ))}
+                  </>
+                ) : null}
+                <Text style={[styles.hint, { color: colors.mutedForeground }]}>
+                  Your account also has to start at KES {formatExact(balanceCheck.opening)} for it to end at KES {formatExact(balanceCheck.closing)}.
+                </Text>
+              </View>
+            ) : null}
 
             {summary ? (
               <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]} testID="mpesa-import-summary">
@@ -1002,12 +1167,13 @@ export default function MpesaImportScreen() {
               </View>
             ) : null}
 
-            <Pressable onPress={() => { setLines(null); setChoices({}); }} style={styles.secondary} accessibilityRole="button">
-              <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>Paste different messages</Text>
+            <Pressable onPress={() => { setLines(null); setChoices({}); setStatementNote(null); setStatementReading(null); }} style={styles.secondary} accessibilityRole="button">
+              <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>Start again</Text>
             </Pressable>
           </>
         )}
       </PageScrollView>
+      <StatementReader job={readerJob} onDone={onStatementRead} />
 
       {lines ? (
         <View style={[styles.footer, { paddingBottom: insets.bottom + 12, backgroundColor: colors.card, borderColor: colors.border }]}>
