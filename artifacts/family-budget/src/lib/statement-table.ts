@@ -46,11 +46,15 @@ function lines(items: readonly TextItem[]): TextItem[][] {
 const rightEdge = (item: TextItem) => item.x + item.w;
 
 /**
- * The three number columns, found from where amounts actually sit across the
- * whole statement: money in, money out and the balance, left to right. Header
- * text is aligned differently from the figures under it, so it is no guide.
+ * The number columns, found from where amounts actually sit across the whole
+ * statement: money in, money out and the balance, left to right. Header text is
+ * aligned differently from the figures under it, so it is no guide to where they
+ * end. The summary table above the rows adds a few stray figures of its own, so
+ * only the biggest clusters count: a column is where a row's worth of amounts pile up.
  */
-function amountColumns(pages: readonly (readonly TextItem[])[]): number[] | null {
+function amountColumns(
+  pages: readonly (readonly TextItem[])[],
+): { paidIn: number | null; withdrawn: number | null; balance: number } | null {
   const edges: number[] = [];
   for (const items of pages) for (const item of items) if (AMOUNT.test(item.str.trim())) edges.push(rightEdge(item));
   if (edges.length === 0) return null;
@@ -61,13 +65,29 @@ function amountColumns(pages: readonly (readonly TextItem[])[]): number[] | null
     if (edges[i] - edges[i - 1] > 24) clusters.push([edges[i]]);
     else clusters[clusters.length - 1].push(edges[i]);
   }
-  // Stray figures (a summary table above the rows) form small clusters of their own.
-  const big = clusters.filter((cluster) => cluster.length >= 5);
-  if (big.length < 2) return null;
-  const centres = big.map((cluster) => cluster.reduce((sum, edge) => sum + edge, 0) / cluster.length);
-  // The last column is the balance, the one before it is money out; money in is
-  // the one before that when there is one.
-  return centres.slice(-3);
+  const centres = clusters
+    .filter((cluster) => cluster.length >= 5)
+    .sort((a, b) => b.length - a.length)
+    .slice(0, 3)
+    .map((cluster) => cluster.reduce((sum, edge) => sum + edge, 0) / cluster.length)
+    .sort((a, b) => a - b);
+  if (centres.length === 3) return { paidIn: centres[0], withdrawn: centres[1], balance: centres[2] };
+  if (centres.length === 2) {
+    // Only one of money in / money out appears: the header says which.
+    const header = (label: string) => {
+      for (const items of pages) {
+        const hit = items.find((item) => item.str.trim() === label);
+        if (hit) return hit.x + hit.w / 2;
+      }
+      return null;
+    };
+    const paidInHeader = header("Paid In");
+    const withdrawnHeader = header("Withdrawn");
+    const isPaidIn =
+      paidInHeader !== null && withdrawnHeader !== null && Math.abs(centres[0] - paidInHeader) < Math.abs(centres[0] - withdrawnHeader);
+    return isPaidIn ? { paidIn: centres[0], withdrawn: null, balance: centres[1] } : { paidIn: null, withdrawn: centres[0], balance: centres[1] };
+  }
+  return null;
 }
 
 /** Text of the details column: everything between the time and the status columns. */
@@ -78,11 +98,11 @@ function joinDetails(parts: string[]): string {
 export function readStatementRows(pages: readonly (readonly TextItem[])[]): StatementRow[] {
   const columns = amountColumns(pages);
   if (!columns) return [];
-  const [paidInEdge, withdrawnEdge, balanceEdge] = columns.length === 3 ? columns : [null, columns[0], columns[1]];
+  const { paidIn: paidInEdge, withdrawn: withdrawnEdge, balance: balanceEdge } = columns;
   const columnOf = (item: TextItem): "paidIn" | "withdrawn" | "balance" | null => {
     const edge = rightEdge(item);
     const options: Array<["paidIn" | "withdrawn" | "balance", number | null]> = [
-      ["paidIn", paidInEdge ?? null],
+      ["paidIn", paidInEdge],
       ["withdrawn", withdrawnEdge],
       ["balance", balanceEdge],
     ];
@@ -164,24 +184,45 @@ export function readStatementRows(pages: readonly (readonly TextItem[])[]): Stat
 }
 
 /**
- * Whether the statement adds up: each row's balance is the balance before it plus
- * what came in, minus what went out. A statement that does not is one whose amounts
- * were misread, and it is better to say so than to record it.
+ * Whether the statement adds up, receipt by receipt: everything under one receipt
+ * (a payment, its charge, and a Fuliza loan draw that funded it) moves the
+ * balance by what came in minus what went out, and the balance after it is the
+ * balance before it plus that.
  *
- * Works whichever way round the statement is ordered.
+ * Checked per receipt and not per row because the rows of one receipt are
+ * offsetting entries that all show the same balance: a Fuliza payment and its
+ * draw cancel out, so no single row's balance follows from the row before it.
+ * A statement that does not add up is one whose amounts were misread, and it is
+ * better to say so than to record it. Works whichever way round the statement is.
  */
 export function checkRunningBalance(rows: readonly StatementRow[]): { checked: number; failedAt: number[]; ok: boolean } {
   if (rows.length < 2) return { checked: 0, failedAt: [], ok: true };
   const newestFirst = rows[0].time >= rows[rows.length - 1].time;
+  const ordered = newestFirst ? rows : [...rows].reverse();
+
+  // Consecutive rows with the same receipt are one group; [start, end) indexes into `ordered`.
+  const groups: Array<{ start: number; end: number }> = [];
+  for (let i = 0; i < ordered.length; i += 1) {
+    const last = groups[groups.length - 1];
+    if (last && ordered[last.start].receipt === ordered[i].receipt) last.end = i + 1;
+    else groups.push({ start: i, end: i + 1 });
+  }
+
   const failedAt: number[] = [];
   let checked = 0;
-  for (let i = 0; i < rows.length - 1; i += 1) {
-    const later = newestFirst ? rows[i] : rows[i + 1];
-    const earlier = newestFirst ? rows[i + 1] : rows[i];
-    if (later.balance === null || earlier.balance === null) continue;
-    const expected = Math.round((earlier.balance + (later.paidIn ?? 0) - (later.withdrawn ?? 0)) * 100) / 100;
+  for (let g = 0; g < groups.length - 1; g += 1) {
+    const later = groups[g];
+    const earlier = groups[g + 1];
+    // Newest first: the newest row of a group carries the balance after the whole group.
+    const after = ordered[later.start].balance;
+    const before = ordered[earlier.start].balance;
+    if (after === null || before === null) continue;
+    let net = 0;
+    for (let i = later.start; i < later.end; i += 1) net += (ordered[i].paidIn ?? 0) - (ordered[i].withdrawn ?? 0);
     checked += 1;
-    if (Math.abs(expected - later.balance) > 0.01) failedAt.push(newestFirst ? i : i + 1);
+    if (Math.abs(Math.round((before + net) * 100) / 100 - after) > 0.01) {
+      failedAt.push(newestFirst ? later.start : rows.length - 1 - later.start);
+    }
   }
   return { checked, failedAt, ok: failedAt.length === 0 };
 }
