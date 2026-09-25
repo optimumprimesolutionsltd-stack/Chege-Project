@@ -235,6 +235,8 @@ const OpeningBalanceInput = z.object({
 const SavingsTransferInput = z.object({
   amount: z.number().int().nonnegative(),
   goalId: z.number().int().positive(),
+  /** The M-Pesa receipt this came from, so the same message or statement is recognised next time. */
+  mpesaReceipt: MpesaReceipt.optional(),
   narration: z.string().trim().min(1).max(200),
   date: z.string().min(1),
   madeById: z.string().nullable().optional(),
@@ -1040,6 +1042,8 @@ async function createSavingsTransfer(
   if (!requireMemberSelfAttribution(req, res, [parsed.data.madeById])) return;
 
   const { amount, goalId, narration, date } = parsed.data;
+  const savingsClash = await alreadyRecorded(groupId, parsed.data.mpesaReceipt);
+  if (savingsClash) { res.status(409).json(savingsClash); return; }
   const madeById = parsed.data.madeById ?? null;
   if (madeById !== null) {
     const err = await validateMemberId(madeById, groupId);
@@ -1081,6 +1085,7 @@ async function createSavingsTransfer(
         expenseCategory: null,
         savingsGoalId: goal.id,
         transferDirection: direction,
+        mpesaReceipt: parsed.data.mpesaReceipt ?? null,
       })
       .returning();
 

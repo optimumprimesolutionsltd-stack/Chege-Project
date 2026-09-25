@@ -63,12 +63,12 @@ describe("recording the same message twice is refused", () => {
     expect(bank).toContain("z.string().trim().min(6).max(20).regex(/^[A-Za-z0-9]+$/)");
   });
 
-  it("stores it on both kinds of posting", () => {
-    expect((bank.match(/mpesaReceipt: parsed\.data\.mpesaReceipt \?\? null,/g) ?? []).length).toBe(2);
+  it("stores it on deposits, withdrawals and savings transfers", () => {
+    expect((bank.match(/mpesaReceipt: parsed\.data\.mpesaReceipt \?\? null,/g) ?? []).length).toBe(3);
   });
 
   it("stays optional, because most postings are typed by hand", () => {
-    expect((bank.match(/mpesaReceipt: MpesaReceipt\.optional\(\),/g) ?? []).length).toBe(2);
+    expect((bank.match(/mpesaReceipt: MpesaReceipt\.optional\(\),/g) ?? []).length).toBe(3);
     expect(bank).toContain("if (!receipt) return null;");
   });
 });

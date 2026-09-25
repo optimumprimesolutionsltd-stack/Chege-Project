@@ -5,7 +5,10 @@ import { CheckCircle2, Loader2, Pencil } from "lucide-react";
 import {
   useCreateDeposit,
   useCreateDisbursement,
+  useGetSavingsGoals,
   useTransferBankToBank,
+  useTransferBankToSavings,
+  useTransferSavingsToBank,
   useGetBudgetCategories,
   useGetGroup,
   useGetJointAccount,
@@ -24,7 +27,12 @@ import {
   categoryPath,
   chooseCategory as chooseLineCategory,
   chooseIncomeSource,
+  canUseSavings,
+  chooseContribution,
+  chooseSavings,
   chooseTransfer,
+  destinationOf,
+  isMove,
   throughMpesaHints,
   initialChoices,
   canReport,
@@ -72,6 +80,7 @@ type Outcome = { saved: number; repeats: number; failed: Array<{ what: string; w
 
 import { readStatementPages, StatementPasswordError } from "@/lib/statement-file";
 import { rememberMpesaCard } from "@/lib/mpesa-card";
+import { savePosting, type PostingApi } from "@/lib/save-posting";
 import { parseStoredRules, payeeKey, payeeName, rulesStorageKey, withRule, withoutRule, type PayeeRules } from "@/lib/payee-learning";
 import { reconcile, statementLines, type StatementReading } from "@/lib/statement-import";
 import { checkRunningBalance, readStatementRows, resolveDirections } from "@/lib/statement-table";
@@ -104,6 +113,10 @@ export default function MpesaImportPage() {
   const createDeposit = useCreateDeposit();
   const createDisbursement = useCreateDisbursement();
   const transferBankToBank = useTransferBankToBank();
+  const transferBankToSavings = useTransferBankToSavings();
+  const transferSavingsToBank = useTransferSavingsToBank();
+  const { data: savingsGoalList = [] } = useGetSavingsGoals();
+  const savingsGoals = savingsGoalList as unknown as Array<{ id: number; name: string; isCompleted?: boolean }>;
 
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
   // M-Pesa is usually its own account: start on one that says so.
@@ -479,6 +492,15 @@ export default function MpesaImportPage() {
     }
   };
 
+  // The calls that record things, handed to the one function that saves a line.
+  const postingApi: PostingApi = {
+    deposit: (data) => createDeposit.mutateAsync({ data: data as never }) as Promise<{ id: number }>,
+    disbursement: (data) => createDisbursement.mutateAsync({ data: data as never }) as Promise<{ id: number }>,
+    bankToBank: (data) => transferBankToBank.mutateAsync({ data: data as never }) as Promise<{ outgoing: { id: number }; incoming: { id: number } }>,
+    toSavings: (data) => transferBankToSavings.mutateAsync({ data: data as never }) as Promise<{ id: number }>,
+    fromSavings: (data) => transferSavingsToBank.mutateAsync({ data: data as never }) as Promise<{ id: number }>,
+  };
+
   const saveAll = async () => {
     if (!lines || !accountId || saving) return;
     if (firstProblem) {
@@ -502,29 +524,8 @@ export default function MpesaImportPage() {
         });
         if (!built) continue;
         try {
-          if (built.kind === "deposit") {
-            await createDeposit.mutateAsync({ data: built.main as never });
-          } else if (built.kind === "transfer") {
-            // Between the person's own accounts: one transfer, and its charge (if any) on the M-Pesa side.
-            const moved = await transferBankToBank.mutateAsync({ data: built.main as never });
-            if (built.fee) {
-              const mpesaLeg = built.main.sourceAccountId === accountId ? moved.outgoing : moved.incoming;
-              try {
-                await createDisbursement.mutateAsync({ data: { ...built.fee, chargeForTransactionId: mpesaLeg.id } as never });
-              } catch {
-                result.failed.push({ what: `${item.description} charge`, why: "The move saved, but its charge did not." });
-              }
-            }
-          } else {
-            const created = await createDisbursement.mutateAsync({ data: built.main as never });
-            if (built.fee) {
-              try {
-                await createDisbursement.mutateAsync({ data: { ...built.fee, chargeForTransactionId: created.id } as never });
-              } catch {
-                result.failed.push({ what: `${item.description} charge`, why: "The payment saved, but its charge did not." });
-              }
-            }
-          }
+          const posted = await savePosting(built, postingApi, accountId);
+          if (posted.feeFailed) result.failed.push({ what: `${item.description} charge`, why: "The entry saved, but its charge did not." });
           result.saved += 1;
           savedIndexes.add(item.index);
         } catch (error) {
@@ -920,7 +921,7 @@ export default function MpesaImportPage() {
                       {out ? "−" : "+"}{formatKes(item.amount ?? 0)}
                     </p>
                   </div>
-                  {out && choice?.include && choice.debt?.kind !== "lend" && !choice.transferTo ? (
+                  {out && choice?.include && choice.debt?.kind !== "lend" && !isMove(choice) ? (
                     <select
                       className={`${SELECT_CLASS} ${choice.category ? "" : "border-destructive"}`}
                       value={choice.category}
@@ -939,12 +940,12 @@ export default function MpesaImportPage() {
                       )}
                     </select>
                   ) : null}
-                  {out && choice?.include && !choice.transferTo && choice.category && categoryPath(choice.category, categories) !== choice.category ? (
+                  {out && choice?.include && !isMove(choice) && choice.category && categoryPath(choice.category, categories) !== choice.category ? (
                     <p className="text-xs text-muted-foreground" data-testid={`mpesa-line-path-${item.index}`}>
                       Filed under {categoryPath(choice.category, categories)}
                     </p>
                   ) : null}
-                  {out && choice?.include && !choice.transferTo && choice.category && item.description && rules[payeeKey(item.description)] !== choice.category ? (
+                  {out && choice?.include && !isMove(choice) && choice.category && item.description && rules[payeeKey(item.description)] !== choice.category ? (
                     <label className="flex items-center gap-2 text-sm text-foreground">
                       <input
                         type="checkbox"
@@ -955,12 +956,12 @@ export default function MpesaImportPage() {
                       Remember {choice.category} for {payeeName(item.description)}
                     </label>
                   ) : null}
-                  {out && choice?.include && !choice.transferTo && choice.auto && choice.category ? (
+                  {out && choice?.include && !isMove(choice) && choice.auto && choice.category ? (
                     <p className="text-xs text-muted-foreground" data-testid={`mpesa-line-suggested-${item.index}`}>
                       Suggested by Jamvi. Change it if it is wrong.
                     </p>
                   ) : null}
-                  {item.direction === "in" && choice?.include && !choice.debt && !choice.transferTo && incomeSources.length > 0 ? (
+                  {item.direction === "in" && choice?.include && !choice.debt && !isMove(choice) && !choice.contributorId && incomeSources.length > 0 ? (
                     <div className="space-y-1" data-testid={`mpesa-line-source-${item.index}`}>
                       <select
                         className={SELECT_CLASS}
@@ -981,7 +982,7 @@ export default function MpesaImportPage() {
                       ) : null}
                     </div>
                   ) : null}
-                  {choice?.include && !choice.debt && otherAccounts.length > 0 ? (
+                  {choice?.include && !choice.debt && !choice.contributorId && otherAccounts.length > 0 ? (
                     <div className="space-y-1" data-testid={`mpesa-line-move-${item.index}`}>
                       <p className={`text-xs ${transferHints.has(item.index) ? "font-semibold text-primary" : "text-muted-foreground"}`}>
                         {transferHints.has(item.index)
@@ -1002,12 +1003,42 @@ export default function MpesaImportPage() {
                       </select>
                     </div>
                   ) : null}
-                  {choice?.include && !choice.transferTo && item.type === "bank_receipt" && parties.length === 0 ? (
+                  {choice?.include && destinationOf(choice) !== "debt" && destinationOf(choice) !== "contribution" && canUseSavings(item) && savingsGoals.length > 0 ? (
+                    <div className="space-y-1" data-testid={`mpesa-line-savings-${item.index}`}>
+                      <p className="text-xs text-muted-foreground">{out ? "Is this going into savings?" : "Is this coming out of savings?"}</p>
+                      <select
+                        className={SELECT_CLASS}
+                        value={choice.savingsGoalId ?? ""}
+                        onChange={(event) => setChoices((current) => chooseSavings(current, item.index, event.target.value ? Number(event.target.value) : null))}
+                        aria-label="Savings goal"
+                        data-testid={`mpesa-line-savings-select-${item.index}`}
+                      >
+                        <option value="">No</option>
+                        {savingsGoals.map((goal) => <option key={goal.id} value={goal.id}>{goal.name}</option>)}
+                      </select>
+                    </div>
+                  ) : null}
+                  {isShared && item.direction === "in" && choice?.include && !isMove(choice) && destinationOf(choice) !== "debt" && parties.length > 0 ? (
+                    <div className="space-y-1" data-testid={`mpesa-line-contribution-${item.index}`}>
+                      <p className="text-xs text-muted-foreground">Is this a member's contribution? Whose?</p>
+                      <select
+                        className={SELECT_CLASS}
+                        value={choice.contributorId ?? ""}
+                        onChange={(event) => setChoices((current) => chooseContribution(current, item.index, event.target.value ? Number(event.target.value) : null))}
+                        aria-label="Whose contribution"
+                        data-testid={`mpesa-line-contribution-select-${item.index}`}
+                      >
+                        <option value="">No</option>
+                        {parties.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}
+                      </select>
+                    </div>
+                  ) : null}
+                  {choice?.include && !isMove(choice) && item.type === "bank_receipt" && parties.length === 0 ? (
                     <Link href="/parties" className="block text-xs font-semibold text-primary" data-testid={`mpesa-line-add-business-${item.index}`}>
                       Money to or from a company you own? Add it in Who owes who, then come back and choose it here.
                     </Link>
                   ) : null}
-                  {choice?.include && !choice.transferTo && canLinkDebt(item, parties) && parties.length > 0 ? (
+                  {choice?.include && !isMove(choice) && !choice.contributorId && canLinkDebt(item, parties) && parties.length > 0 ? (
                     (() => {
                       const linked = choice.debt ? parties.find((party) => party.id === choice.debt!.partyId) : undefined;
                       const guess = !choice.debt && item.direction ? matchParty(item.original ?? item.description, parties) : null;

@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 import {
   buildPostings,
   canReport,
+  canUseSavings,
   categoryChanges,
+  chooseContribution,
+  chooseSavings,
+  defaultCategoryFor,
+  destinationOf,
+  isMove,
   chooseTransfer,
   throughMpesaHints,
   chooseIncomeSource,
@@ -362,3 +368,73 @@ describe('hinting at money passing through M-Pesa when only some of it is sent o
   });
 });
 
+describe('a line goes to exactly one place', () => {
+  it('says where, in one word', () => {
+    expect(destinationOf({ include: true, category: 'Food' })).toBe('category');
+    expect(destinationOf({ include: true, category: '', transferTo: 4 })).toBe('transfer');
+    expect(destinationOf({ include: true, category: '', savingsGoalId: 2 })).toBe('savings');
+    expect(destinationOf({ include: true, category: '', contributorId: 3 })).toBe('contribution');
+    expect(destinationOf({ include: true, category: '', debt: { kind: 'lend', partyId: 1 } })).toBe('debt');
+    expect(isMove({ include: true, category: '', savingsGoalId: 2 })).toBe(true);
+    expect(isMove({ include: true, category: '', contributorId: 3 })).toBe(false);
+  });
+
+  it('choosing one un-chooses the others', () => {
+    const start = { 0: { include: true, category: '', debt: { kind: 'lend' as const, partyId: 1 }, transferTo: 4 } };
+    const saved = chooseSavings(start, 0, 2);
+    expect(saved[0]).toMatchObject({ savingsGoalId: 2, transferTo: null, debt: null });
+    const contributed = chooseContribution(saved, 0, 3);
+    expect(contributed[0]).toMatchObject({ contributorId: 3, savingsGoalId: null });
+    expect(chooseSavings(contributed, 0, null)[0].savingsGoalId).toBeNull();
+  });
+});
+
+describe('savings goals', () => {
+  const out = line({ index: 0, direction: 'out', type: 'person_payment', amount: 1000, description: 'Sample Saver', receipt: 'TESTSAVE01', fee: 30 });
+  const back = line({ index: 1, direction: 'in', type: 'person_receipt', amount: 500, description: 'Sample Saver', receipt: 'TESTSAVE02' });
+
+  it('records money out as a transfer into the goal, with the receipt and the charge', () => {
+    const built = buildPostings(out, { include: true, category: '', savingsGoalId: 2 }, ctx);
+    expect(built?.kind).toBe('savings');
+    expect(built).toMatchObject({ direction: 'out' });
+    expect(built?.main).toMatchObject({ goalId: 2, amount: 1000, mpesaReceipt: 'TESTSAVE01', accountId: 9 });
+    expect(built?.fee).toMatchObject({ amount: 30, expenseCategory: 'Bank charges' });
+  });
+
+  it('records money in as a transfer out of the goal', () => {
+    const built = buildPostings(back, { include: true, category: '', savingsGoalId: 2 }, ctx);
+    expect(built).toMatchObject({ kind: 'savings', direction: 'in' });
+    expect(built?.fee).toBeNull();
+  });
+
+  it('needs no category, and counts as neither spending nor income', () => {
+    expect(problemWith(out, { include: true, category: '', savingsGoalId: 2 })).toBeNull();
+    const both = { 0: { include: true, category: '', savingsGoalId: 2 }, 1: { include: true, category: '', savingsGoalId: 2 } };
+    expect(summarise([out, back], both)).toMatchObject({ moneyIn: 0, moneyOut: 0, moves: 2, fees: 30 });
+  });
+
+  it('takes whole shillings only', () => {
+    expect(canUseSavings(out)).toBe(true);
+    expect(canUseSavings(line({ amount: 100.5 }))).toBe(false);
+    expect(canUseSavings(line({ status: 'skipped' }))).toBe(false);
+  });
+});
+
+describe('a group member contribution in a shared group', () => {
+  const inFrom = line({ index: 0, direction: 'in', type: 'person_receipt', amount: 2000, description: 'Received from Sample Member', receipt: 'TESTCONT01' });
+  it('is recorded under their name on the who-has-paid sheet, not under whoever is saving it', () => {
+    const built = buildPostings(inFrom, { include: true, category: '', contributorId: 7 }, { ...ctx, isShared: true });
+    expect(built?.kind).toBe('deposit');
+    expect(built?.main).toMatchObject({ contributorSplits: [{ contributorId: 7, amount: 2000 }], mpesaReceipt: 'TESTCONT01' });
+    expect(built?.main).not.toHaveProperty('madeById');
+    expect(built?.main).not.toHaveProperty('incomeSourceId');
+  });
+});
+
+describe('paying a chama or sacco from a personal budget', () => {
+  it('suggests a category that says so, when the budget has one', () => {
+    const payment = line({ direction: 'out', description: 'Sample Village Chama' });
+    expect(defaultCategoryFor(payment, ['Food', 'Chama contributions'])).toBe('Chama contributions');
+    expect(defaultCategoryFor(payment, ['Food'])).toBe('');
+  });
+});

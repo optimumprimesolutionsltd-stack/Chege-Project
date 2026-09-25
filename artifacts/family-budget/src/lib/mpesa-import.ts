@@ -51,6 +51,39 @@ export type Choice = {
   transferTo?: number | null;
   /** The person ticked "remember this": keep this category for this payee once it is saved. */
   remember?: boolean;
+  /**
+   * A savings goal, when this line is money going into savings (out of M-Pesa) or coming
+   * back out of it (into M-Pesa). Neither spending nor income.
+   */
+  savingsGoalId?: number | null;
+  /**
+   * In a shared group: whose contribution this money in is, so it lands on the who-has-paid
+   * sheet under their name instead of under whoever is saving it.
+   */
+  contributorId?: number | null;
+};
+
+/**
+ * Where a line goes, in one word. A line goes to exactly one place: a category (ordinary
+ * spending or income), a debt with a person or company, a move between the person"s own
+ * accounts, a savings goal, or a group member"s contribution. Everything that has to
+ * treat these differently asks this instead of checking each field on its own.
+ */
+export type Destination = "category" | "debt" | "transfer" | "savings" | "contribution";
+
+export function destinationOf(choice: Choice | undefined): Destination {
+  if (!choice) return "category";
+  if (choice.transferTo) return "transfer";
+  if (choice.savingsGoalId) return "savings";
+  if (choice.contributorId) return "contribution";
+  if (choice.debt) return "debt";
+  return "category";
+}
+
+/** Money that only moves between the person"s own places: not spending, not income, needing no category. */
+export const isMove = (choice: Choice | undefined): boolean => {
+  const destination = destinationOf(choice);
+  return destination === "transfer" || destination === "savings";
 };
 
 type PastPosting = { type: string; description: string; expenseCategory?: string | null; incomeSourceId?: number | null };
@@ -120,8 +153,16 @@ const KIND_DEFAULTS: Record<string, readonly string[]> = {
   fuliza_fee: ["bank charge", "charge", "fee", "fuliza"],
 };
 
+// A payee that names a group people pay into, and the words a category for it is likely to use.
+const GROUP_PAYEE = /\b(chama|sacco|welfare|merry|self[- ]?help|group)\b/i;
+const GROUP_CATEGORY_WORDS = ["chama", "sacco", "contribution", "welfare", "merry"];
+
 /** A category from this budget that suits the kind of payment, or "" when none does. */
 export function defaultCategoryFor(line: PreviewLine, categoryNames: readonly string[]): string {
+  if (line.direction === "out" && line.description && GROUP_PAYEE.test(line.description)) {
+    const named = categoryNames.find((name) => GROUP_CATEGORY_WORDS.some((word) => name.toLowerCase().includes(word)));
+    if (named) return named;
+  }
   const words = line.type ? KIND_DEFAULTS[line.type] : undefined;
   if (!words) return "";
   for (const word of words) {
@@ -284,8 +325,8 @@ export function snippetFor(pasted: string, receipt: string | null, length = 90):
 /** Why a ticked line cannot be saved yet, or null when it can. */
 export function problemWith(line: PreviewLine, choice: Choice | undefined): string | null {
   if (!choice?.include || !isRecordable(line)) return null;
-  // Money moved between the person"s own accounts is not spending, so it needs no category.
-  if (choice.transferTo) return null;
+  // Money moved between the person"s own places is not spending, so it needs no category.
+  if (isMove(choice)) return null;
   // Money lent is not spending, so it needs no category; paying a debt back does.
   if (line.direction === "out" && choice.debt?.kind !== "lend" && !choice.category.trim()) return "Choose what it was for.";
   return null;
@@ -305,7 +346,7 @@ export function reviewStatus(line: PreviewLine, choice: Choice | undefined): Rev
   if (problemWith(line, choice)) return "needs";
   const setByHand = Boolean(choice.category.trim()) && choice.auto === false;
   const sourceByHand = choice.incomeSourceId != null && choice.sourceAuto === false;
-  if (!choice.include || setByHand || sourceByHand || choice.debt || choice.transferTo) return "changed";
+  if (!choice.include || setByHand || sourceByHand || destinationOf(choice) !== "category") return "changed";
   return "suggested";
 }
 
@@ -330,8 +371,8 @@ export function summarise(lines: readonly PreviewLine[], choices: Record<number,
     const choice = choices[line.index];
     if (!choice?.include || !isRecordable(line) || line.amount === null) continue;
     summary.count += 1;
-    if (choice.transferTo) {
-      // A move between the person"s own accounts is neither money in nor money out; only its charge is a cost.
+    if (isMove(choice)) {
+      // A move between the person"s own places is neither money in nor money out; only its charge is a cost.
       summary.moves += 1;
       if (line.direction === "out") summary.fees += line.fee ?? 0;
       continue;
@@ -372,6 +413,38 @@ export function buildPostings(line: PreviewLine, choice: Choice, ctx: PostingCon
   const description = line.description ?? "M-Pesa";
   const receipt = line.receipt ?? undefined;
 
+  // The charge on money moved out of M-Pesa is the same wherever it went.
+  const moveFee =
+    line.direction === "out" && line.fee && line.fee > 0 && ctx.chargeCategory.trim()
+      ? {
+          amount: line.fee,
+          description: `Bank charge — ${description}`,
+          date,
+          madeById: ctx.isShared ? null : ctx.userId,
+          expenseCategory: ctx.chargeCategory.trim(),
+          destinationKind: "category" as const,
+          accountId: ctx.accountId,
+        }
+      : null;
+
+  // Into or out of a savings goal: one savings transfer, whole shillings, with the receipt on it.
+  if (choice.savingsGoalId) {
+    return {
+      kind: "savings" as const,
+      direction: line.direction,
+      main: {
+        goalId: choice.savingsGoalId,
+        amount: line.amount,
+        narration: description,
+        date,
+        accountId: ctx.accountId,
+        madeById: ctx.isShared ? null : ctx.userId ?? null,
+        ...(receipt ? { mpesaReceipt: receipt } : {}),
+      },
+      fee: moveFee,
+    };
+  }
+
   // Between the person"s own accounts: a transfer, with the receipt on the M-Pesa side, and any charge as before.
   if (choice.transferTo) {
     const out = line.direction === "out";
@@ -385,18 +458,23 @@ export function buildPostings(line: PreviewLine, choice: Choice, ctx: PostingCon
         date,
         ...(receipt ? { mpesaReceipt: receipt, mpesaAccountId: ctx.accountId } : {}),
       },
-      fee:
-        out && line.fee && line.fee > 0 && ctx.chargeCategory.trim()
-          ? {
-              amount: line.fee,
-              description: `Bank charge — ${description}`,
-              date,
-              madeById: ctx.isShared ? null : ctx.userId,
-              expenseCategory: ctx.chargeCategory.trim(),
-              destinationKind: "category" as const,
-              accountId: ctx.accountId,
-            }
-          : null,
+      fee: moveFee,
+    };
+  }
+
+  // A group member"s contribution: recorded under their name on the who-has-paid sheet.
+  if (line.direction === "in" && choice.contributorId) {
+    return {
+      kind: "deposit" as const,
+      main: {
+        amount: line.amount,
+        description,
+        date,
+        contributorSplits: [{ contributorId: choice.contributorId, amount: line.amount }],
+        accountId: ctx.accountId,
+        ...(receipt ? { mpesaReceipt: receipt } : {}),
+      },
+      fee: null,
     };
   }
 
@@ -530,12 +608,33 @@ export function categoryChanges(
   return changes;
 }
 
-/** Sets, or with null clears, the other account of a move between the person"s own accounts. Not a debt, so any debt link goes. */
+// Choosing one place for a line un-chooses the others, so a line is only ever in one.
+const noOtherPlace = { debt: null, incomeSourceId: null, sourceAuto: false, transferTo: null, savingsGoalId: null, contributorId: null } as const;
+
+/** Sets, or with null clears, the other account of a move between the person"s own accounts. */
 export function chooseTransfer(choices: Record<number, Choice>, index: number, accountId: number | null): Record<number, Choice> {
   const current = choices[index];
   if (!current) return choices;
-  return { ...choices, [index]: { ...current, transferTo: accountId, ...(accountId ? { debt: null, incomeSourceId: null, sourceAuto: false } : {}) } };
+  return { ...choices, [index]: accountId ? { ...current, ...noOtherPlace, transferTo: accountId } : { ...current, transferTo: null } };
 }
+
+/** Sets, or with null clears, the savings goal a line goes into or comes out of. */
+export function chooseSavings(choices: Record<number, Choice>, index: number, goalId: number | null): Record<number, Choice> {
+  const current = choices[index];
+  if (!current) return choices;
+  return { ...choices, [index]: goalId ? { ...current, ...noOtherPlace, savingsGoalId: goalId } : { ...current, savingsGoalId: null } };
+}
+
+/** Sets, or with null clears, whose contribution a line is (in a shared group). */
+export function chooseContribution(choices: Record<number, Choice>, index: number, contributorId: number | null): Record<number, Choice> {
+  const current = choices[index];
+  if (!current) return choices;
+  return { ...choices, [index]: contributorId ? { ...current, ...noOtherPlace, contributorId } : { ...current, contributorId: null } };
+}
+
+/** Savings transfers take whole shillings only, and only a payment that could be recorded at all. */
+export const canUseSavings = (line: PreviewLine): boolean =>
+  isRecordable(line) && line.amount !== null && Number.isInteger(line.amount) && line.type !== "fuliza_fee";
 
 /** Words in a payee that say it is a bank: a payment to one is likely a move between the person"s own accounts. */
 export const BANK_WORDS = /\b(bank|equity|kcb|co-?op(erative)?|absa|ncba|stanbic|dtb|i&m|family|sidian|gulf|hf|nba|diamond|standard chartered|citi|hfc|ecobank|uba|prime bank|credit bank|victoria|guaranty|gtb|m-?oriental|paramount|spire)\b/i;
