@@ -29,6 +29,7 @@ import { useColors } from '@/hooks/useColors';
 import { useListEditor } from '@/hooks/useListEditor';
 import { movableOnDay, summariseDays } from '@/lib/moveDay';
 import { formatExact } from '@/lib/formatExact';
+import { ALREADY_GONE_MESSAGE, ALREADY_GONE_TITLE, isNotFound } from '@/lib/staleEntry';
 import { BankPeriodBar } from '@/components/BankPeriodBar';
 import { inPeriod, nairobiToday, periodFor, summarisePeriod, type PeriodPreset } from '@/lib/bankPeriod';
 import { EditableName, ListEditButton, ListEditorFooter, RemoveRowButton } from '@/components/ListEditor';
@@ -924,6 +925,12 @@ export default function BankScreen() {
               }
               await invalidateBalance();
             } catch (error: unknown) {
+              // Not found means it is not in this budget: already deleted, or a list from another budget.
+              if (isNotFound(error)) {
+                await queryClient.invalidateQueries();
+                Alert.alert(ALREADY_GONE_TITLE, ALREADY_GONE_MESSAGE);
+                return;
+              }
               Alert.alert(
                 deletesExpense ? 'Could not delete expense' : 'Could not delete transaction',
                 error instanceof Error ? error.message : 'Please try again.',
@@ -1930,8 +1937,13 @@ export default function BankScreen() {
   const txEditor = useListEditor({
     remove: async (id) => {
       const tx = transactions.find((item) => item.id === id);
-      if (tx?.expenseId != null) await deleteExpense({ id: tx.expenseId });
-      else await deleteTransaction({ id });
+      try {
+        if (tx?.expenseId != null) await deleteExpense({ id: tx.expenseId });
+        else await deleteTransaction({ id });
+      } catch (error: unknown) {
+        // Already gone is what deleting it was for.
+        if (!isNotFound(error)) throw error;
+      }
     },
     afterSave: invalidateBalance,
   });
