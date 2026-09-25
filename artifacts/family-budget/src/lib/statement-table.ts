@@ -200,11 +200,11 @@ export function checkRunningBalance(rows: readonly StatementRow[]): { checked: n
   const newestFirst = rows[0].time >= rows[rows.length - 1].time;
   const ordered = newestFirst ? rows : [...rows].reverse();
 
-  // Consecutive rows with the same receipt are one group; [start, end) indexes into `ordered`.
+  // Consecutive rows with the same receipt, or stamped the same second, are one group; [start, end) indexes into `ordered`.
   const groups: Array<{ start: number; end: number }> = [];
   for (let i = 0; i < ordered.length; i += 1) {
     const last = groups[groups.length - 1];
-    if (last && ordered[last.start].receipt === ordered[i].receipt) last.end = i + 1;
+    if (last && (ordered[last.start].receipt === ordered[i].receipt || ordered[last.start].time === ordered[i].time)) last.end = i + 1;
     else groups.push({ start: i, end: i + 1 });
   }
 
@@ -213,16 +213,46 @@ export function checkRunningBalance(rows: readonly StatementRow[]): { checked: n
   for (let g = 0; g < groups.length - 1; g += 1) {
     const later = groups[g];
     const earlier = groups[g + 1];
-    // Newest first: the newest row of a group carries the balance after the whole group.
-    const after = ordered[later.start].balance;
-    const before = ordered[earlier.start].balance;
-    if (after === null || before === null) continue;
+    // The rows of one receipt are not always listed in the same order (a payment and
+    // its charge can come either way round), so a Fuliza payment shows partial
+    // balances part-way through, so the balance after the whole group is the one on
+    // whichever of its rows lines up.
+    const afters = ordered.slice(later.start, later.end).map((row) => row.balance);
+    const befores = ordered.slice(earlier.start, earlier.end).map((row) => row.balance);
     let net = 0;
     for (let i = later.start; i < later.end; i += 1) net += (ordered[i].paidIn ?? 0) - (ordered[i].withdrawn ?? 0);
+    const usable = afters.some((v) => v !== null) && befores.some((v) => v !== null);
+    if (!usable) continue;
     checked += 1;
-    if (Math.abs(Math.round((before + net) * 100) / 100 - after) > 0.01) {
-      failedAt.push(newestFirst ? later.start : rows.length - 1 - later.start);
-    }
+    const fits = afters.some(
+      (after) =>
+        after !== null &&
+        befores.some((before) => before !== null && Math.abs(Math.round((before + net) * 100) / 100 - after) <= 0.01),
+    );
+    if (!fits) failedAt.push(newestFirst ? later.start : rows.length - 1 - later.start);
   }
   return { checked, failedAt, ok: failedAt.length === 0 };
+}
+
+// Money-in wording in the Details column. The statement prints the Paid In and
+// Withdrawn columns swapped for the rows of a Fuliza payment (the payment sits
+// under Paid In and its loan draw under Withdrawn), so the column alone cannot be
+// trusted there; what the row says it is can.
+const IN_DETAILS = /^(Business Payment from|Funds received from|Customer Transfer from|Transfer from Bank|Deposit of Funds|Salary Payment from|Promotion Payment|Pay Bill Funds from|OverDraft of Credit Party)/i;
+const OUT_DETAILS =
+  /^(OD Loan Repayment|Customer .*Purchase|Customer Transfer|Customer Payment|Customer Withdrawal|Merchant Payment|Pay Bill|Buy Goods|Withdrawal|Airtime|Fuliza)/i;
+
+/**
+ * Puts each amount in the column its Details say it belongs in, keeping the size
+ * the statement printed. Rows whose wording is not recognised keep their column.
+ */
+export function resolveDirections(rows: readonly StatementRow[]): StatementRow[] {
+  return rows.map((row) => {
+    const amount = row.paidIn ?? row.withdrawn;
+    if (amount === null) return row;
+    const details = row.details.trim();
+    if (IN_DETAILS.test(details)) return { ...row, paidIn: amount, withdrawn: null };
+    if (OUT_DETAILS.test(details)) return { ...row, paidIn: null, withdrawn: amount };
+    return row;
+  });
 }
