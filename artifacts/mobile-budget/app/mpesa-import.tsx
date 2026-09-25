@@ -14,9 +14,12 @@ import {
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useQueryClient } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   customFetch,
+  getGetBudgetCategoriesQueryKey,
+  useCreateBudgetCategory,
   useCreateDeposit,
   useCreateDisbursement,
   useGetBudgetCategories,
@@ -67,25 +70,75 @@ const todayIso = () => new Date(Date.now() + 3 * 3_600_000).toISOString().slice(
 
 type Outcome = { saved: number; repeats: number; failed: Array<{ what: string; why: string }> };
 
-/** A category picked from the tree, in a sheet with a search box. */
+/**
+ * A category picked from the tree, in a sheet with a search box.
+ *
+ * It loads the budget's categories itself, the same way the day of banking's
+ * category field does, and says what it is doing: still loading, could not load
+ * (with a retry), or this budget genuinely has none. A picker that only ever
+ * says "no category matches that" leaves somebody guessing which of those it is.
+ * A category can also be added right here, since a payment with nowhere to go
+ * should not send someone away from the messages they have pasted.
+ */
 function CategorySheet({
   visible,
-  categories,
+  budgetName,
   onPick,
   onClose,
 }: {
   visible: boolean;
-  categories: CategoryRow[];
+  budgetName: string | undefined;
   onPick: (name: string) => void;
   onClose: () => void;
 }) {
   const colors = useColors();
+  const queryClient = useQueryClient();
+  const { data: list = [], isLoading, isError, refetch } = useGetBudgetCategories();
+  const categories = list as unknown as CategoryRow[];
+  const { mutateAsync: createCategory, isPending: creating } = useCreateBudgetCategory();
   const [search, setSearch] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [newName, setNewName] = useState('');
   const tree = useMemo(() => filterCategoryTree(buildCategoryTree(categories), search), [categories, search]);
+
   const pick = (name: string) => {
     setSearch('');
+    setAdding(false);
+    setNewName('');
     onPick(name);
   };
+
+  const addCategory = async () => {
+    const name = newName.trim();
+    if (!name) {
+      Alert.alert('Name it', 'Give this category a clear name, such as Transport or Airtime.');
+      return;
+    }
+    const existing = categories.find((row) => row.name.trim().toLocaleLowerCase() === name.toLocaleLowerCase());
+    if (existing) {
+      pick(existing.name);
+      return;
+    }
+    try {
+      const created = await createCategory({
+        data: { name, budgetAmount: 0, priority: 3, isRecurring: true, activeMonth: null, activeYear: null },
+      });
+      await queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
+      pick(created.name);
+    } catch (error: unknown) {
+      Alert.alert('Could not add it', error instanceof Error ? error.message : 'Please try again.');
+    }
+  };
+
+  const nothingToShow = tree.length === 0;
+  const emptyText = isLoading
+    ? 'Loading your categories…'
+    : isError
+      ? 'Could not load your categories.'
+      : categories.length === 0
+        ? `${budgetName ? `“${budgetName}”` : 'This budget'} has no categories yet. Add one below.`
+        : 'No category matches that.';
+
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.sheetBackdrop}>
@@ -97,7 +150,7 @@ function CategorySheet({
             </Pressable>
           </View>
           <CategorySearchBox value={search} onChange={setSearch} testID="mpesa-category-search" />
-          <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: 420 }}>
+          <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: 340 }} testID="mpesa-category-list">
             {tree.map((group) => (
               <View key={group.name}>
                 {group.children.length > 0 ? (
@@ -116,10 +169,53 @@ function CategorySheet({
                 )}
               </View>
             ))}
-            {tree.length === 0 ? (
-              <Text style={[styles.empty, { color: colors.mutedForeground }]}>No category matches that.</Text>
+            {nothingToShow ? (
+              <View testID="mpesa-category-empty">
+                <Text style={[styles.empty, { color: colors.mutedForeground }]}>{emptyText}</Text>
+                {isError ? (
+                  <Pressable onPress={() => refetch()} accessibilityRole="button" style={styles.secondary} testID="mpesa-category-retry">
+                    <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>Try again</Text>
+                  </Pressable>
+                ) : null}
+              </View>
             ) : null}
           </ScrollView>
+          <View style={[styles.addBox, { borderColor: colors.border }]}>
+            {adding ? (
+              <>
+                <TextInput
+                  value={newName}
+                  onChangeText={setNewName}
+                  placeholder={search.trim() ? search.trim() : 'Name it, such as Transport'}
+                  placeholderTextColor={colors.mutedForeground}
+                  autoCorrect={false}
+                  editable={!creating}
+                  style={[styles.pasteBox, { minHeight: 44, borderColor: colors.border, backgroundColor: colors.muted, color: colors.foreground }]}
+                  testID="mpesa-category-new-name"
+                />
+                <Pressable
+                  onPress={addCategory}
+                  disabled={creating}
+                  style={[styles.primary, { backgroundColor: colors.primary, opacity: creating ? 0.6 : 1 }]}
+                  accessibilityRole="button"
+                  testID="mpesa-category-add"
+                >
+                  {creating ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Add and use it</Text>}
+                </Pressable>
+              </>
+            ) : (
+              <Pressable
+                onPress={() => {
+                  setNewName(search.trim());
+                  setAdding(true);
+                }}
+                accessibilityRole="button"
+                testID="mpesa-category-add-open"
+              >
+                <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>＋ Add a category</Text>
+              </Pressable>
+            )}
+          </View>
         </View>
       </View>
     </Modal>
@@ -191,6 +287,17 @@ export default function MpesaImportScreen() {
     setChoices((current) => refreshSuggestions(renamed, current, history, categories.map((row) => row.name), chargeCategory));
     setNaming(null);
   };
+
+  // The categories and this account's history can arrive after the messages were
+  // read (a Share opens the app cold, and they load in the background). When they
+  // do, suggest again for lines still on a suggestion or on nothing; a category
+  // the person chose is never touched.
+  useEffect(() => {
+    if (!lines) return;
+    setChoices((current) => refreshSuggestions(lines, current, history, categories.map((row) => row.name), chargeCategory));
+    // Runs when the lists load, not on every choice.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categoryList, account]);
 
   // Sending a message Jamvi could not read, so its format can be learned.
   const [reporting, setReporting] = useState<{ index: number; text: string } | null>(null);
@@ -658,7 +765,7 @@ export default function MpesaImportScreen() {
         </View>
       </Modal>
 
-      <CategorySheet visible={picking !== null} categories={categories} onPick={chooseCategory} onClose={() => setPicking(null)} />
+      <CategorySheet visible={picking !== null} budgetName={group?.name} onPick={chooseCategory} onClose={() => setPicking(null)} />
     </View>
   );
 }
@@ -692,4 +799,5 @@ const styles = StyleSheet.create({
   groupLabel: { fontSize: 11, fontFamily: 'Inter_600SemiBold', paddingHorizontal: 16, paddingTop: 10 },
   option: { paddingHorizontal: 16, paddingVertical: 13 },
   empty: { padding: 16, textAlign: 'center' },
+  addBox: { padding: 12, gap: 8, borderTopWidth: StyleSheet.hairlineWidth },
 });
