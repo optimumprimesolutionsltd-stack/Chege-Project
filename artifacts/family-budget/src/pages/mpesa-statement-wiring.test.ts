@@ -95,17 +95,16 @@ describe("moves between your own accounts (web)", () => {
   it("offers it on each entry, hints at money passing through M-Pesa, and saves a transfer", () => {
     expect(page).toContain("mpesa-line-move-select-${item.index}");
     expect(page).toContain("throughMpesaHints(lines ?? [])");
-    expect(page).toContain('built.kind === "transfer"');
-    expect(page).toContain("transferBankToBank.mutateAsync");
+    expect(page).toContain("savePosting(built, postingApi, accountId)");
+    expect(page).toContain("bankToBank: (data) => transferBankToBank.mutateAsync");
   });
 });
 
 describe("savings goals and contributions (web)", () => {
   it("offers savings on each entry, and saves it as a savings transfer", () => {
     expect(page).toContain("mpesa-line-savings-select-${item.index}");
-    expect(page).toContain('built.kind === "savings"');
-    expect(page).toContain("transferBankToSavings.mutateAsync");
-    expect(page).toContain("transferSavingsToBank.mutateAsync");
+    expect(page).toContain("toSavings: (data) => transferBankToSavings.mutateAsync");
+    expect(page).toContain("fromSavings: (data) => transferSavingsToBank.mutateAsync");
   });
   it("offers a member contribution in a shared group only", () => {
     expect(page).toContain('isShared && item.direction === "in" && choice?.include');

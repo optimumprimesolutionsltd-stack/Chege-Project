@@ -67,6 +67,7 @@ import { ACTIVE_WORKSPACE_STORAGE_KEY } from '@/lib/workspace';
 import { formatExact } from '@/lib/formatExact';
 import { StatementReader, type ReaderJob } from '@/components/StatementReader';
 import { rememberMpesaCard } from '@/lib/mpesaCard';
+import { savePosting, type PostingApi } from '@/lib/savePosting';
 import { parseStoredRules, payeeKey, payeeName, rulesStorageKey, withRule, withoutRule, type PayeeRules } from '@/lib/payeeLearning';
 import { canReadStatements, chooseStatement, statementBase64, type ChosenStatement } from '@/lib/statementFile';
 import { shownFileName } from '@/lib/shownFileName';
@@ -835,6 +836,15 @@ export default function MpesaImportScreen() {
     );
   };
 
+  // The calls that record things, handed to the one function that saves a line.
+  const postingApi: PostingApi = {
+    deposit: (data) => createDeposit({ data: data as never }) as Promise<{ id: number }>,
+    disbursement: (data) => createDisbursement({ data: data as never }) as Promise<{ id: number }>,
+    bankToBank: (data) => transferBankToBank({ data: data as never }) as Promise<{ outgoing: { id: number }; incoming: { id: number } }>,
+    toSavings: (data) => transferBankToSavings({ data: data as never }) as Promise<{ id: number }>,
+    fromSavings: (data) => transferSavingsToBank({ data: data as never }) as Promise<{ id: number }>,
+  };
+
   const saveAll = async () => {
     if (!lines || !accountId || saving) return;
     if (firstProblem) {
@@ -858,41 +868,8 @@ export default function MpesaImportScreen() {
         });
         if (!built) continue;
         try {
-          if (built.kind === 'deposit') {
-            await createDeposit({ data: built.main as never });
-          } else if (built.kind === 'savings') {
-            // Into or out of a savings goal, with any charge on the M-Pesa side.
-            const moved = built.direction === 'out'
-              ? await transferBankToSavings({ data: built.main as never })
-              : await transferSavingsToBank({ data: built.main as never });
-            if (built.fee) {
-              try {
-                await createDisbursement({ data: { ...built.fee, chargeForTransactionId: (moved as { id: number }).id } as never });
-              } catch {
-                result.failed.push({ what: `${item.description} charge`, why: 'The move saved, but its charge did not.' });
-              }
-            }
-          } else if (built.kind === 'transfer') {
-            // Between the person's own accounts: one transfer, and its charge (if any) on the M-Pesa side.
-            const moved = await transferBankToBank({ data: built.main as never });
-            if (built.fee) {
-              const mpesaLeg = built.main.sourceAccountId === accountId ? moved.outgoing : moved.incoming;
-              try {
-                await createDisbursement({ data: { ...built.fee, chargeForTransactionId: mpesaLeg.id } as never });
-              } catch {
-                result.failed.push({ what: `${item.description} charge`, why: 'The move saved, but its charge did not.' });
-              }
-            }
-          } else {
-            const created = await createDisbursement({ data: built.main as never });
-            if (built.fee) {
-              try {
-                await createDisbursement({ data: { ...built.fee, chargeForTransactionId: created.id } as never });
-              } catch {
-                result.failed.push({ what: `${item.description} charge`, why: 'The payment saved, but its charge did not.' });
-              }
-            }
-          }
+          const posted = await savePosting(built, postingApi, accountId);
+          if (posted.feeFailed) result.failed.push({ what: `${item.description} charge`, why: 'The entry saved, but its charge did not.' });
           result.saved += 1;
           savedIndexes.add(item.index);
         } catch (error: unknown) {

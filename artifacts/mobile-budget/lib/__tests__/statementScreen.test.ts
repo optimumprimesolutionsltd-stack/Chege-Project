@@ -170,8 +170,8 @@ describe('moves between your own accounts (phone)', () => {
   it('offers it on each entry, hints at money passing through M-Pesa, and saves a transfer', () => {
     expect(screen).toContain('mpesa-line-move-${item.index}');
     expect(screen).toContain('throughMpesaHints(lines ?? [])');
-    expect(screen).toContain("built.kind === 'transfer'");
-    expect(screen).toContain('transferBankToBank({ data: built.main as never })');
+    expect(screen).toContain('savePosting(built, postingApi, accountId)');
+    expect(screen).toContain('bankToBank: (data) => transferBankToBank({ data: data as never })');
   });
 });
 
@@ -179,9 +179,8 @@ describe('savings goals and contributions (phone)', () => {
   const screen = read('app/mpesa-import.tsx');
   it('offers savings on each entry, and saves it as a savings transfer', () => {
     expect(screen).toContain('mpesa-line-savings-${item.index}');
-    expect(screen).toContain("built.kind === 'savings'");
-    expect(screen).toContain('transferBankToSavings({ data: built.main as never })');
-    expect(screen).toContain('transferSavingsToBank({ data: built.main as never })');
+    expect(screen).toContain('toSavings: (data) => transferBankToSavings({ data: data as never })');
+    expect(screen).toContain('fromSavings: (data) => transferSavingsToBank({ data: data as never })');
   });
   it('offers a member contribution in a shared group only', () => {
     expect(screen).toContain("isShared && item.direction === 'in' && choice?.include");

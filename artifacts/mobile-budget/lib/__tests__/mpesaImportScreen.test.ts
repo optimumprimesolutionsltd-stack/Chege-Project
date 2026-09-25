@@ -26,7 +26,8 @@ describe('the Paste M-Pesa messages screen', () => {
   });
 
   it('files the M-Pesa charge as its own linked posting, and needs a category for it', () => {
-    expect(screen).toContain('chargeForTransactionId: created.id');
+    expect(screen).toContain('savePosting(built, postingApi, accountId)');
+    expect(read('lib/savePosting.ts')).toContain('chargeForTransactionId: id');
     expect(screen).toContain("'Choose a category for the M-Pesa charges.'");
   });
 
@@ -61,7 +62,7 @@ describe('the web page matches the phone', () => {
     expect(web).toContain('onClick={saveAll}');
     expect(web).toContain('problemWith(item, choices[item.index])');
     expect(web).toContain('/already recorded/i.test(message)');
-    expect(web).toContain('chargeForTransactionId: created.id');
+    expect(web).toContain('savePosting(built, postingApi, accountId)');
     expect(web).toContain('They are not saved.');
   });
   it('can be reached from the route table, the menu and the Bank page', () => {
