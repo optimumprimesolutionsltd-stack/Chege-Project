@@ -81,3 +81,12 @@ describe("changing the category of what is already recorded (web)", () => {
     expect(page).toContain('"/api/mpesa/import/recategorise"');
   });
 });
+
+describe("the dashboard card for the M-Pesa import (web)", () => {
+  const dashboard = readFileSync("src/pages/dashboard.tsx", "utf8").replace(/\r\n/g, "\n");
+  it("sits above the setup guide and is done once something has been saved", () => {
+    expect(dashboard).toContain("<MpesaImportCard />");
+    expect(dashboard.indexOf("<MpesaImportCard />")).toBeLessThan(dashboard.indexOf("<WorkspaceSetupGuide"));
+    expect(page).toContain('if (result.saved > 0) rememberMpesaCard("done");');
+  });
+});

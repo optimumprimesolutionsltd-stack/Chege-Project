@@ -68,6 +68,7 @@ const todayIso = () => new Date(Date.now() + 3 * 3_600_000).toISOString().slice(
 type Outcome = { saved: number; repeats: number; failed: Array<{ what: string; why: string }> };
 
 import { readStatementPages, StatementPasswordError } from "@/lib/statement-file";
+import { rememberMpesaCard } from "@/lib/mpesa-card";
 import { reconcile, statementLines, type StatementReading } from "@/lib/statement-import";
 import { checkRunningBalance, readStatementRows, resolveDirections } from "@/lib/statement-table";
 
@@ -507,6 +508,7 @@ export default function MpesaImportPage() {
         setStatementReading((current) => (current ? { ...current, lines: marked } : current));
       }
       setOutcome(result);
+      if (result.saved > 0) rememberMpesaCard("done");
     }
     void offerBalanceChanges(lines.filter((item) => savedIndexes.has(item.index)));
   };

@@ -1,7 +1,7 @@
 import { useSeo } from "@/hooks/use-seo";
 import { SITE_SEO } from "@/lib/site-seo";
 import { motion, useReducedMotion, type Variants } from "framer-motion";
-import { ArrowRight, CheckCircle2, Users, Wallet, Target } from "lucide-react";
+import { ArrowRight, CheckCircle2, FileText, Lock, Users, Wallet, Target, Upload, ListChecks } from "lucide-react";
 import { Link } from "wouter";
 import { JAMVI_APP_PATH } from "@/lib/site-links";
 import { SEGMENTS } from "@/lib/segments";
@@ -47,12 +47,13 @@ export default function Home() {
                  KES {price} a month. Free for your first {TRIAL_DAYS} days.
               </motion.div>
               <motion.h1 variants={fadeUp} className="text-5xl sm:text-6xl lg:text-7xl font-bold leading-[1.1] mb-6 text-primary">
-                 Budget better <br/><span className="text-secondary">together.</span>
+                 Your M-Pesa month, <br/><span className="text-secondary">sorted in minutes.</span>
               </motion.h1>
               <motion.p variants={fadeUp} className="text-lg sm:text-xl text-foreground/70 mb-8 leading-relaxed max-w-lg">
-                 One subscription covers your own budget and every group you are part of —
-                 with your partner, your family, your roommates, your chama. Groups cost
-                 nothing extra, however many of you there are.
+                 Import your M-Pesa statement, or paste your messages, and Jamvi fills in
+                 your budget for you: who you paid, what it was for, what came in. No more
+                 typing it all in. Then share it with your partner, your family or your
+                 chama, at no extra cost.
               </motion.p>
               <motion.div variants={fadeUp} className="flex flex-col sm:flex-row gap-4">
                 <a href={JAMVI_APP_PATH} className="inline-flex items-center justify-center h-14 px-8 rounded-full bg-primary text-white text-base font-bold hover:bg-primary/90 transition-transform hover:scale-105 active:scale-95 shadow-lg">
@@ -64,7 +65,7 @@ export default function Home() {
               </motion.div>
               
               <motion.p variants={fadeUp} className="mt-10 text-sm font-medium text-foreground/60">
-                Built in Nairobi, for how Kenyans actually manage money.
+                Your statement is read on your phone and never uploaded. Built in Nairobi, for how Kenyans actually manage money.
               </motion.p>
             </motion.div>
             
@@ -84,74 +85,51 @@ export default function Home() {
                 <div className="absolute inset-0 bg-white rounded-[2.5rem] border border-border shadow-2xl overflow-hidden flex flex-col p-6">
 
                   {/*
-                    A household, not a chama, and progress rather than a balance.
-                    A big figure above credits and debits is the grammar of a
-                    banking app and reads as money Jamvi holds, which it never
-                    does. And most people arriving here are not in a chama — they
-                    share money with a partner, a family or roommates. Showing them
-                    their own life converts better than showing them a committee.
+                    The product's best trick, shown rather than described: a
+                    statement becoming a sorted month. The names and amounts are
+                    made up, and the card says so.
                   */}
-                  <div className="flex items-start justify-between mb-6">
+                  <div className="flex items-start justify-between mb-5">
                     <div>
                       <div className="text-xs font-bold text-foreground/50 uppercase tracking-wider mb-2">
-                        The House · September
+                        Example · Your statement
                       </div>
                       <div className="text-3xl font-serif font-bold text-primary leading-none">
-                        KES 12,400
+                        194 entries read
                       </div>
                       <div className="text-sm font-medium text-foreground/60 mt-1">
-                        recorded of KES 20,000 for rent and bills
+                        sorted into categories, ready to check
                       </div>
                     </div>
                     <div className="w-12 h-12 shrink-0 rounded-full bg-accent/20 flex items-center justify-center text-accent-foreground">
-                      <Users className="w-6 h-6" />
-                    </div>
-                  </div>
-
-                  <div className="mb-6">
-                    <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
-                      <div className="h-full w-[62%] rounded-full bg-secondary"></div>
-                    </div>
-                    <div className="mt-2 text-xs font-bold text-foreground/60">
-                      3 of 4 have added theirs
+                      <FileText className="w-6 h-6" />
                     </div>
                   </div>
 
                   <div className="space-y-3">
                     {[
-                      { by: "Otieno", amount: "KES 5,000", done: true, color: "bg-secondary" },
-                      { by: "Nanjala", amount: "KES 5,000", done: true, color: "bg-primary" },
-                      { by: "Wanjiru", amount: "KES 5,000", done: false, color: "bg-accent" },
+                      { who: "Sample Employer", tag: "Salary", amount: "+ KES 45,000", incoming: true },
+                      { who: "Sample Landlord", tag: "Rent", amount: "- KES 15,000", incoming: false },
+                      { who: "Sample Grocer", tag: "Groceries", amount: "- KES 1,250", incoming: false },
+                      { who: "Airtime", tag: "Data and airtime", amount: "- KES 100", incoming: false },
                     ].map((item, i) => (
                       <div key={i} className="flex items-center justify-between p-3 rounded-2xl bg-muted/50">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-10 h-10 rounded-full ${item.color} flex items-center justify-center text-white text-sm font-bold`}>
-                            {item.by.charAt(0)}
-                          </div>
-                          <div>
-                            <div className="font-bold text-foreground">{item.by}</div>
-                            <div className="text-xs text-foreground/60 font-medium">
-                              {item.done ? "Recorded 3 Sep" : "Not yet recorded"}
-                            </div>
+                        <div>
+                          <div className="font-bold text-foreground">{item.who}</div>
+                          <div className="mt-1 inline-block rounded-full bg-secondary/10 px-2 py-0.5 text-xs font-semibold text-secondary">
+                            {item.tag}
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className={`font-bold ${item.done ? "text-foreground" : "text-foreground/40"}`}>
-                            {item.amount}
-                          </span>
-                          {item.done ? (
-                            <CheckCircle2 className="w-5 h-5 text-secondary" />
-                          ) : (
-                            <span className="w-5 h-5 rounded-full border-2 border-foreground/20 inline-block"></span>
-                          )}
-                        </div>
+                        <span className={`font-bold ${item.incoming ? "text-secondary" : "text-foreground"}`}>
+                          {item.amount}
+                        </span>
                       </div>
                     ))}
                   </div>
 
                   <div className="mt-auto pt-6">
-                    <div className="h-12 w-full bg-primary rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-md">
-                      Record a payment
+                    <div className="flex items-center justify-center gap-2 rounded-xl bg-secondary/10 py-3 text-sm font-bold text-secondary">
+                      <CheckCircle2 className="w-5 h-5" /> Matches your statement
                     </div>
                   </div>
 
@@ -159,6 +137,53 @@ export default function Home() {
               </div>
             </motion.div>
           </div>
+        </div>
+      </section>
+
+      {/* The headline feature, in three steps. */}
+      <section id="mpesa-import" className="py-24 bg-primary text-primary-foreground">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-6xl">
+          <div className="text-center max-w-3xl mx-auto mb-14">
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-5 font-serif">Stop typing your M-Pesa in.</h2>
+            <p className="text-lg text-primary-foreground/80 leading-relaxed">
+              Every payment is already in your M-Pesa. Jamvi reads it for you, so a whole
+              month of budgeting takes minutes instead of an evening.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {[
+              {
+                icon: Upload,
+                title: "Bring your M-Pesa",
+                desc: "Choose your M-Pesa statement PDF, or select your M-Pesa messages and paste them in. Do as much or as little as you like.",
+              },
+              {
+                icon: ListChecks,
+                title: "Check what Jamvi read",
+                desc: "Every payment arrives with who it went to, a suggested category and Fuliza handled properly. You change what is wrong, and Jamvi remembers for next time.",
+              },
+              {
+                icon: CheckCircle2,
+                title: "Save, and it adds up",
+                desc: "Save some now and the rest another day. Jamvi checks the result against your statement's own balance, so you know nothing was missed.",
+              },
+            ].map((step, i) => (
+              <div key={i} className="p-8 rounded-3xl bg-white/10 border border-white/15">
+                <div className="w-14 h-14 rounded-2xl bg-accent/20 text-accent flex items-center justify-center mb-6">
+                  <step.icon className="w-7 h-7" />
+                </div>
+                <h3 className="text-xl font-bold mb-3">{i + 1}. {step.title}</h3>
+                <p className="text-primary-foreground/80 leading-relaxed">{step.desc}</p>
+              </div>
+            ))}
+          </div>
+          <p className="mt-10 flex items-start justify-center gap-2 text-center text-sm font-medium text-primary-foreground/80 max-w-3xl mx-auto">
+            <Lock className="w-4 h-4 mt-0.5 flex-shrink-0" />
+            <span>
+              Your statement and its password are read on your own phone or computer and are never uploaded.
+              Messages you paste are read to fill in the list and are not kept. Jamvi records; it never moves your money.
+            </span>
+          </p>
         </div>
       </section>
 

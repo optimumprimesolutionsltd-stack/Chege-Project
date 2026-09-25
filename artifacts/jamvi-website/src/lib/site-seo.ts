@@ -28,8 +28,8 @@ export interface SeoEntry {
  */
 const PAGES: Record<string, SeoEntry> = {
   "/": {
-    title: "Chama & Household Budget App, Built in Kenya",
-    description: `Track chama contributions, split household bills and see who has paid - in one shared record everybody trusts. KES ${JAMVI_PACKAGE.monthlyPriceKes} a month per member; groups of any size cost nothing extra. Free for ${TRIAL_DAYS} days.`,
+    title: "M-Pesa Budget App, Built in Kenya",
+    description: `Import your M-Pesa statement or paste your messages and Jamvi sorts your month into a budget in minutes. Share it with your partner, family or chama. KES ${JAMVI_PACKAGE.monthlyPriceKes} a month; groups cost nothing extra. Free for ${TRIAL_DAYS} days.`,
   },
   "/features": {
     title: "Features for Chamas, Families & Roommates",

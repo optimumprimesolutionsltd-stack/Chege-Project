@@ -54,7 +54,7 @@ const application = {
   inLanguage: "en-KE",
   publisher: { "@id": ORGANISATION_ID },
   description:
-    "Jamvi is a Kenyan budgeting app for chamas, families and households. Record contributions, track who has paid, split expenses and keep one shared history everybody can see.",
+    "Jamvi is a Kenyan budgeting app that turns your M-Pesa statement or messages into a sorted budget in minutes. Share it with your partner, family or chama: record contributions, track who has paid, split expenses and keep one history everybody can see.",
   offers: {
     "@type": "Offer",
     price: String(JAMVI_PACKAGE.monthlyPriceKes),
