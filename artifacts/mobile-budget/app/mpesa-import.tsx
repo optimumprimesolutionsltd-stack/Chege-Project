@@ -26,6 +26,8 @@ import {
   useGetGroup,
   useGetJointAccount,
   useGetJointAccounts,
+  useGetWorkspaces,
+  useSelectWorkspace,
 } from '@workspace/api-client-react';
 import { buildCategoryTree, filterCategoryTree, type CategoryRow } from '@workspace/category-tree';
 
@@ -55,9 +57,13 @@ import {
 } from '@/lib/payeeNicknames';
 import { onSharedMessages, takeSharedMessages } from '@/lib/sharedMessages';
 import { useAuth } from '@/lib/auth';
+import { useDraft } from '@/lib/draft';
+import { clearQueryClientCache } from '@/lib/queryPersist';
+import { ACTIVE_WORKSPACE_STORAGE_KEY } from '@/lib/workspace';
 import { formatExact } from '@/lib/formatExact';
 import {
   buildPostings,
+  categoryPath,
   chooseCategory as chooseLineCategory,
   initialChoices,
   canReport,
@@ -275,6 +281,72 @@ export default function MpesaImportScreen() {
   const [picking, setPicking] = useState<number | 'charge' | null>(null);
   const [saving, setSaving] = useState(false);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
+  // Unfinished work survives an update restart, a crash, or a switch of budget.
+  const pendingChoicesRef = React.useRef<Record<number, Choice> | null>(null);
+  const { restored, dismiss: dismissRestored, discard: discardDraft } = useDraft<{
+    text: string;
+    choices: Record<number, Choice>;
+    hasRead: boolean;
+    accountId: number | null;
+  }>({
+    key: 'mpesa-import',
+    value: { text, choices, hasRead: lines !== null, accountId: selectedAccountId },
+    active: !outcome && text.trim() !== '',
+    onRestore: (saved) => {
+      setText(saved.text);
+      if (saved.accountId) setSelectedAccountId(saved.accountId);
+      if (saved.hasRead) {
+        pendingChoicesRef.current = saved.choices;
+        void readRef.current(saved.text);
+      }
+    },
+  });
+  const startOver = () => {
+    discardDraft();
+    pendingChoicesRef.current = null;
+    setText('');
+    setLines(null);
+    setChoices({});
+  };
+
+  // Which budget these will be saved into, and a way to change it without losing the paste.
+  const { data: workspaces = [] } = useGetWorkspaces();
+  const selectWorkspace = useSelectWorkspace();
+  const [switchingBudget, setSwitchingBudget] = useState(false);
+  const [budgetPickerOpen, setBudgetPickerOpen] = useState(false);
+  const switchedToRef = React.useRef<number | null>(null);
+  const switchBudget = async (groupId: number) => {
+    if (groupId === group?.id) {
+      setBudgetPickerOpen(false);
+      return;
+    }
+    setSwitchingBudget(true);
+    try {
+      await selectWorkspace.mutateAsync({ data: { groupId } });
+      await AsyncStorage.setItem(ACTIVE_WORKSPACE_STORAGE_KEY, String(groupId));
+      // Nothing from the old budget may survive the switch, the same as switching in Settings.
+      await clearQueryClientCache();
+      queryClient.clear();
+      switchedToRef.current = groupId;
+      setSelectedAccountId(null);
+      setChoices({});
+      setBudgetPickerOpen(false);
+    } catch (error: unknown) {
+      Alert.alert('Could not switch budget', error instanceof Error ? error.message : 'Please try again.');
+    } finally {
+      setSwitchingBudget(false);
+    }
+  };
+  // Once the new budget has loaded, read the same messages again: duplicates,
+  // suggestions and nicknames are all per budget.
+  useEffect(() => {
+    if (switchedToRef.current === null || group?.id !== switchedToRef.current) return;
+    switchedToRef.current = null;
+    if (textRef.current.trim()) void readRef.current(textRef.current);
+    // Runs when the budget changes, not on every keystroke.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [group?.id]);
+
   // Names the person gave payees, kept on this device for this budget.
   const [nicknames, setNicknames] = useState<NicknameMap>({});
   const [naming, setNaming] = useState<{ index: number; original: string; text: string } | null>(null);
@@ -377,6 +449,12 @@ export default function MpesaImportScreen() {
       const shown = applyNicknames(response.lines, known);
       setLines(shown);
       setChoices(initialChoices(shown, history, categories.map((row) => row.name), chargeCategory));
+      // A restored draft brings back what was chosen by hand, on top of the fresh reading.
+      const restoredChoices = pendingChoicesRef.current;
+      if (restoredChoices) {
+        pendingChoicesRef.current = null;
+        setChoices((current) => ({ ...current, ...restoredChoices }));
+      }
     } catch (error: unknown) {
       Alert.alert('Could not read them', error instanceof Error ? error.message : 'Please try again.');
     } finally {
@@ -579,6 +657,45 @@ export default function MpesaImportScreen() {
       </View>
 
       <PageScrollView style={{ backgroundColor: colors.background }} contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 120 }]} keyboardShouldPersistTaps="handled">
+        <View style={[styles.card, styles.budgetRow, { backgroundColor: colors.card, borderColor: colors.border }]} testID="mpesa-budget-row">
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0 }]}>These will be saved in</Text>
+            <Text style={[styles.lineTitle, { color: colors.foreground }]} numberOfLines={1} testID="mpesa-budget-name">
+              {group?.name ?? '…'}
+            </Text>
+          </View>
+          {workspaces.length > 1 ? (
+            <Pressable
+              onPress={() => setBudgetPickerOpen(true)}
+              disabled={switchingBudget}
+              accessibilityRole="button"
+              testID="mpesa-budget-change"
+              hitSlop={8}
+            >
+              {switchingBudget ? (
+                <ActivityIndicator color={colors.primary} />
+              ) : (
+                <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>Change</Text>
+              )}
+            </Pressable>
+          ) : null}
+        </View>
+        {restored ? (
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.primary }]} testID="mpesa-restored">
+            <Text style={[styles.lineTitle, { color: colors.foreground }]}>Picked up where you left off</Text>
+            <Text style={[styles.hint, { color: colors.mutedForeground }]}>
+              Your unfinished paste and your choices were kept.
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 16, marginTop: 6 }}>
+              <Pressable onPress={dismissRestored} accessibilityRole="button" testID="mpesa-restored-ok">
+                <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>Keep going</Text>
+              </Pressable>
+              <Pressable onPress={startOver} accessibilityRole="button" testID="mpesa-restored-reset">
+                <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold' }}>Start over</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
         {!lines ? (
           <>
             <View style={[styles.steps, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -688,7 +805,7 @@ export default function MpesaImportScreen() {
                       testID={`mpesa-line-category-${item.index}`}
                     >
                       <Text style={{ color: choice.category ? colors.foreground : colors.destructive, fontFamily: 'Inter_600SemiBold' }}>
-                        {choice.category || 'Choose what it was for'}
+                        {choice.category ? categoryPath(choice.category, categories) : 'Choose what it was for'}
                       </Text>
                       <Feather name="chevron-down" size={16} color={colors.mutedForeground} />
                     </Pressable>
@@ -806,6 +923,38 @@ export default function MpesaImportScreen() {
           </Pressable>
         </View>
       ) : null}
+
+      <Modal visible={budgetPickerOpen} animationType="slide" transparent onRequestClose={() => setBudgetPickerOpen(false)}>
+        <View style={styles.sheetBackdrop}>
+          <View style={[styles.sheet, { backgroundColor: colors.card, borderColor: colors.border, padding: 16, gap: 8 }]}>
+            <Text style={[styles.sheetTitle, { color: colors.foreground }]}>Save them in which budget?</Text>
+            <Text style={[styles.hint, { color: colors.mutedForeground }]}>
+              Your pasted messages stay here. Jamvi reads them again for the budget you choose.
+            </Text>
+            <ScrollView style={{ maxHeight: 320 }}>
+              {(workspaces as unknown as Array<{ id: number; name: string }>).map((workspace) => {
+                const on = workspace.id === group?.id;
+                return (
+                  <Pressable
+                    key={workspace.id}
+                    onPress={() => void switchBudget(workspace.id)}
+                    style={[styles.option, on && { backgroundColor: `${colors.primary}18` }]}
+                    accessibilityRole="button"
+                    testID={`mpesa-budget-${workspace.id}`}
+                  >
+                    <Text style={{ color: colors.foreground, fontFamily: on ? 'Inter_600SemiBold' : 'Inter_400Regular' }}>
+                      {workspace.name}{on ? '  ✓' : ''}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+            <Pressable onPress={() => setBudgetPickerOpen(false)} style={styles.secondary} accessibilityRole="button">
+              <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold' }}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
 
       <Modal visible={debtFor !== null} animationType="slide" transparent onRequestClose={() => setDebtFor(null)}>
         <View style={styles.sheetBackdrop}>
@@ -977,5 +1126,6 @@ const styles = StyleSheet.create({
   groupLabel: { fontSize: 11, fontFamily: 'Inter_600SemiBold', paddingHorizontal: 16, paddingTop: 10 },
   option: { paddingHorizontal: 16, paddingVertical: 13 },
   empty: { padding: 16, textAlign: 'center' },
+  budgetRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   addBox: { padding: 12, gap: 8, borderTopWidth: StyleSheet.hairlineWidth },
 });
