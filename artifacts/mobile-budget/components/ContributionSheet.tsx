@@ -106,7 +106,6 @@ export function ContributionSheet({ canManage = false }: { canManage?: boolean }
       <Pressable style={styles.headRow} onPress={toggle}>
         <View style={styles.headingWrap}>
           <Text style={[styles.heading, { color: colors.foreground }]}>Who has paid</Text>
-          {showBody ? <EditListButton editor={editor} canManage={canManage} /> : null}
         </View>
         <View style={styles.headRight}>
           {showBody && !isEmpty ? (
@@ -163,12 +162,16 @@ export function ContributionSheet({ canManage = false }: { canManage?: boolean }
         </View>
       ) : (
       <>
-      {periodLabel ? (
-        <Text style={[styles.period, { color: colors.foreground }]}>
-          {periodLabel}
-          {data.months.length > 1 ? ` · ${data.months.length} months` : ''}
-        </Text>
-      ) : null}
+      {/* Edit sits on its own line at the top of the panel, out of the crowded heading; Save is at the bottom. */}
+      <View style={styles.editRow}>
+        {periodLabel ? (
+          <Text style={[styles.period, { color: colors.foreground, flex: 1 }]}>
+            {periodLabel}
+            {data.months.length > 1 ? ` · ${data.months.length} months` : ''}
+          </Text>
+        ) : <View style={{ flex: 1 }} />}
+        <EditListButton editor={editor} canManage={canManage} />
+      </View>
       <Text style={[styles.key, { color: colors.mutedForeground }]}>
         Each figure is what a member gave. Red = short of the expected amount. Green = a month an earlier over-payment covered.
       </Text>
@@ -267,6 +270,7 @@ export function ContributionSheet({ canManage = false }: { canManage?: boolean }
 }
 
 const styles = StyleSheet.create({
+  editRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   loading: { paddingVertical: 24, alignItems: 'center' },
   card: { borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, padding: 16, gap: 10 },
   headRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
