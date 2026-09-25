@@ -49,3 +49,24 @@ describe('the screen can be reached', () => {
     expect(read('app/(tabs)/more.tsx')).toContain("href: '/mpesa-import'");
   });
 });
+
+// The web page follows the same rules with the same logic.
+describe('the web page matches the phone', () => {
+  const web = read('../family-budget/src/pages/mpesa-import.tsx');
+  it('shares the exact import logic', () => {
+    expect(read('../family-budget/src/lib/mpesa-import.ts')).toBe(read('lib/mpesaImport.ts').replace(/'/g, '"'));
+  });
+  it('reads through the API, saves only on Save, and keeps the same safeguards', () => {
+    expect(web).toContain('"/api/mpesa/import/preview"');
+    expect(web).toContain('onClick={saveAll}');
+    expect(web).toContain('problemWith(item, choices[item.index])');
+    expect(web).toContain('/already recorded/i.test(message)');
+    expect(web).toContain('chargeForTransactionId: created.id');
+    expect(web).toContain('They are not saved.');
+  });
+  it('can be reached from the route table, the menu and the Bank page', () => {
+    expect(read('../family-budget/src/App.tsx')).toContain('path="/mpesa-import"');
+    expect(read('../family-budget/src/components/layout.tsx')).toContain("href: '/mpesa-import'");
+    expect(read('../family-budget/src/pages/bank.tsx')).toContain('data-testid="button-mpesa-import"');
+  });
+});
