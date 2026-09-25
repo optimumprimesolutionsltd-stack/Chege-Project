@@ -32,6 +32,14 @@ import { PageScrollView } from '@/components/PageScrollReset';
 import { ScreenHint } from '@/components/ScreenHint';
 import { useColors } from '@/hooks/useColors';
 import { canReceiveShares } from '@/lib/shareIntent';
+import {
+  applyNicknames,
+  canNickname,
+  nicknameStorageKey,
+  parseStoredNicknames,
+  withNickname,
+  type NicknameMap,
+} from '@/lib/payeeNicknames';
 import { onSharedMessages, takeSharedMessages } from '@/lib/sharedMessages';
 import { useAuth } from '@/lib/auth';
 import { formatExact } from '@/lib/formatExact';
@@ -45,6 +53,7 @@ import {
   messageFor,
   problemWith,
   redactForReport,
+  refreshSuggestions,
   snippetFor,
   summarise,
   type Choice,
@@ -156,6 +165,33 @@ export default function MpesaImportScreen() {
   const [picking, setPicking] = useState<number | 'charge' | null>(null);
   const [saving, setSaving] = useState(false);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
+  // Names the person gave payees, kept on this device for this budget.
+  const [nicknames, setNicknames] = useState<NicknameMap>({});
+  const [naming, setNaming] = useState<{ index: number; original: string; text: string } | null>(null);
+  const nicknamesKey = nicknameStorageKey(group?.id);
+  useEffect(() => {
+    let active = true;
+    AsyncStorage.getItem(nicknamesKey)
+      .then((stored) => {
+        if (active) setNicknames(parseStoredNicknames(stored));
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [nicknamesKey]);
+
+  const saveNickname = () => {
+    if (!naming || !lines) return;
+    const next = withNickname(nicknames, naming.original, naming.text);
+    setNicknames(next);
+    AsyncStorage.setItem(nicknamesKey, JSON.stringify(next)).catch(() => {});
+    const renamed = applyNicknames(lines, next);
+    setLines(renamed);
+    setChoices((current) => refreshSuggestions(renamed, current, history, categories.map((row) => row.name), chargeCategory));
+    setNaming(null);
+  };
+
   // Sending a message Jamvi could not read, so its format can be learned.
   const [reporting, setReporting] = useState<{ index: number; text: string } | null>(null);
   const [sendingReport, setSendingReport] = useState(false);
@@ -214,8 +250,12 @@ export default function MpesaImportScreen() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: pasted }),
       });
-      setLines(response.lines);
-      setChoices(initialChoices(response.lines, history, categories.map((row) => row.name), chargeCategory));
+      // Read fresh: a share can be read before the effect above has loaded them.
+      const known = parseStoredNicknames(await AsyncStorage.getItem(nicknamesKey).catch(() => null));
+      setNicknames(known);
+      const shown = applyNicknames(response.lines, known);
+      setLines(shown);
+      setChoices(initialChoices(shown, history, categories.map((row) => row.name), chargeCategory));
     } catch (error: unknown) {
       Alert.alert('Could not read them', error instanceof Error ? error.message : 'Please try again.');
     } finally {
@@ -435,7 +475,20 @@ export default function MpesaImportScreen() {
                 <View key={item.index} style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, opacity: choice?.include ? 1 : 0.55 }]} testID={`mpesa-line-${item.index}`}>
                   <View style={styles.lineTop}>
                     <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text style={[styles.lineTitle, { color: colors.foreground }]} numberOfLines={2}>{item.description}</Text>
+                      <Pressable
+                        onPress={canNickname(item) ? () => setNaming({ index: item.index, original: item.original ?? item.description ?? '', text: item.description ?? '' }) : undefined}
+                        disabled={!canNickname(item)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${item.description}. Tap to rename this payee`}
+                        testID={`mpesa-line-name-${item.index}`}
+                        style={styles.nameRow}
+                      >
+                        <Text style={[styles.lineTitle, { color: colors.foreground, flexShrink: 1 }]} numberOfLines={2}>{item.description}</Text>
+                        {canNickname(item) ? <Feather name="edit-2" size={13} color={colors.mutedForeground} /> : null}
+                      </Pressable>
+                      {item.original && item.original !== item.description ? (
+                        <Text style={[styles.hint, { color: colors.mutedForeground }]}>Jamvi read: {item.original}</Text>
+                      ) : null}
                       <Text style={[styles.hint, { color: colors.mutedForeground }]}>
                         {item.date ?? 'No date on it, so today'} · {out ? 'Money out' : 'Money in'}
                       </Text>
@@ -536,6 +589,42 @@ export default function MpesaImportScreen() {
         </View>
       ) : null}
 
+      <Modal visible={naming !== null} animationType="slide" transparent onRequestClose={() => setNaming(null)}>
+        <View style={styles.sheetBackdrop}>
+          <View style={[styles.sheet, { backgroundColor: colors.card, borderColor: colors.border, padding: 16, gap: 10 }]}>
+            <Text style={[styles.sheetTitle, { color: colors.foreground }]}>What do you call this?</Text>
+            <Text style={[styles.hint, { color: colors.mutedForeground }]}>
+              Jamvi read: {naming?.original}. Give it a name that makes sense to you, and Jamvi will use it every time.
+            </Text>
+            <TextInput
+              value={naming?.text ?? ''}
+              onChangeText={(value) => setNaming((current) => (current ? { ...current, text: value } : current))}
+              autoCorrect={false}
+              style={[styles.pasteBox, { minHeight: 48, borderColor: colors.border, backgroundColor: colors.muted, color: colors.foreground }]}
+              testID="mpesa-nickname-text"
+            />
+            <Pressable
+              onPress={saveNickname}
+              style={[styles.primary, { backgroundColor: colors.primary }]}
+              accessibilityRole="button"
+              testID="mpesa-nickname-save"
+            >
+              <Text style={styles.primaryText}>Save name</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setNaming((current) => (current ? { ...current, text: current.original } : current))}
+              style={styles.secondary}
+              accessibilityRole="button"
+            >
+              <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold' }}>Use the name Jamvi read</Text>
+            </Pressable>
+            <Pressable onPress={() => setNaming(null)} style={styles.secondary} accessibilityRole="button">
+              <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold' }}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
       <Modal visible={reporting !== null} animationType="slide" transparent onRequestClose={() => setReporting(null)}>
         <View style={styles.sheetBackdrop}>
           <View style={[styles.sheet, { backgroundColor: colors.card, borderColor: colors.border, padding: 16, gap: 10 }]}>
@@ -592,6 +681,7 @@ const styles = StyleSheet.create({
   summaryLine: { fontSize: 16, fontFamily: 'Inter_700Bold' },
   lineTop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   lineTitle: { fontSize: 15, fontFamily: 'Inter_600SemiBold' },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   amount: { fontSize: 16, fontFamily: 'Inter_700Bold' },
   categoryButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 },
   footer: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth },
