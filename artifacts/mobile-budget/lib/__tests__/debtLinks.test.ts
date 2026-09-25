@@ -63,7 +63,7 @@ describe('who a debt entry was for is recorded and read back', () => {
   const screen = read('app/mpesa-import.tsx');
   const bank = read('app/(tabs)/bank.tsx');
   it('the import records it right after saving, without ever blocking the save', () => {
-    expect(screen).toContain('debtLinks.push({ transactionId: created.id');
+    expect(screen).toContain('debtLinks.push({ transactionId: posted.id');
     expect(screen).toContain('void saveDebtLinks(debtLinks);');
     expect(read('lib/debtReversal.ts')).toContain('The entries are saved either way');
   });
