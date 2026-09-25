@@ -20,7 +20,7 @@
     },
     "android": {
       "package": "ke.co.optimumprimesolutions.jamvi",
-      "versionCode": 2
+      "versionCode": 3
     },
     "web": {
       "favicon": "./assets/images/icon.png"
