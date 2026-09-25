@@ -151,3 +151,17 @@ describe('changing the category of what is already recorded (phone)', () => {
     expect(screen).toContain("'/api/mpesa/import/recategorise'");
   });
 });
+
+// From a real phone: the bottom of these sheets sat under Android's navigation bar,
+// half hiding Cancel and the last choices.
+describe('the sheets on the M-Pesa screen clear the phone navigation bar', () => {
+  const screen = read('app/mpesa-import.tsx');
+  it('gives every bottom sheet room for it', () => {
+    const sheets = screen.match(/styles\.sheet, \{ backgroundColor: colors\.card/g) ?? [];
+    expect(sheets.length).toBeGreaterThanOrEqual(5);
+    for (const sheet of screen.split('styles.sheet, {').slice(1)) {
+      expect(sheet.slice(0, 260)).toMatch(/insets\.bottom/);
+    }
+  });
+});
+

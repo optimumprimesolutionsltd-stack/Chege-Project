@@ -1409,7 +1409,7 @@ export default function MpesaImportScreen() {
 
       <Modal visible={budgetPickerOpen} animationType="slide" transparent onRequestClose={() => setBudgetPickerOpen(false)}>
         <View style={styles.sheetBackdrop}>
-          <View style={[styles.sheet, { backgroundColor: colors.card, borderColor: colors.border, padding: 16, gap: 8 }]}>
+          <View style={[styles.sheet, { backgroundColor: colors.card, borderColor: colors.border, padding: 16, paddingBottom: 16 + Math.max(insets.bottom, 24), gap: 8 }]}>
             <Text style={[styles.sheetTitle, { color: colors.foreground }]}>Save them in which budget?</Text>
             <Text style={[styles.hint, { color: colors.mutedForeground }]}>
               Your pasted messages stay here. Jamvi reads them again for the budget you choose.
@@ -1441,7 +1441,7 @@ export default function MpesaImportScreen() {
 
       <Modal visible={debtFor !== null} animationType="slide" transparent onRequestClose={() => setDebtFor(null)}>
         <View style={styles.sheetBackdrop}>
-          <View style={[styles.sheet, { backgroundColor: colors.card, borderColor: colors.border, padding: 16, gap: 10 }]}>
+          <View style={[styles.sheet, { backgroundColor: colors.card, borderColor: colors.border, padding: 16, paddingBottom: 16 + Math.max(insets.bottom, 24), gap: 10 }]}>
             <Text style={[styles.sheetTitle, { color: colors.foreground }]}>Is this a debt or loan?</Text>
             <Text style={[styles.hint, { color: colors.mutedForeground }]}>
               Choose who, and what it is. Jamvi will offer to update what you owe or are owed once everything is saved.
@@ -1508,7 +1508,7 @@ export default function MpesaImportScreen() {
 
       <Modal visible={naming !== null} animationType="slide" transparent onRequestClose={() => setNaming(null)}>
         <View style={styles.sheetBackdrop}>
-          <View style={[styles.sheet, { backgroundColor: colors.card, borderColor: colors.border, padding: 16, gap: 10 }]}>
+          <View style={[styles.sheet, { backgroundColor: colors.card, borderColor: colors.border, padding: 16, paddingBottom: 16 + Math.max(insets.bottom, 24), gap: 10 }]}>
             <Text style={[styles.sheetTitle, { color: colors.foreground }]}>What do you call this?</Text>
             <Text style={[styles.hint, { color: colors.mutedForeground }]}>
               Jamvi read: {naming?.original}. Give it a name that makes sense to you, and Jamvi will use it every time.
@@ -1544,7 +1544,7 @@ export default function MpesaImportScreen() {
 
       <Modal visible={reporting !== null} animationType="slide" transparent onRequestClose={() => setReporting(null)}>
         <View style={styles.sheetBackdrop}>
-          <View style={[styles.sheet, { backgroundColor: colors.card, borderColor: colors.border, padding: 16, gap: 10 }]}>
+          <View style={[styles.sheet, { backgroundColor: colors.card, borderColor: colors.border, padding: 16, paddingBottom: 16 + Math.max(insets.bottom, 24), gap: 10 }]}>
             <Text style={[styles.sheetTitle, { color: colors.foreground }]}>Send this message</Text>
             <Text style={[styles.hint, { color: colors.mutedForeground }]}>
               This goes to the Jamvi team so we can teach the app this kind of message. It is not linked to you, and phone
