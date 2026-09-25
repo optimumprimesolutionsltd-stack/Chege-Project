@@ -14,7 +14,7 @@ import {
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   customFetch,
@@ -26,6 +26,8 @@ import {
   useGetGroup,
   useGetJointAccount,
   useGetJointAccounts,
+  useGetWorkspaces,
+  useSelectWorkspace,
 } from '@workspace/api-client-react';
 import { buildCategoryTree, filterCategoryTree, type CategoryRow } from '@workspace/category-tree';
 
@@ -36,6 +38,16 @@ import { ScreenHint } from '@/components/ScreenHint';
 import { useColors } from '@/hooks/useColors';
 import { canReceiveShares } from '@/lib/shareIntent';
 import {
+  balanceChanges,
+  canLinkDebt,
+  DEBT_LABEL,
+  debtKindsFor,
+  matchParty,
+  suggestDebtKind,
+  type DebtKind,
+  type PartyLite,
+} from '@/lib/mpesaDebts';
+import {
   applyNicknames,
   canNickname,
   nicknameStorageKey,
@@ -45,9 +57,13 @@ import {
 } from '@/lib/payeeNicknames';
 import { onSharedMessages, takeSharedMessages } from '@/lib/sharedMessages';
 import { useAuth } from '@/lib/auth';
+import { useDraft } from '@/lib/draft';
+import { clearQueryClientCache } from '@/lib/queryPersist';
+import { ACTIVE_WORKSPACE_STORAGE_KEY } from '@/lib/workspace';
 import { formatExact } from '@/lib/formatExact';
 import {
   buildPostings,
+  categoryPath,
   chooseCategory as chooseLineCategory,
   initialChoices,
   canReport,
@@ -153,6 +169,11 @@ function CategorySheet({
             </Pressable>
           </View>
           <CategorySearchBox value={search} onChange={setSearch} testID="mpesa-category-search" />
+          {tree.some((group) => group.children.length > 0) ? (
+            <Text style={[styles.hint, { color: colors.mutedForeground, paddingHorizontal: 16 }]} testID="mpesa-category-hint">
+              The names in capitals are groups. Pick one of the categories under them.
+            </Text>
+          ) : null}
           <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: 340 }} testID="mpesa-category-list">
             {tree.map((group) => (
               <View key={group.name}>
@@ -236,6 +257,7 @@ export default function MpesaImportScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const { data: group } = useGetGroup();
   const isShared = group?.isPrivate === false;
 
@@ -264,6 +286,72 @@ export default function MpesaImportScreen() {
   const [picking, setPicking] = useState<number | 'charge' | null>(null);
   const [saving, setSaving] = useState(false);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
+  // Unfinished work survives an update restart, a crash, or a switch of budget.
+  const pendingChoicesRef = React.useRef<Record<number, Choice> | null>(null);
+  const { restored, dismiss: dismissRestored, discard: discardDraft } = useDraft<{
+    text: string;
+    choices: Record<number, Choice>;
+    hasRead: boolean;
+    accountId: number | null;
+  }>({
+    key: 'mpesa-import',
+    value: { text, choices, hasRead: lines !== null, accountId: selectedAccountId },
+    active: !outcome && text.trim() !== '',
+    onRestore: (saved) => {
+      setText(saved.text);
+      if (saved.accountId) setSelectedAccountId(saved.accountId);
+      if (saved.hasRead) {
+        pendingChoicesRef.current = saved.choices;
+        void readRef.current(saved.text);
+      }
+    },
+  });
+  const startOver = () => {
+    discardDraft();
+    pendingChoicesRef.current = null;
+    setText('');
+    setLines(null);
+    setChoices({});
+  };
+
+  // Which budget these will be saved into, and a way to change it without losing the paste.
+  const { data: workspaces = [] } = useGetWorkspaces();
+  const selectWorkspace = useSelectWorkspace();
+  const [switchingBudget, setSwitchingBudget] = useState(false);
+  const [budgetPickerOpen, setBudgetPickerOpen] = useState(false);
+  const switchedToRef = React.useRef<number | null>(null);
+  const switchBudget = async (groupId: number) => {
+    if (groupId === group?.id) {
+      setBudgetPickerOpen(false);
+      return;
+    }
+    setSwitchingBudget(true);
+    try {
+      await selectWorkspace.mutateAsync({ data: { groupId } });
+      await AsyncStorage.setItem(ACTIVE_WORKSPACE_STORAGE_KEY, String(groupId));
+      // Nothing from the old budget may survive the switch, the same as switching in Settings.
+      await clearQueryClientCache();
+      queryClient.clear();
+      switchedToRef.current = groupId;
+      setSelectedAccountId(null);
+      setChoices({});
+      setBudgetPickerOpen(false);
+    } catch (error: unknown) {
+      Alert.alert('Could not switch budget', error instanceof Error ? error.message : 'Please try again.');
+    } finally {
+      setSwitchingBudget(false);
+    }
+  };
+  // Once the new budget has loaded, read the same messages again: duplicates,
+  // suggestions and nicknames are all per budget.
+  useEffect(() => {
+    if (switchedToRef.current === null || group?.id !== switchedToRef.current) return;
+    switchedToRef.current = null;
+    if (textRef.current.trim()) void readRef.current(textRef.current);
+    // Runs when the budget changes, not on every keystroke.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [group?.id]);
+
   // Names the person gave payees, kept on this device for this budget.
   const [nicknames, setNicknames] = useState<NicknameMap>({});
   const [naming, setNaming] = useState<{ index: number; original: string; text: string } | null>(null);
@@ -366,6 +454,12 @@ export default function MpesaImportScreen() {
       const shown = applyNicknames(response.lines, known);
       setLines(shown);
       setChoices(initialChoices(shown, history, categories.map((row) => row.name), chargeCategory));
+      // A restored draft brings back what was chosen by hand, on top of the fresh reading.
+      const restoredChoices = pendingChoicesRef.current;
+      if (restoredChoices) {
+        pendingChoicesRef.current = null;
+        setChoices((current) => ({ ...current, ...restoredChoices }));
+      }
     } catch (error: unknown) {
       Alert.alert('Could not read them', error instanceof Error ? error.message : 'Please try again.');
     } finally {
@@ -417,6 +511,24 @@ export default function MpesaImportScreen() {
     return null;
   }, [lines, choices, summary, chargeCategory]);
 
+  // Who owes who, and the categories that track a debt: a payment to or from a
+  // person can be a debt or a loan, and paying a debt's category pays it down.
+  const { data: parties = [] } = useQuery<PartyLite[]>({
+    queryKey: ['parties'],
+    queryFn: () => customFetch<PartyLite[]>('/api/contributors'),
+    staleTime: 30_000,
+  });
+  const debtCategories = useMemo(
+    () =>
+      (categoryList as unknown as Array<{ id: number; name: string; debtBalance?: number | null }>)
+        .filter((row) => row.debtBalance !== null && row.debtBalance !== undefined)
+        .map((row) => ({ id: row.id, name: row.name, debtBalance: row.debtBalance })),
+    [categoryList],
+  );
+  const [debtFor, setDebtFor] = useState<{ index: number; partyId: number | null; kind: DebtKind | null } | null>(null);
+  const setDebt = (index: number, debt: { kind: DebtKind; partyId: number } | null) =>
+    setChoices((current) => ({ ...current, [index]: { ...current[index], debt } }));
+
   const recordable = lines?.filter(isRecordable) ?? [];
   const notImported = lines?.filter((item) => !isRecordable(item)) ?? [];
 
@@ -428,6 +540,7 @@ export default function MpesaImportScreen() {
     }
     setSaving(true);
     const result: Outcome = { saved: 0, repeats: 0, failed: [] };
+    const savedIndexes = new Set<number>();
     try {
       for (const item of lines) {
         const choice = choices[item.index];
@@ -454,6 +567,7 @@ export default function MpesaImportScreen() {
             }
           }
           result.saved += 1;
+          savedIndexes.add(item.index);
         } catch (error: unknown) {
           const message = error instanceof Error ? error.message : 'It was not saved.';
           if (/already recorded/i.test(message)) result.repeats += 1;
@@ -464,6 +578,41 @@ export default function MpesaImportScreen() {
       setSaving(false);
       setOutcome(result);
     }
+    offerBalanceChanges(lines.filter((item) => savedIndexes.has(item.index)));
+  };
+
+  /**
+   * Once, at the end, for everything that was saved. Asked and never applied by
+   * itself: the entries can be edited or deleted afterwards, and a balance moved
+   * behind somebody's back would be left quietly wrong.
+   */
+  const offerBalanceChanges = (saved: PreviewLine[]) => {
+    const changes = balanceChanges(saved, choices, parties, debtCategories);
+    if (changes.length === 0) return;
+    Alert.alert(
+      changes.length === 1 ? 'Update this balance too?' : `Update ${changes.length} balances too?`,
+      `${changes.map((change) => `· ${change.label}`).join('\n')}\n\nThe entries are already saved either way.`,
+      [
+        { text: 'Not now', style: 'cancel' },
+        {
+          text: 'Update',
+          onPress: async () => {
+            try {
+              for (const change of changes) {
+                await customFetch(change.endpoint, {
+                  method: change.method,
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(change.body),
+                });
+              }
+              await queryClient.invalidateQueries({ queryKey: ['parties'] });
+            } catch (error: unknown) {
+              Alert.alert('Some balances did not update', error instanceof Error ? error.message : 'Please try again.');
+            }
+          },
+        },
+      ],
+    );
   };
 
   if (outcome) {
@@ -513,6 +662,45 @@ export default function MpesaImportScreen() {
       </View>
 
       <PageScrollView style={{ backgroundColor: colors.background }} contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 120 }]} keyboardShouldPersistTaps="handled">
+        <View style={[styles.card, styles.budgetRow, { backgroundColor: colors.card, borderColor: colors.border }]} testID="mpesa-budget-row">
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0 }]}>These will be saved in</Text>
+            <Text style={[styles.lineTitle, { color: colors.foreground }]} numberOfLines={1} testID="mpesa-budget-name">
+              {group?.name ?? '…'}
+            </Text>
+          </View>
+          {workspaces.length > 1 ? (
+            <Pressable
+              onPress={() => setBudgetPickerOpen(true)}
+              disabled={switchingBudget}
+              accessibilityRole="button"
+              testID="mpesa-budget-change"
+              hitSlop={8}
+            >
+              {switchingBudget ? (
+                <ActivityIndicator color={colors.primary} />
+              ) : (
+                <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>Change</Text>
+              )}
+            </Pressable>
+          ) : null}
+        </View>
+        {restored ? (
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.primary }]} testID="mpesa-restored">
+            <Text style={[styles.lineTitle, { color: colors.foreground }]}>Picked up where you left off</Text>
+            <Text style={[styles.hint, { color: colors.mutedForeground }]}>
+              Your unfinished paste and your choices were kept.
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 16, marginTop: 6 }}>
+              <Pressable onPress={dismissRestored} accessibilityRole="button" testID="mpesa-restored-ok">
+                <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>Keep going</Text>
+              </Pressable>
+              <Pressable onPress={startOver} accessibilityRole="button" testID="mpesa-restored-reset">
+                <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold' }}>Start over</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
         {!lines ? (
           <>
             <View style={[styles.steps, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -614,7 +802,7 @@ export default function MpesaImportScreen() {
                     </Text>
                     <Switch value={!!choice?.include} onValueChange={(value) => toggle(item.index, value)} accessibilityLabel={`Save ${item.description}`} />
                   </View>
-                  {out && choice?.include ? (
+                  {out && choice?.include && choice.debt?.kind !== 'lend' ? (
                     <Pressable
                       onPress={() => setPicking(item.index)}
                       style={[styles.categoryButton, { borderColor: choice.category ? colors.border : colors.destructive, backgroundColor: colors.muted }]}
@@ -622,7 +810,7 @@ export default function MpesaImportScreen() {
                       testID={`mpesa-line-category-${item.index}`}
                     >
                       <Text style={{ color: choice.category ? colors.foreground : colors.destructive, fontFamily: 'Inter_600SemiBold' }}>
-                        {choice.category || 'Choose what it was for'}
+                        {choice.category ? categoryPath(choice.category, categories) : 'Choose what it was for'}
                       </Text>
                       <Feather name="chevron-down" size={16} color={colors.mutedForeground} />
                     </Pressable>
@@ -631,6 +819,48 @@ export default function MpesaImportScreen() {
                     <Text style={[styles.hint, { color: colors.mutedForeground }]} testID={`mpesa-line-suggested-${item.index}`}>
                       Suggested by Jamvi. Tap to choose a different one.
                     </Text>
+                  ) : null}
+                  {choice?.include && canLinkDebt(item) && parties.length > 0 ? (
+                    (() => {
+                      const linked = choice.debt ? parties.find((party) => party.id === choice.debt!.partyId) : undefined;
+                      const guess = !choice.debt && item.direction ? matchParty(item.original ?? item.description, parties) : null;
+                      const guessKind = guess && item.direction ? suggestDebtKind(item.direction, guess) : null;
+                      return (
+                        <>
+                          {choice.debt && linked ? (
+                            <Pressable
+                              onPress={() => setDebtFor({ index: item.index, partyId: linked.id, kind: choice.debt!.kind })}
+                              accessibilityRole="button"
+                              testID={`mpesa-line-debt-${item.index}`}
+                            >
+                              <Text style={[styles.hint, { color: colors.primary, fontFamily: 'Inter_600SemiBold' }]}>
+                                {DEBT_LABEL[choice.debt.kind]}: {linked.name} · tap to change
+                              </Text>
+                            </Pressable>
+                          ) : guess && guessKind ? (
+                            <Pressable
+                              onPress={() => setDebt(item.index, { kind: guessKind, partyId: guess.id })}
+                              accessibilityRole="button"
+                              testID={`mpesa-line-debt-guess-${item.index}`}
+                            >
+                              <Text style={[styles.hint, { color: colors.primary, fontFamily: 'Inter_600SemiBold' }]}>
+                                Looks like {guess.name}. {DEBT_LABEL[guessKind]}? Tap to set
+                              </Text>
+                            </Pressable>
+                          ) : (
+                            <Pressable
+                              onPress={() => setDebtFor({ index: item.index, partyId: guess?.id ?? null, kind: null })}
+                              accessibilityRole="button"
+                              testID={`mpesa-line-debt-open-${item.index}`}
+                            >
+                              <Text style={[styles.hint, { color: colors.primary, fontFamily: 'Inter_600SemiBold' }]}>
+                                Is this a debt or loan?
+                              </Text>
+                            </Pressable>
+                          )}
+                        </>
+                      );
+                    })()
                   ) : null}
                   {out && item.fee ? (
                     <Text style={[styles.hint, { color: colors.mutedForeground }]}>+ KES {formatExact(item.fee)} M-Pesa charge, saved on its own</Text>
@@ -698,6 +928,105 @@ export default function MpesaImportScreen() {
           </Pressable>
         </View>
       ) : null}
+
+      <Modal visible={budgetPickerOpen} animationType="slide" transparent onRequestClose={() => setBudgetPickerOpen(false)}>
+        <View style={styles.sheetBackdrop}>
+          <View style={[styles.sheet, { backgroundColor: colors.card, borderColor: colors.border, padding: 16, gap: 8 }]}>
+            <Text style={[styles.sheetTitle, { color: colors.foreground }]}>Save them in which budget?</Text>
+            <Text style={[styles.hint, { color: colors.mutedForeground }]}>
+              Your pasted messages stay here. Jamvi reads them again for the budget you choose.
+            </Text>
+            <ScrollView style={{ maxHeight: 320 }}>
+              {(workspaces as unknown as Array<{ id: number; name: string }>).map((workspace) => {
+                const on = workspace.id === group?.id;
+                return (
+                  <Pressable
+                    key={workspace.id}
+                    onPress={() => void switchBudget(workspace.id)}
+                    style={[styles.option, on && { backgroundColor: `${colors.primary}18` }]}
+                    accessibilityRole="button"
+                    testID={`mpesa-budget-${workspace.id}`}
+                  >
+                    <Text style={{ color: colors.foreground, fontFamily: on ? 'Inter_600SemiBold' : 'Inter_400Regular' }}>
+                      {workspace.name}{on ? '  ✓' : ''}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+            <Pressable onPress={() => setBudgetPickerOpen(false)} style={styles.secondary} accessibilityRole="button">
+              <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold' }}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={debtFor !== null} animationType="slide" transparent onRequestClose={() => setDebtFor(null)}>
+        <View style={styles.sheetBackdrop}>
+          <View style={[styles.sheet, { backgroundColor: colors.card, borderColor: colors.border, padding: 16, gap: 10 }]}>
+            <Text style={[styles.sheetTitle, { color: colors.foreground }]}>Is this a debt or loan?</Text>
+            <Text style={[styles.hint, { color: colors.mutedForeground }]}>
+              Choose who, and what it is. Jamvi will offer to update what you owe or are owed once everything is saved.
+            </Text>
+            <ScrollView style={{ maxHeight: 160 }}>
+              {parties.map((party) => {
+                const on = debtFor?.partyId === party.id;
+                return (
+                  <Pressable
+                    key={party.id}
+                    onPress={() => setDebtFor((current) => (current ? { ...current, partyId: party.id } : current))}
+                    style={[styles.option, on && { backgroundColor: `${colors.primary}18` }]}
+                    accessibilityRole="button"
+                    testID={`mpesa-debt-party-${party.id}`}
+                  >
+                    <Text style={{ color: colors.foreground, fontFamily: on ? 'Inter_600SemiBold' : 'Inter_400Regular' }}>{party.name}</Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+            {(() => {
+              const line = lines?.find((candidate) => candidate.index === debtFor?.index);
+              if (!line?.direction) return null;
+              return debtKindsFor(line.direction).map((kind) => {
+                const on = debtFor?.kind === kind;
+                return (
+                  <Pressable
+                    key={kind}
+                    onPress={() => setDebtFor((current) => (current ? { ...current, kind } : current))}
+                    style={[styles.categoryButton, { borderColor: on ? colors.primary : colors.border, backgroundColor: on ? `${colors.primary}18` : colors.muted }]}
+                    accessibilityRole="button"
+                    testID={`mpesa-debt-kind-${kind}`}
+                  >
+                    <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>{DEBT_LABEL[kind]}</Text>
+                  </Pressable>
+                );
+              });
+            })()}
+            <Pressable
+              onPress={() => {
+                if (debtFor?.partyId && debtFor.kind) setDebt(debtFor.index, { kind: debtFor.kind, partyId: debtFor.partyId });
+                setDebtFor(null);
+              }}
+              disabled={!debtFor?.partyId || !debtFor.kind}
+              style={[styles.primary, { backgroundColor: colors.primary, opacity: debtFor?.partyId && debtFor.kind ? 1 : 0.5 }]}
+              accessibilityRole="button"
+              testID="mpesa-debt-save"
+            >
+              <Text style={styles.primaryText}>Save</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                if (debtFor) setDebt(debtFor.index, null);
+                setDebtFor(null);
+              }}
+              style={styles.secondary}
+              accessibilityRole="button"
+            >
+              <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold' }}>No, it is not a debt or loan</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
 
       <Modal visible={naming !== null} animationType="slide" transparent onRequestClose={() => setNaming(null)}>
         <View style={styles.sheetBackdrop}>
@@ -802,5 +1131,6 @@ const styles = StyleSheet.create({
   groupLabel: { fontSize: 11, fontFamily: 'Inter_600SemiBold', paddingHorizontal: 16, paddingTop: 10 },
   option: { paddingHorizontal: 16, paddingVertical: 13 },
   empty: { padding: 16, textAlign: 'center' },
+  budgetRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   addBox: { padding: 12, gap: 8, borderTopWidth: StyleSheet.hairlineWidth },
 });

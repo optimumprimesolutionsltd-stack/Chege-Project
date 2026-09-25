@@ -1,3 +1,5 @@
+import type { DebtLink } from './mpesaDebts';
+
 export type AlreadyRecorded = { date: string | null; description: string };
 
 /** One line of the review list, as the API's preview returns it. */
@@ -20,8 +22,11 @@ export type PreviewLine = {
   alreadyRecorded: AlreadyRecorded | null;
 };
 
-/** `auto` is true while the category is Jamvi's suggestion and the person has not chosen one. */
-export type Choice = { include: boolean; category: string; auto?: boolean };
+/**
+ * `auto` is true while the category is Jamvi's suggestion and the person has not chosen one.
+ * `debt` links a payment to or from a person to what stands between you.
+ */
+export type Choice = { include: boolean; category: string; auto?: boolean; debt?: DebtLink | null };
 
 type PastPosting = { type: string; description: string; expenseCategory?: string | null };
 
@@ -176,7 +181,8 @@ export function snippetFor(pasted: string, receipt: string | null, length = 90):
 /** Why a ticked line cannot be saved yet, or null when it can. */
 export function problemWith(line: PreviewLine, choice: Choice | undefined): string | null {
   if (!choice?.include || !isRecordable(line)) return null;
-  if (line.direction === 'out' && !choice.category.trim()) return 'Choose what it was for.';
+  // Money lent is not spending, so it needs no category; paying a debt back does.
+  if (line.direction === 'out' && choice.debt?.kind !== 'lend' && !choice.category.trim()) return 'Choose what it was for.';
   return null;
 }
 
@@ -231,6 +237,10 @@ export function buildPostings(line: PreviewLine, choice: Choice, ctx: PostingCon
         date,
         madeById: ctx.userId,
         accountId: ctx.accountId,
+        // They paid back what they owed you, or you borrowed from them: neither
+        // is income, and the server keeps both out of the income figures.
+        ...(choice.debt?.kind === 'repaid' ? { settlesContributorId: choice.debt.partyId } : {}),
+        ...(choice.debt?.kind === 'borrowed' ? { isBorrowing: true } : {}),
         ...(receipt ? { mpesaReceipt: receipt } : {}),
       },
       fee: null,
@@ -239,6 +249,8 @@ export function buildPostings(line: PreviewLine, choice: Choice, ctx: PostingCon
 
   // A shared group's spending defaults to the group, as it does on the Bank form.
   const madeById = ctx.isShared ? null : ctx.userId;
+  // Lending is not a cost: no category, and linked to who it went to.
+  const lending = choice.debt?.kind === 'lend';
   return {
     kind: 'disbursement' as const,
     main: {
@@ -246,8 +258,9 @@ export function buildPostings(line: PreviewLine, choice: Choice, ctx: PostingCon
       description,
       date,
       madeById,
-      expenseCategory: choice.category.trim(),
-      destinationKind: 'category' as const,
+      ...(lending
+        ? { isLending: true, settlesContributorId: choice.debt!.partyId }
+        : { expenseCategory: choice.category.trim(), destinationKind: 'category' as const }),
       accountId: ctx.accountId,
       ...(receipt ? { mpesaReceipt: receipt } : {}),
     },
@@ -306,4 +319,19 @@ const PHONE_PATTERNS = [
 /** Hides phone numbers before somebody sees the text they are about to send. */
 export function redactForReport(message: string): string {
   return PHONE_PATTERNS.reduce((text, pattern) => text.replace(pattern, '<PHONE>'), message);
+}
+
+/**
+ * A category with the heading it sits under, so "Electricity" under Utilities
+ * reads "Utilities › Electricity". A heading is not itself something money can
+ * be filed under, so without this a chosen subcategory shows no sign of which
+ * group it belongs to.
+ */
+export function categoryPath(
+  name: string,
+  rows: ReadonlyArray<{ id: number; name: string; parentId?: number | null }>,
+): string {
+  const row = rows.find((candidate) => candidate.name === name);
+  const parent = row?.parentId ? rows.find((candidate) => candidate.id === row.parentId) : undefined;
+  return parent ? `${parent.name} › ${name}` : name;
 }

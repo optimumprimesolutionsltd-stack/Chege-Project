@@ -108,7 +108,7 @@ describe('suggestions follow the name the person uses', () => {
 describe('both apps do the same', () => {
   it('share the exact logic', () => {
     expect(read('../family-budget/src/lib/payee-nicknames.ts')).toBe(read('lib/payeeNicknames.ts').replace(/'/g, '"'));
-    expect(read('../family-budget/src/lib/mpesa-import.ts')).toBe(read('lib/mpesaImport.ts').replace(/'/g, '"'));
+    expect(read('../family-budget/src/lib/mpesa-import.ts')).toBe(read('lib/mpesaImport.ts').replace(/'/g, '"').replace('./mpesaDebts', './mpesa-debts'));
   });
 
   it.each([

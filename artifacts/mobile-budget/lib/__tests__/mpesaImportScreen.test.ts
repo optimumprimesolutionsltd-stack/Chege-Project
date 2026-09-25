@@ -54,7 +54,7 @@ describe('the screen can be reached', () => {
 describe('the web page matches the phone', () => {
   const web = read('../family-budget/src/pages/mpesa-import.tsx');
   it('shares the exact import logic', () => {
-    expect(read('../family-budget/src/lib/mpesa-import.ts')).toBe(read('lib/mpesaImport.ts').replace(/'/g, '"'));
+    expect(read('../family-budget/src/lib/mpesa-import.ts')).toBe(read('lib/mpesaImport.ts').replace(/'/g, '"').replace('./mpesaDebts', './mpesa-debts'));
   });
   it('reads through the API, saves only on Save, and keeps the same safeguards', () => {
     expect(web).toContain('"/api/mpesa/import/preview"');

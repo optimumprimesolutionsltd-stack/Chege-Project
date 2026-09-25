@@ -22,6 +22,7 @@ import * as Updates from 'expo-updates';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { usePathname } from 'expo-router';
 import { saveResumePoint } from '@/lib/resumeAfterUpdate';
+import { hasUnsavedWork } from '@/lib/unsavedWork';
 
 interface Props {
   message: string;
@@ -110,6 +111,11 @@ export function UpdatePrompt({ message, onDismiss }: Props) {
         {/* Heading */}
         <Text style={styles.title}>Update ready</Text>
         <Text style={styles.message}>{message}</Text>
+        {hasUnsavedWork() ? (
+          <Text style={styles.message} testID="update-keeps-work">
+            Your unfinished work is kept. It will be here when Jamvi restarts.
+          </Text>
+        ) : null}
 
         {/* Error */}
         {error && <Text style={styles.errorText}>{error}</Text>}
