@@ -72,6 +72,7 @@ type Outcome = { saved: number; repeats: number; failed: Array<{ what: string; w
 
 import { readStatementPages, StatementPasswordError } from "@/lib/statement-file";
 import { rememberMpesaCard } from "@/lib/mpesa-card";
+import { parseStoredRules, payeeKey, payeeName, rulesStorageKey, withRule, withoutRule, type PayeeRules } from "@/lib/payee-learning";
 import { reconcile, statementLines, type StatementReading } from "@/lib/statement-import";
 import { checkRunningBalance, readStatementRows, resolveDirections } from "@/lib/statement-table";
 
@@ -141,6 +142,22 @@ export default function MpesaImportPage() {
   // Names the person gave payees, kept in this browser for this budget.
   const [nicknames, setNicknames] = useState<NicknameMap>({});
   const [naming, setNaming] = useState<{ index: number; original: string; text: string } | null>(null);
+  // What Jamvi was asked to remember: a payee's category, kept in this browser for this budget.
+  const rulesKey = rulesStorageKey(group?.id);
+  const [rules, setRules] = useState<PayeeRules>({});
+  const [rulesOpen, setRulesOpen] = useState(false);
+  useEffect(() => {
+    try {
+      setRules(parseStoredRules(window.localStorage.getItem(rulesKey)));
+    } catch {
+      setRules({});
+    }
+  }, [rulesKey]);
+  const keepRules = (next: PayeeRules) => {
+    setRules(next);
+    try { window.localStorage.setItem(rulesKey, JSON.stringify(next)); } catch { /* kept only when storage allows */ }
+  };
+
   const nicknamesKey = nicknameStorageKey(group?.id);
   const readStoredNicknames = (): NicknameMap => {
     try {
@@ -161,7 +178,7 @@ export default function MpesaImportPage() {
     try { window.localStorage.setItem(nicknamesKey, JSON.stringify(next)); } catch { /* remembered only when storage allows */ }
     const renamed = applyNicknames(lines, next);
     setLines(renamed);
-    setChoices((current) => refreshSuggestions(renamed, current, history, categories.map((row) => row.name), chargeCategory));
+    setChoices((current) => refreshSuggestions(renamed, current, history, categories.map((row) => row.name), chargeCategory, rules));
     setNaming(null);
   };
 
@@ -274,7 +291,7 @@ export default function MpesaImportPage() {
       );
       setLines(shown);
       setStatementReading({ ...reading, lines: shown });
-      setChoices(initialChoices(shown, history, categories.map((row) => row.name), chargeCategory));
+      setChoices(initialChoices(shown, history, categories.map((row) => row.name), chargeCategory, rules));
       setStatementPassword("");
     } catch (error) {
       if (error instanceof StatementPasswordError) {
@@ -308,7 +325,7 @@ export default function MpesaImportPage() {
       if (!response.ok || !body.lines) throw new Error(body.error ?? "Could not read them.");
       const shown = applyNicknames(body.lines, readStoredNicknames());
       setLines(shown);
-      setChoices(initialChoices(shown, history, categories.map((row) => row.name), chargeCategory));
+      setChoices(initialChoices(shown, history, categories.map((row) => row.name), chargeCategory, rules));
     } catch (error) {
       toast({ variant: "destructive", title: "Could not read them", description: error instanceof Error ? error.message : "Please try again." });
     } finally {
@@ -527,6 +544,16 @@ export default function MpesaImportPage() {
       setOutcome(result);
       if (result.saved > 0) rememberMpesaCard("done");
     }
+    {
+      let kept = rules;
+      for (const item of lines) {
+        const choice = choices[item.index];
+        if (savedIndexes.has(item.index) && choice?.remember && choice.category.trim() && item.description) {
+          kept = withRule(kept, item.description, choice.category);
+        }
+      }
+      if (kept !== rules) keepRules(kept);
+    }
     void offerBalanceChanges(lines.filter((item) => savedIndexes.has(item.index)));
   };
 
@@ -591,6 +618,23 @@ export default function MpesaImportPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-5 p-4 sm:p-6" data-testid="mpesa-import-page">
+      <Dialog open={rulesOpen} onOpenChange={setRulesOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>What Jamvi remembers</DialogTitle>
+            <DialogDescription>Categories you asked Jamvi to keep for a payee. Forget one and it goes back to being suggested from your history.</DialogDescription>
+          </DialogHeader>
+          <div className="max-h-72 space-y-2 overflow-y-auto">
+            {Object.entries(rules).map(([key, category]) => (
+              <div key={key} className="flex items-center justify-between gap-2 rounded-lg border border-border p-2 text-sm">
+                <span>{key} → {category}</span>
+                <Button variant="ghost" size="sm" onClick={() => keepRules(withoutRule(rules, key))} aria-label={`Forget ${key}`} data-testid={`mpesa-rule-forget-${key}`}>Forget</Button>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={naming !== null} onOpenChange={(open) => !open && setNaming(null)}>
         <DialogContent>
           <DialogHeader>
@@ -714,7 +758,7 @@ export default function MpesaImportPage() {
               onChange={(event) => {
                 setSelectedAccountId(Number(event.target.value));
                 // The suggestions come from this account's history, so start them again.
-                setChoices(initialChoices(lines, [], categories.map((row) => row.name), chargeCategory));
+                setChoices(initialChoices(lines, [], categories.map((row) => row.name), chargeCategory, rules));
               }}
               data-testid="mpesa-import-account"
             >
@@ -789,6 +833,11 @@ export default function MpesaImportPage() {
 
           {recordable.length > 0 ? <CategorySearchInput query={search.query} onChange={search.setQuery} testId="mpesa-category-search" /> : null}
 
+          {Object.keys(rules).length > 0 ? (
+            <button type="button" onClick={() => setRulesOpen(true)} className="text-left text-sm font-semibold text-primary" data-testid="mpesa-rules-open">
+              What Jamvi remembers ({Object.keys(rules).length})
+            </button>
+          ) : null}
           {review && review.all > 0 ? (
             <Card data-testid="mpesa-review">
               <CardContent className="space-y-2 p-4">
@@ -894,6 +943,17 @@ export default function MpesaImportPage() {
                     <p className="text-xs text-muted-foreground" data-testid={`mpesa-line-path-${item.index}`}>
                       Filed under {categoryPath(choice.category, categories)}
                     </p>
+                  ) : null}
+                  {out && choice?.include && !choice.transferTo && choice.category && item.description && rules[payeeKey(item.description)] !== choice.category ? (
+                    <label className="flex items-center gap-2 text-sm text-foreground">
+                      <input
+                        type="checkbox"
+                        checked={choice.remember === true}
+                        onChange={(event) => setChoices((current) => ({ ...current, [item.index]: { ...current[item.index], remember: event.target.checked } }))}
+                        data-testid={`mpesa-line-remember-${item.index}`}
+                      />
+                      Remember {choice.category} for {payeeName(item.description)}
+                    </label>
                   ) : null}
                   {out && choice?.include && !choice.transferTo && choice.auto && choice.category ? (
                     <p className="text-xs text-muted-foreground" data-testid={`mpesa-line-suggested-${item.index}`}>

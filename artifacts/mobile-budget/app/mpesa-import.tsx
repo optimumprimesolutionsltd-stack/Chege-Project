@@ -64,6 +64,7 @@ import { ACTIVE_WORKSPACE_STORAGE_KEY } from '@/lib/workspace';
 import { formatExact } from '@/lib/formatExact';
 import { StatementReader, type ReaderJob } from '@/components/StatementReader';
 import { rememberMpesaCard } from '@/lib/mpesaCard';
+import { parseStoredRules, payeeKey, payeeName, rulesStorageKey, withRule, withoutRule, type PayeeRules } from '@/lib/payeeLearning';
 import { canReadStatements, chooseStatement, statementBase64, type ChosenStatement } from '@/lib/statementFile';
 import { shownFileName } from '@/lib/shownFileName';
 import { reconcile, statementLines, type StatementReading } from '@/lib/statementImport';
@@ -477,6 +478,26 @@ export default function MpesaImportScreen() {
   // Names the person gave payees, kept on this device for this budget.
   const [nicknames, setNicknames] = useState<NicknameMap>({});
   const [naming, setNaming] = useState<{ index: number; original: string; text: string } | null>(null);
+  // What Jamvi was asked to remember: a payee's category, kept on this phone for this budget.
+  const rulesKey = rulesStorageKey(group?.id);
+  const [rules, setRules] = useState<PayeeRules>({});
+  const [rulesOpen, setRulesOpen] = useState(false);
+  useEffect(() => {
+    let active = true;
+    AsyncStorage.getItem(rulesKey)
+      .then((stored) => {
+        if (active) setRules(parseStoredRules(stored));
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [rulesKey]);
+  const keepRules = (next: PayeeRules) => {
+    setRules(next);
+    AsyncStorage.setItem(rulesKey, JSON.stringify(next)).catch(() => {});
+  };
+
   const nicknamesKey = nicknameStorageKey(group?.id);
   useEffect(() => {
     let active = true;
@@ -497,7 +518,7 @@ export default function MpesaImportScreen() {
     AsyncStorage.setItem(nicknamesKey, JSON.stringify(next)).catch(() => {});
     const renamed = applyNicknames(lines, next);
     setLines(renamed);
-    setChoices((current) => refreshSuggestions(renamed, current, history, categories.map((row) => row.name), chargeCategory));
+    setChoices((current) => refreshSuggestions(renamed, current, history, categories.map((row) => row.name), chargeCategory, rules));
     setNaming(null);
   };
 
@@ -507,7 +528,7 @@ export default function MpesaImportScreen() {
   // the person chose is never touched.
   useEffect(() => {
     if (!lines) return;
-    setChoices((current) => refreshSuggestions(lines, current, history, categories.map((row) => row.name), chargeCategory));
+    setChoices((current) => refreshSuggestions(lines, current, history, categories.map((row) => row.name), chargeCategory, rules));
     // Runs when the lists load, not on every choice.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [categoryList, account]);
@@ -575,7 +596,7 @@ export default function MpesaImportScreen() {
       setNicknames(known);
       const shown = applyNicknames(response.lines, known);
       setLines(shown);
-      setChoices(initialChoices(shown, history, categories.map((row) => row.name), chargeCategory));
+      setChoices(initialChoices(shown, history, categories.map((row) => row.name), chargeCategory, rules));
       // A restored draft brings back what was chosen by hand, on top of the fresh reading.
       const restoredChoices = pendingChoicesRef.current;
       if (restoredChoices) {
@@ -659,7 +680,7 @@ export default function MpesaImportScreen() {
       );
       setLines(shown);
       setStatementReading({ ...reading, lines: shown });
-      setChoices(initialChoices(shown, history, categories.map((row) => row.name), chargeCategory));
+      setChoices(initialChoices(shown, history, categories.map((row) => row.name), chargeCategory, rules));
       setStatementPassword('');
     } catch (error: unknown) {
       Alert.alert('Could not read the statement', error instanceof Error ? error.message : 'Please try again.');
@@ -866,6 +887,16 @@ export default function MpesaImportScreen() {
       }
       setOutcome(result);
       if (result.saved > 0) void rememberMpesaCard('done');
+    }
+    {
+      let kept = rules;
+      for (const item of lines) {
+        const choice = choices[item.index];
+        if (savedIndexes.has(item.index) && choice?.remember && choice.category.trim() && item.description) {
+          kept = withRule(kept, item.description, choice.category);
+        }
+      }
+      if (kept !== rules) keepRules(kept);
     }
     offerBalanceChanges(lines.filter((item) => savedIndexes.has(item.index)));
   };
@@ -1092,7 +1123,7 @@ export default function MpesaImportScreen() {
               onSelect={(id) => {
                 setSelectedAccountId(id);
                 // The suggestions come from this account's history, so start them again.
-                setChoices(initialChoices(lines, [], categories.map((row) => row.name), chargeCategory));
+                setChoices(initialChoices(lines, [], categories.map((row) => row.name), chargeCategory, rules));
               }}
               testIDPrefix="mpesa-import-account"
             />
@@ -1141,6 +1172,13 @@ export default function MpesaImportScreen() {
               </View>
             ) : null}
 
+            {Object.keys(rules).length > 0 ? (
+              <Pressable onPress={() => setRulesOpen(true)} accessibilityRole="button" testID="mpesa-rules-open" style={{ alignSelf: 'flex-start' }}>
+                <Text style={[styles.hint, { color: colors.primary, fontFamily: 'Inter_600SemiBold', marginTop: 0 }]}>
+                  What Jamvi remembers ({Object.keys(rules).length})
+                </Text>
+              </Pressable>
+            ) : null}
             {review && review.all > 0 ? (
               <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]} testID="mpesa-review">
                 <Text style={[styles.hint, { color: colors.foreground, marginTop: 0 }]} testID="mpesa-review-counts">
@@ -1236,6 +1274,20 @@ export default function MpesaImportScreen() {
                         {choice.category ? categoryPath(choice.category, categories) : 'Choose what it was for'}
                       </Text>
                       <Feather name="chevron-down" size={16} color={colors.mutedForeground} />
+                    </Pressable>
+                  ) : null}
+                  {out && choice?.include && !choice.transferTo && choice.category && item.description && rules[payeeKey(item.description)] !== choice.category ? (
+                    <Pressable
+                      onPress={() => setChoices((current) => ({ ...current, [item.index]: { ...current[item.index], remember: !current[item.index]?.remember } }))}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: choice.remember === true }}
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 }}
+                      testID={`mpesa-line-remember-${item.index}`}
+                    >
+                      <Feather name={choice.remember ? 'check-square' : 'square'} size={18} color={choice.remember ? colors.primary : colors.mutedForeground} />
+                      <Text style={{ color: colors.foreground, fontSize: 13, flexShrink: 1 }}>
+                        Remember {choice.category} for {payeeName(item.description)}
+                      </Text>
                     </Pressable>
                   ) : null}
                   {out && choice?.include && !choice.transferTo && choice.auto && choice.category ? (
@@ -1554,6 +1606,30 @@ export default function MpesaImportScreen() {
               accessibilityRole="button"
             >
               <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold' }}>No, it is not a debt or loan</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={rulesOpen} animationType="slide" transparent onRequestClose={() => setRulesOpen(false)}>
+        <View style={styles.sheetBackdrop}>
+          <View style={[styles.sheet, { backgroundColor: colors.card, borderColor: colors.border, padding: 16, paddingBottom: 16 + Math.max(insets.bottom, 24), gap: 10 }]}>
+            <Text style={[styles.sheetTitle, { color: colors.foreground }]}>What Jamvi remembers</Text>
+            <Text style={[styles.hint, { color: colors.mutedForeground }]}>
+              Categories you asked Jamvi to keep for a payee. Forget one and it goes back to being suggested from your history.
+            </Text>
+            <ScrollView style={{ maxHeight: 280 }}>
+              {Object.entries(rules).map(([key, category]) => (
+                <View key={key} style={[styles.option, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }]}>
+                  <Text style={{ color: colors.foreground, flexShrink: 1 }}>{key} → {category}</Text>
+                  <Pressable onPress={() => keepRules(withoutRule(rules, key))} accessibilityRole="button" accessibilityLabel={`Forget ${key}`} hitSlop={8} testID={`mpesa-rule-forget-${key}`}>
+                    <Feather name="x" size={18} color={colors.mutedForeground} />
+                  </Pressable>
+                </View>
+              ))}
+            </ScrollView>
+            <Pressable onPress={() => setRulesOpen(false)} style={styles.secondary} accessibilityRole="button">
+              <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>Done</Text>
             </Pressable>
           </View>
         </View>
