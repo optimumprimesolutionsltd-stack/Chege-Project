@@ -91,6 +91,9 @@ const CHARGE_CATEGORY_KEY = 'jamvi:last-charge-category';
 
 const todayIso = () => new Date(Date.now() + 3 * 3_600_000).toISOString().slice(0, 10);
 
+/** A statement is kept this long, so it can be worked through over days. */
+const STATEMENT_DRAFT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+
 type Outcome = { saved: number; repeats: number; failed: Array<{ what: string; why: string }> };
 
 /**
@@ -378,7 +381,37 @@ export default function MpesaImportScreen() {
       }
     },
   });
+  // A statement is worked through at the person's own pace: what is still to do is kept
+  // on this phone (never the PDF or its password) and picked up again where it was left.
+  const statementLeft = (statementReading?.lines ?? []).filter(isRecordable).length;
+  const { discard: discardStatementDraft } = useDraft<{
+    reading: StatementReading;
+    choices: Record<number, Choice>;
+    accountId: number | null;
+  }>({
+    key: 'mpesa-statement',
+    value: { reading: statementReading as StatementReading, choices, accountId: selectedAccountId },
+    active: statementReading !== null && statementLeft > 0,
+    maxAgeMs: STATEMENT_DRAFT_MAX_AGE_MS,
+    onRestore: (saved) => {
+      if (!saved.reading?.lines) return;
+      if (saved.accountId) setSelectedAccountId(saved.accountId);
+      setStatementReading(saved.reading);
+      setLines(saved.reading.lines);
+      setChoices(saved.choices);
+      setStatementNote('Picked up where you left off with your statement. Anything saved since is marked as recorded.');
+      // Some may have been saved from another screen since: ask again which are recorded.
+      markRecorded(saved.reading.lines)
+        .then((checked) => {
+          setLines(checked);
+          setStatementReading((current) => (current ? { ...current, lines: checked } : current));
+        })
+        .catch(() => {});
+    },
+  });
+
   const startOver = () => {
+    discardStatementDraft();
     setStatementNote(null);
     setStatementReading(null);
     discardDraft();
@@ -541,6 +574,22 @@ export default function MpesaImportScreen() {
     }
   };
 
+  // Which of a statement's entries this budget already has: asked with the receipt codes only.
+  const markRecorded = async (all: PreviewLine[]): Promise<PreviewLine[]> => {
+    const codes = [...new Set(all.map((line) => line.receipt).filter((code): code is string => Boolean(code)))];
+    if (codes.length === 0) return all;
+    const body = await customFetch<{ recorded: Array<{ receipt: string; date: string; description: string }> }>('/api/mpesa/import/check-receipts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ receipts: codes }),
+    });
+    const recorded = new Map(body.recorded.map((row) => [row.receipt, { date: row.date, description: row.description }]));
+    return all.map((line) => {
+      const existing = line.receipt ? recorded.get(line.receipt) : undefined;
+      return existing ? { ...line, alreadyRecorded: existing } : line;
+    });
+  };
+
   const pickStatement = async () => {
     try {
       const chosen = await chooseStatement();
@@ -582,20 +631,7 @@ export default function MpesaImportScreen() {
         throw new Error('This statement does not add up, so Jamvi will not risk recording wrong amounts. Paste your messages instead.');
       }
       const reading = statementLines(rows);
-      const codes = [...new Set(reading.lines.map((line) => line.receipt).filter((code): code is string => Boolean(code)))];
-      let recorded = new Map<string, { date: string | null; description: string }>();
-      if (codes.length > 0) {
-        const body = await customFetch<{ recorded: Array<{ receipt: string; date: string; description: string }> }>('/api/mpesa/import/check-receipts', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ receipts: codes }),
-        });
-        recorded = new Map(body.recorded.map((row) => [row.receipt, { date: row.date, description: row.description }]));
-      }
-      const checked = reading.lines.map((line) => {
-        const existing = line.receipt ? recorded.get(line.receipt) : undefined;
-        return existing ? { ...line, alreadyRecorded: existing } : line;
-      });
+      const checked = await markRecorded(reading.lines);
       const known = parseStoredNicknames(await AsyncStorage.getItem(nicknamesKey).catch(() => null));
       setNicknames(known);
       const shown = applyNicknames(checked, known);
@@ -733,6 +769,12 @@ export default function MpesaImportScreen() {
       }
     } finally {
       setSaving(false);
+      if (statementReading) {
+        const stamp = { date: todayIso(), description: 'Saved from your statement' };
+        const marked = lines.map((item) => (savedIndexes.has(item.index) ? { ...item, alreadyRecorded: stamp } : item));
+        setLines(marked);
+        setStatementReading((current) => (current ? { ...current, lines: marked } : current));
+      }
       setOutcome(result);
     }
     offerBalanceChanges(lines.filter((item) => savedIndexes.has(item.index)));
@@ -791,6 +833,21 @@ export default function MpesaImportScreen() {
             </Text>
           ))}
         </View>
+        {statementReading && statementLeft > 0 ? (
+          <Pressable
+            onPress={() => setOutcome(null)}
+            style={[styles.primary, { backgroundColor: colors.primary }]}
+            accessibilityRole="button"
+            testID="mpesa-import-keep-going"
+          >
+            <Text style={styles.primaryText}>Keep going ({statementLeft} left)</Text>
+          </Pressable>
+        ) : null}
+        {statementReading && statementLeft > 0 ? (
+          <Text style={[styles.hint, { color: colors.mutedForeground, textAlign: 'center' }]} testID="mpesa-import-continue-later">
+            Or come back later: the rest of your statement is kept on this phone. Open the M-Pesa screen again and it is here.
+          </Text>
+        ) : null}
         <Pressable
           onPress={() => router.replace('/(tabs)/bank')}
           style={[styles.primary, { backgroundColor: colors.primary }]}

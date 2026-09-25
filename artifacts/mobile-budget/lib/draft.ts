@@ -38,11 +38,14 @@ export function useDraft<T>({
   value,
   active,
   onRestore,
+  maxAgeMs = DRAFT_MAX_AGE_MS,
 }: {
   key: string;
   value: T;
   active: boolean;
   onRestore: (saved: T) => void;
+  /** How long it is kept. A statement is worked through over days, a paste over an afternoon. */
+  maxAgeMs?: number;
 }): { restored: boolean; dismiss: () => void; discard: () => void } {
   const [restored, setRestored] = useState(false);
   // Nothing is written or removed until the stored draft has been looked at,
@@ -56,7 +59,7 @@ export function useDraft<T>({
     AsyncStorage.getItem(PREFIX + key)
       .then((raw) => {
         if (!alive) return;
-        const saved = parseDraft<T>(raw);
+        const saved = parseDraft<T>(raw, Date.now(), maxAgeMs);
         if (saved !== null) {
           onRestoreRef.current(saved);
           setRestored(true);
