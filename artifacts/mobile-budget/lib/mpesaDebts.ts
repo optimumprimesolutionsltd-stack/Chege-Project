@@ -1,4 +1,4 @@
-import type { Choice, PreviewLine } from './mpesaImport';
+import { BANK_WORDS, type Choice, type PreviewLine } from './mpesaImport';
 
 /** A person or institution in "Who owes who", with what stands between you. */
 export type PartyLite = { id: number; name: string; owedToUs?: number | null; owedByUs?: number | null };
@@ -27,9 +27,22 @@ export const DEBT_LABEL: Record<DebtKind, string> = {
 export const debtKindsFor = (direction: 'out' | 'in'): DebtKind[] =>
   direction === 'out' ? ['pay-back', 'lend'] : ['repaid', 'borrowed'];
 
-/** Only a payment to or from a person can be a debt or a loan. */
-export const canLinkDebt = (line: PreviewLine): boolean =>
-  line.status === 'ready' && (line.type === 'person_payment' || line.type === 'person_receipt');
+/**
+ * A payment to or from a person can be a debt or a loan, and so can money to or from
+ * a company: a director's own business paying them, or being paid, is the same
+ * creditor and debtor logic as a neighbour. Money in from a bank is always asked
+ * about. A paybill or till payment is asked about only when it names a bank, or a
+ * person or company already in Who owes who, so everyday bills stay uncluttered.
+ */
+export const canLinkDebt = (line: PreviewLine, parties: readonly PartyLite[] = []): boolean => {
+  if (line.status !== 'ready') return false;
+  if (line.type === 'person_payment' || line.type === 'person_receipt' || line.type === 'bank_receipt') return true;
+  if (line.type === 'paybill_payment' || line.type === 'merchant_payment') {
+    const name = line.original ?? line.description ?? '';
+    return BANK_WORDS.test(name) || matchParty(name, parties) !== null;
+  }
+  return false;
+};
 
 const clean = (value: string) => value.trim().replace(/\s+/g, ' ').toLocaleLowerCase('en-KE');
 const words = (value: string) => clean(value).split(' ').filter((word) => word.length > 1);

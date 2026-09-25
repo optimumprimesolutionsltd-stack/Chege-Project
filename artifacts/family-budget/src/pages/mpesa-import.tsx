@@ -1002,7 +1002,12 @@ export default function MpesaImportPage() {
                       </select>
                     </div>
                   ) : null}
-                  {choice?.include && !choice.transferTo && canLinkDebt(item) && parties.length > 0 ? (
+                  {choice?.include && !choice.transferTo && item.type === "bank_receipt" && parties.length === 0 ? (
+                    <Link href="/parties" className="block text-xs font-semibold text-primary" data-testid={`mpesa-line-add-business-${item.index}`}>
+                      Money to or from a company you own? Add it in Who owes who, then come back and choose it here.
+                    </Link>
+                  ) : null}
+                  {choice?.include && !choice.transferTo && canLinkDebt(item, parties) && parties.length > 0 ? (
                     (() => {
                       const linked = choice.debt ? parties.find((party) => party.id === choice.debt!.partyId) : undefined;
                       const guess = !choice.debt && item.direction ? matchParty(item.original ?? item.description, parties) : null;

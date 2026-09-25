@@ -1362,7 +1362,14 @@ export default function MpesaImportScreen() {
                       </ScrollView>
                     </View>
                   ) : null}
-                  {choice?.include && !choice.transferTo && canLinkDebt(item) && parties.length > 0 ? (
+                  {choice?.include && !choice.transferTo && item.type === 'bank_receipt' && parties.length === 0 ? (
+                    <Pressable onPress={() => router.push('/parties' as never)} accessibilityRole="button" testID={`mpesa-line-add-business-${item.index}`}>
+                      <Text style={[styles.hint, { color: colors.primary, marginTop: 0, fontFamily: 'Inter_600SemiBold' }]}>
+                        Money to or from a company you own? Add it in Who owes who, then come back and choose it here.
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                  {choice?.include && !choice.transferTo && canLinkDebt(item, parties) && parties.length > 0 ? (
                     (() => {
                       const linked = choice.debt ? parties.find((party) => party.id === choice.debt!.partyId) : undefined;
                       const guess = !choice.debt && item.direction ? matchParty(item.original ?? item.description, parties) : null;

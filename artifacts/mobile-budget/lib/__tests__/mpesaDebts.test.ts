@@ -45,6 +45,33 @@ describe('which lines can be a debt', () => {
     expect(canLinkDebt(line({ status: 'skipped' }))).toBe(false);
   });
 
+  // A director's companies are creditors and debtors like anyone else: money from one
+  // company's bank into M-Pesa and on to another company's bank is two debt entries.
+  it('money in from a bank can always be a debt', () => {
+    expect(canLinkDebt(line({ type: 'bank_receipt', direction: 'in' }))).toBe(true);
+  });
+
+  it('a paybill or till payment can be one when it names a bank or somebody in Who owes who, and not otherwise', () => {
+    const company = [{ id: 5, name: 'Sample Holdings Ltd', owedToUs: 0, owedByUs: 0 }];
+    expect(canLinkDebt(line({ type: 'paybill_payment', description: 'Sample Kcb Bank (Acc 1)' }))).toBe(true);
+    expect(canLinkDebt(line({ type: 'paybill_payment', description: 'Sample Electricity Company' }))).toBe(false);
+    expect(canLinkDebt(line({ type: 'paybill_payment', description: 'Sample Holdings Ltd' }), company)).toBe(true);
+    expect(canLinkDebt(line({ type: 'merchant_payment', description: 'Sample Holdings Ltd' }), company)).toBe(true);
+    expect(canLinkDebt(line({ type: 'airtime_purchase', description: 'Sample Holdings Ltd' }), company)).toBe(false);
+  });
+
+  it('two companies through the director: borrowed from the first, lent to the second', () => {
+    const inFromBank = line({ direction: 'in', type: 'bank_receipt', amount: 3000, description: 'Received from Sample Equity Bank' });
+    const outToBank = line({ index: 1, direction: 'out', type: 'paybill_payment', amount: 2500, description: 'Sample Kcb Bank (Acc 1)' });
+    const borrowed = buildPostings(inFromBank, { include: true, category: '', debt: { kind: 'borrowed', partyId: 1 } }, ctx);
+    const lent = buildPostings(outToBank, { include: true, category: '', debt: { kind: 'lend', partyId: 2 } }, ctx);
+    expect(borrowed?.main).toMatchObject({ isBorrowing: true, amount: 3000 });
+    expect(lent?.main).toMatchObject({ isLending: true, settlesContributorId: 2, amount: 2500 });
+    const parties = [{ id: 1, name: 'First Company', owedByUs: 0, owedToUs: 0 }, { id: 2, name: 'Second Company', owedByUs: 0, owedToUs: 0 }];
+    const changes = balanceChanges([inFromBank, outToBank], { 0: { include: true, category: '', debt: { kind: 'borrowed', partyId: 1 } }, 1: { include: true, category: '', debt: { kind: 'lend', partyId: 2 } } }, parties, []);
+    expect(changes.map((change) => change.body)).toEqual([{ owedByUs: 3000 }, { owedToUs: 2500 }]);
+  });
+
   it('offers the two meanings each way money can move', () => {
     expect(debtKindsFor('out')).toEqual(['pay-back', 'lend']);
     expect(debtKindsFor('in')).toEqual(['repaid', 'borrowed']);
@@ -199,7 +226,7 @@ describe('the debt logic is the same on both apps', () => {
     ['phone', read('app/mpesa-import.tsx')],
     ['web', read('../family-budget/src/pages/mpesa-import.tsx')],
   ])('%s offers the choice on a person line, and the balances only after saving, asked and not applied', (_name, source) => {
-    expect(source).toContain('canLinkDebt(item)');
+    expect(source).toContain('canLinkDebt(item, parties)');
     expect(source).toContain('matchParty(item.original ?? item.description, parties)');
     expect(source).toContain('balanceChanges(');
     expect(source).toContain('Is this a debt or loan?');
