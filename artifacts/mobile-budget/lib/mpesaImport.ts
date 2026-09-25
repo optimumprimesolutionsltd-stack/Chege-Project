@@ -538,7 +538,7 @@ export function chooseTransfer(choices: Record<number, Choice>, index: number, a
 }
 
 /** Words in a payee that say it is a bank: a payment to one is likely a move between the person's own accounts. */
-const BANK_WORDS = /\b(bank|equity|kcb|co-?op(erative)?|absa|ncba|stanbic|dtb|i&m|family|sidian|gulf|hf|nba|diamond|standard chartered|citi|hfc|ecobank|uba|prime bank|credit bank|victoria|guaranty|gtb|m-?oriental|paramount|spire)\b/i;
+export const BANK_WORDS = /\b(bank|equity|kcb|co-?op(erative)?|absa|ncba|stanbic|dtb|i&m|family|sidian|gulf|hf|nba|diamond|standard chartered|citi|hfc|ecobank|uba|prime bank|credit bank|victoria|guaranty|gtb|m-?oriental|paramount|spire)\b/i;
 
 /**
  * Lines that look like money passing through M-Pesa between the person's own accounts:
