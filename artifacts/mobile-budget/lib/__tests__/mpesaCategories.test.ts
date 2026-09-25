@@ -161,7 +161,7 @@ describe('the category picker says what is wrong and can fix it', () => {
 
   it('suggests again when the categories or history arrive after the messages were read', () => {
     expect(phone).toContain('}, [categoryList, account]);');
-    expect(phone).toContain('refreshSuggestions(lines, current, history, categories.map((row) => row.name), chargeCategory)');
+    expect(phone).toContain('refreshSuggestions(lines, current, history, categories.map((row) => row.name), chargeCategory, rules)');
   });
 
   it('the web page says so when there are no categories, and points to Budget', () => {
