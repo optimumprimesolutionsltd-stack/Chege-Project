@@ -26,4 +26,11 @@ describe("the statement section of the M-Pesa page", () => {
   it("does not show the phone number in the file name", () => {
     expect(page).toContain(String.raw`replace(/\d{6,}/g, "…")`);
   });
+
+  it("shows whether saving would match the statement, and what the difference is made of", () => {
+    expect(page).toContain("reconcile({ ...statementReading, lines }");
+    expect(page).toContain('data-testid="mpesa-statement-balance"');
+    expect(page).toContain("Will not match your statement exactly");
+    expect(page).toContain("balanceCheck.parts.map");
+  });
 });

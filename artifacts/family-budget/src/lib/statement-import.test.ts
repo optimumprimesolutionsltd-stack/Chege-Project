@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { statementLines } from "./statement-import";
+import { reconcile, statementLines } from "./statement-import";
 import type { StatementRow } from "./statement-table";
 
 let n = 0;
@@ -74,5 +74,47 @@ describe("statementLines", () => {
     const { lines } = statementLines([at("01 08:00:00", "Pay Bill Charge", { withdrawn: 5 })]);
     expect(lines[0]).toMatchObject({ status: "skipped" });
     expect(lines[0].reason).toContain("bank charge");
+  });
+});
+
+describe("reconcile", () => {
+  // Opening 1,000. +500 received; a Fuliza-funded payment of 300 with a 5 charge and a 100 loan draw;
+  // a 100 loan repayment; a 20 reversal. Closing 1,215.
+  const statement = () => {
+    const received = at("01 08:00:00", "Funds received from - 2547***000 SAMPLE PERSON", { paidIn: 500, balance: 1500 });
+    const draw = at("02 08:00:00", "OverDraft of Credit Party", { paidIn: 100, balance: 1295 });
+    const payment = { ...at("02 08:00:00", "Pay Bill Online Fuliza M-Pesa to 123456 - SAMPLE UTILITY", { withdrawn: 300, balance: 1200 }), receipt: draw.receipt };
+    const charge = { ...at("02 08:00:00", "Pay Bill Charge", { withdrawn: 5, balance: 1195 }), receipt: draw.receipt };
+    const repay = at("03 08:00:00", "OD Loan Repayment to 999999 - M-PESA Overdraw", { withdrawn: 100, balance: 1195 - 100 + 100 });
+    const reversal = at("04 08:00:00", "Pay Utility Reversal by Lipa na Sample", { paidIn: 20, balance: 1215 });
+    return [reversal, repay, charge, payment, draw, received];
+  };
+
+  it("finds the opening and closing balance", () => {
+    const reading = statementLines(statement());
+    expect(reading.opening).toBe(1000);
+    expect(reading.closing).toBe(1215);
+  });
+
+  it("says what is left out and that the parts add up to the difference", () => {
+    const reading = statementLines(statement());
+    const result = reconcile(reading, () => true)!;
+    expect(result.statementChange).toBe(215);
+    expect(result.savedChange).toBe(195);
+    expect(result.gap).toBe(20);
+    expect(result.parts.map((part) => part.amount)).toEqual([-100, 100, 20]);
+    expect(result.parts.reduce((sum, part) => sum + part.amount, 0)).toBe(result.gap);
+  });
+
+  it("counts what is not ticked as part of the difference", () => {
+    const reading = statementLines(statement());
+    const result = reconcile(reading, (line) => line.direction === "in")!;
+    const unticked = result.parts.find((part) => part.label.includes("not ticked"));
+    expect(unticked?.amount).toBe(-305);
+    expect(result.parts.reduce((sum, part) => sum + part.amount, 0)).toBe(result.gap);
+  });
+
+  it("has nothing to say when the balances cannot be worked out", () => {
+    expect(reconcile({ ...statementLines([]), opening: null }, () => true)).toBeNull();
   });
 });

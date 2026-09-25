@@ -63,7 +63,7 @@ const todayIso = () => new Date(Date.now() + 3 * 3_600_000).toISOString().slice(
 type Outcome = { saved: number; repeats: number; failed: Array<{ what: string; why: string }> };
 
 import { readStatementPages, StatementPasswordError } from "@/lib/statement-file";
-import { statementLines } from "@/lib/statement-import";
+import { reconcile, statementLines, type StatementReading } from "@/lib/statement-import";
 import { checkRunningBalance, readStatementRows, resolveDirections } from "@/lib/statement-table";
 
 const SELECT_CLASS = "flex h-11 w-full rounded-md border border-input bg-card px-3 py-2 text-sm";
@@ -212,6 +212,7 @@ export default function MpesaImportPage() {
   const [statementPassword, setStatementPassword] = useState("");
   const [readingStatement, setReadingStatement] = useState(false);
   const [statementNote, setStatementNote] = useState<string | null>(null);
+  const [statementReading, setStatementReading] = useState<StatementReading | null>(null);
 
   const readStatement = async () => {
     if (!statementFile) return;
@@ -251,6 +252,7 @@ export default function MpesaImportPage() {
         `Read ${shown.length} entries from your statement. It adds up.${left.length > 0 ? ` Left out because they are not spending or income: ${left.join(" and ")}. What a Fuliza loan paid for is recorded as a normal payment.` : ""}`,
       );
       setLines(shown);
+      setStatementReading({ ...reading, lines: shown });
       setChoices(initialChoices(shown, history, categories.map((row) => row.name), chargeCategory));
       setStatementPassword("");
     } catch (error) {
@@ -292,6 +294,12 @@ export default function MpesaImportPage() {
       setReading(false);
     }
   };
+
+  // Would saving these leave the account moved as far as the statement says M-Pesa moved?
+  const balanceCheck = useMemo(
+    () => (statementReading && lines ? reconcile({ ...statementReading, lines }, (line) => choices[line.index]?.include === true) : null),
+    [statementReading, lines, choices],
+  );
 
   const summary = useMemo(() => (lines ? summarise(lines, choices) : null), [lines, choices]);
   const firstProblem = useMemo(() => {
@@ -427,7 +435,7 @@ export default function MpesaImportPage() {
         </Card>
         <div className="flex justify-center gap-3">
           <Link href="/bank"><Button>See my bank</Button></Link>
-          <Button variant="outline" onClick={() => { setOutcome(null); setLines(null); setChoices({}); setText(""); }}>Paste more</Button>
+          <Button variant="outline" onClick={() => { setOutcome(null); setLines(null); setChoices({}); setText(""); setStatementNote(null); setStatementReading(null); }}>Paste more</Button>
         </div>
       </div>
     );
@@ -570,6 +578,30 @@ export default function MpesaImportPage() {
 
           {statementNote ? (
             <p className="rounded-xl border border-border bg-card p-3 text-sm text-foreground" data-testid="mpesa-statement-note">{statementNote}</p>
+          ) : null}
+          {balanceCheck ? (
+            <Card data-testid="mpesa-statement-balance">
+              <CardContent className="space-y-2 p-4 text-sm">
+                <p className="font-bold text-foreground">
+                  {Math.abs(balanceCheck.gap) < 0.005 ? "Matches your statement" : "Will not match your statement exactly"}
+                </p>
+                <p className="text-muted-foreground">
+                  Your statement went from {formatKes(balanceCheck.opening)} to {formatKes(balanceCheck.closing)}, a change of {formatKes(balanceCheck.statementChange)}.
+                  Saving these moves this account by {formatKes(balanceCheck.savedChange)}.
+                </p>
+                {Math.abs(balanceCheck.gap) >= 0.005 ? (
+                  <>
+                    <p className="text-foreground">The difference of {formatKes(balanceCheck.gap)} is:</p>
+                    <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
+                      {balanceCheck.parts.map((part) => (
+                        <li key={part.label}>{part.label}: {formatKes(part.amount)}</li>
+                      ))}
+                    </ul>
+                  </>
+                ) : null}
+                <p className="text-xs text-muted-foreground">Your account also has to start at {formatKes(balanceCheck.opening)} for it to end at {formatKes(balanceCheck.closing)}.</p>
+              </CardContent>
+            </Card>
           ) : null}
           {summary ? (
             <Card data-testid="mpesa-import-summary">
@@ -844,7 +876,7 @@ export default function MpesaImportPage() {
           <div className="sticky bottom-4 space-y-2 rounded-2xl border border-border bg-card p-3 shadow-lg">
             {firstProblem ? <p className="text-sm text-destructive">{firstProblem}</p> : null}
             <div className="flex gap-3">
-              <Button variant="outline" onClick={() => { setLines(null); setChoices({}); setStatementNote(null); }}>Start again</Button>
+              <Button variant="outline" onClick={() => { setLines(null); setChoices({}); setStatementNote(null); setStatementReading(null); }}>Start again</Button>
               <Button onClick={saveAll} disabled={saving || !summary || summary.count === 0} className="flex-1" data-testid="mpesa-import-save">
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : `Save ${summary?.count ?? 0} ${summary?.count === 1 ? "entry" : "entries"}`}
               </Button>
