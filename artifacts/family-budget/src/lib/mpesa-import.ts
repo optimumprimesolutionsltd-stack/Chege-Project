@@ -317,3 +317,18 @@ const PHONE_PATTERNS = [
 export function redactForReport(message: string): string {
   return PHONE_PATTERNS.reduce((text, pattern) => text.replace(pattern, "<PHONE>"), message);
 }
+
+/**
+ * A category with the heading it sits under, so "Electricity" under Utilities
+ * reads "Utilities › Electricity". A heading is not itself something money can
+ * be filed under, so without this a chosen subcategory shows no sign of which
+ * group it belongs to.
+ */
+export function categoryPath(
+  name: string,
+  rows: ReadonlyArray<{ id: number; name: string; parentId?: number | null }>,
+): string {
+  const row = rows.find((candidate) => candidate.name === name);
+  const parent = row?.parentId ? rows.find((candidate) => candidate.id === row.parentId) : undefined;
+  return parent ? `${parent.name} › ${name}` : name;
+}
