@@ -1449,6 +1449,9 @@ export default function BankScreen() {
    * still stands — which is what the statement will show.
    */
   const postBankCharge = async (kind: 'deposit' | 'withdrawal' | 'transfer', parentId?: number) => {
+    // Without this an edited deposit, whose charge field is hidden, would read as
+    // "charge cleared" and delete the fee it already had.
+    if (!chargeCanApply) return;
     // Editing: the fee already on this posting is updated, or removed when
     // the field is cleared, rather than a second one being written.
     if (existingCharge) {
@@ -2003,7 +2006,9 @@ export default function BankScreen() {
   const parsedOutgoingAmount = readAmount(amount);
   // Blank means no charge. Anything unreadable is caught on submit.
   const parsedCharge = chargeAmount.trim() === '' ? 0 : readAmount(chargeAmount);
-  const chargeCanApply = isWithdrawal || isDeposit || isMovingMoney;
+  // Money coming in carries no bank charge, here or on the web: a charge is what
+  // the bank takes out. A charge already saved against a deposit is left alone.
+  const chargeCanApply = isWithdrawal || isMovingMoney;
   const chargeToPost = chargeCanApply && parsedCharge !== null && parsedCharge > 0 ? parsedCharge : 0;
   const editingTransaction = editingTransactionId === null
     ? null
