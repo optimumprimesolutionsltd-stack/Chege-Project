@@ -118,12 +118,20 @@ function CategorySheet({
   const [search, setSearch] = useState('');
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState('');
+  // null is a category (or a new group) of its own; a number is the group it goes under.
+  const [newParentId, setNewParentId] = useState<number | null>(null);
   const tree = useMemo(() => filterCategoryTree(buildCategoryTree(categories), search), [categories, search]);
+  // Only a top-level category can be a group: the app keeps two levels, and the server refuses a third.
+  const parentChoices = useMemo(
+    () => categories.filter((row) => !row.parentId && row.name.trim().toLocaleLowerCase() !== 'other'),
+    [categories],
+  );
 
   const pick = (name: string) => {
     setSearch('');
     setAdding(false);
     setNewName('');
+    setNewParentId(null);
     onPick(name);
   };
 
@@ -140,7 +148,15 @@ function CategorySheet({
     }
     try {
       const created = await createCategory({
-        data: { name, budgetAmount: 0, priority: 3, isRecurring: true, activeMonth: null, activeYear: null },
+        data: {
+          name,
+          budgetAmount: 0,
+          priority: 3,
+          isRecurring: true,
+          activeMonth: null,
+          activeYear: null,
+          ...(newParentId !== null ? { parentId: newParentId } : {}),
+        },
       });
       await queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
       pick(created.name);
@@ -217,6 +233,39 @@ function CategorySheet({
                   style={[styles.pasteBox, { minHeight: 44, borderColor: colors.border, backgroundColor: colors.muted, color: colors.foreground }]}
                   testID="mpesa-category-new-name"
                 />
+                <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0 }]}>Put it under</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                  contentContainerStyle={{ gap: 8, paddingVertical: 2 }}
+                  testID="mpesa-category-parents"
+                >
+                  {[{ id: null as number | null, name: 'Its own (or a new group)' }, ...parentChoices].map((choice) => {
+                    const on = newParentId === choice.id;
+                    return (
+                      <Pressable
+                        key={choice.id ?? 'own'}
+                        onPress={() => setNewParentId(choice.id)}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: on }}
+                        testID={`mpesa-category-parent-${choice.id ?? 'own'}`}
+                        style={{
+                          paddingHorizontal: 12,
+                          paddingVertical: 7,
+                          borderRadius: 999,
+                          borderWidth: 1,
+                          borderColor: on ? colors.primary : colors.border,
+                          backgroundColor: on ? `${colors.primary}22` : colors.muted,
+                        }}
+                      >
+                        <Text style={{ color: on ? colors.primary : colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>
+                          {choice.name}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
                 <Pressable
                   onPress={addCategory}
                   disabled={creating}
