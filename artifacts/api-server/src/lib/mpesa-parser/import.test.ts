@@ -110,26 +110,51 @@ describe("Fuliza notices", () => {
   const PAYMENT = "TESTFULIZA1 Confirmed. Ksh20.00 sent to SAMPLE SHOP on 24/10/26 at 9:15 AM. New M-PESA balance is Ksh0.00. Transaction cost, Ksh0.00.";
   const NOTICE = "TESTFULIZA1 Confirmed. Fuliza M-PESA amount is Ksh 25.00. Access Fee charged Ksh 0.26. Total Fuliza M-PESA outstanding amount is Ksh 25.26 due on 24/11/26.";
 
-  it("is recognised and left out, so the same spending is not counted twice", () => {
+  const NOTICE_NO_FEE = "TESTFULIZA2 Confirmed. Fuliza M-PESA amount is Ksh 25.00. Total Fuliza M-PESA outstanding amount is Ksh 25.00 due on 24/11/26.";
+
+  it("records only the access fee, as money out: the loan itself is not spending", () => {
     const item = toImportItem(NOTICE, 0);
-    expect(item).toMatchObject({ status: "skipped", type: "fuliza_notice", receipt: "TESTFULIZA1", amount: 25 });
-    expect(item.direction).toBeNull();
-    expect(item.reason).toContain("Fuliza loan notice");
-    expect(item.reason).toContain("access fee KES 0.26");
+    expect(item).toMatchObject({
+      status: "ready", direction: "out", type: "fuliza_fee", amount: 0.26, description: "Fuliza access fee", fee: null,
+    });
+    expect(item.amount).not.toBe(25);
   });
 
-  it("does not disturb the payment message that shares its receipt code", () => {
+  it("gives the fee its own receipt code, so it never collides with its payment's", () => {
+    expect(toImportItem(NOTICE, 0).receipt).toBe("TESTFULIZA1FEE");
+  });
+
+  it("leaves a notice with no access fee out, and says why", () => {
+    const item = toImportItem(NOTICE_NO_FEE, 0);
+    expect(item).toMatchObject({ status: "skipped", type: "fuliza_notice", receipt: "TESTFULIZA2", amount: 25 });
+    expect(item.direction).toBeNull();
+    expect(item.reason).toContain("Fuliza loan notice");
+  });
+
+  it("does not disturb the payment message that shares its receipt code, and takes its date", () => {
     const items = readPaste([PAYMENT, NOTICE].join("\n"));
     expect(items.map((item) => [item.receipt, item.status, item.type])).toEqual([
       ["TESTFULIZA1", "ready", "person_payment"],
-      ["TESTFULIZA1", "skipped", "fuliza_notice"],
+      ["TESTFULIZA1FEE", "ready", "fuliza_fee"],
     ]);
+    expect(items[1].date).toBe("2026-10-24");
+  });
+
+  it("has no date when its payment was not pasted with it, rather than borrowing the due date", () => {
+    expect(readPaste(NOTICE)[0].date).toBeNull();
+  });
+
+  it("stays a valid receipt code for the ledger", () => {
+    const code = toImportItem(NOTICE, 0).receipt!;
+    expect(code).toMatch(/^[A-Z0-9]{6,20}$/);
   });
 
   it("is not a repeat of its own payment, in the route", () => {
     const route = readFileSync(new URL("../../routes/mpesa-import.ts", import.meta.url), "utf8");
     expect(route).toContain('item.type !== "fuliza_notice"');
     expect(route).toContain('if (item.type === "fuliza_notice") return { ...item, alreadyRecorded: null };');
+    // The fee has a receipt code of its own, so it takes part in the duplicate check like any line.
+    expect(route).not.toContain('"fuliza_fee"');
   });
 });
 

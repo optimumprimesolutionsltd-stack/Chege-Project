@@ -213,7 +213,7 @@ export default function MpesaImportScreen() {
         body: JSON.stringify({ text }),
       });
       setLines(response.lines);
-      setChoices(initialChoices(response.lines, history, categories.map((row) => row.name)));
+      setChoices(initialChoices(response.lines, history, categories.map((row) => row.name), chargeCategory));
     } catch (error: unknown) {
       Alert.alert('Could not read them', error instanceof Error ? error.message : 'Please try again.');
     } finally {
@@ -384,7 +384,7 @@ export default function MpesaImportScreen() {
               onSelect={(id) => {
                 setSelectedAccountId(id);
                 // The suggestions come from this account's history, so start them again.
-                setChoices(initialChoices(lines, [], categories.map((row) => row.name)));
+                setChoices(initialChoices(lines, [], categories.map((row) => row.name), chargeCategory));
               }}
               testIDPrefix="mpesa-import-account"
             />
