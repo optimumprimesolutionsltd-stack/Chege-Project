@@ -34,3 +34,31 @@ describe("the statement section of the M-Pesa page", () => {
     expect(page).toContain("balanceCheck.parts.map");
   });
 });
+
+describe("working through a statement over several visits (web)", () => {
+  it("keeps what is still to do for a month on this device, never the PDF or its password", () => {
+    expect(page).toContain("const STATEMENT_DRAFT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;");
+    expect(page).toContain("jamvi:mpesa-statement:");
+    const write = page.slice(page.indexOf("window.localStorage.setItem(statementDraftKey"), page.indexOf("window.localStorage.setItem(statementDraftKey") + 200);
+    expect(write).toContain("reading: statementReading");
+    expect(write).not.toContain("statementPassword");
+    expect(write).not.toContain("statementFile");
+  });
+
+  it("does not erase the kept copy before it has been looked at", () => {
+    expect(page).toContain("if (draftChecked !== statementDraftKey) return undefined;");
+  });
+
+  it("marks what was saved as recorded, asks again on return, and offers to keep going", () => {
+    expect(page).toContain('description: "Saved from your statement"');
+    expect(page).toContain("markRecorded(saved.reading.lines)");
+    expect(page).toContain("mpesa-import-keep-going");
+  });
+});
+
+describe("the red message names its entry (web)", () => {
+  it("scrolls to the entry it is about when clicked", () => {
+    expect(page).toContain("scrollIntoView");
+    expect(page).toContain('data-testid="mpesa-first-problem"');
+  });
+});

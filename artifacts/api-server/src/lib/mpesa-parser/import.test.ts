@@ -86,12 +86,18 @@ describe("toImportItem: money in", () => {
     expect(item).toMatchObject({ status: "ready", direction: "in", type: "person_receipt", amount: 3500, fee: null, date: "2025-10-22" });
     expect(item.description).toBe("Received from Sample Person");
   });
+
+  it("reads a reversal as money back in, pointing at the payment it undid", () => {
+    const item = toImportItem(REVERSAL, 0);
+    expect(item).toMatchObject({ status: "ready", direction: "in", type: "reversal", amount: 1, fee: null, date: "2026-08-13", named: false });
+    expect(item.receipt).toBe("TESTREVERSAL1");
+    expect(item.description).toBe("Money back: reversal of TESTORIGINAL1");
+  });
 });
 
 describe("toImportItem: what it will not decide for you", () => {
   it.each([
     ["cash you gave an agent", CASH_DEPOSIT],
-    ["a reversal", REVERSAL],
   ])("skips %s and says why, keeping what it read", (_name, message) => {
     const item = toImportItem(message, 0);
     expect(item.status).toBe("skipped");

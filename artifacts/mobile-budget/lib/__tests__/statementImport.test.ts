@@ -63,11 +63,16 @@ describe('statementLines', () => {
   it('leaves out what it does not recognise, with a reason, rather than guessing', () => {
     const { lines } = statementLines([
       at('01 08:00:00', 'Something Never Seen Before', { withdrawn: 5 }),
-      at('01 09:00:00', 'Pay Utility Reversal by Lipa na Sample', { paidIn: 5 }),
+      at('01 09:00:00', 'Pay Utility Reversal by Lipa na Sample', { withdrawn: 5 }),
     ]);
     expect(lines.map((line) => line.status)).toEqual(['skipped', 'skipped']);
     expect(lines[0].reason).toContain('not recognised');
-    expect(lines[1].reason).toContain('came back');
+    expect(lines[1].reason).toContain('took money out');
+  });
+
+  it('records a reversal that put money back as money in', () => {
+    const { lines } = statementLines([at('01 09:00:00', 'Pay Utility Reversal by Lipa na Sample', { paidIn: 5 })]);
+    expect(lines[0]).toMatchObject({ status: 'ready', direction: 'in', type: 'reversal', amount: 5, description: 'Money back: a reversed payment', named: false });
   });
 
   it('does not fold a charge when there is no single payment for it', () => {
@@ -100,9 +105,10 @@ describe('reconcile', () => {
     const reading = statementLines(statement());
     const result = reconcile(reading, () => true)!;
     expect(result.statementChange).toBe(215);
-    expect(result.savedChange).toBe(195);
-    expect(result.gap).toBe(20);
-    expect(result.parts.map((part) => part.amount)).toEqual([-100, 100, 20]);
+    // The reversal is recorded as money back in, so only the Fuliza loans and repayments differ, and they cancel here.
+    expect(result.savedChange).toBe(215);
+    expect(result.gap).toBe(0);
+    expect(result.parts.map((part) => part.amount)).toEqual([-100, 100]);
     expect(result.parts.reduce((sum, part) => sum + part.amount, 0)).toBe(result.gap);
   });
 
@@ -112,6 +118,16 @@ describe('reconcile', () => {
     const unticked = result.parts.find((part) => part.label.includes('not ticked'));
     expect(unticked?.amount).toBe(-305);
     expect(result.parts.reduce((sum, part) => sum + part.amount, 0)).toBe(result.gap);
+  });
+
+  it('counts what the account already has as matched, not as a difference', () => {
+    const reading = statementLines(statement());
+    const earlier = reading.lines.map((line) => (line.direction === 'in' && line.amount === 500 ? { ...line, alreadyRecorded: { date: '2026-09-01', description: 'Saved' } } : line));
+    const result = reconcile({ ...reading, lines: earlier }, (line) => !line.alreadyRecorded)!;
+    expect(result.alreadyRecordedChange).toBe(500);
+    expect(result.savedChange).toBe(-285);
+    expect(result.gap).toBe(0);
+    expect(result.parts.find((part) => part.label.includes('not ticked'))).toBeUndefined();
   });
 
   it('has nothing to say when the balances cannot be worked out', () => {

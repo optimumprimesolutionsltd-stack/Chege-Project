@@ -122,3 +122,11 @@ describe('working through a statement over several visits', () => {
   });
 });
 
+describe('the red message names its entry (phone)', () => {
+  const screen = read('app/mpesa-import.tsx');
+  it('scrolls to the entry it is about when tapped', () => {
+    expect(screen).toContain('scrollRef.current?.scrollTo(');
+    expect(screen).toContain('lineTops.current[item.index] = event.nativeEvent.layout.y');
+    expect(screen).toContain('testID="mpesa-first-problem"');
+  });
+});

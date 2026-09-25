@@ -56,14 +56,13 @@ const OUT_TYPES = new Set<MpesaTransactionType>([
   "airtime_purchase",
   "cash_withdrawal",
 ]);
-const IN_TYPES = new Set<MpesaTransactionType>(["person_receipt", "bank_receipt"]);
+const IN_TYPES = new Set<MpesaTransactionType>(["person_receipt", "bank_receipt", "reversal"]);
 
 // Recorded only when the person decides. Guessing what these mean for their
 // books would be inventing an answer about their money.
 const NEEDS_A_DECISION: Partial<Record<MpesaTransactionType, string>> = {
   cash_deposit: "Cash you gave an agent to put on M-Pesa. Record it yourself as money in from your cash.",
   bank_transfer: "A move between M-Pesa and a bank. Record it yourself as a move between accounts.",
-  reversal: "Money that came back from an earlier payment. Record it yourself against that payment.",
   failed: "This one did not go through, so there is nothing to record.",
   other: "This kind of message is not recognised yet.",
 };
@@ -83,6 +82,8 @@ function describe(type: MpesaTransactionType, counterparty: string | null, refer
     case "person_receipt":
     case "bank_receipt":
       return who ? `Received from ${who}` : "Money received";
+    case "reversal":
+      return reference ? `Money back: reversal of ${reference}` : "Money back: a reversed payment";
     case "paybill_payment":
       return who ? (reference ? `${who} (${titleCase(reference)})` : who) : "Paybill payment";
     default:
@@ -189,7 +190,7 @@ export function toImportItem(message: string, index: number): ImportItem {
     direction,
     type: tx.transactionType,
     amount: tx.amount,
-    description: describe(tx.transactionType, tx.merchantOrCounterparty, tx.accountReference),
+    description: describe(tx.transactionType, tx.merchantOrCounterparty, tx.transactionType === "reversal" ? tx.originalTransactionId : tx.accountReference),
     named: Boolean(tx.merchantOrCounterparty),
     date: tx.date,
     // Only an outgoing payment carries a cost worth recording.
