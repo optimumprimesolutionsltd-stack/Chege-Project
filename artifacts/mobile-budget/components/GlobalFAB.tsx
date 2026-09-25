@@ -15,6 +15,7 @@ const MAIN_ACTIONS = [
 const BANKING_ACTIONS = [
   { id: 'deposit', icon: 'arrow-down-left' as const, label: 'Money in', hint: 'Money that came into your bank account', route: '/(tabs)/bank?shortcut=deposit' },
   { id: 'withdraw', icon: 'arrow-up-right' as const, label: 'Money out', hint: 'Money you took out of your bank account', route: '/(tabs)/bank?shortcut=withdraw' },
+  { id: 'mpesa', icon: 'message-square' as const, label: 'Paste M-Pesa', hint: 'Turn your M-Pesa messages into entries', route: '/mpesa-import' },
   { id: 'transfer', icon: 'repeat' as const, label: 'Move money', hint: 'Move money between your accounts or goals', route: '/(tabs)/bank?shortcut=bank-transfer' },
 ];
 
