@@ -88,6 +88,9 @@ describe("the dashboard card for the M-Pesa import (web)", () => {
     expect(dashboard).toContain("<MpesaImportCard />");
     expect(dashboard.indexOf("<MpesaImportCard />")).toBeLessThan(dashboard.indexOf("<WorkspaceSetupGuide"));
     expect(page).toContain('if (result.saved > 0) rememberMpesaCard("done");');
+  });
+});
+
 describe("moves between your own accounts (web)", () => {
   it("offers it on each entry, hints at money passing through M-Pesa, and saves a transfer", () => {
     expect(page).toContain("mpesa-line-move-select-${item.index}");
