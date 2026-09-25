@@ -92,6 +92,9 @@ function CategorySheet({
   onClose: () => void;
 }) {
   const colors = useColors();
+  // The sheet sits at the very bottom of the screen, so without the safe-area
+  // inset its last row ("Add a category") slid under the phone's navigation bar.
+  const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const { data: list = [], isLoading, isError, refetch } = useGetBudgetCategories();
   const categories = list as unknown as CategoryRow[];
@@ -142,7 +145,7 @@ function CategorySheet({
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.sheetBackdrop}>
-        <View style={[styles.sheet, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={[styles.sheet, { backgroundColor: colors.card, borderColor: colors.border, paddingBottom: 24 + insets.bottom }]}>
           <View style={styles.sheetHeader}>
             <Text style={[styles.sheetTitle, { color: colors.foreground }]}>What was it for?</Text>
             <Pressable onPress={onClose} hitSlop={10} accessibilityLabel="Close">
