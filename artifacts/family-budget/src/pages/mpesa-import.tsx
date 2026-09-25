@@ -22,6 +22,7 @@ import {
   buildPostings,
   categoryPath,
   chooseCategory as chooseLineCategory,
+  chooseIncomeSource,
   initialChoices,
   canReport,
   isRecordable,
@@ -92,9 +93,21 @@ export default function MpesaImportPage() {
   const accountId = selectedAccountId ?? guessedAccount;
   const { data: account } = useGetJointAccount(accountId ? { accountId } : undefined);
   const history = useMemo(
-    () => (account?.transactions ?? []) as Array<{ type: string; description: string; expenseCategory?: string | null }>,
+    () => (account?.transactions ?? []) as Array<{ type: string; description: string; expenseCategory?: string | null; incomeSourceId?: number | null }>,
     [account],
   );
+  // Where money in can be said to have come from: the person's own sources in a
+  // Personal budget, everybody's in a shared group (each names its owner).
+  const { data: incomeSources = [] } = useQuery<Array<{ id: number; name: string; userId?: string | null }>>({
+    queryKey: ["income-sources", !isShared ? user?.id ?? "__me__" : "__group__"],
+    queryFn: async () => {
+      const url = !isShared && user?.id ? `/api/income-sources?userId=${encodeURIComponent(user.id)}` : "/api/income-sources";
+      const response = await fetch(url, { credentials: "include" });
+      if (!response.ok) return [];
+      return response.json();
+    },
+    staleTime: 30_000,
+  });
 
   const [text, setText] = useState("");
   const [reading, setReading] = useState(false);
@@ -272,6 +285,7 @@ export default function MpesaImportPage() {
           isShared,
           today: todayIso(),
           chargeCategory,
+          incomeSources,
         });
         if (!built) continue;
         try {
@@ -564,6 +578,27 @@ export default function MpesaImportPage() {
                     <p className="text-xs text-muted-foreground" data-testid={`mpesa-line-suggested-${item.index}`}>
                       Suggested by Jamvi. Change it if it is wrong.
                     </p>
+                  ) : null}
+                  {item.direction === "in" && choice?.include && !choice.debt && incomeSources.length > 0 ? (
+                    <div className="space-y-1" data-testid={`mpesa-line-source-${item.index}`}>
+                      <select
+                        className={SELECT_CLASS}
+                        value={choice.incomeSourceId ?? ""}
+                        onChange={(event) =>
+                          setChoices((current) => chooseIncomeSource(lines ?? [], current, item.index, event.target.value ? Number(event.target.value) : null))
+                        }
+                        aria-label="Where did this come from?"
+                        data-testid={`mpesa-line-source-select-${item.index}`}
+                      >
+                        <option value="">Where did this come from? (optional)</option>
+                        {incomeSources.map((source) => <option key={source.id} value={source.id}>{source.name}</option>)}
+                      </select>
+                      {choice.sourceAuto && choice.incomeSourceId ? (
+                        <p className="text-xs text-muted-foreground" data-testid={`mpesa-line-source-suggested-${item.index}`}>
+                          Suggested by Jamvi. Change it if it is wrong.
+                        </p>
+                      ) : null}
+                    </div>
                   ) : null}
                   {choice?.include && canLinkDebt(item) && parties.length > 0 ? (
                     (() => {

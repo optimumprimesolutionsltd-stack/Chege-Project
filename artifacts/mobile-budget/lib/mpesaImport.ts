@@ -26,9 +26,18 @@ export type PreviewLine = {
  * `auto` is true while the category is Jamvi's suggestion and the person has not chosen one.
  * `debt` links a payment to or from a person to what stands between you.
  */
-export type Choice = { include: boolean; category: string; auto?: boolean; debt?: DebtLink | null };
+export type Choice = {
+  include: boolean;
+  category: string;
+  auto?: boolean;
+  debt?: DebtLink | null;
+  /** For money in: which of the person's income sources it came from. Optional. */
+  incomeSourceId?: number | null;
+  /** True while that source is Jamvi's suggestion and the person has not chosen one. */
+  sourceAuto?: boolean;
+};
 
-type PastPosting = { type: string; description: string; expenseCategory?: string | null };
+type PastPosting = { type: string; description: string; expenseCategory?: string | null; incomeSourceId?: number | null };
 
 const clean = (value: string) => value.trim().replace(/\s+/g, ' ').toLocaleLowerCase('en-KE');
 
@@ -51,6 +60,31 @@ export function suggestCategory(description: string, history: readonly PastPosti
   for (const [category, count] of counts) {
     if (count > bestCount) {
       best = category;
+      bestCount = count;
+    }
+  }
+  return best;
+}
+
+/**
+ * The income source money from this sender was filed under before, so a client
+ * who pays every month is tagged once. The one used most often for that
+ * description among earlier deposits, or null when there is none.
+ */
+export function suggestIncomeSource(description: string, history: readonly PastPosting[]): number | null {
+  const wanted = clean(description);
+  if (!wanted) return null;
+  const counts = new Map<number, number>();
+  for (const posting of history) {
+    if (posting.type !== 'deposit' || !posting.incomeSourceId) continue;
+    if (clean(posting.description) !== wanted) continue;
+    counts.set(posting.incomeSourceId, (counts.get(posting.incomeSourceId) ?? 0) + 1);
+  }
+  let best: number | null = null;
+  let bestCount = 0;
+  for (const [id, count] of counts) {
+    if (count > bestCount) {
+      best = id;
       bestCount = count;
     }
   }
@@ -97,6 +131,10 @@ export function initialChoices(
   for (const line of lines) {
     const suggested = suggestionFor(line, history, categoryNames, chargeCategory);
     choices[line.index] = { include: isRecordable(line), category: suggested, auto: suggested !== '' };
+    if (line.direction === 'in') {
+      const source = line.description ? suggestIncomeSource(line.description, history) : null;
+      choices[line.index] = { ...choices[line.index], incomeSourceId: source, sourceAuto: source !== null };
+    }
   }
   return choices;
 }
@@ -128,9 +166,42 @@ export function refreshSuggestions(
   const next: Record<number, Choice> = { ...choices };
   for (const line of lines) {
     const current = choices[line.index];
-    if (!current || (current.category && !current.auto)) continue;
+    if (!current) continue;
+    if (line.direction === 'in') {
+      // A source the person chose is never replaced; a suggestion is offered again.
+      if (current.incomeSourceId == null || current.sourceAuto) {
+        const source = line.description ? suggestIncomeSource(line.description, history) : null;
+        next[line.index] = { ...current, incomeSourceId: source, sourceAuto: source !== null };
+      }
+      continue;
+    }
+    if (current.category && !current.auto) continue;
     const suggested = suggestionFor(line, history, categoryNames, chargeCategory);
     next[line.index] = { ...current, category: suggested, auto: suggested !== '' };
+  }
+  return next;
+}
+
+/**
+ * The person picks where money in came from. It is theirs from then on, and the
+ * same sender's other lines that have no source get it too, so a client's twelve
+ * payments take one choice. Picking none clears it.
+ */
+export function chooseIncomeSource(
+  lines: readonly PreviewLine[],
+  choices: Record<number, Choice>,
+  index: number,
+  sourceId: number | null,
+): Record<number, Choice> {
+  const chosen = lines.find((line) => line.index === index);
+  const next: Record<number, Choice> = { ...choices, [index]: { ...choices[index], incomeSourceId: sourceId, sourceAuto: false } };
+  if (!chosen?.description || sourceId === null) return next;
+  const sender = clean(chosen.description);
+  for (const line of lines) {
+    if (line.index === index || line.direction !== 'in' || !line.description) continue;
+    if (clean(line.description) !== sender) continue;
+    if (choices[line.index]?.incomeSourceId) continue;
+    next[line.index] = { ...choices[line.index], incomeSourceId: sourceId, sourceAuto: true };
   }
   return next;
 }
@@ -213,6 +284,8 @@ export type PostingContext = {
   today: string;
   /** Where the M-Pesa transaction cost is filed. */
   chargeCategory: string;
+  /** The income sources, so a deposit can name the member a source belongs to. */
+  incomeSources?: ReadonlyArray<{ id: number; userId?: string | null }>;
 };
 
 /**
@@ -229,13 +302,17 @@ export function buildPostings(line: PreviewLine, choice: Choice, ctx: PostingCon
   const receipt = line.receipt ?? undefined;
 
   if (line.direction === 'in') {
+    // A source is only for income: a repayment or a loan is not, so it takes none.
+    const source = choice.incomeSourceId && !choice.debt ? ctx.incomeSources?.find((entry) => entry.id === choice.incomeSourceId) : undefined;
     return {
       kind: 'deposit' as const,
       main: {
         amount: line.amount,
         description,
         date,
-        madeById: ctx.userId,
+        // A source belongs to one member, and the server only accepts it when the deposit names that member.
+        madeById: source?.userId ?? ctx.userId,
+        ...(source ? { incomeSourceId: source.id } : {}),
         accountId: ctx.accountId,
         // They paid back what they owed you, or you borrowed from them: neither
         // is income, and the server keeps both out of the income figures.
