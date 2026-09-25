@@ -1,4 +1,5 @@
 import type { DebtLink } from "./mpesa-debts";
+import { fuzzyCategory, ruleCategory, wordCategory, type PayeeRules } from "./payee-learning";
 
 export type AlreadyRecorded = {
   date: string | null;
@@ -48,6 +49,8 @@ export type Choice = {
    * out to another bank). Neither income nor spending.
    */
   transferTo?: number | null;
+  /** The person ticked "remember this": keep this category for this payee once it is saved. */
+  remember?: boolean;
 };
 
 type PastPosting = { type: string; description: string; expenseCategory?: string | null; incomeSourceId?: number | null };
@@ -139,10 +142,11 @@ export function initialChoices(
   history: readonly PastPosting[],
   categoryNames: readonly string[] = [],
   chargeCategory = "",
+  rules: PayeeRules = {},
 ): Record<number, Choice> {
   const choices: Record<number, Choice> = {};
   for (const line of lines) {
-    const suggested = suggestionFor(line, history, categoryNames, chargeCategory);
+    const suggested = suggestionFor(line, history, categoryNames, chargeCategory, rules);
     choices[line.index] = { include: isRecordable(line), category: suggested, auto: suggested !== "" };
     if (line.direction === "in") {
       const source = line.description ? suggestIncomeSource(line.description, history) : null;
@@ -157,11 +161,25 @@ function suggestionFor(
   history: readonly PastPosting[],
   categoryNames: readonly string[],
   chargeCategory: string,
+  rules: PayeeRules = {},
 ): string {
   if (line.direction !== "out") return "";
-  const earlier = line.description ? suggestCategory(line.description, history) : "";
+  const description = line.description ?? "";
+  // A rule the person kept, then this exact payee"s history, then payees with a similar name,
+  // then a word that has nearly always meant one category in their own books.
+  const kept = description ? ruleCategory(description, rules) : "";
+  const earlier = description ? suggestCategory(description, history) : "";
+  const similar = description && line.named !== false ? fuzzyCategory(description, history, categoryNames) : "";
+  const byWord = description && line.named !== false ? wordCategory(description, history, categoryNames) : "";
   // A Fuliza access fee is a bank charge: it goes where charges already go.
-  return earlier || (line.type === "fuliza_fee" ? chargeCategory : "") || defaultCategoryFor(line, categoryNames);
+  return (
+    (kept && (categoryNames.length === 0 || categoryNames.includes(kept)) ? kept : "") ||
+    earlier ||
+    similar ||
+    byWord ||
+    (line.type === "fuliza_fee" ? chargeCategory : "") ||
+    defaultCategoryFor(line, categoryNames)
+  );
 }
 
 /**
@@ -175,6 +193,7 @@ export function refreshSuggestions(
   history: readonly PastPosting[],
   categoryNames: readonly string[],
   chargeCategory = "",
+  rules: PayeeRules = {},
 ): Record<number, Choice> {
   const next: Record<number, Choice> = { ...choices };
   for (const line of lines) {
@@ -189,7 +208,7 @@ export function refreshSuggestions(
       continue;
     }
     if (current.category && !current.auto) continue;
-    const suggested = suggestionFor(line, history, categoryNames, chargeCategory);
+    const suggested = suggestionFor(line, history, categoryNames, chargeCategory, rules);
     next[line.index] = { ...current, category: suggested, auto: suggested !== "" };
   }
   return next;
