@@ -77,7 +77,9 @@ import {
   isRecordable,
   lineLabel,
   messageFor,
+  categoryChanges,
   problemWith,
+  recategorisable,
   reviewCounts,
   reviewStatus,
   type ReviewView,
@@ -363,7 +365,10 @@ export default function MpesaImportScreen() {
   // Which of the entries to show: all, or only those still to look at, changed by you, or needing you.
   const [view, setView] = useState<ReviewView>('all');
   const [chargeCategory, setChargeCategory] = useState('');
-  const [picking, setPicking] = useState<number | 'charge' | null>(null);
+  // A number is a line being categorised; 'charge' is the M-Pesa charges; 'recat:N' is an already-recorded entry whose category is being changed.
+  const [picking, setPicking] = useState<number | 'charge' | `recat:${number}` | null>(null);
+  const [recat, setRecat] = useState<Record<number, string>>({});
+  const [recategorising, setRecategorising] = useState(false);
   const [saving, setSaving] = useState(false);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   // Unfinished work survives an update restart, a crash, or a switch of budget.
@@ -583,12 +588,12 @@ export default function MpesaImportScreen() {
   const markRecorded = async (all: PreviewLine[]): Promise<PreviewLine[]> => {
     const codes = [...new Set(all.map((line) => line.receipt).filter((code): code is string => Boolean(code)))];
     if (codes.length === 0) return all;
-    const body = await customFetch<{ recorded: Array<{ receipt: string; date: string; description: string }> }>('/api/mpesa/import/check-receipts', {
+    const body = await customFetch<{ recorded: Array<{ receipt: string; date: string; description: string; category?: string | null; editable?: boolean }> }>('/api/mpesa/import/check-receipts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ receipts: codes }),
     });
-    const recorded = new Map(body.recorded.map((row) => [row.receipt, { date: row.date, description: row.description }]));
+    const recorded = new Map(body.recorded.map((row) => [row.receipt, { date: row.date, description: row.description, category: row.category ?? null, editable: row.editable === true }]));
     return all.map((line) => {
       const existing = line.receipt ? recorded.get(line.receipt) : undefined;
       return existing ? { ...line, alreadyRecorded: existing } : line;
@@ -682,10 +687,12 @@ export default function MpesaImportScreen() {
     setChoices((current) => ({ ...current, [index]: { ...current[index], include } }));
 
   const chooseCategory = (name: string) => {
-    if (picking === 'charge') {
+    if (typeof picking === 'string' && picking.startsWith('recat:')) {
+      setRecat((current) => ({ ...current, [Number(picking.slice(6))]: name }));
+    } else if (picking === 'charge') {
       setChargeCategory(name);
       AsyncStorage.setItem(CHARGE_CATEGORY_KEY, name).catch(() => {});
-    } else if (picking !== null) {
+    } else if (typeof picking === 'number') {
       setChoices((current) => chooseLineCategory(lines ?? [], current, picking, name));
     }
     setPicking(null);
@@ -743,6 +750,50 @@ export default function MpesaImportScreen() {
 
   const recordable = lines?.filter(isRecordable) ?? [];
   const notImported = lines?.filter((item) => !isRecordable(item)) ?? [];
+
+  // Changing the category of entries already recorded: nothing else about them is touched.
+  const pendingChanges = useMemo(() => categoryChanges(lines ?? [], recat), [lines, recat]);
+  const applyRecategorise = () => {
+    if (pendingChanges.length === 0 || recategorising) return;
+    Alert.alert(
+      `Change ${pendingChanges.length} ${pendingChanges.length === 1 ? 'category' : 'categories'}?`,
+      'Only the category changes. Their amounts, dates and everything else stay as they are.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Change',
+          onPress: async () => {
+            setRecategorising(true);
+            try {
+              const result = await customFetch<{ updated: number; skipped: string[] }>('/api/mpesa/import/recategorise', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ changes: pendingChanges }),
+              });
+              const done = new Set(pendingChanges.filter((change) => !result.skipped.includes(change.receipt)).map((change) => change.receipt));
+              const next = (lines ?? []).map((item) =>
+                item.receipt && done.has(item.receipt) && item.alreadyRecorded
+                  ? { ...item, alreadyRecorded: { ...item.alreadyRecorded, category: recat[item.index] } }
+                  : item,
+              );
+              setLines(next);
+              setStatementReading((current) => (current ? { ...current, lines: next } : current));
+              setRecat({});
+              void queryClient.invalidateQueries();
+              Alert.alert(
+                `${result.updated} ${result.updated === 1 ? 'category' : 'categories'} changed`,
+                result.skipped.length > 0 ? `${result.skipped.length} could not be changed (they are not plain spending).` : undefined,
+              );
+            } catch (error: unknown) {
+              Alert.alert('Could not change them', error instanceof Error ? error.message : 'Please try again.');
+            } finally {
+              setRecategorising(false);
+            }
+          },
+        },
+      ],
+    );
+  };
 
   const saveAll = async () => {
     if (!lines || !accountId || saving) return;
@@ -1287,9 +1338,42 @@ export default function MpesaImportScreen() {
                           : item.alreadyRecorded.description
                         : item.reason}
                     </Text>
+                    {item.alreadyRecorded?.editable && item.direction === 'out' ? (
+                      <View style={{ marginTop: 6, gap: 4 }}>
+                        <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0 }]}>
+                          Now in: {item.alreadyRecorded.category || 'no category'}
+                        </Text>
+                        <Pressable
+                          onPress={() => setPicking(`recat:${item.index}`)}
+                          accessibilityRole="button"
+                          testID={`mpesa-recat-${item.index}`}
+                          style={[styles.categoryButton, { borderColor: recat[item.index] ? colors.primary : colors.border, backgroundColor: colors.muted }]}
+                        >
+                          <Text style={{ color: recat[item.index] ? colors.primary : colors.foreground, fontFamily: 'Inter_600SemiBold', flexShrink: 1 }}>
+                            {recat[item.index] ? `Change to: ${recat[item.index]}` : 'Change its category'}
+                          </Text>
+                          <Feather name="chevron-down" size={16} color={colors.mutedForeground} />
+                        </Pressable>
+                      </View>
+                    ) : null}
                     {reportLink(item)}
                   </View>
                 ))}
+                {pendingChanges.length > 0 ? (
+                  <Pressable
+                    onPress={applyRecategorise}
+                    disabled={recategorising}
+                    style={[styles.primary, { backgroundColor: colors.primary, opacity: recategorising ? 0.6 : 1 }]}
+                    accessibilityRole="button"
+                    testID="mpesa-recat-apply"
+                  >
+                    {recategorising ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text style={styles.primaryText}>Change {pendingChanges.length} {pendingChanges.length === 1 ? 'category' : 'categories'}</Text>
+                    )}
+                  </Pressable>
+                ) : null}
               </View>
             ) : null}
 

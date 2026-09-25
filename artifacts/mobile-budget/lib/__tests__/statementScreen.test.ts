@@ -143,3 +143,11 @@ describe('telling what has been looked at (phone)', () => {
   });
 });
 
+describe('changing the category of what is already recorded (phone)', () => {
+  const screen = read('app/mpesa-import.tsx');
+  it('offers it on recorded spending, and asks before changing anything', () => {
+    expect(screen).toContain('mpesa-recat-apply');
+    expect(screen).toContain('Only the category changes.');
+    expect(screen).toContain("'/api/mpesa/import/recategorise'");
+  });
+});

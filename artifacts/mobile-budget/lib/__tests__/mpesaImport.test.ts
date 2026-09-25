@@ -2,12 +2,14 @@ import { describe, expect, it } from 'vitest';
 import {
   buildPostings,
   canReport,
+  categoryChanges,
   chooseIncomeSource,
   initialChoices,
   isRecordable,
   lineLabel,
   messageFor,
   problemWith,
+  recategorisable,
   redactForReport,
   reviewCounts,
   reviewStatus,
@@ -278,3 +280,22 @@ describe('what the person has looked at', () => {
   });
 });
 
+describe('changing the category of what is already recorded', () => {
+  const recorded = (over: Partial<PreviewLine>, editable = true, category: string | null = 'Old') =>
+    line({ receipt: 'TESTREC001', alreadyRecorded: { date: '2026-09-02', description: 'Sample Shop', category, editable }, ...over });
+
+  it('offers only ordinary spending that is already recorded', () => {
+    const lines = [
+      recorded({ index: 0 }),
+      recorded({ index: 1, receipt: 'TESTREC002' }, false),
+      recorded({ index: 2, receipt: 'TESTREC003', direction: 'in' }),
+      line({ index: 3, receipt: 'TESTREC004' }),
+    ];
+    expect(recategorisable(lines).map((l) => l.index)).toEqual([0]);
+  });
+
+  it('sends only the entries given a different category', () => {
+    const lines = [recorded({ index: 0 }), recorded({ index: 1, receipt: 'TESTREC002' }), recorded({ index: 2, receipt: 'TESTREC003' })];
+    expect(categoryChanges(lines, { 0: 'Food', 1: 'Old', 2: '  ' })).toEqual([{ receipt: 'TESTREC001', category: 'Food' }]);
+  });
+});
