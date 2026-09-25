@@ -81,3 +81,38 @@ describe('clearer messages when something needs fixing', () => {
     expect(source).not.toContain('Already recorded${item.alreadyRecorded.date ?');
   });
 });
+
+describe('the send-this-message button', () => {
+  const phone = read('app/mpesa-import.tsx');
+  const web = read('../family-budget/src/pages/mpesa-import.tsx');
+  const server = read('../api-server/src/routes/mpesa-import.ts');
+
+  it.each([['phone', phone], ['web', web]])('%s shows the text first, opt-in, one message at a time', (_name, source) => {
+    expect(source).toContain('redactForReport(message)');
+    expect(source).toContain('/api/mpesa/report-format');
+    expect(source).toContain('Send this message so Jamvi can learn it');
+    expect(source).toContain('Black out any names or other details');
+    expect(source).toContain('It is not linked to you');
+    expect(source).toContain('testID="mpesa-report-send"'.replace('testID=', source === web ? 'data-testid=' : 'testID='));
+  });
+
+  it('is offered on lines that read but named nobody, and on messages that were not saved', () => {
+    for (const source of [phone, web]) {
+      expect(source.split('{reportLink(item)}').length - 1).toBe(2);
+    }
+  });
+
+  it('the server relays it with nothing about who sent it', () => {
+    expect(server).toContain('"/mpesa/report-format"');
+    expect(server).toContain('submittedBy: "mpesa-format-report"');
+  });
+
+  it('keeps its message split in step with the server', () => {
+    // Line N on the review list must be message N of the paste, so the two
+    // apps must cut the paste at exactly the same places.
+    const splitOf = (source: string) => source.match(/\.split\((\/.+?\/)\)/)?.[1];
+    const serverPattern = splitOf(read('../api-server/src/lib/mpesa-parser/import.ts'));
+    expect(serverPattern).toBeTruthy();
+    expect(splitOf(read('lib/mpesaImport.ts'))).toBe(serverPattern);
+  });
+});

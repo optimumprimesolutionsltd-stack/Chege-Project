@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildPostings,
+  canReport,
   initialChoices,
   isRecordable,
   lineLabel,
+  messageFor,
   problemWith,
+  redactForReport,
   snippetFor,
+  splitMessages,
   suggestCategory,
   summarise,
   type PostingContext,
@@ -144,5 +148,33 @@ describe('finding a line in a long list', () => {
   it('shows nothing when the receipt is not in the pasted text', () => {
     expect(snippetFor('nothing here', 'TESTNONAME1')).toBeNull();
     expect(snippetFor('anything', null)).toBeNull();
+  });
+});
+
+describe('sending a message so its format can be learned', () => {
+  it('offers it for what could not be read, an unknown kind, or a message that named nobody', () => {
+    expect(canReport(line({ status: 'skipped', type: null, direction: null, amount: null, receipt: null }))).toBe(true);
+    expect(canReport(line({ status: 'skipped', type: 'other', direction: null }))).toBe(true);
+    expect(canReport(line({ named: false }))).toBe(true);
+  });
+
+  it('does not offer it for a kind Jamvi understands, a named message, or a repeat', () => {
+    expect(canReport(line({ status: 'skipped', type: 'reversal', direction: null }))).toBe(false);
+    expect(canReport(line({ status: 'skipped', type: 'cash_deposit', direction: null }))).toBe(false);
+    expect(canReport(line({ named: true }))).toBe(false);
+    expect(canReport(line({ named: false, alreadyRecorded: { date: '2026-09-02', description: 'x' } }))).toBe(false);
+  });
+
+  it('finds line N in the pasted text, the same way the server counts them', () => {
+    const pasted = 'TESTAAA1 Confirmed. Ksh10.00 sent to X on 2/9/26. TESTBBB2 Confirmed. Ksh20.00 paid to Y. on 2/9/26.';
+    expect(splitMessages(pasted)).toHaveLength(2);
+    expect(messageFor(pasted, 1)?.startsWith('TESTBBB2 Confirmed.')).toBe(true);
+    expect(messageFor(pasted, 5)).toBeNull();
+  });
+
+  it('hides phone numbers before anybody reviews the text', () => {
+    const shown = redactForReport('paid to 0712 345 678 and +254 722 111 222 and 0733-444-555');
+    expect(shown).not.toMatch(/0712|722 111|0733/);
+    expect(shown.match(/<PHONE>/g)).toHaveLength(3);
   });
 });

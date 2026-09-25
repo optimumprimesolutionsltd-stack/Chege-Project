@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { readPaste, splitMpesaMessages, toImportItem } from "./import";
+import { buildFormatReport, readPaste, splitMpesaMessages, toImportItem } from "./import";
 
 // The anonymized examples the parser was built against (see parser.test.ts).
 const SEND_PERSON =
@@ -106,6 +106,33 @@ describe("toImportItem: what it will not decide for you", () => {
   });
 });
 
+describe("Fuliza notices", () => {
+  const PAYMENT = "TESTFULIZA1 Confirmed. Ksh20.00 sent to SAMPLE SHOP on 24/10/26 at 9:15 AM. New M-PESA balance is Ksh0.00. Transaction cost, Ksh0.00.";
+  const NOTICE = "TESTFULIZA1 Confirmed. Fuliza M-PESA amount is Ksh 25.00. Access Fee charged Ksh 0.26. Total Fuliza M-PESA outstanding amount is Ksh 25.26 due on 24/11/26.";
+
+  it("is recognised and left out, so the same spending is not counted twice", () => {
+    const item = toImportItem(NOTICE, 0);
+    expect(item).toMatchObject({ status: "skipped", type: "fuliza_notice", receipt: "TESTFULIZA1", amount: 25 });
+    expect(item.direction).toBeNull();
+    expect(item.reason).toContain("Fuliza loan notice");
+    expect(item.reason).toContain("access fee KES 0.26");
+  });
+
+  it("does not disturb the payment message that shares its receipt code", () => {
+    const items = readPaste([PAYMENT, NOTICE].join("\n"));
+    expect(items.map((item) => [item.receipt, item.status, item.type])).toEqual([
+      ["TESTFULIZA1", "ready", "person_payment"],
+      ["TESTFULIZA1", "skipped", "fuliza_notice"],
+    ]);
+  });
+
+  it("is not a repeat of its own payment, in the route", () => {
+    const route = readFileSync(new URL("../../routes/mpesa-import.ts", import.meta.url), "utf8");
+    expect(route).toContain('item.type !== "fuliza_notice"');
+    expect(route).toContain('if (item.type === "fuliza_notice") return { ...item, alreadyRecorded: null };');
+  });
+});
+
 describe("readPaste", () => {
   it("keeps the order, and one bad message does not lose the others", () => {
     const items = readPaste([SEND_PERSON, "garbage line", RECEIVE, CASH_DEPOSIT].join("\n"));
@@ -133,5 +160,32 @@ describe("the preview route", () => {
   it("neither logs nor stores what was pasted", () => {
     expect(route).not.toMatch(/console\.|logger\.|req\.log/);
     expect(route).not.toContain(".insert(");
+  });
+});
+
+describe("sending a message so its format can be learned", () => {
+  const NO_NAME = "TESTNONAME1 Confirmed. Ksh50.00 paid on 2/9/26 at 9:50 AM. New M-PESA balance is Ksh0.00. Sent by 0712 345 678.";
+
+  it("masks phone numbers again and says what the parser made of the message", () => {
+    const report = buildFormatReport(NO_NAME);
+    expect(report).not.toContain("0712 345 678");
+    expect(report).toContain("<PHONE>");
+    expect(report).toContain("M-Pesa format report");
+    expect(report).toContain("Parser version:");
+    expect(report).toContain("Parser saw: type=");
+    expect(report).toContain("counterparty=none");
+  });
+
+  it("says so when the text is not an M-Pesa message at all", () => {
+    expect(buildFormatReport("Hello, see you at 5 today")).toContain("Parser saw: status=unsupported");
+  });
+
+  it("puts nothing about the sender in the relayed body", () => {
+    const route = readFileSync(new URL("../../routes/mpesa-import.ts", import.meta.url), "utf8");
+    expect(route).toContain('submittedBy: "mpesa-format-report"');
+    expect(route).not.toContain("req.user");
+    expect(route).toContain("feedbackLimiter");
+    expect(route).toContain('context: "mpesa-format"');
+    expect(route).not.toMatch(/console\.|logger\.|req\.log/);
   });
 });
