@@ -60,6 +60,7 @@ export const isRecordable = (line: PreviewLine): boolean =>
 const KIND_DEFAULTS: Record<string, readonly string[]> = {
   airtime_purchase: ['airtime', 'data', 'phone', 'communication', 'bundle'],
   cash_withdrawal: ['cash', 'withdraw'],
+  fuliza_fee: ['bank charge', 'charge', 'fee', 'fuliza'],
 };
 
 /** A category from this budget that suits the kind of payment, or '' when none does. */
@@ -83,12 +84,15 @@ export function initialChoices(
   lines: readonly PreviewLine[],
   history: readonly PastPosting[],
   categoryNames: readonly string[] = [],
+  chargeCategory = '',
 ): Record<number, Choice> {
   const choices: Record<number, Choice> = {};
   for (const line of lines) {
+    const earlier = line.direction === 'out' && line.description ? suggestCategory(line.description, history) : '';
+    // A Fuliza access fee is a bank charge: it goes where charges already go.
     const suggested =
       line.direction === 'out'
-        ? (line.description ? suggestCategory(line.description, history) : '') || defaultCategoryFor(line, categoryNames)
+        ? earlier || (line.type === 'fuliza_fee' ? chargeCategory : '') || defaultCategoryFor(line, categoryNames)
         : '';
     choices[line.index] = { include: isRecordable(line), category: suggested, auto: suggested !== '' };
   }

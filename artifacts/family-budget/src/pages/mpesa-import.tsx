@@ -156,7 +156,7 @@ export default function MpesaImportPage() {
       const body = (await response.json().catch(() => ({}))) as { lines?: PreviewLine[]; error?: string };
       if (!response.ok || !body.lines) throw new Error(body.error ?? "Could not read them.");
       setLines(body.lines);
-      setChoices(initialChoices(body.lines, history, categories.map((row) => row.name)));
+      setChoices(initialChoices(body.lines, history, categories.map((row) => row.name), chargeCategory));
     } catch (error) {
       toast({ variant: "destructive", title: "Could not read them", description: error instanceof Error ? error.message : "Please try again." });
     } finally {
@@ -315,7 +315,7 @@ export default function MpesaImportPage() {
               onChange={(event) => {
                 setSelectedAccountId(Number(event.target.value));
                 // The suggestions come from this account's history, so start them again.
-                setChoices(initialChoices(lines, [], categories.map((row) => row.name)));
+                setChoices(initialChoices(lines, [], categories.map((row) => row.name), chargeCategory));
               }}
               data-testid="mpesa-import-account"
             >

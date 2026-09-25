@@ -36,7 +36,7 @@ export interface ImportItem {
   reason: string | null;
   receipt: string | null;
   direction: ImportDirection | null;
-  type: MpesaTransactionType | "fuliza_notice" | null;
+  type: MpesaTransactionType | "fuliza_notice" | "fuliza_fee" | null;
   amount: number | null;
   /** What the money went to, or came from, in words worth keeping as the note. */
   description: string | null;
@@ -110,19 +110,44 @@ const skipped = (index: number, reason: string, partial: Partial<ImportItem> = {
 // receipt code. Its first amount is the loan, not a second payment, so reading
 // it as one would count the same spending twice.
 const FULIZA_NOTICE = /^\s*([A-Z0-9]{8,15})\s+[Cc]onfirmed\.?\s*Fuliza\s+M-?PESA\s+amount\s+is\s+Ksh\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)/i;
+export const FULIZA_FEE_SUFFIX = "FEE";
 const ACCESS_FEE = /access\s+fee\s+charged\s+Ksh\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)/i;
 
 /** Turns one message into what the review list shows. Reads only what the parser found. */
 export function toImportItem(message: string, index: number): ImportItem {
   const notice = message.match(FULIZA_NOTICE);
   if (notice) {
+    const code = notice[1].toUpperCase();
     const loan = Number(notice[2].replace(/,/g, ""));
-    const fee = message.match(ACCESS_FEE)?.[1];
+    const feeText = message.match(ACCESS_FEE)?.[1];
+    const fee = feeText ? Number(feeText.replace(/,/g, "")) : NaN;
+    // The access fee is a real cost, and the one part of a Fuliza notice that is
+    // spending: recorded as a bank charge. The loan itself is not, because the
+    // payment it covered is its own message.
+    if (Number.isFinite(fee) && fee > 0) {
+      return {
+        index,
+        status: "ready",
+        reason: null,
+        // The notice shares its payment's receipt code, and a code can be
+        // recorded once per budget, so the fee carries its own: the same notice
+        // pasted twice is still refused, and the payment keeps its code.
+        receipt: `${code}${FULIZA_FEE_SUFFIX}`,
+        direction: "out",
+        type: "fuliza_fee",
+        amount: fee,
+        description: "Fuliza access fee",
+        named: true,
+        date: null,
+        fee: null,
+        mpesaBalance: null,
+      };
+    }
     return skipped(
       index,
-      `A Fuliza loan notice (KES ${loan.toLocaleString("en-KE")}${fee ? `, access fee KES ${fee}` : ""}). ` +
+      `A Fuliza loan notice (KES ${loan.toLocaleString("en-KE")}). ` +
         "The payment it covered is a separate message, so this is not recorded on its own.",
-      { type: "fuliza_notice", receipt: notice[1].toUpperCase(), amount: Number.isFinite(loan) ? loan : null },
+      { type: "fuliza_notice", receipt: code, amount: Number.isFinite(loan) ? loan : null },
     );
   }
   const result = parseMpesaMessage(message);
@@ -175,7 +200,15 @@ export function toImportItem(message: string, index: number): ImportItem {
 
 /** Everything one paste holds, in the order it was pasted. */
 export function readPaste(text: string): ImportItem[] {
-  return splitMpesaMessages(text).map((message, index) => toImportItem(message, index));
+  const items = splitMpesaMessages(text).map((message, index) => toImportItem(message, index));
+  // A Fuliza notice carries no date of its own (the date in it is when the loan
+  // is due), but the payment it covered does, and shares its code.
+  return items.map((item) => {
+    if (item.type !== "fuliza_fee" || item.date || !item.receipt) return item;
+    const code = item.receipt.slice(0, -FULIZA_FEE_SUFFIX.length);
+    const payment = items.find((other) => other.receipt === code && other.type !== "fuliza_fee" && other.date);
+    return payment ? { ...item, date: payment.date } : item;
+  });
 }
 
 /**

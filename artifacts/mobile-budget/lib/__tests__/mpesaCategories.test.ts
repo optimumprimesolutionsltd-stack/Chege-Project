@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { chooseCategory, defaultCategoryFor, initialChoices, type PreviewLine } from '@/lib/mpesaImport';
+import { buildPostings, canReport, chooseCategory, defaultCategoryFor, initialChoices, type PostingContext, type PreviewLine } from '@/lib/mpesaImport';
+
+const ctx: PostingContext = { accountId: 9, userId: 'u1', isShared: false, today: '2026-10-25', chargeCategory: 'Bank charges' };
 
 const read = (p: string) => readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
 
@@ -95,5 +97,36 @@ describe('the screens keep both powers', () => {
     expect(phone).toContain('onSelect={(id) => {');
     expect(web).toContain('/m-?pesa/i.test(account.name)');
     expect(web).toContain('setSelectedAccountId(Number(event.target.value))');
+  });
+});
+
+describe('a Fuliza access fee is recorded as a bank charge', () => {
+  const fee = (over: Partial<PreviewLine> = {}) =>
+    line({ index: 0, type: 'fuliza_fee', description: 'Fuliza access fee', amount: 0.26, receipt: 'TESTFULIZA1FEE', named: true, ...over });
+
+  it('starts in the category charges already go to, and can be changed like any other', () => {
+    const start = initialChoices([fee()], [], NAMES, 'Bank charges');
+    expect(start[0]).toMatchObject({ include: true, category: 'Bank charges', auto: true });
+    expect(chooseCategory([fee()], start, 0, 'Household')[0]).toMatchObject({ category: 'Household', auto: false });
+  });
+
+  it('prefers where the last Fuliza fee went, then a category that says charge or fee', () => {
+    const history = [{ type: 'disbursement', description: 'Fuliza access fee', expenseCategory: 'Fuliza costs' }];
+    expect(initialChoices([fee()], history, NAMES, 'Bank charges')[0].category).toBe('Fuliza costs');
+    expect(initialChoices([fee()], [], NAMES, '')[0].category).toBe('Bank charges');
+    expect(initialChoices([fee()], [], ['Groceries'], '')[0].category).toBe('');
+  });
+
+  it('is saved as an ordinary spending posting with its own receipt code, and no fee of its own', () => {
+    const built = buildPostings(fee(), { include: true, category: 'Bank charges' }, ctx);
+    expect(built?.kind).toBe('disbursement');
+    expect(built?.main).toMatchObject({
+      amount: 0.26, description: 'Fuliza access fee', expenseCategory: 'Bank charges', mpesaReceipt: 'TESTFULIZA1FEE', date: '2026-10-24',
+    });
+    expect(built?.fee).toBeNull();
+  });
+
+  it('is not offered as a message to send, since Jamvi understood it', () => {
+    expect(canReport(fee())).toBe(false);
   });
 });
