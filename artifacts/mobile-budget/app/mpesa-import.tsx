@@ -14,9 +14,12 @@ import {
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useQueryClient } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   customFetch,
+  getGetBudgetCategoriesQueryKey,
+  useCreateBudgetCategory,
   useCreateDeposit,
   useCreateDisbursement,
   useGetBudgetCategories,
@@ -32,6 +35,14 @@ import { PageScrollView } from '@/components/PageScrollReset';
 import { ScreenHint } from '@/components/ScreenHint';
 import { useColors } from '@/hooks/useColors';
 import { canReceiveShares } from '@/lib/shareIntent';
+import {
+  applyNicknames,
+  canNickname,
+  nicknameStorageKey,
+  parseStoredNicknames,
+  withNickname,
+  type NicknameMap,
+} from '@/lib/payeeNicknames';
 import { onSharedMessages, takeSharedMessages } from '@/lib/sharedMessages';
 import { useAuth } from '@/lib/auth';
 import { formatExact } from '@/lib/formatExact';
@@ -45,6 +56,7 @@ import {
   messageFor,
   problemWith,
   redactForReport,
+  refreshSuggestions,
   snippetFor,
   summarise,
   type Choice,
@@ -58,25 +70,75 @@ const todayIso = () => new Date(Date.now() + 3 * 3_600_000).toISOString().slice(
 
 type Outcome = { saved: number; repeats: number; failed: Array<{ what: string; why: string }> };
 
-/** A category picked from the tree, in a sheet with a search box. */
+/**
+ * A category picked from the tree, in a sheet with a search box.
+ *
+ * It loads the budget's categories itself, the same way the day of banking's
+ * category field does, and says what it is doing: still loading, could not load
+ * (with a retry), or this budget genuinely has none. A picker that only ever
+ * says "no category matches that" leaves somebody guessing which of those it is.
+ * A category can also be added right here, since a payment with nowhere to go
+ * should not send someone away from the messages they have pasted.
+ */
 function CategorySheet({
   visible,
-  categories,
+  budgetName,
   onPick,
   onClose,
 }: {
   visible: boolean;
-  categories: CategoryRow[];
+  budgetName: string | undefined;
   onPick: (name: string) => void;
   onClose: () => void;
 }) {
   const colors = useColors();
+  const queryClient = useQueryClient();
+  const { data: list = [], isLoading, isError, refetch } = useGetBudgetCategories();
+  const categories = list as unknown as CategoryRow[];
+  const { mutateAsync: createCategory, isPending: creating } = useCreateBudgetCategory();
   const [search, setSearch] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [newName, setNewName] = useState('');
   const tree = useMemo(() => filterCategoryTree(buildCategoryTree(categories), search), [categories, search]);
+
   const pick = (name: string) => {
     setSearch('');
+    setAdding(false);
+    setNewName('');
     onPick(name);
   };
+
+  const addCategory = async () => {
+    const name = newName.trim();
+    if (!name) {
+      Alert.alert('Name it', 'Give this category a clear name, such as Transport or Airtime.');
+      return;
+    }
+    const existing = categories.find((row) => row.name.trim().toLocaleLowerCase() === name.toLocaleLowerCase());
+    if (existing) {
+      pick(existing.name);
+      return;
+    }
+    try {
+      const created = await createCategory({
+        data: { name, budgetAmount: 0, priority: 3, isRecurring: true, activeMonth: null, activeYear: null },
+      });
+      await queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
+      pick(created.name);
+    } catch (error: unknown) {
+      Alert.alert('Could not add it', error instanceof Error ? error.message : 'Please try again.');
+    }
+  };
+
+  const nothingToShow = tree.length === 0;
+  const emptyText = isLoading
+    ? 'Loading your categories…'
+    : isError
+      ? 'Could not load your categories.'
+      : categories.length === 0
+        ? `${budgetName ? `“${budgetName}”` : 'This budget'} has no categories yet. Add one below.`
+        : 'No category matches that.';
+
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.sheetBackdrop}>
@@ -88,7 +150,7 @@ function CategorySheet({
             </Pressable>
           </View>
           <CategorySearchBox value={search} onChange={setSearch} testID="mpesa-category-search" />
-          <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: 420 }}>
+          <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: 340 }} testID="mpesa-category-list">
             {tree.map((group) => (
               <View key={group.name}>
                 {group.children.length > 0 ? (
@@ -107,10 +169,53 @@ function CategorySheet({
                 )}
               </View>
             ))}
-            {tree.length === 0 ? (
-              <Text style={[styles.empty, { color: colors.mutedForeground }]}>No category matches that.</Text>
+            {nothingToShow ? (
+              <View testID="mpesa-category-empty">
+                <Text style={[styles.empty, { color: colors.mutedForeground }]}>{emptyText}</Text>
+                {isError ? (
+                  <Pressable onPress={() => refetch()} accessibilityRole="button" style={styles.secondary} testID="mpesa-category-retry">
+                    <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>Try again</Text>
+                  </Pressable>
+                ) : null}
+              </View>
             ) : null}
           </ScrollView>
+          <View style={[styles.addBox, { borderColor: colors.border }]}>
+            {adding ? (
+              <>
+                <TextInput
+                  value={newName}
+                  onChangeText={setNewName}
+                  placeholder={search.trim() ? search.trim() : 'Name it, such as Transport'}
+                  placeholderTextColor={colors.mutedForeground}
+                  autoCorrect={false}
+                  editable={!creating}
+                  style={[styles.pasteBox, { minHeight: 44, borderColor: colors.border, backgroundColor: colors.muted, color: colors.foreground }]}
+                  testID="mpesa-category-new-name"
+                />
+                <Pressable
+                  onPress={addCategory}
+                  disabled={creating}
+                  style={[styles.primary, { backgroundColor: colors.primary, opacity: creating ? 0.6 : 1 }]}
+                  accessibilityRole="button"
+                  testID="mpesa-category-add"
+                >
+                  {creating ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Add and use it</Text>}
+                </Pressable>
+              </>
+            ) : (
+              <Pressable
+                onPress={() => {
+                  setNewName(search.trim());
+                  setAdding(true);
+                }}
+                accessibilityRole="button"
+                testID="mpesa-category-add-open"
+              >
+                <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>＋ Add a category</Text>
+              </Pressable>
+            )}
+          </View>
         </View>
       </View>
     </Modal>
@@ -156,6 +261,44 @@ export default function MpesaImportScreen() {
   const [picking, setPicking] = useState<number | 'charge' | null>(null);
   const [saving, setSaving] = useState(false);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
+  // Names the person gave payees, kept on this device for this budget.
+  const [nicknames, setNicknames] = useState<NicknameMap>({});
+  const [naming, setNaming] = useState<{ index: number; original: string; text: string } | null>(null);
+  const nicknamesKey = nicknameStorageKey(group?.id);
+  useEffect(() => {
+    let active = true;
+    AsyncStorage.getItem(nicknamesKey)
+      .then((stored) => {
+        if (active) setNicknames(parseStoredNicknames(stored));
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [nicknamesKey]);
+
+  const saveNickname = () => {
+    if (!naming || !lines) return;
+    const next = withNickname(nicknames, naming.original, naming.text);
+    setNicknames(next);
+    AsyncStorage.setItem(nicknamesKey, JSON.stringify(next)).catch(() => {});
+    const renamed = applyNicknames(lines, next);
+    setLines(renamed);
+    setChoices((current) => refreshSuggestions(renamed, current, history, categories.map((row) => row.name), chargeCategory));
+    setNaming(null);
+  };
+
+  // The categories and this account's history can arrive after the messages were
+  // read (a Share opens the app cold, and they load in the background). When they
+  // do, suggest again for lines still on a suggestion or on nothing; a category
+  // the person chose is never touched.
+  useEffect(() => {
+    if (!lines) return;
+    setChoices((current) => refreshSuggestions(lines, current, history, categories.map((row) => row.name), chargeCategory));
+    // Runs when the lists load, not on every choice.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categoryList, account]);
+
   // Sending a message Jamvi could not read, so its format can be learned.
   const [reporting, setReporting] = useState<{ index: number; text: string } | null>(null);
   const [sendingReport, setSendingReport] = useState(false);
@@ -214,8 +357,12 @@ export default function MpesaImportScreen() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: pasted }),
       });
-      setLines(response.lines);
-      setChoices(initialChoices(response.lines, history, categories.map((row) => row.name), chargeCategory));
+      // Read fresh: a share can be read before the effect above has loaded them.
+      const known = parseStoredNicknames(await AsyncStorage.getItem(nicknamesKey).catch(() => null));
+      setNicknames(known);
+      const shown = applyNicknames(response.lines, known);
+      setLines(shown);
+      setChoices(initialChoices(shown, history, categories.map((row) => row.name), chargeCategory));
     } catch (error: unknown) {
       Alert.alert('Could not read them', error instanceof Error ? error.message : 'Please try again.');
     } finally {
@@ -435,7 +582,20 @@ export default function MpesaImportScreen() {
                 <View key={item.index} style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, opacity: choice?.include ? 1 : 0.55 }]} testID={`mpesa-line-${item.index}`}>
                   <View style={styles.lineTop}>
                     <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text style={[styles.lineTitle, { color: colors.foreground }]} numberOfLines={2}>{item.description}</Text>
+                      <Pressable
+                        onPress={canNickname(item) ? () => setNaming({ index: item.index, original: item.original ?? item.description ?? '', text: item.description ?? '' }) : undefined}
+                        disabled={!canNickname(item)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${item.description}. Tap to rename this payee`}
+                        testID={`mpesa-line-name-${item.index}`}
+                        style={styles.nameRow}
+                      >
+                        <Text style={[styles.lineTitle, { color: colors.foreground, flexShrink: 1 }]} numberOfLines={2}>{item.description}</Text>
+                        {canNickname(item) ? <Feather name="edit-2" size={13} color={colors.mutedForeground} /> : null}
+                      </Pressable>
+                      {item.original && item.original !== item.description ? (
+                        <Text style={[styles.hint, { color: colors.mutedForeground }]}>Jamvi read: {item.original}</Text>
+                      ) : null}
                       <Text style={[styles.hint, { color: colors.mutedForeground }]}>
                         {item.date ?? 'No date on it, so today'} · {out ? 'Money out' : 'Money in'}
                       </Text>
@@ -536,6 +696,42 @@ export default function MpesaImportScreen() {
         </View>
       ) : null}
 
+      <Modal visible={naming !== null} animationType="slide" transparent onRequestClose={() => setNaming(null)}>
+        <View style={styles.sheetBackdrop}>
+          <View style={[styles.sheet, { backgroundColor: colors.card, borderColor: colors.border, padding: 16, gap: 10 }]}>
+            <Text style={[styles.sheetTitle, { color: colors.foreground }]}>What do you call this?</Text>
+            <Text style={[styles.hint, { color: colors.mutedForeground }]}>
+              Jamvi read: {naming?.original}. Give it a name that makes sense to you, and Jamvi will use it every time.
+            </Text>
+            <TextInput
+              value={naming?.text ?? ''}
+              onChangeText={(value) => setNaming((current) => (current ? { ...current, text: value } : current))}
+              autoCorrect={false}
+              style={[styles.pasteBox, { minHeight: 48, borderColor: colors.border, backgroundColor: colors.muted, color: colors.foreground }]}
+              testID="mpesa-nickname-text"
+            />
+            <Pressable
+              onPress={saveNickname}
+              style={[styles.primary, { backgroundColor: colors.primary }]}
+              accessibilityRole="button"
+              testID="mpesa-nickname-save"
+            >
+              <Text style={styles.primaryText}>Save name</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setNaming((current) => (current ? { ...current, text: current.original } : current))}
+              style={styles.secondary}
+              accessibilityRole="button"
+            >
+              <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold' }}>Use the name Jamvi read</Text>
+            </Pressable>
+            <Pressable onPress={() => setNaming(null)} style={styles.secondary} accessibilityRole="button">
+              <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold' }}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
       <Modal visible={reporting !== null} animationType="slide" transparent onRequestClose={() => setReporting(null)}>
         <View style={styles.sheetBackdrop}>
           <View style={[styles.sheet, { backgroundColor: colors.card, borderColor: colors.border, padding: 16, gap: 10 }]}>
@@ -569,7 +765,7 @@ export default function MpesaImportScreen() {
         </View>
       </Modal>
 
-      <CategorySheet visible={picking !== null} categories={categories} onPick={chooseCategory} onClose={() => setPicking(null)} />
+      <CategorySheet visible={picking !== null} budgetName={group?.name} onPick={chooseCategory} onClose={() => setPicking(null)} />
     </View>
   );
 }
@@ -592,6 +788,7 @@ const styles = StyleSheet.create({
   summaryLine: { fontSize: 16, fontFamily: 'Inter_700Bold' },
   lineTop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   lineTitle: { fontSize: 15, fontFamily: 'Inter_600SemiBold' },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   amount: { fontSize: 16, fontFamily: 'Inter_700Bold' },
   categoryButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 },
   footer: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth },
@@ -602,4 +799,5 @@ const styles = StyleSheet.create({
   groupLabel: { fontSize: 11, fontFamily: 'Inter_600SemiBold', paddingHorizontal: 16, paddingTop: 10 },
   option: { paddingHorizontal: 16, paddingVertical: 13 },
   empty: { padding: 16, textAlign: 'center' },
+  addBox: { padding: 12, gap: 8, borderTopWidth: StyleSheet.hairlineWidth },
 });

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
-import { CheckCircle2, Loader2 } from "lucide-react";
+import { CheckCircle2, Loader2, Pencil } from "lucide-react";
 import {
   useCreateDeposit,
   useCreateDisbursement,
@@ -27,11 +27,20 @@ import {
   messageFor,
   problemWith,
   redactForReport,
+  refreshSuggestions,
   snippetFor,
   summarise,
   type Choice,
   type PreviewLine,
 } from "@/lib/mpesa-import";
+import {
+  applyNicknames,
+  canNickname,
+  nicknameStorageKey,
+  parseStoredNicknames,
+  withNickname,
+  type NicknameMap,
+} from "@/lib/payee-nicknames";
 
 // Shared with the day of banking and the Bank form: a fee is the same expense every time.
 const CHARGE_CATEGORY_KEY = "jamvi:last-charge-category";
@@ -57,7 +66,7 @@ export default function MpesaImportPage() {
 
   const { data: accountList = [] } = useGetJointAccounts();
   const accounts = accountList as unknown as Array<{ id: number; name: string }>;
-  const { data: categoryList = [] } = useGetBudgetCategories();
+  const { data: categoryList = [], isLoading: categoriesLoading, isError: categoriesError, refetch: refetchCategories } = useGetBudgetCategories();
   const categories = categoryList as unknown as CategoryRow[];
   const categoryTree = useMemo(() => buildCategoryTree(categories), [categories]);
   const search = useCategorySearch(categoryTree);
@@ -81,6 +90,33 @@ export default function MpesaImportPage() {
   const [chargeCategory, setChargeCategory] = useState("");
   const [saving, setSaving] = useState(false);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
+  // Names the person gave payees, kept in this browser for this budget.
+  const [nicknames, setNicknames] = useState<NicknameMap>({});
+  const [naming, setNaming] = useState<{ index: number; original: string; text: string } | null>(null);
+  const nicknamesKey = nicknameStorageKey(group?.id);
+  const readStoredNicknames = (): NicknameMap => {
+    try {
+      return parseStoredNicknames(window.localStorage.getItem(nicknamesKey));
+    } catch {
+      return {};
+    }
+  };
+  useEffect(() => {
+    setNicknames(readStoredNicknames());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nicknamesKey]);
+
+  const saveNickname = () => {
+    if (!naming || !lines) return;
+    const next = withNickname(nicknames, naming.original, naming.text);
+    setNicknames(next);
+    try { window.localStorage.setItem(nicknamesKey, JSON.stringify(next)); } catch { /* remembered only when storage allows */ }
+    const renamed = applyNicknames(lines, next);
+    setLines(renamed);
+    setChoices((current) => refreshSuggestions(renamed, current, history, categories.map((row) => row.name), chargeCategory));
+    setNaming(null);
+  };
+
   // Sending a message Jamvi could not read, so its format can be learned.
   const [reporting, setReporting] = useState<{ index: number; text: string } | null>(null);
   const [sendingReport, setSendingReport] = useState(false);
@@ -155,8 +191,9 @@ export default function MpesaImportPage() {
       });
       const body = (await response.json().catch(() => ({}))) as { lines?: PreviewLine[]; error?: string };
       if (!response.ok || !body.lines) throw new Error(body.error ?? "Could not read them.");
-      setLines(body.lines);
-      setChoices(initialChoices(body.lines, history, categories.map((row) => row.name), chargeCategory));
+      const shown = applyNicknames(body.lines, readStoredNicknames());
+      setLines(shown);
+      setChoices(initialChoices(shown, history, categories.map((row) => row.name), chargeCategory));
     } catch (error) {
       toast({ variant: "destructive", title: "Could not read them", description: error instanceof Error ? error.message : "Please try again." });
     } finally {
@@ -252,6 +289,30 @@ export default function MpesaImportPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-5 p-4 sm:p-6" data-testid="mpesa-import-page">
+      <Dialog open={naming !== null} onOpenChange={(open) => !open && setNaming(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>What do you call this?</DialogTitle>
+            <DialogDescription>
+              Jamvi read: {naming?.original}. Give it a name that makes sense to you, and Jamvi will use it every time.
+            </DialogDescription>
+          </DialogHeader>
+          <input
+            value={naming?.text ?? ""}
+            onChange={(event) => setNaming((current) => (current ? { ...current, text: event.target.value } : current))}
+            className="h-11 w-full rounded-md border border-input bg-card px-3 text-sm"
+            data-testid="mpesa-nickname-text"
+          />
+          <div className="flex flex-wrap justify-end gap-3">
+            <Button variant="ghost" onClick={() => setNaming((current) => (current ? { ...current, text: current.original } : current))}>
+              Use the name Jamvi read
+            </Button>
+            <Button variant="outline" onClick={() => setNaming(null)}>Cancel</Button>
+            <Button onClick={saveNickname} data-testid="mpesa-nickname-save">Save name</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={reporting !== null} onOpenChange={(open) => !open && setReporting(null)}>
         <DialogContent>
           <DialogHeader>
@@ -337,6 +398,28 @@ export default function MpesaImportPage() {
             </Card>
           ) : null}
 
+          {/* A payment needs a category, so say plainly when there are none to choose from. */}
+          {categories.length === 0 ? (
+            <Card data-testid="mpesa-no-categories">
+              <CardContent className="space-y-2 p-4 text-sm">
+                <p className="font-semibold text-foreground">
+                  {categoriesLoading
+                    ? "Loading your categories…"
+                    : categoriesError
+                      ? "Could not load your categories."
+                      : `${group?.name ? `“${group.name}”` : "This budget"} has no categories yet.`}
+                </p>
+                {categoriesError ? (
+                  <Button size="sm" variant="outline" onClick={() => void refetchCategories()}>Try again</Button>
+                ) : !categoriesLoading ? (
+                  <p className="text-muted-foreground">
+                    Payments need one to be saved under. <Link href="/budget" className="font-semibold text-primary underline">Add categories in Budget</Link>, then paste again.
+                  </p>
+                ) : null}
+              </CardContent>
+            </Card>
+          ) : null}
+
           {recordable.length > 0 ? <CategorySearchInput query={search.query} onChange={search.setQuery} testId="mpesa-category-search" /> : null}
 
           {recordable.map((item) => {
@@ -354,7 +437,23 @@ export default function MpesaImportPage() {
                       className="h-5 w-5"
                     />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate font-semibold text-foreground">{item.description}</p>
+                      {canNickname(item) ? (
+                        <button
+                          type="button"
+                          onClick={() => setNaming({ index: item.index, original: item.original ?? item.description ?? "", text: item.description ?? "" })}
+                          className="flex max-w-full items-center gap-1.5 text-left font-semibold text-foreground hover:underline"
+                          aria-label={`${item.description}. Rename this payee`}
+                          data-testid={`mpesa-line-name-${item.index}`}
+                        >
+                          <span className="truncate">{item.description}</span>
+                          <Pencil className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden="true" />
+                        </button>
+                      ) : (
+                        <p className="truncate font-semibold text-foreground">{item.description}</p>
+                      )}
+                      {item.original && item.original !== item.description ? (
+                        <p className="text-xs text-muted-foreground">Jamvi read: {item.original}</p>
+                      ) : null}
                       <p className="text-xs text-muted-foreground">{item.date ?? "No date on it, so today"} · {out ? "Money out" : "Money in"}</p>
                       {item.named === false && snippetFor(text, item.receipt) ? (
                         <p className="text-xs italic text-muted-foreground" data-testid={`mpesa-line-snippet-${item.index}`}>

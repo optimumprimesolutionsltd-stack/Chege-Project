@@ -10,6 +10,8 @@ export type PreviewLine = {
   type: string | null;
   amount: number | null;
   description: string | null;
+  /** The name the message gave, kept when the person's nickname for the payee is shown as the description. */
+  original?: string;
   /** False when the message named nobody, so the description is only a generic label. */
   named?: boolean;
   date: string | null;
@@ -88,15 +90,44 @@ export function initialChoices(
 ): Record<number, Choice> {
   const choices: Record<number, Choice> = {};
   for (const line of lines) {
-    const earlier = line.direction === 'out' && line.description ? suggestCategory(line.description, history) : '';
-    // A Fuliza access fee is a bank charge: it goes where charges already go.
-    const suggested =
-      line.direction === 'out'
-        ? earlier || (line.type === 'fuliza_fee' ? chargeCategory : '') || defaultCategoryFor(line, categoryNames)
-        : '';
+    const suggested = suggestionFor(line, history, categoryNames, chargeCategory);
     choices[line.index] = { include: isRecordable(line), category: suggested, auto: suggested !== '' };
   }
   return choices;
+}
+
+function suggestionFor(
+  line: PreviewLine,
+  history: readonly PastPosting[],
+  categoryNames: readonly string[],
+  chargeCategory: string,
+): string {
+  if (line.direction !== 'out') return '';
+  const earlier = line.description ? suggestCategory(line.description, history) : '';
+  // A Fuliza access fee is a bank charge: it goes where charges already go.
+  return earlier || (line.type === 'fuliza_fee' ? chargeCategory : '') || defaultCategoryFor(line, categoryNames);
+}
+
+/**
+ * Suggestions again, after a payee was renamed: the new name may match earlier
+ * entries the old one did not. Only lines still on a suggestion or on nothing
+ * are touched; a category the person chose is never replaced.
+ */
+export function refreshSuggestions(
+  lines: readonly PreviewLine[],
+  choices: Record<number, Choice>,
+  history: readonly PastPosting[],
+  categoryNames: readonly string[],
+  chargeCategory = '',
+): Record<number, Choice> {
+  const next: Record<number, Choice> = { ...choices };
+  for (const line of lines) {
+    const current = choices[line.index];
+    if (!current || (current.category && !current.auto)) continue;
+    const suggested = suggestionFor(line, history, categoryNames, chargeCategory);
+    next[line.index] = { ...current, category: suggested, auto: suggested !== '' };
+  }
+  return next;
 }
 
 /**
