@@ -178,9 +178,28 @@ export function statementLines(rows: readonly StatementRow[]): StatementReading 
     for (const row of mains) {
       const details = row.details.trim();
       const index = lines.length;
+      if (REVERSAL.test(details) && row.paidIn !== null) {
+        // Money that came back from an earlier payment: recorded as money in.
+        lines.push({
+          index,
+          status: 'ready',
+          reason: null,
+          receipt: row.receipt,
+          direction: 'in',
+          type: 'reversal',
+          amount: row.paidIn,
+          description: 'Money back: a reversed payment',
+          named: false,
+          date: dateOf(row.time),
+          fee: null,
+          mpesaBalance: row.balance,
+          alreadyRecorded: null,
+        });
+        continue;
+      }
       if (REVERSAL.test(details)) {
         leftOutNet += netOf(row);
-        lines.push(left(index, row, 'Money that came back from an earlier payment. Record it yourself against that payment.'));
+        lines.push(left(index, row, 'A reversal that took money out. Record it yourself against the payment it belongs to.'));
         continue;
       }
       const match = KINDS.find(([pattern]) => pattern.test(details));
@@ -233,7 +252,9 @@ export interface Reconciliation {
   /** How far the statement's balance moved, and how far the entries about to be saved move this account. */
   statementChange: number;
   savedChange: number;
-  /** statementChange - savedChange: what would still differ after saving. */
+  /** What entries this budget already has (saved earlier, from here or from a paste) have moved it by. */
+  alreadyRecordedChange: number;
+  /** statementChange - savedChange - alreadyRecordedChange: what would still differ after saving. */
   gap: number;
   /** What the difference is made of. These add up to the gap. */
   parts: Array<{ label: string; amount: number }>;
@@ -249,14 +270,24 @@ export function reconcile(reading: StatementReading, included: (line: PreviewLin
   const round = (value: number) => Math.round(value * 100) / 100;
   const effect = (line: PreviewLine) => (line.amount === null || !line.direction ? 0 : line.direction === 'in' ? line.amount : -(line.amount + (line.fee ?? 0)));
   const ready = reading.lines.filter((line) => line.status === 'ready');
-  const saved = round(ready.filter(included).reduce((sum, line) => sum + effect(line), 0));
-  const notSaved = round(ready.filter((line) => !included(line)).reduce((sum, line) => sum + effect(line), 0));
+  // What the account already has counts as matched: it is in the balance already.
+  const alreadyIn = round(ready.filter((line) => line.alreadyRecorded).reduce((sum, line) => sum + effect(line), 0));
+  const saved = round(ready.filter((line) => !line.alreadyRecorded && included(line)).reduce((sum, line) => sum + effect(line), 0));
+  const notSaved = round(ready.filter((line) => !line.alreadyRecorded && !included(line)).reduce((sum, line) => sum + effect(line), 0));
   const statementChange = round(reading.closing - reading.opening);
   const parts = [
     { label: 'Fuliza loan repayments (not spending, so not recorded)', amount: -reading.loanRepaymentTotal },
     { label: 'Fuliza loans (not income, so not recorded)', amount: reading.loanDrawTotal },
     { label: 'Entries left out with a reason', amount: reading.leftOutNet },
-    { label: 'Entries not ticked, or already recorded', amount: notSaved },
+    { label: 'Entries not ticked', amount: notSaved },
   ].filter((part) => Math.abs(part.amount) >= 0.005);
-  return { opening: reading.opening, closing: reading.closing, statementChange, savedChange: saved, gap: round(statementChange - saved), parts };
+  return {
+    opening: reading.opening,
+    closing: reading.closing,
+    statementChange,
+    savedChange: saved,
+    alreadyRecordedChange: alreadyIn,
+    gap: round(statementChange - saved - alreadyIn),
+    parts,
+  };
 }

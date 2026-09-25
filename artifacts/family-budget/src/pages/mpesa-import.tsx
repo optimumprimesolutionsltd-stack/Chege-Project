@@ -66,6 +66,9 @@ import { readStatementPages, StatementPasswordError } from "@/lib/statement-file
 import { reconcile, statementLines, type StatementReading } from "@/lib/statement-import";
 import { checkRunningBalance, readStatementRows, resolveDirections } from "@/lib/statement-table";
 
+/** A statement is kept this long, so it can be worked through over days. */
+const STATEMENT_DRAFT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+
 const SELECT_CLASS = "flex h-11 w-full rounded-md border border-input bg-card px-3 py-2 text-sm";
 
 /**
@@ -214,6 +217,25 @@ export default function MpesaImportPage() {
   const [statementNote, setStatementNote] = useState<string | null>(null);
   const [statementReading, setStatementReading] = useState<StatementReading | null>(null);
 
+  // Which of a statement's entries this budget already has: asked with the receipt codes only.
+  const markRecorded = async (all: PreviewLine[]): Promise<PreviewLine[]> => {
+    const codes = [...new Set(all.map((line) => line.receipt).filter((code): code is string => Boolean(code)))];
+    if (codes.length === 0) return all;
+    const response = await fetch("/api/mpesa/import/check-receipts", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ receipts: codes }),
+    });
+    const body = (await response.json().catch(() => ({}))) as { recorded?: Array<{ receipt: string; date: string; description: string }>; error?: string };
+    if (!response.ok || !body.recorded) throw new Error(body.error ?? "Could not check what is already recorded.");
+    const recorded = new Map(body.recorded.map((row) => [row.receipt, { date: row.date, description: row.description }]));
+    return all.map((line) => {
+      const existing = line.receipt ? recorded.get(line.receipt) : undefined;
+      return existing ? { ...line, alreadyRecorded: existing } : line;
+    });
+  };
+
   const readStatement = async () => {
     if (!statementFile) return;
     setReadingStatement(true);
@@ -226,23 +248,7 @@ export default function MpesaImportPage() {
         throw new Error("This statement does not add up, so Jamvi will not risk recording wrong amounts. Paste your messages instead.");
       }
       const reading = statementLines(rows);
-      const codes = [...new Set(reading.lines.map((line) => line.receipt).filter((code): code is string => Boolean(code)))];
-      let recorded = new Map<string, { date: string | null; description: string }>();
-      if (codes.length > 0) {
-        const response = await fetch("/api/mpesa/import/check-receipts", {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ receipts: codes }),
-        });
-        const body = (await response.json().catch(() => ({}))) as { recorded?: Array<{ receipt: string; date: string; description: string }>; error?: string };
-        if (!response.ok || !body.recorded) throw new Error(body.error ?? "Could not check what is already recorded.");
-        recorded = new Map(body.recorded.map((row) => [row.receipt, { date: row.date, description: row.description }]));
-      }
-      const checked = reading.lines.map((line) => {
-        const existing = line.receipt ? recorded.get(line.receipt) : undefined;
-        return existing ? { ...line, alreadyRecorded: existing } : line;
-      });
+      const checked = await markRecorded(reading.lines);
       const shown = applyNicknames(checked, readStoredNicknames());
       const left = [
         reading.loanDraws > 0 ? `${reading.loanDraws} Fuliza loans` : null,
@@ -295,6 +301,55 @@ export default function MpesaImportPage() {
     }
   };
 
+  // A statement is worked through at the person's own pace: what is still to do is kept on
+  // this device (never the PDF or its password) and picked up again where it was left.
+  const statementDraftKey = `jamvi:mpesa-statement:${group?.id ?? "none"}`;
+  const [draftChecked, setDraftChecked] = useState<string | null>(null);
+  const statementLeft = (statementReading?.lines ?? []).filter(isRecordable).length;
+  useEffect(() => {
+    if (!group?.id || draftChecked === statementDraftKey) return;
+    setDraftChecked(statementDraftKey);
+    try {
+      const raw = window.localStorage.getItem(statementDraftKey);
+      const saved = raw ? (JSON.parse(raw) as { savedAt: number; reading: StatementReading; choices: Record<number, Choice>; accountId: number | null }) : null;
+      if (!saved || !saved.reading?.lines || Date.now() - saved.savedAt > STATEMENT_DRAFT_MAX_AGE_MS) return;
+      if (saved.accountId) setSelectedAccountId(saved.accountId);
+      setStatementReading(saved.reading);
+      setLines(saved.reading.lines);
+      setChoices(saved.choices);
+      setStatementNote("Picked up where you left off with your statement. Anything saved since is marked as recorded.");
+      // Some may have been saved from another screen since: ask again which are recorded.
+      markRecorded(saved.reading.lines)
+        .then((checked) => {
+          setLines(checked);
+          setStatementReading((current) => (current ? { ...current, lines: checked } : current));
+        })
+        .catch(() => {});
+    } catch {
+      /* nothing kept, or storage not allowed: start fresh */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [group?.id]);
+  useEffect(() => {
+    if (draftChecked !== statementDraftKey) return undefined;
+    try {
+      if (statementReading && statementLeft > 0) {
+        const timer = window.setTimeout(() => {
+          try {
+            window.localStorage.setItem(statementDraftKey, JSON.stringify({ savedAt: Date.now(), reading: statementReading, choices, accountId: selectedAccountId }));
+          } catch {
+            /* kept only when storage allows */
+          }
+        }, 500);
+        return () => window.clearTimeout(timer);
+      }
+      window.localStorage.removeItem(statementDraftKey);
+    } catch {
+      /* kept only when storage allows */
+    }
+    return undefined;
+  }, [draftChecked, statementDraftKey, statementReading, statementLeft, choices, selectedAccountId]);
+
   // Would saving these leave the account moved as far as the statement says M-Pesa moved?
   const balanceCheck = useMemo(
     () => (statementReading && lines ? reconcile({ ...statementReading, lines }, (line) => choices[line.index]?.include === true) : null),
@@ -302,6 +357,16 @@ export default function MpesaImportPage() {
   );
 
   const summary = useMemo(() => (lines ? summarise(lines, choices) : null), [lines, choices]);
+  // Which entry the red message is about, so clicking it can take you there.
+  const firstProblemIndex = useMemo(() => {
+    if (!lines) return null;
+    for (const item of lines) if (problemWith(item, choices[item.index])) return item.index;
+    return null;
+  }, [lines, choices]);
+  const showProblem = () => {
+    if (firstProblemIndex === null) return;
+    document.querySelector(`[data-testid="mpesa-line-${firstProblemIndex}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
   const firstProblem = useMemo(() => {
     if (!lines) return null;
     for (const item of lines) {
@@ -385,6 +450,12 @@ export default function MpesaImportPage() {
       }
     } finally {
       setSaving(false);
+      if (statementReading) {
+        const stamp = { date: todayIso(), description: "Saved from your statement" };
+        const marked = lines.map((item) => (savedIndexes.has(item.index) ? { ...item, alreadyRecorded: stamp } : item));
+        setLines(marked);
+        setStatementReading((current) => (current ? { ...current, lines: marked } : current));
+      }
       setOutcome(result);
     }
     void offerBalanceChanges(lines.filter((item) => savedIndexes.has(item.index)));
@@ -433,8 +504,16 @@ export default function MpesaImportPage() {
             ))}
           </CardContent>
         </Card>
+        {statementReading && statementLeft > 0 ? (
+          <p className="text-center text-sm text-muted-foreground" data-testid="mpesa-import-continue-later">
+            {statementLeft} of your statement left. Keep going now, or come back later: the rest is kept on this device and is here when you open this page again.
+          </p>
+        ) : null}
         <div className="flex justify-center gap-3">
-          <Link href="/bank"><Button>See my bank</Button></Link>
+          {statementReading && statementLeft > 0 ? (
+            <Button onClick={() => setOutcome(null)} data-testid="mpesa-import-keep-going">Keep going ({statementLeft} left)</Button>
+          ) : null}
+          <Link href="/bank"><Button variant={statementReading && statementLeft > 0 ? "outline" : "default"}>See my bank</Button></Link>
           <Button variant="outline" onClick={() => { setOutcome(null); setLines(null); setChoices({}); setText(""); setStatementNote(null); setStatementReading(null); }}>Paste more</Button>
         </div>
       </div>
@@ -588,6 +667,7 @@ export default function MpesaImportPage() {
                 <p className="text-muted-foreground">
                   Your statement went from {formatKes(balanceCheck.opening)} to {formatKes(balanceCheck.closing)}, a change of {formatKes(balanceCheck.statementChange)}.
                   Saving these moves this account by {formatKes(balanceCheck.savedChange)}.
+                  {balanceCheck.alreadyRecordedChange !== 0 ? ` Entries already recorded account for ${formatKes(balanceCheck.alreadyRecordedChange)}.` : ""}
                 </p>
                 {Math.abs(balanceCheck.gap) >= 0.005 ? (
                   <>
@@ -874,7 +954,12 @@ export default function MpesaImportPage() {
           ) : null}
 
           <div className="sticky bottom-4 space-y-2 rounded-2xl border border-border bg-card p-3 shadow-lg">
-            {firstProblem ? <p className="text-sm text-destructive">{firstProblem}</p> : null}
+            {firstProblem ? (
+              <button type="button" onClick={showProblem} className="block w-full text-left text-sm text-destructive" data-testid="mpesa-first-problem">
+                {firstProblem}
+                {firstProblemIndex !== null ? " Click to see it." : ""}
+              </button>
+            ) : null}
             <div className="flex gap-3">
               <Button variant="outline" onClick={() => { setLines(null); setChoices({}); setStatementNote(null); setStatementReading(null); }}>Start again</Button>
               <Button onClick={saveAll} disabled={saving || !summary || summary.count === 0} className="flex-1" data-testid="mpesa-import-save">

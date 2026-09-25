@@ -693,6 +693,18 @@ export default function MpesaImportScreen() {
   );
 
   const summary = useMemo(() => (lines ? summarise(lines, choices) : null), [lines, choices]);
+  // Which entry the red message is about, so tapping it can take you there.
+  const firstProblemIndex = useMemo(() => {
+    if (!lines) return null;
+    for (const item of lines) if (problemWith(item, choices[item.index])) return item.index;
+    return null;
+  }, [lines, choices]);
+  const scrollRef = React.useRef<ScrollView>(null);
+  const lineTops = React.useRef<Record<number, number>>({});
+  const showProblem = () => {
+    if (firstProblemIndex === null) return;
+    scrollRef.current?.scrollTo({ y: Math.max(0, (lineTops.current[firstProblemIndex] ?? 0) - 12), animated: true });
+  };
   const firstProblem = useMemo(() => {
     if (!lines) return null;
     for (const item of lines) {
@@ -875,7 +887,7 @@ export default function MpesaImportScreen() {
         </View>
       </View>
 
-      <PageScrollView style={{ backgroundColor: colors.background }} contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 120 }]} keyboardShouldPersistTaps="handled">
+      <PageScrollView ref={scrollRef} style={{ backgroundColor: colors.background }} contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 120 }]} keyboardShouldPersistTaps="handled">
         <View style={[styles.card, styles.budgetRow, { backgroundColor: colors.card, borderColor: colors.border }]} testID="mpesa-budget-row">
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0 }]}>These will be saved in</Text>
@@ -1020,6 +1032,7 @@ export default function MpesaImportScreen() {
                 </Text>
                 <Text style={[styles.hint, { color: colors.mutedForeground }]}>
                   Your statement went from KES {formatExact(balanceCheck.opening)} to KES {formatExact(balanceCheck.closing)}, a change of KES {formatExact(balanceCheck.statementChange)}. Saving these moves this account by KES {formatExact(balanceCheck.savedChange)}.
+                  {balanceCheck.alreadyRecordedChange !== 0 ? ` Entries already recorded account for KES ${formatExact(balanceCheck.alreadyRecordedChange)}.` : ''}
                 </Text>
                 {Math.abs(balanceCheck.gap) >= 0.005 ? (
                   <>
@@ -1053,7 +1066,7 @@ export default function MpesaImportScreen() {
               const choice = choices[item.index];
               const out = item.direction === 'out';
               return (
-                <View key={item.index} style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, opacity: choice?.include ? 1 : 0.55 }]} testID={`mpesa-line-${item.index}`}>
+                <View key={item.index} style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, opacity: choice?.include ? 1 : 0.55 }]} testID={`mpesa-line-${item.index}`} onLayout={(event) => { lineTops.current[item.index] = event.nativeEvent.layout.y; }}>
                   <View style={styles.lineTop}>
                     <View style={{ flex: 1, minWidth: 0 }}>
                       <Pressable
@@ -1234,7 +1247,14 @@ export default function MpesaImportScreen() {
 
       {lines ? (
         <View style={[styles.footer, { paddingBottom: insets.bottom + 12, backgroundColor: colors.card, borderColor: colors.border }]}>
-          {firstProblem ? <Text style={[styles.hint, { color: colors.destructive, marginBottom: 6 }]}>{firstProblem}</Text> : null}
+          {firstProblem ? (
+            <Pressable onPress={showProblem} accessibilityRole="button" accessibilityHint="Shows the entry that needs attention" testID="mpesa-first-problem">
+              <Text style={[styles.hint, { color: colors.destructive, marginBottom: 6 }]}>
+                {firstProblem}
+                {firstProblemIndex !== null ? '  Tap to see it.' : ''}
+              </Text>
+            </Pressable>
+          ) : null}
           <Pressable
             onPress={saveAll}
             disabled={saving || !summary || summary.count === 0}
