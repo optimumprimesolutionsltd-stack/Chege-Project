@@ -41,3 +41,14 @@ describe('the "Who has paid" panel', () => {
     expect(sheet).toContain('<View style={styles.editRow}>');
   });
 });
+
+// From a real phone: the Edit pill was pushed past the right edge, showing only "Edi".
+describe('the Edit pill on the income streams heading stays on screen', () => {
+  const budget = read('app/(tabs)/budget.tsx');
+  it('lets the heading text shrink and keeps the pill whole', () => {
+    const header = budget.slice(budget.indexOf('<View style={styles.incomeHeader}>'), budget.indexOf('testID="income-edit"'));
+    expect(header).toContain('style={{ flex: 1, minWidth: 0 }}');
+    expect(header).toContain('style={{ flexShrink: 0, marginLeft: 8 }}');
+  });
+});
+
