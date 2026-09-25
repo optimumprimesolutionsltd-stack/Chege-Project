@@ -72,6 +72,42 @@ router.post("/mpesa/import/preview", async (req, res): Promise<void> => {
   });
 });
 
+const receiptsSchema = z.object({
+  receipts: z.array(z.string().trim().regex(/^[A-Z0-9]{8,15}$/, "That is not a receipt code.")).min(1).max(2_000),
+});
+
+/**
+ * Which of these receipt codes this budget already has, for a statement read on
+ * the person's own device. Only the codes arrive, never the statement, and
+ * nothing is logged or stored. A statement holds the same payments a pasted
+ * message does, under the same code, so a payment recorded either way is
+ * recognised the other way.
+ */
+router.post("/mpesa/import/check-receipts", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+
+  const parsed = receiptsSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Send the receipt codes to check." });
+    return;
+  }
+
+  const codes = [...new Set(parsed.data.receipts)];
+  const recorded = await db
+    .select({
+      receipt: jointAccountTxTable.mpesaReceipt,
+      date: jointAccountTxTable.date,
+      description: jointAccountTxTable.description,
+    })
+    .from(jointAccountTxTable)
+    .where(and(eq(jointAccountTxTable.groupId, groupId), inArray(jointAccountTxTable.mpesaReceipt, codes)));
+
+  res.json({
+    recorded: recorded.map((row) => ({ receipt: row.receipt, date: String(row.date), description: row.description })),
+  });
+});
+
 const reportSchema = z.object({
   message: z.string().trim().min(10, "There is no message to send.").max(2_000, "That message is too long."),
 });

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { CheckCircle2, Loader2, Pencil } from "lucide-react";
@@ -61,6 +61,10 @@ const CHARGE_CATEGORY_KEY = "jamvi:last-charge-category";
 const todayIso = () => new Date(Date.now() + 3 * 3_600_000).toISOString().slice(0, 10);
 
 type Outcome = { saved: number; repeats: number; failed: Array<{ what: string; why: string }> };
+
+import { readStatementPages, StatementPasswordError } from "@/lib/statement-file";
+import { reconcile, statementLines, type StatementReading } from "@/lib/statement-import";
+import { checkRunningBalance, readStatementRows, resolveDirections } from "@/lib/statement-table";
 
 const SELECT_CLASS = "flex h-11 w-full rounded-md border border-input bg-card px-3 py-2 text-sm";
 
@@ -202,6 +206,70 @@ export default function MpesaImportPage() {
     }
   }, []);
 
+  // A statement PDF: read on this device, with its password used only here.
+  const statementInput = useRef<HTMLInputElement>(null);
+  const [statementFile, setStatementFile] = useState<File | null>(null);
+  const [statementPassword, setStatementPassword] = useState("");
+  const [readingStatement, setReadingStatement] = useState(false);
+  const [statementNote, setStatementNote] = useState<string | null>(null);
+  const [statementReading, setStatementReading] = useState<StatementReading | null>(null);
+
+  const readStatement = async () => {
+    if (!statementFile) return;
+    setReadingStatement(true);
+    try {
+      const pages = await readStatementPages(statementFile, statementPassword);
+      const rows = resolveDirections(readStatementRows(pages));
+      if (rows.length === 0) throw new Error("Jamvi could not find the payments in this file. Is it the M-Pesa statement PDF?");
+      const balance = checkRunningBalance(rows);
+      if (!balance.ok) {
+        throw new Error("This statement does not add up, so Jamvi will not risk recording wrong amounts. Paste your messages instead.");
+      }
+      const reading = statementLines(rows);
+      const codes = [...new Set(reading.lines.map((line) => line.receipt).filter((code): code is string => Boolean(code)))];
+      let recorded = new Map<string, { date: string | null; description: string }>();
+      if (codes.length > 0) {
+        const response = await fetch("/api/mpesa/import/check-receipts", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ receipts: codes }),
+        });
+        const body = (await response.json().catch(() => ({}))) as { recorded?: Array<{ receipt: string; date: string; description: string }>; error?: string };
+        if (!response.ok || !body.recorded) throw new Error(body.error ?? "Could not check what is already recorded.");
+        recorded = new Map(body.recorded.map((row) => [row.receipt, { date: row.date, description: row.description }]));
+      }
+      const checked = reading.lines.map((line) => {
+        const existing = line.receipt ? recorded.get(line.receipt) : undefined;
+        return existing ? { ...line, alreadyRecorded: existing } : line;
+      });
+      const shown = applyNicknames(checked, readStoredNicknames());
+      const left = [
+        reading.loanDraws > 0 ? `${reading.loanDraws} Fuliza loans` : null,
+        reading.loanRepayments > 0 ? `${reading.loanRepayments} loan repayments` : null,
+      ].filter(Boolean);
+      setStatementNote(
+        `Read ${shown.length} entries from your statement. It adds up.${left.length > 0 ? ` Left out because they are not spending or income: ${left.join(" and ")}. What a Fuliza loan paid for is recorded as a normal payment.` : ""}`,
+      );
+      setLines(shown);
+      setStatementReading({ ...reading, lines: shown });
+      setChoices(initialChoices(shown, history, categories.map((row) => row.name), chargeCategory));
+      setStatementPassword("");
+    } catch (error) {
+      if (error instanceof StatementPasswordError) {
+        toast({
+          variant: "destructive",
+          title: error.wrong ? "Wrong password" : "Password needed",
+          description: error.wrong ? "That did not open the statement. Try again." : "Type the password M-Pesa sent with the statement.",
+        });
+      } else {
+        toast({ variant: "destructive", title: "Could not read the statement", description: error instanceof Error ? error.message : "Please try again." });
+      }
+    } finally {
+      setReadingStatement(false);
+    }
+  };
+
   const readMessages = async () => {
     if (!text.trim()) {
       toast({ variant: "destructive", title: "Paste your messages", description: "Copy them from your Messages app, then paste them here." });
@@ -226,6 +294,12 @@ export default function MpesaImportPage() {
       setReading(false);
     }
   };
+
+  // Would saving these leave the account moved as far as the statement says M-Pesa moved?
+  const balanceCheck = useMemo(
+    () => (statementReading && lines ? reconcile({ ...statementReading, lines }, (line) => choices[line.index]?.include === true) : null),
+    [statementReading, lines, choices],
+  );
 
   const summary = useMemo(() => (lines ? summarise(lines, choices) : null), [lines, choices]);
   const firstProblem = useMemo(() => {
@@ -361,7 +435,7 @@ export default function MpesaImportPage() {
         </Card>
         <div className="flex justify-center gap-3">
           <Link href="/bank"><Button>See my bank</Button></Link>
-          <Button variant="outline" onClick={() => { setOutcome(null); setLines(null); setChoices({}); setText(""); }}>Paste more</Button>
+          <Button variant="outline" onClick={() => { setOutcome(null); setLines(null); setChoices({}); setText(""); setStatementNote(null); setStatementReading(null); }}>Paste more</Button>
         </div>
       </div>
     );
@@ -448,6 +522,38 @@ export default function MpesaImportPage() {
           <Button onClick={readMessages} disabled={reading} className="h-12 w-full" data-testid="mpesa-import-read">
             {reading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Read my messages"}
           </Button>
+
+          <Card data-testid="mpesa-statement">
+            <CardContent className="space-y-3 p-4">
+              <p className="text-sm font-semibold text-foreground">Or use your M-Pesa statement</p>
+              <p className="text-xs text-muted-foreground">
+                Choose the statement PDF and type its password. Jamvi reads it here on your device. The file and the password are not uploaded or saved.
+              </p>
+              <input
+                ref={statementInput}
+                type="file"
+                accept="application/pdf,.pdf"
+                className="hidden"
+                onChange={(event) => setStatementFile(event.target.files?.[0] ?? null)}
+                data-testid="mpesa-statement-file"
+              />
+              <Button type="button" variant="outline" className="h-11 w-full" onClick={() => statementInput.current?.click()}>
+                {statementFile ? statementFile.name.replace(/\d{6,}/g, "…") : "Choose the statement PDF"}
+              </Button>
+              <input
+                type="password"
+                value={statementPassword}
+                onChange={(event) => setStatementPassword(event.target.value)}
+                autoComplete="off"
+                placeholder="Statement password"
+                className="h-11 w-full rounded-md border border-input bg-card px-3 text-sm"
+                data-testid="mpesa-statement-password"
+              />
+              <Button onClick={readStatement} disabled={!statementFile || readingStatement} className="h-12 w-full" data-testid="mpesa-statement-read">
+                {readingStatement ? <Loader2 className="h-4 w-4 animate-spin" /> : "Read my statement"}
+              </Button>
+            </CardContent>
+          </Card>
         </>
       ) : (
         <>
@@ -470,6 +576,33 @@ export default function MpesaImportPage() {
             </select>
           </div>
 
+          {statementNote ? (
+            <p className="rounded-xl border border-border bg-card p-3 text-sm text-foreground" data-testid="mpesa-statement-note">{statementNote}</p>
+          ) : null}
+          {balanceCheck ? (
+            <Card data-testid="mpesa-statement-balance">
+              <CardContent className="space-y-2 p-4 text-sm">
+                <p className="font-bold text-foreground">
+                  {Math.abs(balanceCheck.gap) < 0.005 ? "Matches your statement" : "Will not match your statement exactly"}
+                </p>
+                <p className="text-muted-foreground">
+                  Your statement went from {formatKes(balanceCheck.opening)} to {formatKes(balanceCheck.closing)}, a change of {formatKes(balanceCheck.statementChange)}.
+                  Saving these moves this account by {formatKes(balanceCheck.savedChange)}.
+                </p>
+                {Math.abs(balanceCheck.gap) >= 0.005 ? (
+                  <>
+                    <p className="text-foreground">The difference of {formatKes(balanceCheck.gap)} is:</p>
+                    <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
+                      {balanceCheck.parts.map((part) => (
+                        <li key={part.label}>{part.label}: {formatKes(part.amount)}</li>
+                      ))}
+                    </ul>
+                  </>
+                ) : null}
+                <p className="text-xs text-muted-foreground">Your account also has to start at {formatKes(balanceCheck.opening)} for it to end at {formatKes(balanceCheck.closing)}.</p>
+              </CardContent>
+            </Card>
+          ) : null}
           {summary ? (
             <Card data-testid="mpesa-import-summary">
               <CardContent className="p-4">
@@ -743,7 +876,7 @@ export default function MpesaImportPage() {
           <div className="sticky bottom-4 space-y-2 rounded-2xl border border-border bg-card p-3 shadow-lg">
             {firstProblem ? <p className="text-sm text-destructive">{firstProblem}</p> : null}
             <div className="flex gap-3">
-              <Button variant="outline" onClick={() => { setLines(null); setChoices({}); }}>Paste different messages</Button>
+              <Button variant="outline" onClick={() => { setLines(null); setChoices({}); setStatementNote(null); setStatementReading(null); }}>Start again</Button>
               <Button onClick={saveAll} disabled={saving || !summary || summary.count === 0} className="flex-1" data-testid="mpesa-import-save">
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : `Save ${summary?.count ?? 0} ${summary?.count === 1 ? "entry" : "entries"}`}
               </Button>

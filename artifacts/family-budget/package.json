@@ -77,5 +77,8 @@
     "vitest": "^4.1.10",
     "wouter": "^3.3.5",
     "zod": "catalog:"
+  },
+  "dependencies": {
+    "pdfjs-dist": "^6.3.289"
   }
 }
