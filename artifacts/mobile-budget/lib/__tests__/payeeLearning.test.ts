@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { initialChoices, type PreviewLine } from '@/lib/mpesaImport';
 import {
   distinctiveWords,
+  ruleLabel,
   fuzzyCategory,
   parseStoredRules,
   payeeKey,
@@ -105,3 +106,55 @@ describe('both screens', () => {
     expect(norm(read('../family-budget/src/lib/payee-learning.ts'))).toBe(norm(read('lib/payeeLearning.ts')));
   });
 });
+
+describe('till and paybill numbers', () => {
+  it('a rule kept for a number applies under any spelling of the name', () => {
+    const rules = withRule({}, 'Sample Shop', 'Groceries', '123456');
+    expect(ruleCategory('Sample Shop Ltd', rules, '123456')).toBe('Groceries');
+    expect(ruleCategory('Totally Different Name', rules, '123456')).toBe('Groceries');
+    expect(ruleCategory('Sample Shop', rules)).toBe('Groceries');
+    expect(ruleCategory('Totally Different Name', rules, '999999')).toBe('');
+  });
+
+  it('a number is read in words in the list of what is remembered', () => {
+    expect(ruleLabel('#123456')).toBe('Till or paybill 123456');
+    expect(ruleLabel('sample shop')).toBe('sample shop');
+  });
+
+  it('a line from a statement carries its number into the suggestion', () => {
+    const rules = withRule({}, 'Sample Shop', 'Groceries', '123456');
+    const line: PreviewLine = {
+      index: 0, status: 'ready', reason: null, receipt: 'TESTNUM001', direction: 'out', type: 'merchant_payment', amount: 100,
+      description: 'Other Spelling Of Shop', named: true, date: '2026-09-01', fee: null, mpesaBalance: 0, alreadyRecorded: null, payeeNumber: '123456',
+    };
+    expect(initialChoices([line], [], NAMES.concat('Groceries'), '', rules)[0]).toMatchObject({ category: 'Groceries', auto: true });
+  });
+});
+
+describe('a member of a shared group', () => {
+  const out: PreviewLine = {
+    index: 0, status: 'ready', reason: null, receipt: 'TESTMEM001', direction: 'out', type: 'person_payment', amount: 100,
+    description: 'Sample Person', named: true, date: '2026-09-01', fee: null, mpesaBalance: 0, alreadyRecorded: null,
+  };
+  const money: PreviewLine = { ...out, index: 1, receipt: 'TESTMEM002', direction: 'in', type: 'person_receipt' };
+  it('starts with payments out unticked, since only an owner or admin can record them, and money in ticked', () => {
+    const choices = initialChoices([out, money], [], NAMES, '', {}, false);
+    expect(choices[0].include).toBe(false);
+    expect(choices[1].include).toBe(true);
+    expect(initialChoices([out, money], [], NAMES, '', {}, true)[0].include).toBe(true);
+  });
+});
+
+describe('both screens tell a member what they cannot do', () => {
+  it('warn, and keep the manager-only choices away', () => {
+    const phone = read('app/mpesa-import.tsx');
+    const web = read('../family-budget/src/pages/mpesa-import.tsx');
+    for (const screen of [phone, web]) {
+      expect(screen).toContain('mpesa-member-warning');
+      expect(screen).toMatch(/const canManageBudget = !isShared \|\| group\?\.role === ["']owner["'] \|\| group\?\.role === ["']admin["']/);
+      expect(screen).toContain('canManageBudget && choice?.include && !choice.debt && !choice.contributorId && otherAccounts.length > 0');
+      expect(screen).toContain('rules, canManageBudget)');
+    }
+  });
+});
+

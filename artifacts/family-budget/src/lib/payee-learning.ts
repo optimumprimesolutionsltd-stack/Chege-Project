@@ -44,8 +44,16 @@ const spending = (history: readonly Past[]) => history.filter((posting) => posti
 
 const exists = (category: string, categoryNames: readonly string[]) => categoryNames.length === 0 || categoryNames.includes(category);
 
-/** The category the person asked to keep for this payee, or "". */
-export function ruleCategory(description: string, rules: PayeeRules): string {
+/** A till or paybill number as a rule key: the same shop under a different spelling is still the same number. */
+const numberKey = (number: string | null | undefined): string => (number ? `#${number}` : "");
+
+/** A rule"s key in words a person can read. */
+export const ruleLabel = (key: string): string => (key.startsWith("#") ? `Till or paybill ${key.slice(1)}` : key);
+
+/** The category the person asked to keep for this payee, or "". A till or paybill number, when there is one, wins over the name. */
+export function ruleCategory(description: string, rules: PayeeRules, number?: string | null): string {
+  const byNumber = numberKey(number);
+  if (byNumber && rules[byNumber]) return rules[byNumber];
   const key = payeeKey(description);
   return key ? rules[key] ?? "" : "";
 }
@@ -120,11 +128,14 @@ function winner(score: Map<string, number>, categoryNames: readonly string[]): s
   return ranked[0][0];
 }
 
-/** Keeps a rule for a payee. */
-export function withRule(rules: PayeeRules, description: string, category: string): PayeeRules {
+/** Keeps a rule for a payee, and for its till or paybill number when it has one. */
+export function withRule(rules: PayeeRules, description: string, category: string, number?: string | null): PayeeRules {
   const key = payeeKey(description);
   if (!key || !category.trim()) return rules;
-  return { ...rules, [key]: category.trim() };
+  const next: PayeeRules = { ...rules, [key]: category.trim() };
+  const byNumber = numberKey(number);
+  if (byNumber) next[byNumber] = category.trim();
+  return next;
 }
 
 /** Forgets a rule. */

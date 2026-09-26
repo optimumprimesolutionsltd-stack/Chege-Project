@@ -195,7 +195,7 @@ describe('changing budget with a statement open', () => {
   it('keeps the statement and checks it against the new budget instead of clearing it', () => {
     expect(screen).toContain('const kept = statementReadingRef.current;');
     expect(screen).toContain('alreadyRecorded: null');
-    expect(screen).toContain('setChoices(initialChoices(checked, [], [], chargeCategory));');
+    expect(screen).toContain('setChoices(initialChoices(checked, [], [], chargeCategory, {}, canManageBudget));');
   });
 });
 

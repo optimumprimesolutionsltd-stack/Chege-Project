@@ -68,7 +68,7 @@ import { formatExact } from '@/lib/formatExact';
 import { StatementReader, type ReaderJob } from '@/components/StatementReader';
 import { rememberMpesaCard } from '@/lib/mpesaCard';
 import { savePosting, type PostingApi } from '@/lib/savePosting';
-import { parseStoredRules, payeeKey, payeeName, rulesStorageKey, withRule, withoutRule, type PayeeRules } from '@/lib/payeeLearning';
+import { parseStoredRules, payeeKey, payeeName, ruleLabel, rulesStorageKey, withRule, withoutRule, type PayeeRules } from '@/lib/payeeLearning';
 import { saveDebtLinks } from '@/lib/debtReversal';
 import type { DebtEntryLink } from '@/lib/debtLinks';
 import { canReadStatements, chooseStatement, statementBase64, type ChosenStatement } from '@/lib/statementFile';
@@ -340,6 +340,8 @@ export default function MpesaImportScreen() {
   const queryClient = useQueryClient();
   const { data: group } = useGetGroup();
   const isShared = group?.isPrivate === false;
+  // In a shared group only an owner or admin can record payments out, moves between accounts and savings.
+  const canManageBudget = !isShared || group?.role === 'owner' || group?.role === 'admin';
 
   const { data: accountList = [] } = useGetJointAccounts();
   const accounts = accountList as unknown as Array<{ id: number; name: string }>;
@@ -505,7 +507,7 @@ export default function MpesaImportScreen() {
       .then((checked) => {
         setLines(checked);
         setStatementReading({ ...kept, lines: checked });
-        setChoices(initialChoices(checked, [], [], chargeCategory));
+        setChoices(initialChoices(checked, [], [], chargeCategory, {}, canManageBudget));
       });
     // Runs when the budget changes, not on every keystroke.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -632,7 +634,7 @@ export default function MpesaImportScreen() {
       setNicknames(known);
       const shown = applyNicknames(response.lines, known);
       setLines(shown);
-      setChoices(initialChoices(shown, history, categories.map((row) => row.name), chargeCategory, rules));
+      setChoices(initialChoices(shown, history, categories.map((row) => row.name), chargeCategory, rules, canManageBudget));
       // A restored draft brings back what was chosen by hand, on top of the fresh reading.
       const restoredChoices = pendingChoicesRef.current;
       if (restoredChoices) {
@@ -716,7 +718,7 @@ export default function MpesaImportScreen() {
       );
       setLines(shown);
       setStatementReading({ ...reading, lines: shown });
-      setChoices(initialChoices(shown, history, categories.map((row) => row.name), chargeCategory, rules));
+      setChoices(initialChoices(shown, history, categories.map((row) => row.name), chargeCategory, rules, canManageBudget));
       setStatementPassword('');
     } catch (error: unknown) {
       Alert.alert('Could not read the statement', error instanceof Error ? error.message : 'Please try again.');
@@ -920,7 +922,7 @@ export default function MpesaImportScreen() {
       for (const item of lines) {
         const choice = choices[item.index];
         if (savedIndexes.has(item.index) && choice?.remember && choice.category.trim() && item.description) {
-          kept = withRule(kept, item.description, choice.category);
+          kept = withRule(kept, item.description, choice.category, item.payeeNumber);
         }
       }
       if (kept !== rules) keepRules(kept);
@@ -1151,11 +1153,18 @@ export default function MpesaImportScreen() {
               onSelect={(id) => {
                 setSelectedAccountId(id);
                 // The suggestions come from this account's history, so start them again.
-                setChoices(initialChoices(lines, [], categories.map((row) => row.name), chargeCategory, rules));
+                setChoices(initialChoices(lines, [], categories.map((row) => row.name), chargeCategory, rules, canManageBudget));
               }}
               testIDPrefix="mpesa-import-account"
             />
 
+            {!canManageBudget ? (
+              <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.destructive }]} testID="mpesa-member-warning">
+                <Text style={[styles.hint, { color: colors.foreground, marginTop: 0 }]}>
+                  You are a member of this group, so you can record money that came in, but not payments out, moves between accounts or savings. Those are left unticked. A group owner or admin can record them.
+                </Text>
+              </View>
+            ) : null}
             {statementNote ? (
               <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]} testID="mpesa-statement-note">
                 <Text style={[styles.hint, { color: colors.foreground, marginTop: 0 }]}>{statementNote}</Text>
@@ -1289,7 +1298,7 @@ export default function MpesaImportScreen() {
                     <Text style={[styles.amount, { color: out ? colors.destructive : colors.success }]}>
                       {out ? '−' : '+'}{formatExact(item.amount ?? 0)}
                     </Text>
-                    <Switch value={!!choice?.include} onValueChange={(value) => toggle(item.index, value)} accessibilityLabel={`Save ${item.description}`} />
+                    <Switch value={!!choice?.include} disabled={!canManageBudget && out} onValueChange={(value) => toggle(item.index, value)} accessibilityLabel={`Save ${item.description}`} />
                   </View>
                   {out && choice?.include && choice.debt?.kind !== 'lend' && !isMove(choice) ? (
                     <Pressable
@@ -1359,7 +1368,7 @@ export default function MpesaImportScreen() {
                       ) : null}
                     </View>
                   ) : null}
-                  {choice?.include && !choice.debt && !choice.contributorId && otherAccounts.length > 0 ? (
+                  {canManageBudget && choice?.include && !choice.debt && !choice.contributorId && otherAccounts.length > 0 ? (
                     <View style={{ gap: 6 }} testID={`mpesa-line-move-${item.index}`}>
                       <Text style={[styles.hint, { color: transferHints.has(item.index) ? colors.primary : colors.mutedForeground, marginTop: 0, fontFamily: transferHints.has(item.index) ? 'Inter_600SemiBold' : undefined }]}>
                         {transferHints.has(item.index)
@@ -1392,7 +1401,7 @@ export default function MpesaImportScreen() {
                       </ScrollView>
                     </View>
                   ) : null}
-                  {choice?.include && destinationOf(choice) !== 'debt' && destinationOf(choice) !== 'contribution' && canUseSavings(item) && savingsGoals.length > 0 ? (
+                  {canManageBudget && choice?.include && destinationOf(choice) !== 'debt' && destinationOf(choice) !== 'contribution' && canUseSavings(item) && savingsGoals.length > 0 ? (
                     <View style={{ gap: 6 }} testID={`mpesa-line-savings-${item.index}`}>
                       <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0 }]}>
                         {out ? 'Is this going into savings?' : 'Is this coming out of savings?'}
@@ -1416,7 +1425,7 @@ export default function MpesaImportScreen() {
                       </ScrollView>
                     </View>
                   ) : null}
-                  {isShared && item.direction === 'in' && choice?.include && !isMove(choice) && destinationOf(choice) !== 'debt' && parties.length > 0 ? (
+                  {canManageBudget && isShared && item.direction === 'in' && choice?.include && !isMove(choice) && destinationOf(choice) !== 'debt' && parties.length > 0 ? (
                     <View style={{ gap: 6 }} testID={`mpesa-line-contribution-${item.index}`}>
                       <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0 }]}>Is this a member's contribution? Whose?</Text>
                       <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
@@ -1717,7 +1726,7 @@ export default function MpesaImportScreen() {
             <ScrollView style={{ maxHeight: 280 }}>
               {Object.entries(rules).map(([key, category]) => (
                 <View key={key} style={[styles.option, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }]}>
-                  <Text style={{ color: colors.foreground, flexShrink: 1 }}>{key} → {category}</Text>
+                  <Text style={{ color: colors.foreground, flexShrink: 1 }}>{ruleLabel(key)} → {category}</Text>
                   <Pressable onPress={() => keepRules(withoutRule(rules, key))} accessibilityRole="button" accessibilityLabel={`Forget ${key}`} hitSlop={8} testID={`mpesa-rule-forget-${key}`}>
                     <Feather name="x" size={18} color={colors.mutedForeground} />
                   </Pressable>

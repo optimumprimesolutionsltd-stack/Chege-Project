@@ -85,6 +85,9 @@ function describe(kind: Kind, name: string | null, reference: string | null): st
 
 const dateOf = (time: string) => time.slice(0, 10);
 
+/** The till or paybill number in a row's details ("... to 123456 - NAME"), which a message never carries. */
+const payeeNumberOf = (details: string): string | null => details.match(/\b(?:to|from)\s+(\d{5,7})\s*-/i)?.[1] ?? null;
+
 const left = (index: number, row: StatementRow, reason: string): PreviewLine => ({
   index,
   status: "skipped",
@@ -221,6 +224,7 @@ export function statementLines(rows: readonly StatementRow[]): StatementReading 
         amount,
         description: describe(kind, name, reference),
         named: kind === "airtime_purchase" ? false : Boolean(name),
+        payeeNumber: kind === "person_payment" || kind === "person_receipt" || kind === "airtime_purchase" ? null : payeeNumberOf(details),
         date: dateOf(row.time),
         fee: direction === "out" && foldable && charged > 0 ? Math.round(charged * 100) / 100 : null,
         mpesaBalance: row.balance,
