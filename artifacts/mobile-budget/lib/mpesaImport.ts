@@ -28,6 +28,8 @@ export type PreviewLine = {
   fee: number | null;
   mpesaBalance: number | null;
   alreadyRecorded: AlreadyRecorded | null;
+  /** The till or paybill number, when the source carries one (a statement does, a message does not). */
+  payeeNumber?: string | null;
 };
 
 /**
@@ -184,11 +186,13 @@ export function initialChoices(
   categoryNames: readonly string[] = [],
   chargeCategory = '',
   rules: PayeeRules = {},
+  /** False for a member of a shared group: only an owner or admin can record payments out, so those start unticked. */
+  canRecordOut = true,
 ): Record<number, Choice> {
   const choices: Record<number, Choice> = {};
   for (const line of lines) {
     const suggested = suggestionFor(line, history, categoryNames, chargeCategory, rules);
-    choices[line.index] = { include: isRecordable(line), category: suggested, auto: suggested !== '' };
+    choices[line.index] = { include: isRecordable(line) && (canRecordOut || line.direction !== 'out'), category: suggested, auto: suggested !== '' };
     if (line.direction === 'in') {
       const source = line.description ? suggestIncomeSource(line.description, history) : null;
       choices[line.index] = { ...choices[line.index], incomeSourceId: source, sourceAuto: source !== null };
@@ -208,7 +212,7 @@ function suggestionFor(
   const description = line.description ?? '';
   // A rule the person kept, then this exact payee's history, then payees with a similar name,
   // then a word that has nearly always meant one category in their own books.
-  const kept = description ? ruleCategory(description, rules) : '';
+  const kept = description ? ruleCategory(description, rules, line.payeeNumber) : '';
   const earlier = description ? suggestCategory(description, history) : '';
   const similar = description && line.named !== false ? fuzzyCategory(description, history, categoryNames) : '';
   const byWord = description && line.named !== false ? wordCategory(description, history, categoryNames) : '';

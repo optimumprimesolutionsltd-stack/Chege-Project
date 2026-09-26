@@ -134,3 +134,16 @@ describe("reconcile", () => {
     expect(reconcile({ ...statementLines([]), opening: null }, () => true)).toBeNull();
   });
 });
+
+describe("till and paybill numbers", () => {
+  it("are read from a statement row, and only for shops and bills, never a person or airtime", () => {
+    const { lines } = statementLines([
+      at("01 08:00:00", "Merchant Payment Online to 123456 - SAMPLE SHOP", { withdrawn: 100 }),
+      at("01 09:00:00", "Pay Bill Online to 654321 - SAMPLE UTILITY Acc. 42", { withdrawn: 50 }),
+      at("01 10:00:00", "Customer Transfer to - 2547***000 SAMPLE PERSON", { withdrawn: 30 }),
+      at("01 11:00:00", "Customer Bundle Purchase to 2547***000 - SAMPLE PERSON by 2547***111", { withdrawn: 20 }),
+    ]);
+    expect(lines.map((line) => line.payeeNumber)).toEqual(["123456", "654321", null, null]);
+  });
+});
+

@@ -81,7 +81,7 @@ type Outcome = { saved: number; repeats: number; failed: Array<{ what: string; w
 import { readStatementPages, StatementPasswordError } from "@/lib/statement-file";
 import { rememberMpesaCard } from "@/lib/mpesa-card";
 import { savePosting, type PostingApi } from "@/lib/save-posting";
-import { parseStoredRules, payeeKey, payeeName, rulesStorageKey, withRule, withoutRule, type PayeeRules } from "@/lib/payee-learning";
+import { parseStoredRules, payeeKey, payeeName, ruleLabel, rulesStorageKey, withRule, withoutRule, type PayeeRules } from "@/lib/payee-learning";
 import { saveDebtLinks } from "@/lib/debt-reversal";
 import type { DebtEntryLink } from "@/lib/debt-links";
 import { reconcile, statementLines, type StatementReading } from "@/lib/statement-import";
@@ -105,6 +105,8 @@ export default function MpesaImportPage() {
   const { user } = useAuth();
   const { data: group } = useGetGroup();
   const isShared = group?.isPrivate === false;
+  // In a shared group only an owner or admin can record payments out, moves between accounts and savings.
+  const canManageBudget = !isShared || group?.role === "owner" || group?.role === "admin";
 
   const { data: accountList = [] } = useGetJointAccounts();
   const accounts = accountList as unknown as Array<{ id: number; name: string }>;
@@ -306,7 +308,7 @@ export default function MpesaImportPage() {
       );
       setLines(shown);
       setStatementReading({ ...reading, lines: shown });
-      setChoices(initialChoices(shown, history, categories.map((row) => row.name), chargeCategory, rules));
+      setChoices(initialChoices(shown, history, categories.map((row) => row.name), chargeCategory, rules, canManageBudget));
       setStatementPassword("");
     } catch (error) {
       if (error instanceof StatementPasswordError) {
@@ -340,7 +342,7 @@ export default function MpesaImportPage() {
       if (!response.ok || !body.lines) throw new Error(body.error ?? "Could not read them.");
       const shown = applyNicknames(body.lines, readStoredNicknames());
       setLines(shown);
-      setChoices(initialChoices(shown, history, categories.map((row) => row.name), chargeCategory, rules));
+      setChoices(initialChoices(shown, history, categories.map((row) => row.name), chargeCategory, rules, canManageBudget));
     } catch (error) {
       toast({ variant: "destructive", title: "Could not read them", description: error instanceof Error ? error.message : "Please try again." });
     } finally {
@@ -555,7 +557,7 @@ export default function MpesaImportPage() {
       for (const item of lines) {
         const choice = choices[item.index];
         if (savedIndexes.has(item.index) && choice?.remember && choice.category.trim() && item.description) {
-          kept = withRule(kept, item.description, choice.category);
+          kept = withRule(kept, item.description, choice.category, item.payeeNumber);
         }
       }
       if (kept !== rules) keepRules(kept);
@@ -634,7 +636,7 @@ export default function MpesaImportPage() {
           <div className="max-h-72 space-y-2 overflow-y-auto">
             {Object.entries(rules).map(([key, category]) => (
               <div key={key} className="flex items-center justify-between gap-2 rounded-lg border border-border p-2 text-sm">
-                <span>{key} → {category}</span>
+                <span>{ruleLabel(key)} → {category}</span>
                 <Button variant="ghost" size="sm" onClick={() => keepRules(withoutRule(rules, key))} aria-label={`Forget ${key}`} data-testid={`mpesa-rule-forget-${key}`}>Forget</Button>
               </div>
             ))}
@@ -765,7 +767,7 @@ export default function MpesaImportPage() {
               onChange={(event) => {
                 setSelectedAccountId(Number(event.target.value));
                 // The suggestions come from this account's history, so start them again.
-                setChoices(initialChoices(lines, [], categories.map((row) => row.name), chargeCategory, rules));
+                setChoices(initialChoices(lines, [], categories.map((row) => row.name), chargeCategory, rules, canManageBudget));
               }}
               data-testid="mpesa-import-account"
             >
@@ -775,6 +777,11 @@ export default function MpesaImportPage() {
             </select>
           </div>
 
+          {!canManageBudget ? (
+            <p className="rounded-xl border border-destructive bg-card p-3 text-sm text-foreground" data-testid="mpesa-member-warning">
+              You are a member of this group, so you can record money that came in, but not payments out, moves between accounts or savings. Those are left unticked. A group owner or admin can record them.
+            </p>
+          ) : null}
           {statementNote ? (
             <p className="rounded-xl border border-border bg-card p-3 text-sm text-foreground" data-testid="mpesa-statement-note">{statementNote}</p>
           ) : null}
@@ -893,6 +900,7 @@ export default function MpesaImportPage() {
                     <input
                       type="checkbox"
                       checked={!!choice?.include}
+                      disabled={!canManageBudget && out}
                       onChange={(event) => setChoices((current) => ({ ...current, [item.index]: { ...current[item.index], include: event.target.checked } }))}
                       aria-label={`Save ${item.description}`}
                       className="h-5 w-5"
@@ -988,7 +996,7 @@ export default function MpesaImportPage() {
                       ) : null}
                     </div>
                   ) : null}
-                  {choice?.include && !choice.debt && !choice.contributorId && otherAccounts.length > 0 ? (
+                  {canManageBudget && choice?.include && !choice.debt && !choice.contributorId && otherAccounts.length > 0 ? (
                     <div className="space-y-1" data-testid={`mpesa-line-move-${item.index}`}>
                       <p className={`text-xs ${transferHints.has(item.index) ? "font-semibold text-primary" : "text-muted-foreground"}`}>
                         {transferHints.has(item.index)
@@ -1009,7 +1017,7 @@ export default function MpesaImportPage() {
                       </select>
                     </div>
                   ) : null}
-                  {choice?.include && destinationOf(choice) !== "debt" && destinationOf(choice) !== "contribution" && canUseSavings(item) && savingsGoals.length > 0 ? (
+                  {canManageBudget && choice?.include && destinationOf(choice) !== "debt" && destinationOf(choice) !== "contribution" && canUseSavings(item) && savingsGoals.length > 0 ? (
                     <div className="space-y-1" data-testid={`mpesa-line-savings-${item.index}`}>
                       <p className="text-xs text-muted-foreground">{out ? "Is this going into savings?" : "Is this coming out of savings?"}</p>
                       <select
@@ -1024,7 +1032,7 @@ export default function MpesaImportPage() {
                       </select>
                     </div>
                   ) : null}
-                  {isShared && item.direction === "in" && choice?.include && !isMove(choice) && destinationOf(choice) !== "debt" && parties.length > 0 ? (
+                  {canManageBudget && isShared && item.direction === "in" && choice?.include && !isMove(choice) && destinationOf(choice) !== "debt" && parties.length > 0 ? (
                     <div className="space-y-1" data-testid={`mpesa-line-contribution-${item.index}`}>
                       <p className="text-xs text-muted-foreground">Is this a member's contribution? Whose?</p>
                       <select
