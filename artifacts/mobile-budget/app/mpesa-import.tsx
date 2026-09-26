@@ -385,6 +385,8 @@ export default function MpesaImportScreen() {
   const [choices, setChoices] = useState<Record<number, Choice>>({});
   // Which of the entries to show: all, or only those still to look at, changed by you, or needing you.
   const [view, setView] = useState<ReviewView>('all');
+  // Lines whose extra questions (debt, move, savings...) are open. Each closed line is a few native views instead of a dozen, which is what kept toggling snappy with 200 of them.
+  const [openMore, setOpenMore] = useState<Set<number>>(new Set());
   const [chargeCategory, setChargeCategory] = useState('');
   // A number is a line being categorised; 'charge' is the M-Pesa charges; 'recat:N' is an already-recorded entry whose category is being changed.
   const [picking, setPicking] = useState<number | 'charge' | `recat:${number}` | null>(null);
@@ -481,11 +483,30 @@ export default function MpesaImportScreen() {
     }
   };
   // Once the new budget has loaded, read the same messages again: duplicates,
-  // suggestions and nicknames are all per budget.
+  // suggestions and nicknames are all per budget. A statement is not read again from a
+  // file (the file is gone), so its entries are kept and checked against the new budget:
+  // which of them it already has, and fresh suggestions. Switching used to clear the
+  // choices and leave every entry unticked and greyed out.
+  const statementReadingRef = React.useRef<StatementReading | null>(null);
+  statementReadingRef.current = statementReading;
   useEffect(() => {
     if (switchedToRef.current === null || group?.id !== switchedToRef.current) return;
     switchedToRef.current = null;
-    if (textRef.current.trim()) void readRef.current(textRef.current);
+    if (textRef.current.trim()) {
+      void readRef.current(textRef.current);
+      return;
+    }
+    const kept = statementReadingRef.current;
+    if (!kept) return;
+    // What the old budget had recorded says nothing about the new one.
+    const fresh = kept.lines.map((item) => ({ ...item, alreadyRecorded: null }));
+    void markRecorded(fresh)
+      .catch(() => fresh)
+      .then((checked) => {
+        setLines(checked);
+        setStatementReading({ ...kept, lines: checked });
+        setChoices(initialChoices(checked, [], [], chargeCategory));
+      });
     // Runs when the budget changes, not on every keystroke.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [group?.id]);
@@ -1302,6 +1323,8 @@ export default function MpesaImportScreen() {
                       Suggested by Jamvi. Tap to choose a different one.
                     </Text>
                   ) : null}
+                  {openMore.has(item.index) || destinationOf(choice) !== 'category' || transferHints.has(item.index) ? (
+                    <>
                   {item.direction === 'in' && choice?.include && !choice.debt && !isMove(choice) && !choice.contributorId && incomeSources.length > 0 ? (
                     <View style={{ gap: 6 }} testID={`mpesa-line-source-${item.index}`}>
                       <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0 }]}>Where did this come from? (optional)</Text>
@@ -1463,6 +1486,19 @@ export default function MpesaImportScreen() {
                         </>
                       );
                     })()
+                  ) : null}
+                    </>
+                  ) : choice?.include ? (
+                    <Pressable
+                      onPress={() => setOpenMore((current) => new Set(current).add(item.index))}
+                      accessibilityRole="button"
+                      hitSlop={6}
+                      testID={`mpesa-line-more-${item.index}`}
+                    >
+                      <Text style={[styles.hint, { color: colors.primary, marginTop: 0, fontFamily: 'Inter_600SemiBold' }]}>
+                        More: debt or loan, between my accounts, savings
+                      </Text>
+                    </Pressable>
                   ) : null}
                   {out && item.fee ? (
                     <Text style={[styles.hint, { color: colors.mutedForeground }]}>+ KES {formatExact(item.fee)} M-Pesa charge, saved on its own</Text>

@@ -187,3 +187,24 @@ describe('savings goals and contributions (phone)', () => {
     expect(screen).toContain('mpesa-line-contribution-${item.index}');
   });
 });
+
+// From a real phone: changing budget with a statement open cleared every choice, leaving all
+// 196 entries unticked and greyed out with nothing to do.
+describe('changing budget with a statement open', () => {
+  const screen = read('app/mpesa-import.tsx');
+  it('keeps the statement and checks it against the new budget instead of clearing it', () => {
+    expect(screen).toContain('const kept = statementReadingRef.current;');
+    expect(screen).toContain('alreadyRecorded: null');
+    expect(screen).toContain('setChoices(initialChoices(checked, [], [], chargeCategory));');
+  });
+});
+
+// From a real phone: toggling a line was sticky with two hundred of them on screen.
+describe('two hundred entries stay light', () => {
+  const screen = read('app/mpesa-import.tsx');
+  it('opens the extra questions on a line only when asked, or when they already matter', () => {
+    expect(screen).toContain("openMore.has(item.index) || destinationOf(choice) !== 'category' || transferHints.has(item.index)");
+    expect(screen).toContain('mpesa-line-more-${item.index}');
+  });
+});
+

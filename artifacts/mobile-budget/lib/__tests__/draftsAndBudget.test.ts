@@ -98,7 +98,7 @@ describe('which budget the messages are saved into', () => {
     expect(screen).toContain('await AsyncStorage.setItem(ACTIVE_WORKSPACE_STORAGE_KEY, String(groupId));');
     expect(screen).toContain('await clearQueryClientCache();');
     expect(screen).toContain('queryClient.clear();');
-    expect(screen).toContain('if (textRef.current.trim()) void readRef.current(textRef.current);');
+    expect(screen).toContain('void readRef.current(textRef.current);');
   });
 
   it('the web page names the budget too', () => {
