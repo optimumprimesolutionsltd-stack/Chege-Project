@@ -30,6 +30,8 @@ import { useListEditor } from '@/hooks/useListEditor';
 import { movableOnDay, summariseDays } from '@/lib/moveDay';
 import { formatExact } from '@/lib/formatExact';
 import { ALREADY_GONE_MESSAGE, ALREADY_GONE_TITLE, isNotFound } from '@/lib/staleEntry';
+import { fetchDebtLinks, offerDebtReversal } from '@/lib/debtReversal';
+import type { DebtEntryLink } from '@/lib/debtLinks';
 import { BankPeriodBar } from '@/components/BankPeriodBar';
 import { inPeriod, nairobiToday, periodFor, summarisePeriod, type PeriodPreset } from '@/lib/bankPeriod';
 import { EditableName, ListEditButton, ListEditorFooter, RemoveRowButton } from '@/components/ListEditor';
@@ -918,12 +920,14 @@ export default function BankScreen() {
         {
           text: 'Delete', style: 'destructive', onPress: async () => {
             try {
+              const links = await fetchDebtLinks([tx.id]);
               if (deletesExpense) {
                 await deleteExpense({ id: tx.expenseId! });
               } else {
                 await deleteTransaction({ id: tx.id });
               }
               await invalidateBalance();
+              void offerDebtReversal([{ id: tx.id, type: tx.type, amount: tx.amount, expenseCategory: tx.expenseCategory }], links, queryClient);
             } catch (error: unknown) {
               // Not found means it is not in this budget: already deleted, or a list from another budget.
               if (isNotFound(error)) {
@@ -1934,18 +1938,30 @@ export default function BankScreen() {
     remove: async (id) => { await deleteAccount({ id }); },
     afterSave: invalidateAccounts,
   });
+  const deletedForReversal = React.useRef<Array<{ entry: Tx; links: DebtEntryLink[] }>>([]);
   const txEditor = useListEditor({
     remove: async (id) => {
       const tx = transactions.find((item) => item.id === id);
+      // Who a debt entry was for, read before it goes, so its balance can be offered back afterwards.
+      const links = tx ? await fetchDebtLinks([id]) : [];
       try {
         if (tx?.expenseId != null) await deleteExpense({ id: tx.expenseId });
         else await deleteTransaction({ id });
+        if (tx) deletedForReversal.current.push({ entry: tx, links });
       } catch (error: unknown) {
         // Already gone is what deleting it was for.
         if (!isNotFound(error)) throw error;
       }
     },
-    afterSave: invalidateBalance,
+    afterSave: async () => {
+      await invalidateBalance();
+      const gone = deletedForReversal.current.splice(0);
+      await offerDebtReversal(
+        gone.map((item) => ({ id: item.entry.id, type: item.entry.type, amount: item.entry.amount, expenseCategory: item.entry.expenseCategory })),
+        gone.flatMap((item) => item.links),
+        queryClient,
+      );
+    },
   });
   // A transaction row can only be staged for removal when the person could
   // delete it on its own — the same rule the per-row Delete already enforces.
