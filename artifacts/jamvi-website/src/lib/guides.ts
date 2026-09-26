@@ -289,6 +289,76 @@ export const GUIDES: readonly Guide[] = [
     },
   },
   {
+    slug: "/guides/how-jamvi-reads-mpesa",
+    title: "How Jamvi Reads Your M-Pesa Without Guessing",
+    description:
+      "Why Jamvi imports your M-Pesa statement instead of making you type it in, how it handles Fuliza, and how it checks its own arithmetic against your statement.",
+    label: "How Jamvi reads M-Pesa",
+    readingMinutes: 5,
+    updated: "2026-09-26",
+    heading: "How Jamvi reads your M-Pesa without guessing",
+    intro:
+      "Most of what Kenyans spend passes through M-Pesa, so most of what a budget needs to know is already written down, in a statement PDF and in a phone full of text messages. Yet the first thing most budgeting apps ask is that you type it all in again. People give up in the second week. Jamvi does not ask. Here is how it works, and what it will not do.",
+    sections: [
+      {
+        heading: "The rule it will not break: no guessing about your money",
+        body: [
+          "A budget that is quietly wrong is worse than no budget. So Jamvi recognises the M-Pesa message and statement formats it has actually been taught, one family at a time. When it meets something it does not know, it says so and leaves that line out with a reason. It never invents an answer.",
+          "A message it cannot read can be sent to the Jamvi team, so a later update understands it.",
+        ],
+      },
+      {
+        heading: "Two ways in",
+        body: [
+          "Paste your messages. Select as many M-Pesa messages as you like, copy them and paste them in, or share them straight to Jamvi on Android. Jamvi reads them to fill in the list and does not keep them.",
+          "Or bring the statement PDF. Choose the file and type its password. The PDF is read on your own phone or computer. It is never uploaded, and neither is the password.",
+          "Both end in the same place: a list you check, and a Save button. Nothing is recorded until you press it.",
+        ],
+      },
+      {
+        heading: "Reading a statement is harder than it looks",
+        body: [
+          "A statement is a table drawn on a page, and the details of one payment often wrap over several lines. Read as plain text, amounts land in the wrong column about half the time. So Jamvi works from the exact position of every piece of text on the page.",
+          "Where the statement itself mirrors its columns, as it does for a payment made with Fuliza, Jamvi decides which way the money went from what the row says it is.",
+        ],
+      },
+      {
+        heading: "Fuliza is handled properly",
+        body: [
+          "What a Fuliza loan paid for is your spending, so it is recorded as a normal payment. The loan itself and its repayments are not spending or income, so they are left out, and Jamvi tells you how many it left out.",
+        ],
+      },
+      {
+        heading: "It checks its own arithmetic",
+        body: [
+          "Before it will use a statement, Jamvi checks that every payment follows from the balance before it. If it does not add up, Jamvi refuses the file instead of recording wrong amounts.",
+          "After you choose what to save, it compares the result with the statement's opening and closing balance and lists what makes up any difference, such as Fuliza repayments or entries you did not tick, so nothing disappears quietly.",
+        ],
+      },
+      {
+        heading: "Money that is not income and not spending",
+        body: [
+          "A payment from your bank into M-Pesa and on to another bank is not income and not spending. A loan from your own company is not income. Money you lend is not a cost.",
+          "So every line can be a move between your own accounts, a debt or loan with a person or a company, money into savings, or a member's contribution to a group. Each is recorded as what it is. Jamvi offers to update the balances that follow, and never does it behind your back.",
+        ],
+      },
+      {
+        heading: "It learns a little, and you stay in charge",
+        body: [
+          "The category of a payment is suggested from your own books: the payee you paid before, a payee with a similar name, or a word that has nearly always meant one category in your history. You can ask Jamvi to remember a choice, and see and forget what it has remembered.",
+          "Suggestions are always marked as Jamvi's, and yours always win. You can also save some entries now and the rest another day; anything already recorded is recognised and never counted twice.",
+        ],
+      },
+    ],
+    takeaway:
+      "Jamvi reads your M-Pesa so you do not have to type it, and it is careful about it: it says what it left out, checks its own arithmetic against your statement, and leaves the decisions that are yours to you. It is an import you choose to do, not a connection to your M-Pesa account.",
+    related: {
+      slug: "/guides/import-mpesa-statement-budget",
+      label: "Turn your M-Pesa statement into a budget",
+      blurb: "The step-by-step: get the statement PDF, open it in Jamvi, check the suggestions and save.",
+    },
+  },
+  {
     slug: "/guides/import-mpesa-statement-budget",
     title: "Turn Your M-Pesa Statement Into a Budget",
     description:
@@ -337,9 +407,9 @@ export const GUIDES: readonly Guide[] = [
     takeaway:
       "Get the statement PDF, open it in Jamvi, check the suggestions and save. It is read on your device, Fuliza is handled properly, and the result is checked against your statement's own balance.",
     related: {
-      slug: "/pricing",
-      label: "Jamvi pricing",
-      blurb: "One simple price covers your own budget and every group you are part of. Free for your first days.",
+      slug: "/guides/how-jamvi-reads-mpesa",
+      label: "How Jamvi reads your M-Pesa without guessing",
+      blurb: "Why it imports instead of asking you to type, how Fuliza is handled, and how it checks its own arithmetic against your statement.",
     },
   },
   {

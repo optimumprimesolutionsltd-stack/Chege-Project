@@ -177,7 +177,12 @@ export default function Home() {
               </div>
             ))}
           </div>
-          <p className="mt-10 flex items-start justify-center gap-2 text-center text-sm font-medium text-primary-foreground/80 max-w-3xl mx-auto">
+          <p className="mt-8 text-center">
+            <Link href="/guides/how-jamvi-reads-mpesa" className="text-accent font-bold hover:underline inline-flex items-center">
+              How Jamvi reads your M-Pesa without guessing <ArrowRight className="ml-1 w-4 h-4" />
+            </Link>
+          </p>
+          <p className="mt-6 flex items-start justify-center gap-2 text-center text-sm font-medium text-primary-foreground/80 max-w-3xl mx-auto">
             <Lock className="w-4 h-4 mt-0.5 flex-shrink-0" />
             <span>
               Your statement and its password are read on your own phone or computer and are never uploaded.
