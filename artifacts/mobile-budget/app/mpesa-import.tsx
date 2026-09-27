@@ -1677,9 +1677,11 @@ export default function MpesaImportScreen() {
                               onPress={() => setDebtFor({ index: item.index, partyId: guess?.id ?? null, kind: null })}
                               accessibilityRole="button"
                               testID={`mpesa-line-debt-open-${item.index}`}
+                              hitSlop={10}
+                              style={{ paddingVertical: 6 }}
                             >
-                              <Text style={[styles.hint, { color: colors.primary, fontFamily: 'Inter_600SemiBold' }]}>
-                                Is this a debt or loan?
+                              <Text style={[styles.hint, { color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 15 }]}>
+                                Debt, loan, or paid through your account?
                               </Text>
                             </Pressable>
                           )}
@@ -1855,7 +1857,7 @@ export default function MpesaImportScreen() {
         <View style={styles.sheetBackdrop}>
           <View style={[styles.sheet, { backgroundColor: colors.card, borderColor: colors.border, padding: 16, paddingBottom: 16 + Math.max(insets.bottom, 24), gap: 10 }]}>
             <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-              <Text style={[styles.sheetTitle, { color: colors.foreground, flexShrink: 1 }]}>Is this a debt or loan?</Text>
+              <Text style={[styles.sheetTitle, { color: colors.foreground, flexShrink: 1 }]}>Debt, loan, or paid through your account?</Text>
               {/* Leaves whatever this line already had untouched — unlike the "not a debt" button below, which is
                   its own deliberate answer and does write a change. An accidental open needs a true way out. */}
               <Pressable onPress={() => setDebtFor(null)} hitSlop={10} accessibilityLabel="Close without changing anything" testID="mpesa-debt-cancel">
@@ -1863,7 +1865,10 @@ export default function MpesaImportScreen() {
               </Pressable>
             </View>
             <Text style={[styles.hint, { color: colors.mutedForeground }]}>
-              Choose who, and what it is. Jamvi will offer to update what you owe or are owed once everything is saved.
+              Choose who, and what it is. If the money was never really yours — it just passed through on its way
+              somewhere else — "They are paying me back" or "I borrowed this from them" is still the right choice: it
+              keeps your balance accurate without counting as your income or spending. Jamvi will offer to update
+              what you owe or are owed once everything is saved.
             </Text>
             <ScrollView style={{ maxHeight: 160 }} keyboardShouldPersistTaps="handled">
               {parties.map((party) => {

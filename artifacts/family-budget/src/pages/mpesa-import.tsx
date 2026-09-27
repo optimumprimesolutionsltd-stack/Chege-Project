@@ -1208,6 +1208,11 @@ export default function MpesaImportPage() {
                       if (debtEditing?.index === item.index) {
                         return (
                           <div className="space-y-2 rounded-lg border border-border p-3" data-testid={`mpesa-debt-editor-${item.index}`}>
+                            <p className="text-xs text-muted-foreground">
+                              If the money was never really yours — it just passed through on its way somewhere else —
+                              &ldquo;They are paying me back&rdquo; or &ldquo;I borrowed this from them&rdquo; is still the right choice: it
+                              keeps your balance accurate without counting as your income or spending.
+                            </p>
                             <select
                               className={SELECT_CLASS}
                               value={debtEditing.partyId}
@@ -1277,7 +1282,7 @@ export default function MpesaImportPage() {
                           className="text-left text-xs font-semibold text-primary hover:underline"
                           data-testid={`mpesa-line-debt-open-${item.index}`}
                         >
-                          Is this a debt or loan?
+                          Debt, loan, or paid through your account?
                         </button>
                       );
                     })()

@@ -229,7 +229,7 @@ describe('the debt logic is the same on both apps', () => {
     expect(source).toContain('canLinkDebt(item, parties)');
     expect(source).toContain('matchParty(item.original ?? item.description, parties)');
     expect(source).toContain('balanceChanges(');
-    expect(source).toContain('Is this a debt or loan?');
+    expect(source).toContain('Debt, loan, or paid through your account?');
     expect(source).toContain('The entries are already saved either way.');
     expect(source).toContain("choice.debt?.kind !== 'lend'".replace(/'/g, source.includes('window.confirm') ? '"' : "'"));
   });
