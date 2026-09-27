@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { budgetCategoriesTable, expensesTable, expenseCategoryAllocationsTable, groupsTable, jointAccountTxTable } from "@workspace/db";
+import { budgetCategoriesTable, expensesTable, expenseCategoryAllocationsTable, groupsTable, incomeSourcesTable, jointAccountTxTable } from "@workspace/db";
 import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
@@ -422,6 +422,9 @@ const categoryFields = z.object({
   // (1/100 of a percent) so the rate is an exact integer.
   debtBalance: z.number().finite().min(0).multipleOf(0.01).nullable().optional(),
   debtInterestRateBps: z.number().int().min(0).max(10000).nullable().optional(),
+  // Present marks this category as a cost of earning that income source —
+  // its spending reduces that stream's profit on the income-streams report.
+  reducesIncomeSourceId: z.number().int().positive().nullable().optional(),
 });
 
 const categorySchema = categoryFields.superRefine((data, ctx) => {
@@ -487,6 +490,15 @@ async function clearParentBudgetAmount(
   await runner.update(budgetCategoriesTable)
     .set({ budgetAmount: 0 })
     .where(and(eq(budgetCategoriesTable.id, parentId), eq(budgetCategoriesTable.groupId, groupId)));
+}
+
+async function incomeSourceRejection(groupId: number, incomeSourceId: number): Promise<string | null> {
+  const [source] = await db
+    .select({ id: incomeSourcesTable.id })
+    .from(incomeSourcesTable)
+    .where(and(eq(incomeSourcesTable.id, incomeSourceId), eq(incomeSourcesTable.groupId, groupId)))
+    .limit(1);
+  return source ? null : "That income stream does not exist in this budget.";
 }
 
 async function parentRejection(
@@ -560,6 +572,10 @@ router.post("/budget-categories", async (req, res) => {
     const rejection = await parentRejection(groupId, parsed.data.parentId, null);
     if (rejection) { res.status(400).json({ error: rejection }); return; }
   }
+  if (parsed.data.reducesIncomeSourceId != null) {
+    const rejection = await incomeSourceRejection(groupId, parsed.data.reducesIncomeSourceId);
+    if (rejection) { res.status(400).json({ error: rejection }); return; }
+  }
   try {
     const row = await db.transaction(async (tx) => {
       // A subcategory is part of whatever its parent is, so it ranks with it.
@@ -609,6 +625,10 @@ router.put("/budget-categories/:id", async (req, res) => {
   if (!existing) { res.status(404).json({ error: "Category not found" }); return; }
   if (parsed.data.parentId != null) {
     const rejection = await parentRejection(groupId, parsed.data.parentId, id);
+    if (rejection) { res.status(400).json({ error: rejection }); return; }
+  }
+  if (parsed.data.reducesIncomeSourceId != null) {
+    const rejection = await incomeSourceRejection(groupId, parsed.data.reducesIncomeSourceId);
     if (rejection) { res.status(400).json({ error: rejection }); return; }
   }
   const merged = categorySchema.safeParse({ ...existing, ...parsed.data });

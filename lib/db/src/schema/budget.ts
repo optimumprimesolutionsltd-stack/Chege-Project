@@ -74,6 +74,13 @@ export const budgetCategoriesTable = pgTable("budget_categories", {
   // an exact integer rather than a float that drifts on repeated writes.
   debtBalance: numeric("debt_balance", { precision: 14, scale: 2, mode: "number" }),
   debtInterestRateBps: integer("debt_interest_rate_bps"),
+  // A cost of earning a side income (stock bought for a hustle sold through
+  // M-Pesa, say) can name the income source it eats into. Optional and
+  // one-directional — an income source does not know its own cost
+  // categories, they point at it — so most categories, which are not
+  // anybody's cost of earning, carry null and are never involved in the
+  // profit subtraction on the income-streams report.
+  reducesIncomeSourceId: integer("reduces_income_source_id").references(() => incomeSourcesTable.id, { onDelete: "set null" }),
 }, (table) => [
   check(
     "budget_categories_name_valid_check",

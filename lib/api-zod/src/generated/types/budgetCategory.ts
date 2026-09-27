@@ -31,4 +31,9 @@ export interface BudgetCategory {
      * @nullable
      */
   activeYear?: number | null;
+  /**
+     * The income source this category is a cost of earning, if any. Its spending is worked out of that stream's profit on the income-streams report instead of only counting against the budget as a whole.
+     * @nullable
+     */
+  reducesIncomeSourceId?: number | null;
 }

@@ -1,15 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   getDashboardMonthlyReportPdf,
+  getGetBudgetCategoriesQueryKey,
   getGetDashboardCategoryBreakdownQueryKey,
   getGetDashboardIncomeStreamsQueryKey,
   getGetDashboardPeriodTotalsQueryKey,
   getGetDashboardSummaryQueryKey,
   useGetGroup,
+  useGetBudgetCategories,
   useGetDashboardCategoryBreakdown,
   useGetDashboardIncomeStreams,
   useGetDashboardPeriodTotals,
   useGetDashboardSummary,
+  useUpdateBudgetCategory,
 } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -66,6 +70,42 @@ export default function IncomeStreamsReport() {
   // (the server refuses everybody else). A Personal budget is its owner's.
   const { data: pdfGroup } = useGetGroup();
   const canDownloadPdf = pdfGroup?.isPrivate !== false || pdfGroup?.role === "owner" || pdfGroup?.role === "admin";
+  // Linking a category as a stream's cost is a category edit, and the server
+  // only lets a manager make those.
+  const canManageCostCategories = pdfGroup?.role === "owner" || pdfGroup?.role === "admin";
+  const queryClient = useQueryClient();
+  const { data: categories = [] } = useGetBudgetCategories();
+  const updateCostCategory = useUpdateBudgetCategory();
+  const leafCategories = useMemo(
+    () => categories.filter((category) => !categories.some((other) => other.parentId === category.id)),
+    [categories],
+  );
+  // Only one category links to a stream through this picker at a time, even
+  // though the field itself allows many categories to point at the same
+  // stream — moving the link off whichever category held it keeps that true.
+  const chooseCostCategory = async (incomeSourceId: number, sourceName: string, categoryId: number | null) => {
+    const previouslyLinked = categories.find((category) => category.reducesIncomeSourceId === incomeSourceId);
+    if (previouslyLinked && previouslyLinked.id === categoryId) return;
+    if (previouslyLinked && categoryId != null) {
+      const newCategory = categories.find((category) => category.id === categoryId);
+      const confirmed = window.confirm(
+        `"${previouslyLinked.name}" is currently linked to ${sourceName}. Choosing "${newCategory?.name ?? "this category"}" instead will unlink it. Replace it?`,
+      );
+      if (!confirmed) return;
+    }
+    try {
+      if (previouslyLinked) {
+        await updateCostCategory.mutateAsync({ id: previouslyLinked.id, data: { reducesIncomeSourceId: null } });
+      }
+      if (categoryId != null) {
+        await updateCostCategory.mutateAsync({ id: categoryId, data: { reducesIncomeSourceId: incomeSourceId } });
+      }
+      await queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
+      await queryClient.invalidateQueries({ queryKey: getGetDashboardIncomeStreamsQueryKey({ month, year }) });
+    } catch {
+      // The select reverts to whatever the next categories fetch says is true.
+    }
+  };
   // What the monthly PDF includes beyond its summary cards.
   const [includeBudget, setIncludeBudget] = useState(true);
   const [includeIncome, setIncludeIncome] = useState(true);
@@ -631,9 +671,37 @@ export default function IncomeStreamsReport() {
                           <span className="min-w-0 break-words">Expected {formatKes(stream.expectedMonthlyAmount)} · {stream.remainingBalance < 0 ? `${formatKes(Math.abs(stream.remainingBalance))} above` : `${formatKes(stream.remainingBalance)} remaining`}</span>
                           <span className="shrink-0">{stream.transactionCount} {stream.transactionCount === 1 ? "record" : "records"}</span>
                         </div>
+                        {stream.costs > 0 && (
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {formatKes(stream.total + stream.costs)} sales − {formatKes(stream.costs)} {leafCategories.find((category) => category.reducesIncomeSourceId === stream.incomeSourceId)?.name ?? "cost"} = {formatKes(stream.total)} profit
+                          </p>
+                        )}
                       </button>
                       {isExpanded && (
                         <div id={`income-stream-${streamId}-activity`} className="border-t border-border/60 pt-4">
+                          {!unattributed && canManageCostCategories && (
+                            <label className="mb-4 flex flex-col gap-1.5 text-sm font-medium text-foreground">
+                              Cost category (optional)
+                              <select
+                                className="flex h-11 w-full rounded-md border border-input bg-card px-3 py-2 text-sm"
+                                value={leafCategories.find((category) => category.reducesIncomeSourceId === stream.incomeSourceId)?.id ?? ""}
+                                onChange={(event) => void chooseCostCategory(stream.incomeSourceId!, stream.sourceName, event.target.value ? Number(event.target.value) : null)}
+                                data-testid={`income-stream-cost-category-${streamId}`}
+                              >
+                                <option value="">None</option>
+                                {leafCategories.map((category) => (
+                                  <option key={category.id} value={category.id}>
+                                    {category.name}
+                                    {category.reducesIncomeSourceId != null && category.reducesIncomeSourceId !== stream.incomeSourceId ? " (linked elsewhere)" : ""}
+                                  </option>
+                                ))}
+                              </select>
+                              <span className="text-xs font-normal text-muted-foreground">
+                                Spending tagged to this category is worked out of {stream.sourceName}&rsquo;s profit every month.
+                                Only categories without sub-categories of their own are listed — a category holding sub-categories carries no spending itself, so link each sub-category separately.
+                              </span>
+                            </label>
+                          )}
                           <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                             <div>
                               <p className="text-sm font-semibold">Activity in this stream</p>
