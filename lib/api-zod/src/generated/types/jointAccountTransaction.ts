@@ -27,6 +27,11 @@ export interface JointAccountTransaction {
      */
   runningBalance?: number | null;
   description: string;
+  /**
+     * A plain note against the entry, the same as expenses already have.
+     * @nullable
+     */
+  notes?: string | null;
   madeById?: string | null;
   madeByName?: string | null;
   /**

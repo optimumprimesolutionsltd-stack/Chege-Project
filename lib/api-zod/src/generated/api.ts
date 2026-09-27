@@ -1036,6 +1036,7 @@ export const GetJointAccountResponse = zod.object({
   "amount": zod.number(),
   "runningBalance": zod.number().nullish().describe('Balance in this specific bank account immediately after this transaction; null for an all-accounts view'),
   "description": zod.string(),
+  "notes": zod.string().nullish().describe('A plain note against the entry, the same as expenses already have.'),
   "madeById": zod.string().nullish(),
   "madeByName": zod.string().nullish(),
   "incomeSourceId": zod.number().nullish().describe('Income source attached to a single-depositor deposit'),
@@ -1100,6 +1101,8 @@ export const createDepositBodyMpesaReceiptMax = 20;
 export const createDepositBodyAmountMin = 0;
 export const createDepositBodyAmountMultipleOf = 0.01;
 
+export const createDepositBodyNotesMax = 1000;
+
 export const createDepositBodyAppliesToMonthMax = 12;
 
 export const createDepositBodyAppliesToYearMin = 2000;
@@ -1120,6 +1123,7 @@ export const CreateDepositBody = zod.object({
   "isBorrowing": zod.boolean().optional().describe('Money borrowed, arriving in the account. A loan paid out to you is not earnings either, so it is left out of every figure counting money in. Set alongside settlesContributorId when the lender is a recorded party, and on its own when the loan is tracked as a debt category instead.'),
   "amount": zod.number().min(createDepositBodyAmountMin).multipleOf(createDepositBodyAmountMultipleOf).describe('KES amount with up to two decimal places. Zero is allowed, so an existing posting can be cleared to nothing rather than deleted.'),
   "description": zod.string(),
+  "notes": zod.string().max(createDepositBodyNotesMax).optional().describe('A plain note against the entry, the same as expenses already have.'),
   "date": zod.coerce.date(),
   "appliesToMonth": zod.number().min(1).max(createDepositBodyAppliesToMonthMax).nullish().describe('The month this deposit was for, when that differs from the month it arrived — April\'s dues paid in September, or June\'s paid in April. Omit for the month it arrived in. Must be given with appliesToYear.'),
   "appliesToYear": zod.number().min(createDepositBodyAppliesToYearMin).max(createDepositBodyAppliesToYearMax).nullish(),
@@ -1151,6 +1155,7 @@ export const CreateDepositResponse = zod.object({
   "amount": zod.number(),
   "runningBalance": zod.number().nullish().describe('Balance in this specific bank account immediately after this transaction; null for an all-accounts view'),
   "description": zod.string(),
+  "notes": zod.string().nullish().describe('A plain note against the entry, the same as expenses already have.'),
   "madeById": zod.string().nullish(),
   "madeByName": zod.string().nullish(),
   "incomeSourceId": zod.number().nullish().describe('Income source attached to a single-depositor deposit'),
@@ -1186,6 +1191,8 @@ export const createDisbursementBodyMpesaReceiptMax = 20;
 export const createDisbursementBodyAmountMin = 0;
 export const createDisbursementBodyAmountMultipleOf = 0.01;
 
+export const createDisbursementBodyNotesMax = 1000;
+
 
 
 
@@ -1195,6 +1202,7 @@ export const CreateDisbursementBody = zod.object({
   "mpesaReceipt": zod.string().min(createDisbursementBodyMpesaReceiptMin).max(createDisbursementBodyMpesaReceiptMax).optional().describe('The M-Pesa receipt code this posting came from. Unique per budget: recording the same code twice is refused with 409, so a message pasted again cannot be counted again.'),
   "amount": zod.number().min(createDisbursementBodyAmountMin).multipleOf(createDisbursementBodyAmountMultipleOf).describe('KES amount with up to two decimal places. Zero is allowed, so an existing posting can be cleared to nothing rather than deleted.'),
   "description": zod.string().optional(),
+  "notes": zod.string().max(createDisbursementBodyNotesMax).optional().describe('A plain note against the entry, the same as expenses already have.'),
   "date": zod.coerce.date(),
   "madeById": zod.string().nullish().describe('ID of the household member responsible for this disbursement. Omit or pass null for Joint bank. Must be a valid household member ID when non-null.\n'),
   "isLending": zod.boolean().optional().describe('Money lent, leaving the account. Not spending — you expect it back and it is now owed to you — so it carries no category, which is what keeps it out of every spending total.'),
@@ -1221,6 +1229,7 @@ export const CreateDisbursementResponse = zod.object({
   "amount": zod.number(),
   "runningBalance": zod.number().nullish().describe('Balance in this specific bank account immediately after this transaction; null for an all-accounts view'),
   "description": zod.string(),
+  "notes": zod.string().nullish().describe('A plain note against the entry, the same as expenses already have.'),
   "madeById": zod.string().nullish(),
   "madeByName": zod.string().nullish(),
   "incomeSourceId": zod.number().nullish().describe('Income source attached to a single-depositor deposit'),
@@ -1284,6 +1293,7 @@ export const TransferBankToSavingsResponse = zod.object({
   "amount": zod.number(),
   "runningBalance": zod.number().nullish().describe('Balance in this specific bank account immediately after this transaction; null for an all-accounts view'),
   "description": zod.string(),
+  "notes": zod.string().nullish().describe('A plain note against the entry, the same as expenses already have.'),
   "madeById": zod.string().nullish(),
   "madeByName": zod.string().nullish(),
   "incomeSourceId": zod.number().nullish().describe('Income source attached to a single-depositor deposit'),
@@ -1347,6 +1357,7 @@ export const TransferSavingsToBankResponse = zod.object({
   "amount": zod.number(),
   "runningBalance": zod.number().nullish().describe('Balance in this specific bank account immediately after this transaction; null for an all-accounts view'),
   "description": zod.string(),
+  "notes": zod.string().nullish().describe('A plain note against the entry, the same as expenses already have.'),
   "madeById": zod.string().nullish(),
   "madeByName": zod.string().nullish(),
   "incomeSourceId": zod.number().nullish().describe('Income source attached to a single-depositor deposit'),
@@ -1416,6 +1427,7 @@ export const TransferBankToBankResponse = zod.object({
   "amount": zod.number(),
   "runningBalance": zod.number().nullish().describe('Balance in this specific bank account immediately after this transaction; null for an all-accounts view'),
   "description": zod.string(),
+  "notes": zod.string().nullish().describe('A plain note against the entry, the same as expenses already have.'),
   "madeById": zod.string().nullish(),
   "madeByName": zod.string().nullish(),
   "incomeSourceId": zod.number().nullish().describe('Income source attached to a single-depositor deposit'),
@@ -1449,6 +1461,7 @@ export const TransferBankToBankResponse = zod.object({
   "amount": zod.number(),
   "runningBalance": zod.number().nullish().describe('Balance in this specific bank account immediately after this transaction; null for an all-accounts view'),
   "description": zod.string(),
+  "notes": zod.string().nullish().describe('A plain note against the entry, the same as expenses already have.'),
   "madeById": zod.string().nullish(),
   "madeByName": zod.string().nullish(),
   "incomeSourceId": zod.number().nullish().describe('Income source attached to a single-depositor deposit'),
@@ -1486,6 +1499,8 @@ export const UpdateJointAccountTransactionParams = zod.object({
 export const updateJointAccountTransactionBodyAmountMin = 0;
 export const updateJointAccountTransactionBodyAmountMultipleOf = 0.01;
 
+export const updateJointAccountTransactionBodyNotesMax = 1000;
+
 
 export const updateJointAccountTransactionBodyContributorSplitsItemAmountMin = 0;
 export const updateJointAccountTransactionBodyContributorSplitsItemAmountMultipleOf = 0.01;
@@ -1500,6 +1515,7 @@ export const updateJointAccountTransactionBodyNarrationMax = 200;
 export const UpdateJointAccountTransactionBody = zod.object({
   "amount": zod.number().min(updateJointAccountTransactionBodyAmountMin).multipleOf(updateJointAccountTransactionBodyAmountMultipleOf),
   "description": zod.string().optional().describe('Optional supporting detail; withdrawals fall back to their category'),
+  "notes": zod.string().max(updateJointAccountTransactionBodyNotesMax).nullish().describe('A plain note against the entry. Omit to leave it unchanged; null or empty clears it.'),
   "date": zod.coerce.date(),
   "madeById": zod.string().nullish(),
   "incomeSourceId": zod.number().nullish().describe('Preserved for deposits unless explicitly changed'),
@@ -1534,6 +1550,7 @@ export const UpdateJointAccountTransactionResponse = zod.object({
   "amount": zod.number(),
   "runningBalance": zod.number().nullish().describe('Balance in this specific bank account immediately after this transaction; null for an all-accounts view'),
   "description": zod.string(),
+  "notes": zod.string().nullish().describe('A plain note against the entry, the same as expenses already have.'),
   "madeById": zod.string().nullish(),
   "madeByName": zod.string().nullish(),
   "incomeSourceId": zod.number().nullish().describe('Income source attached to a single-depositor deposit'),

@@ -15,6 +15,12 @@ export interface UpdateJointAccountTransactionInput {
   amount: number;
   /** Optional supporting detail; withdrawals fall back to their category */
   description?: string;
+  /**
+     * A plain note against the entry. Omit to leave it unchanged; null or empty clears it.
+     * @maxLength 1000
+     * @nullable
+     */
+  notes?: string | null;
   date: Date;
   /** @nullable */
   madeById?: string | null;

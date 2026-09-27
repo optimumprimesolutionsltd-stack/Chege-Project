@@ -434,6 +434,9 @@ export const jointAccountTxTable = pgTable("joint_account_transactions", {
   // Set for the Joint-bank portion of a single split-funded expense. The
   // expense route owns this ledger row so both records stay in sync.
   expenseId: integer("expense_id").references(() => expensesTable.id, { onDelete: "cascade" }),
+  /** A plain note against the entry, the same as expenses already have. Nothing reads it
+   *  but the person who wrote it; it never feeds a total or a report. */
+  notes: text("notes"),
   date: date("date").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [

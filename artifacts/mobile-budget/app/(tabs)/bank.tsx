@@ -112,6 +112,7 @@ type Tx = {
   amount: number;
   runningBalance?: number | null;
   description: string;
+  notes?: string | null;
   madeById?: string | null;
   madeByName?: string | null;
   incomeSourceId?: number | null;
@@ -182,6 +183,9 @@ export default function BankScreen() {
   const [txType, setTxType] = useState<TxType>('deposit');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
+  // A plain note against the entry, the same as expenses already have. Never read by any
+  // total or report; somewhere to keep anything else worth remembering about it.
+  const [notes, setNotes] = useState('');
   const [expenseCategory, setExpenseCategory] = useState('');
   // The month a deposit was *for*, when that is not the month it arrived.
   // Null is "the month it arrived in", which is almost every deposit.
@@ -510,6 +514,7 @@ export default function BankScreen() {
     setTxType(type);
     setAmount('');
     setDescription('');
+    setNotes('');
     setExpenseCategory('');
     setShowCategoryPicker(false);
     setNewCategoryName('');
@@ -564,6 +569,7 @@ export default function BankScreen() {
   const resetForNextEntry = () => {
     setAmount('');
     setDescription('');
+    setNotes('');
     setExpenseCategory('');
     setShowCategoryPicker(false);
     setNewCategoryName('');
@@ -960,6 +966,7 @@ export default function BankScreen() {
     setDescription(type === 'transfer'
       ? tx.description.replace(/^Transfer (?:to|from) savings —\s*/, '')
       : tx.description);
+    setNotes(tx.notes ?? '');
     setDate(tx.date);
     setExpenseCategory(tx.expenseCategory ?? '');
     setWithdrawPartyId(type === 'disbursement' ? tx.settlesContributorId ?? null : null);
@@ -1731,6 +1738,8 @@ export default function BankScreen() {
           data: {
             amount: parsed,
             description: finalDescription,
+            // Omitted leaves the note as it was; empty clears it.
+            notes: notes.trim() || null,
             date,
             madeById: !isSharedWorkspace
               ? user?.id
@@ -1786,6 +1795,7 @@ export default function BankScreen() {
             data: {
               amount: parsed,
               description: description.trim(),
+              notes: notes.trim() || undefined,
               date,
               contributorSplits: validDepositorIds.map((userId) => ({
                 userId,
@@ -1802,6 +1812,7 @@ export default function BankScreen() {
             data: {
               amount: parsed,
               description: description.trim(),
+              notes: notes.trim() || undefined,
               date,
               ...(repayingParty ? { settlesContributorId: repayingParty.id } : {}),
               ...(isBorrowing ? { isBorrowing: true } : {}),
@@ -1819,6 +1830,7 @@ export default function BankScreen() {
             data: {
               amount: parsed,
               description: description.trim(),
+              notes: notes.trim() || undefined,
               date,
               ...(repayingParty ? { settlesContributorId: repayingParty.id } : {}),
               ...(isBorrowing ? { isBorrowing: true } : {}),
@@ -1836,6 +1848,7 @@ export default function BankScreen() {
           data: {
             amount: parsed,
             description: finalDescription,
+            notes: notes.trim() || undefined,
             date,
             madeById: !isSharedWorkspace ? user?.id : withdrawerId ?? null,
             accountId: selectedAccountId ?? undefined,
@@ -2499,13 +2512,24 @@ export default function BankScreen() {
                 />
               </View>
               <View style={styles.txInfo}>
-                <Text style={[styles.txDesc, { color: colors.foreground }]} numberOfLines={1}>
-                  {item.bankTransferId
-                    ? `${dep ? 'From' : 'To'} ${item.bankTransferAccountName ?? 'bank account'}`
-                    : item.savingsGoalId
-                    ? `${item.transferDirection === 'to_savings' ? 'Bank → Savings' : 'Savings → Bank'}: ${item.savingsGoalName ?? 'Savings goal'}`
-                    : !dep && item.expenseCategory ? item.expenseCategory : item.description}
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                  <Text style={[styles.txDesc, { color: colors.foreground, flexShrink: 1 }]} numberOfLines={1}>
+                    {item.bankTransferId
+                      ? `${dep ? 'From' : 'To'} ${item.bankTransferAccountName ?? 'bank account'}`
+                      : item.savingsGoalId
+                      ? `${item.transferDirection === 'to_savings' ? 'Bank → Savings' : 'Savings → Bank'}: ${item.savingsGoalName ?? 'Savings goal'}`
+                      : !dep && item.expenseCategory ? item.expenseCategory : item.description}
+                  </Text>
+                  {item.notes ? (
+                    <Feather
+                      name="file-text"
+                      size={12}
+                      color={colors.mutedForeground}
+                      accessibilityLabel={`Has a note: ${item.notes}`}
+                      testID={`bank-has-notes-${item.id}`}
+                    />
+                  ) : null}
+                </View>
                 <Text style={[styles.txMeta, { color: colors.mutedForeground }]}>
                   {item.bankTransferId
                     ? `Internal bank transfer · ${item.description} · `
@@ -3156,6 +3180,27 @@ export default function BankScreen() {
                     returnKeyType="done"
                     onSubmitEditing={Keyboard.dismiss}
                     testID="bank-description-input"
+                  />
+                </>
+              )}
+
+              {isDeposit && (
+                <>
+                  <Text style={[styles.label, { color: colors.mutedForeground }]}>
+                    Notes <Text style={{ fontWeight: '400' }}>(optional)</Text>
+                  </Text>
+                  <TextInput
+                    style={[
+                      styles.input,
+                      { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted, minHeight: 60 },
+                    ]}
+                    placeholder="Anything else worth keeping about this entry"
+                    placeholderTextColor={colors.mutedForeground}
+                    value={notes}
+                    onChangeText={setNotes}
+                    multiline
+                    textAlignVertical="top"
+                    testID="bank-notes-input"
                   />
                 </>
               )}
@@ -4503,6 +4548,22 @@ export default function BankScreen() {
                     returnKeyType="done"
                     onSubmitEditing={Keyboard.dismiss}
                     testID="bank-description-input"
+                  />
+                  <Text style={[styles.label, { color: colors.mutedForeground }]}>
+                    Notes <Text style={{ fontWeight: '400' }}>(optional)</Text>
+                  </Text>
+                  <TextInput
+                    style={[
+                      styles.input,
+                      { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted, minHeight: 60 },
+                    ]}
+                    placeholder="Anything else worth keeping about this entry"
+                    placeholderTextColor={colors.mutedForeground}
+                    value={notes}
+                    onChangeText={setNotes}
+                    multiline
+                    textAlignVertical="top"
+                    testID="bank-notes-input"
                   />
                 </>
               )}

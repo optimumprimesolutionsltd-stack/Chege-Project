@@ -107,6 +107,8 @@ const DepositInput = z.object({
    */
   isBorrowing: z.boolean().optional(),
   description: z.string().min(1),
+  /** A plain note against the entry, the same as expenses already have. */
+  notes: z.string().trim().max(1000).optional(),
   date: z.string().min(1),
   madeById: z.string().nullable().optional(),
   incomeSourceId: z.number().int().positive().optional(),
@@ -131,6 +133,8 @@ const DisbursementInput = z.object({
   amount: NonNegativeBankAmount,
   mpesaReceipt: MpesaReceipt.optional(),
   description: z.string().trim().max(200).optional().default(""),
+  /** A plain note against the entry, the same as expenses already have. */
+  notes: z.string().trim().max(1000).optional(),
   date: z.string().min(1),
   madeById: z.string().nullable().optional(),
   /**
@@ -180,6 +184,8 @@ const UpdateJointAccountInput = z.object({
   // Omitted leaves whoever was recorded alone: an edit that never touches the
   // party must not drop it.
   settlesContributorId: z.number().int().positive().nullable().optional(),
+  // Omitted leaves the note as it was; null or empty clears it.
+  notes: z.string().trim().max(1000).nullable().optional(),
   sourceKind: z.enum(["income_source", "other"]).optional(),
   destinationKind: z.enum(["category", "other"]).optional(),
   contributorSplits: z.array(z.object({
@@ -385,6 +391,7 @@ async function enrichTx(
     ...tx,
     // null madeById = Joint bank (shared household); name resolves to null so UI can show GROUP_ATTRIBUTION
     madeByName,
+    notes: tx.notes ?? null,
     expenseCategory: tx.expenseCategory ?? null,
     isLending: tx.isLending ?? false,
     chargeForTransactionId: tx.chargeForTransactionId ?? null,
@@ -828,6 +835,7 @@ router.post("/joint-account/deposit", async (req, res): Promise<void> => {
         groupId,
         accountId,
         type: "deposit", amount, description, date,
+        notes: parsed.data.notes?.trim() || null,
         mpesaReceipt: parsed.data.mpesaReceipt ?? null,
         // The date stays authoritative for the balance: money moves when it
         // moves. Only the obligation follows the period below.
@@ -1013,6 +1021,7 @@ router.post("/joint-account/disbursement", async (req, res): Promise<void> => {
       // Description is a supporting note. When omitted, retain a meaningful
       // non-null value while reports remain anchored on expenseCategory.
       description: description || expenseCategory || "Lent out",
+      notes: parsed.data.notes?.trim() || null,
       date,
       madeById,
       expenseCategory,
@@ -1349,6 +1358,7 @@ router.put("/joint-account/:id", async (req, res): Promise<void> => {
           savingsGoalId: goalId,
           transferDirection: direction,
           accountId,
+          ...(parsed.data.notes === undefined ? {} : { notes: parsed.data.notes?.trim() || null }),
         })
         .where(and(eq(jointAccountTxTable.id, lockedBankTx.id), eq(jointAccountTxTable.groupId, groupId)))
         .returning();
@@ -1455,6 +1465,7 @@ router.put("/joint-account/:id", async (req, res): Promise<void> => {
           incomeSourceId,
           expenseCategory: null,
           accountId,
+          ...(parsed.data.notes === undefined ? {} : { notes: parsed.data.notes?.trim() || null }),
         })
         .where(and(eq(jointAccountTxTable.id, existing.id), eq(jointAccountTxTable.groupId, groupId)))
         .returning();
@@ -1532,6 +1543,7 @@ router.put("/joint-account/:id", async (req, res): Promise<void> => {
       ...(parsed.data.settlesContributorId === undefined
         ? {}
         : { settlesContributorId: parsed.data.settlesContributorId }),
+      ...(parsed.data.notes === undefined ? {} : { notes: parsed.data.notes?.trim() || null }),
     })
     .where(and(eq(jointAccountTxTable.id, existing.id), eq(jointAccountTxTable.groupId, groupId)))
     .returning();

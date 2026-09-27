@@ -3498,6 +3498,9 @@ components:
           description: Balance in this specific bank account immediately after this transaction; null for an all-accounts view
         description:
           type: string
+        notes:
+          type: ["string", "null"]
+          description: A plain note against the entry, the same as expenses already have.
         madeById:
           type: string
           nullable: true
@@ -3672,6 +3675,10 @@ components:
           description: KES amount with up to two decimal places. Zero is allowed, so an existing posting can be cleared to nothing rather than deleted.
         description:
           type: string
+        notes:
+          type: string
+          maxLength: 1000
+          description: A plain note against the entry, the same as expenses already have.
         date:
           type: string
           format: date
@@ -3758,6 +3765,10 @@ components:
           description: KES amount with up to two decimal places. Zero is allowed, so an existing posting can be cleared to nothing rather than deleted.
         description:
           type: string
+        notes:
+          type: string
+          maxLength: 1000
+          description: A plain note against the entry, the same as expenses already have.
         date:
           type: string
           format: date
@@ -3812,6 +3823,10 @@ components:
         description:
           type: string
           description: Optional supporting detail; withdrawals fall back to their category
+        notes:
+          type: ["string", "null"]
+          maxLength: 1000
+          description: A plain note against the entry. Omit to leave it unchanged; null or empty clears it.
         date:
           type: string
           format: date

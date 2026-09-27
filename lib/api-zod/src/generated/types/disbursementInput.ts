@@ -20,6 +20,11 @@ export interface DisbursementInput {
      */
   amount: number;
   description?: string;
+  /**
+     * A plain note against the entry, the same as expenses already have.
+     * @maxLength 1000
+     */
+  notes?: string;
   date: Date;
   /**
      * ID of the household member responsible for this disbursement. Omit or pass null for Joint bank. Must be a valid household member ID when non-null.

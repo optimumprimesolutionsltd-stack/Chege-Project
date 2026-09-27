@@ -28,6 +28,11 @@ export interface DepositInput {
      */
   amount: number;
   description: string;
+  /**
+     * A plain note against the entry, the same as expenses already have.
+     * @maxLength 1000
+     */
+  notes?: string;
   date: Date;
   /**
      * The month this deposit was for, when that differs from the month it arrived — April's dues paid in September, or June's paid in April. Omit for the month it arrived in. Must be given with appliesToYear.
