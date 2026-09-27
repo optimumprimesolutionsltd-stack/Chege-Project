@@ -1849,7 +1849,14 @@ export default function MpesaImportScreen() {
       <Modal visible={debtFor !== null} animationType="slide" transparent onRequestClose={() => setDebtFor(null)}>
         <View style={styles.sheetBackdrop}>
           <View style={[styles.sheet, { backgroundColor: colors.card, borderColor: colors.border, padding: 16, paddingBottom: 16 + Math.max(insets.bottom, 24), gap: 10 }]}>
-            <Text style={[styles.sheetTitle, { color: colors.foreground }]}>Is this a debt or loan?</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+              <Text style={[styles.sheetTitle, { color: colors.foreground, flexShrink: 1 }]}>Is this a debt or loan?</Text>
+              {/* Leaves whatever this line already had untouched — unlike the "not a debt" button below, which is
+                  its own deliberate answer and does write a change. An accidental open needs a true way out. */}
+              <Pressable onPress={() => setDebtFor(null)} hitSlop={10} accessibilityLabel="Close without changing anything" testID="mpesa-debt-cancel">
+                <Feather name="x" size={22} color={colors.mutedForeground} />
+              </Pressable>
+            </View>
             <Text style={[styles.hint, { color: colors.mutedForeground }]}>
               Choose who, and what it is. Jamvi will offer to update what you owe or are owed once everything is saved.
             </Text>
