@@ -80,6 +80,7 @@ type Outcome = { saved: number; repeats: number; failed: Array<{ what: string; w
 
 import { readStatementPages, StatementPasswordError } from "@/lib/statement-file";
 import { rememberMpesaCard } from "@/lib/mpesa-card";
+import { keepScreenAwakeWhileSaving, letScreenSleepAgain } from "@/lib/keep-awake";
 import { runPool, savePosting, SAVE_CONCURRENCY, type PostingApi } from "@/lib/save-posting";
 import { parseStoredRules, payeeKey, payeeName, ruleLabel, rulesStorageKey, withRule, withoutRule, type PayeeRules } from "@/lib/payee-learning";
 import { saveDebtLinks } from "@/lib/debt-reversal";
@@ -515,6 +516,7 @@ export default function MpesaImportPage() {
       return;
     }
     setSaving(true);
+    void keepScreenAwakeWhileSaving();
     const result: Outcome = { saved: 0, repeats: 0, failed: [] };
     const savedIndexes = new Set<number>();
     // Who each debt entry was for, kept so deleting it can offer to put that person's balance back.
@@ -554,6 +556,7 @@ export default function MpesaImportPage() {
     } finally {
       setSaveProgress(null);
       setSaving(false);
+      letScreenSleepAgain();
       if (statementReading) {
         const stamp = { date: todayIso(), description: "Saved from your statement" };
         const marked = lines.map((item) => (savedIndexes.has(item.index) ? { ...item, alreadyRecorded: stamp } : item));
