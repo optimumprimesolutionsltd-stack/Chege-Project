@@ -54,6 +54,13 @@ describe("linking a category as an income stream's cost", () => {
   it("explains why a category with its own sub-categories is left out of the list", () => {
     expect(reportSource).toContain("Only categories without sub-categories of their own are listed");
   });
+
+  it("surfaces the feature on the page itself, not only inside the picker", () => {
+    // Nothing pointed a manager toward this until they happened to open a
+    // stream and notice the picker. A manager-only line in the page's own
+    // explanation means it can be found without already knowing it exists.
+    expect(reportSource).toContain("Running a side hustle through one of these? Open it below and link a cost category");
+  });
 });
 
 describe("the Income vs Expenses comparison on the monthly summary", () => {

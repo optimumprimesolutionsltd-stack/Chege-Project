@@ -938,6 +938,11 @@ export default function ReportsScreen() {
                 <Text style={[styles.sectionSub, { color: colors.mutedForeground }]}>
                   Expected income, recorded funding, and what remains this month
                 </Text>
+                {canManageCostCategories ? (
+                  <Text style={[styles.sectionSub, { color: colors.mutedForeground, marginTop: 2 }]}>
+                    Running a side hustle through one of these? Open it and link a cost category (like Stock) to see real profit, not just the sale amount.
+                  </Text>
+                ) : null}
               </View>
               <Feather name="pie-chart" size={19} color={colors.primary} />
             </View>

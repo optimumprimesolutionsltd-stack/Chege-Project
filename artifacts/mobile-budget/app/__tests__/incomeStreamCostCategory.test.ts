@@ -46,4 +46,11 @@ describe('linking a category as an income stream\'s cost', () => {
   it('explains why a category with its own sub-categories is left out of the list', () => {
     expect(reports).toContain('Only categories without sub-categories of their own are listed');
   });
+
+  it('surfaces the feature on the Income Streams section itself, not only inside the picker', () => {
+    // Nothing pointed a manager toward this until they happened to open a
+    // stream and notice the picker. A manager-only hint on the section
+    // heading means it can be found without already knowing it exists.
+    expect(reports).toContain('Running a side hustle through one of these? Open it and link a cost category');
+  });
 });
