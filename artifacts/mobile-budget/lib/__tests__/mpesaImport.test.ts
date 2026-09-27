@@ -5,6 +5,7 @@ import {
   canUseSavings,
   categoryChanges,
   chooseContribution,
+  chooseOtherBudget,
   chooseSavings,
   defaultCategoryFor,
   destinationOf,
@@ -106,7 +107,7 @@ describe('summarise', () => {
       1: { include: true, category: '' },
       2: { include: false, category: '' },
     });
-    expect(summary).toEqual({ count: 2, moneyIn: 3500, moneyOut: 3000, fees: 25, missingCategory: 0, moves: 0 });
+    expect(summary).toEqual({ count: 2, moneyIn: 3500, moneyOut: 3000, fees: 25, missingCategory: 0, moves: 0, toOtherBudgets: 0 });
   });
 });
 
@@ -417,6 +418,47 @@ describe('savings goals', () => {
     expect(canUseSavings(out)).toBe(true);
     expect(canUseSavings(line({ amount: 100.5 }))).toBe(false);
     expect(canUseSavings(line({ status: 'skipped' }))).toBe(false);
+  });
+});
+
+describe('recording a line in a different budget entirely', () => {
+  const out = line({ index: 0, direction: 'out', type: 'person_payment', amount: 3000, description: 'Sample Stockist', receipt: 'TESTSIDE01', fee: 25 });
+  const inbound = line({ index: 1, direction: 'in', type: 'person_receipt', amount: 5000, description: 'Sample Buyer', receipt: 'TESTSIDE02', fee: null });
+  const target = { groupId: 5, groupName: 'Side hustle', accountId: 3, accountName: 'M-Pesa', category: 'Stock' };
+
+  it('builds a payment against the other budget\'s own account and category, keeping the charge on this one', () => {
+    const built = buildPostings(out, { include: true, category: '', otherBudget: target }, ctx);
+    expect(built).toMatchObject({ kind: 'other-budget', groupId: 5, direction: 'out' });
+    expect(built?.main).toMatchObject({ amount: 3000, accountId: 3, expenseCategory: 'Stock', mpesaReceipt: 'TESTSIDE01' });
+    expect(built?.fee).toMatchObject({ amount: 25, expenseCategory: 'Bank charges', accountId: 9 });
+  });
+
+  it('builds a deposit against the other budget, with an income source only when one was chosen', () => {
+    const built = buildPostings(inbound, { include: true, category: '', otherBudget: { ...target, incomeSourceId: 11, category: undefined } }, ctx);
+    expect(built).toMatchObject({ kind: 'other-budget', groupId: 5, direction: 'in' });
+    expect(built?.main).toMatchObject({ amount: 5000, accountId: 3, incomeSourceId: 11 });
+    expect(built?.fee).toBeNull();
+  });
+
+  it('needs an account, and a category for money out, before it can be saved', () => {
+    expect(problemWith(out, { include: true, category: '', otherBudget: { ...target, accountId: 0 } })).toContain('Choose an account');
+    expect(problemWith(out, { include: true, category: '', otherBudget: { ...target, category: undefined } })).toContain('Choose what it was for in Side hustle');
+    expect(problemWith(out, { include: true, category: '', otherBudget: target })).toBeNull();
+    expect(problemWith(inbound, { include: true, category: '', otherBudget: { ...target, category: undefined } })).toBeNull();
+  });
+
+  it('counts as neither this budget\'s income nor its spending, and is its own tally', () => {
+    const choices = { 0: { include: true, category: '', otherBudget: target }, 1: { include: true, category: '', otherBudget: target } };
+    expect(summarise([out, inbound], choices)).toMatchObject({ moneyIn: 0, moneyOut: 0, moves: 0, toOtherBudgets: 2, fees: 25 });
+  });
+
+  it('is one destination among the rest, and choosing it clears any other', () => {
+    expect(destinationOf({ include: true, category: '', otherBudget: target })).toBe('other-budget');
+    expect(isMove({ include: true, category: '', otherBudget: target })).toBe(true);
+    const start = { 0: { include: true, category: '', debt: { kind: 'lend' as const, partyId: 1 }, transferTo: 4 } };
+    const chosen = chooseOtherBudget(start, 0, target);
+    expect(chosen[0]).toMatchObject({ otherBudget: target, debt: null, transferTo: null });
+    expect(chooseOtherBudget(chosen, 0, null)[0].otherBudget).toBeNull();
   });
 });
 

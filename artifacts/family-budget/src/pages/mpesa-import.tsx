@@ -3,6 +3,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { CheckCircle2, Loader2, Pencil } from "lucide-react";
 import {
+  createDeposit as createDepositInOtherBudget,
+  createDisbursement as createDisbursementInOtherBudget,
   useCreateDeposit,
   useCreateDisbursement,
   useGetSavingsGoals,
@@ -13,6 +15,8 @@ import {
   useGetGroup,
   useGetJointAccount,
   useGetJointAccounts,
+  useGetWorkspaces,
+  type Workspace,
 } from "@workspace/api-client-react";
 import { useAuth } from "@workspace/replit-auth-web";
 import { buildCategoryTree, type CategoryRow } from "@workspace/category-tree";
@@ -29,6 +33,7 @@ import {
   chooseIncomeSource,
   canUseSavings,
   chooseContribution,
+  chooseOtherBudget,
   chooseSavings,
   chooseTransfer,
   destinationOf,
@@ -87,6 +92,7 @@ import { saveDebtLinks } from "@/lib/debt-reversal";
 import type { DebtEntryLink } from "@/lib/debt-links";
 import { reconcile, statementLines, type StatementReading } from "@/lib/statement-import";
 import { checkRunningBalance, readStatementRows, resolveDirections } from "@/lib/statement-table";
+import { fetchOtherBudgetOptions, type OtherBudgetOptions } from "@/lib/other-budget-options";
 
 /** A statement is kept this long, so it can be worked through over days. */
 const STATEMENT_DRAFT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
@@ -457,6 +463,32 @@ export default function MpesaImportPage() {
 
   const transferHints = useMemo(() => throughMpesaHints(lines ?? []), [lines]);
   const otherAccounts = accounts.filter((option) => option.id !== accountId);
+
+  // Recording a line in a different budget entirely — a side hustle run as its own project,
+  // say. Only a budget this person actually manages, so recording in it is always allowed.
+  // Its accounts, categories and income sources are read without ever switching to it, then
+  // kept for the rest of this review so picking it on a second line costs nothing further.
+  const { data: allWorkspaces = [] } = useGetWorkspaces();
+  const otherManagedBudgets = (allWorkspaces as Workspace[]).filter(
+    (workspace) => workspace.id !== group?.id && (workspace.role === "owner" || workspace.role === "admin"),
+  );
+  const [otherBudgetOptions, setOtherBudgetOptions] = useState<Record<number, OtherBudgetOptions>>({});
+  const [loadingOtherBudget, setLoadingOtherBudget] = useState<number | null>(null);
+  const loadOtherBudgetOptions = async (groupId: number): Promise<OtherBudgetOptions | null> => {
+    const cached = otherBudgetOptions[groupId];
+    if (cached) return cached;
+    setLoadingOtherBudget(groupId);
+    try {
+      const options = await fetchOtherBudgetOptions(groupId);
+      setOtherBudgetOptions((current) => ({ ...current, [groupId]: options }));
+      return options;
+    } catch (error) {
+      toast({ variant: "destructive", title: "Could not read that budget", description: error instanceof Error ? error.message : "Please try again." });
+      return null;
+    } finally {
+      setLoadingOtherBudget(null);
+    }
+  };
   const recordable = lines?.filter(isRecordable) ?? [];
   const notImported = lines?.filter((item) => !isRecordable(item)) ?? [];
 
@@ -507,6 +539,14 @@ export default function MpesaImportPage() {
     bankToBank: (data) => transferBankToBank.mutateAsync({ data: data as never }) as Promise<{ outgoing: { id: number }; incoming: { id: number } }>,
     toSavings: (data) => transferBankToSavings.mutateAsync({ data: data as never }) as Promise<{ id: number }>,
     fromSavings: (data) => transferSavingsToBank.mutateAsync({ data: data as never }) as Promise<{ id: number }>,
+    // Named explicitly, on the plain client rather than a mutation hook: this never belongs to
+    // the current budget's own cache, and its own membership check is verified again server side.
+    otherBudget: async (groupId, direction, data) => {
+      const options = { headers: { "x-jamvi-workspace": String(groupId) } };
+      return direction === "in"
+        ? createDepositInOtherBudget(data as never, options)
+        : createDisbursementInOtherBudget(data as never, options);
+    },
   };
 
   const saveAll = async () => {
@@ -832,6 +872,7 @@ export default function MpesaImportPage() {
                   Money in {formatKes(summary.moneyIn)} · money out {formatKes(summary.moneyOut)}
                   {summary.fees > 0 ? ` · M-Pesa charges ${formatKes(summary.fees)}` : ""}
                   {summary.moves > 0 ? ` · ${summary.moves} between your own accounts` : ""}
+                  {summary.toOtherBudgets > 0 ? ` · ${summary.toOtherBudgets} in another budget` : ""}
                 </p>
               </CardContent>
             </Card>
@@ -1044,6 +1085,99 @@ export default function MpesaImportPage() {
                         <option value="">No</option>
                         {savingsGoals.map((goal) => <option key={goal.id} value={goal.id}>{goal.name}</option>)}
                       </select>
+                    </div>
+                  ) : null}
+                  {canManageBudget && choice?.include && (destinationOf(choice) === "category" || destinationOf(choice) === "other-budget") && otherManagedBudgets.length > 0 ? (
+                    <div className="space-y-1" data-testid={`mpesa-line-other-budget-${item.index}`}>
+                      <p className="text-xs text-muted-foreground">Does this belong to a different budget you run?</p>
+                      <select
+                        className={SELECT_CLASS}
+                        value={choice.otherBudget?.groupId ?? ""}
+                        disabled={loadingOtherBudget !== null}
+                        onChange={async (event) => {
+                          const groupId = event.target.value ? Number(event.target.value) : null;
+                          if (groupId === null) {
+                            setChoices((current) => chooseOtherBudget(current, item.index, null));
+                            return;
+                          }
+                          const target = otherManagedBudgets.find((workspace) => workspace.id === groupId);
+                          const options = await loadOtherBudgetOptions(groupId);
+                          if (!target || !options) return;
+                          setChoices((current) =>
+                            chooseOtherBudget(current, item.index, {
+                              groupId,
+                              groupName: target.name,
+                              accountId: options.accounts[0]?.id ?? 0,
+                              accountName: options.accounts[0]?.name ?? "",
+                            }),
+                          );
+                        }}
+                        aria-label="Send to another budget"
+                        data-testid={`mpesa-line-other-budget-select-${item.index}`}
+                      >
+                        <option value="">No</option>
+                        {otherManagedBudgets.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}
+                      </select>
+                      {loadingOtherBudget !== null ? <p className="text-xs text-muted-foreground">Reading that budget…</p> : null}
+                      {choice.otherBudget && otherBudgetOptions[choice.otherBudget.groupId] ? (
+                        (() => {
+                          const target = choice.otherBudget!;
+                          const options = otherBudgetOptions[target.groupId];
+                          return (
+                            <div className="space-y-2">
+                              {options.accounts.length === 0 ? (
+                                <p className="text-xs text-destructive">{target.groupName} has no bank account yet. Add one there first.</p>
+                              ) : (
+                                <>
+                                  <p className="text-xs text-muted-foreground">Which account in {target.groupName}?</p>
+                                  <select
+                                    className={SELECT_CLASS}
+                                    value={target.accountId}
+                                    onChange={(event) => setChoices((current) => chooseOtherBudget(current, item.index, { ...target, accountId: Number(event.target.value), accountName: options.accounts.find((a) => a.id === Number(event.target.value))?.name ?? "" }))}
+                                    aria-label={`Account in ${target.groupName}`}
+                                    data-testid={`mpesa-line-other-budget-account-${item.index}`}
+                                  >
+                                    {options.accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
+                                  </select>
+                                </>
+                              )}
+                              {out ? (
+                                options.categories.length === 0 ? (
+                                  <p className="text-xs text-destructive">{target.groupName} has no categories yet. Add one there first.</p>
+                                ) : (
+                                  <>
+                                    <p className="text-xs text-muted-foreground">Which category in {target.groupName}?</p>
+                                    <select
+                                      className={`${SELECT_CLASS} ${target.category ? "" : "border-destructive"}`}
+                                      value={target.category ?? ""}
+                                      onChange={(event) => setChoices((current) => chooseOtherBudget(current, item.index, { ...target, category: event.target.value }))}
+                                      aria-label={`Category in ${target.groupName}`}
+                                      data-testid={`mpesa-line-other-budget-category-${item.index}`}
+                                    >
+                                      <option value="">Choose what it was for</option>
+                                      {options.categories.map((category) => <option key={category} value={category}>{category}</option>)}
+                                    </select>
+                                  </>
+                                )
+                              ) : options.incomeSources.length > 0 ? (
+                                <>
+                                  <p className="text-xs text-muted-foreground">Which income source in {target.groupName}? (optional)</p>
+                                  <select
+                                    className={SELECT_CLASS}
+                                    value={target.incomeSourceId ?? ""}
+                                    onChange={(event) => setChoices((current) => chooseOtherBudget(current, item.index, { ...target, incomeSourceId: event.target.value ? Number(event.target.value) : null }))}
+                                    aria-label={`Income source in ${target.groupName}`}
+                                    data-testid={`mpesa-line-other-budget-income-${item.index}`}
+                                  >
+                                    <option value="">Not sure</option>
+                                    {options.incomeSources.map((source) => <option key={source.id} value={source.id}>{source.name}</option>)}
+                                  </select>
+                                </>
+                              ) : null}
+                            </div>
+                          );
+                        })()
+                      ) : null}
                     </div>
                   ) : null}
                   {canManageBudget && isShared && item.direction === "in" && choice?.include && !isMove(choice) && destinationOf(choice) !== "debt" && parties.length > 0 ? (

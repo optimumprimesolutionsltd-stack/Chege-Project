@@ -16,6 +16,8 @@ export type PostingApi = {
   bankToBank: (data: unknown) => Promise<{ outgoing: Made; incoming: Made }>;
   toSavings: (data: unknown) => Promise<Made>;
   fromSavings: (data: unknown) => Promise<Made>;
+  /** Records an entry in a budget other than the one being saved into, named by its id. */
+  otherBudget: (groupId: number, direction: 'in' | 'out', data: unknown) => Promise<Made>;
 };
 
 export type Posted = {
@@ -35,6 +37,20 @@ export type Posted = {
  * savings transfer all end the same way, whichever app is saving.
  */
 export async function savePosting(built: Built, api: PostingApi, mpesaAccountId: number): Promise<Posted> {
+  if (built.kind === 'other-budget') {
+    await api.otherBudget(built.groupId, built.direction, built.main);
+    // The charge, when there is one, is a real cost on this budget's own account, so it is
+    // still recorded here — but it cannot be tied to the entry it came with, which now lives
+    // in a different budget's own history.
+    if (!built.fee) return { id: undefined, feeFailed: false };
+    try {
+      await api.disbursement(built.fee);
+      return { id: undefined, feeFailed: false };
+    } catch {
+      return { id: undefined, feeFailed: true };
+    }
+  }
+
   let id: number | undefined;
   if (built.kind === 'deposit') {
     id = (await api.deposit(built.main)).id;

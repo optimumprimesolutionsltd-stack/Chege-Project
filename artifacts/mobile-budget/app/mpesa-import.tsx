@@ -17,6 +17,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
+  createDeposit as createDepositInOtherBudget,
+  createDisbursement as createDisbursementInOtherBudget,
   customFetch,
   getGetBudgetCategoriesQueryKey,
   useCreateBudgetCategory,
@@ -32,6 +34,7 @@ import {
   useGetJointAccounts,
   useGetWorkspaces,
   useSelectWorkspace,
+  type Workspace,
 } from '@workspace/api-client-react';
 import { buildCategoryTree, filterCategoryTree, type CategoryRow } from '@workspace/category-tree';
 
@@ -77,6 +80,7 @@ import { shownFileName } from '@/lib/shownFileName';
 import { reconcile, statementLines, type StatementReading } from '@/lib/statementImport';
 import { checkRunningBalance, readStatementRows, resolveDirections } from '@/lib/statementTable';
 import type { ReaderMessage } from '@/lib/statementReaderHtml';
+import { fetchOtherBudgetOptions, type OtherBudgetOptions } from '@/lib/otherBudgetOptions';
 import {
   buildPostings,
   categoryPath,
@@ -84,6 +88,7 @@ import {
   chooseIncomeSource,
   canUseSavings,
   chooseContribution,
+  chooseOtherBudget,
   chooseSavings,
   chooseTransfer,
   destinationOf,
@@ -488,6 +493,31 @@ export default function MpesaImportScreen() {
       setSwitchingBudget(false);
     }
   };
+
+  // Recording a line in a different budget entirely — a side hustle run as its own project,
+  // say. Only a budget this person actually manages, so recording in it is always allowed.
+  // Its accounts, categories and income sources are read without ever switching to it, then
+  // kept for the rest of this review so picking it on a second line costs nothing further.
+  const otherManagedBudgets = (workspaces as Workspace[]).filter(
+    (workspace) => workspace.id !== group?.id && (workspace.role === 'owner' || workspace.role === 'admin'),
+  );
+  const [otherBudgetOptions, setOtherBudgetOptions] = useState<Record<number, OtherBudgetOptions>>({});
+  const [loadingOtherBudget, setLoadingOtherBudget] = useState<number | null>(null);
+  const loadOtherBudgetOptions = async (groupId: number): Promise<OtherBudgetOptions | null> => {
+    const cached = otherBudgetOptions[groupId];
+    if (cached) return cached;
+    setLoadingOtherBudget(groupId);
+    try {
+      const options = await fetchOtherBudgetOptions(groupId);
+      setOtherBudgetOptions((current) => ({ ...current, [groupId]: options }));
+      return options;
+    } catch (error: unknown) {
+      Alert.alert('Could not read that budget', error instanceof Error ? error.message : 'Please try again.');
+      return null;
+    } finally {
+      setLoadingOtherBudget(null);
+    }
+  };
   // Once the new budget has loaded, read the same messages again: duplicates,
   // suggestions and nicknames are all per budget. A statement is not read again from a
   // file (the file is gone), so its entries are kept and checked against the new budget:
@@ -872,6 +902,14 @@ export default function MpesaImportScreen() {
     bankToBank: (data) => transferBankToBank({ data: data as never }) as Promise<{ outgoing: { id: number }; incoming: { id: number } }>,
     toSavings: (data) => transferBankToSavings({ data: data as never }) as Promise<{ id: number }>,
     fromSavings: (data) => transferSavingsToBank({ data: data as never }) as Promise<{ id: number }>,
+    // Named explicitly, on the plain client rather than a mutation hook: this never belongs to
+    // the current budget's own cache, and its own membership check is verified again server side.
+    otherBudget: async (groupId, direction, data) => {
+      const options = { headers: { 'x-jamvi-workspace': String(groupId) } };
+      return direction === 'in'
+        ? createDepositInOtherBudget(data as never, options)
+        : createDisbursementInOtherBudget(data as never, options);
+    },
   };
 
   const saveAll = async () => {
@@ -1219,6 +1257,7 @@ export default function MpesaImportScreen() {
                   Money in KES {formatExact(summary.moneyIn)} · money out KES {formatExact(summary.moneyOut)}
                   {summary.fees > 0 ? ` · M-Pesa charges KES ${formatExact(summary.fees)}` : ''}
                   {summary.moves > 0 ? ` · ${summary.moves} between your own accounts` : ''}
+                  {summary.toOtherBudgets > 0 ? ` · ${summary.toOtherBudgets} in another budget` : ''}
                 </Text>
               </View>
             ) : null}
@@ -1439,6 +1478,130 @@ export default function MpesaImportScreen() {
                       </ScrollView>
                     </View>
                   ) : null}
+                  {canManageBudget && choice?.include && (destinationOf(choice) === 'category' || destinationOf(choice) === 'other-budget') && otherManagedBudgets.length > 0 ? (
+                    <View style={{ gap: 6 }} testID={`mpesa-line-other-budget-${item.index}`}>
+                      <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0 }]}>Does this belong to a different budget you run?</Text>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
+                        {[{ id: null as number | null, name: 'No' }, ...otherManagedBudgets.map((option) => ({ id: option.id as number | null, name: option.name }))].map((option) => {
+                          const on = (choice.otherBudget?.groupId ?? null) === option.id;
+                          return (
+                            <Pressable
+                              key={option.id ?? 'no'}
+                              disabled={loadingOtherBudget !== null}
+                              onPress={async () => {
+                                if (option.id === null) {
+                                  setChoices((current) => chooseOtherBudget(current, item.index, null));
+                                  return;
+                                }
+                                const options = await loadOtherBudgetOptions(option.id);
+                                if (!options) return;
+                                setChoices((current) =>
+                                  chooseOtherBudget(current, item.index, {
+                                    groupId: option.id!,
+                                    groupName: option.name,
+                                    accountId: options.accounts[0]?.id ?? 0,
+                                    accountName: options.accounts[0]?.name ?? '',
+                                  }),
+                                );
+                              }}
+                              accessibilityRole="button"
+                              accessibilityState={{ selected: on }}
+                              testID={`mpesa-line-other-budget-${item.index}-${option.id ?? 'no'}`}
+                              style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, borderWidth: 1, borderColor: on ? colors.primary : colors.border, backgroundColor: on ? `${colors.primary}22` : colors.muted, opacity: loadingOtherBudget === option.id ? 0.6 : 1 }}
+                            >
+                              {loadingOtherBudget === option.id ? (
+                                <ActivityIndicator size="small" color={colors.primary} />
+                              ) : (
+                                <Text style={{ color: on ? colors.primary : colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>{option.name}</Text>
+                              )}
+                            </Pressable>
+                          );
+                        })}
+                      </ScrollView>
+                      {choice.otherBudget ? (
+                        (() => {
+                          const target = choice.otherBudget!;
+                          const options = otherBudgetOptions[target.groupId];
+                          if (!options) return null;
+                          return (
+                            <View style={{ gap: 6 }}>
+                              {options.accounts.length === 0 ? (
+                                <Text style={[styles.hint, { color: colors.destructive, marginTop: 0 }]}>{target.groupName} has no bank account yet. Add one there first.</Text>
+                              ) : (
+                                <>
+                                  <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0 }]}>Which account in {target.groupName}?</Text>
+                                  <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
+                                    {options.accounts.map((account) => {
+                                      const on = target.accountId === account.id;
+                                      return (
+                                        <Pressable
+                                          key={account.id}
+                                          onPress={() => setChoices((current) => chooseOtherBudget(current, item.index, { ...target, accountId: account.id, accountName: account.name }))}
+                                          accessibilityRole="button"
+                                          accessibilityState={{ selected: on }}
+                                          testID={`mpesa-line-other-budget-account-${item.index}-${account.id}`}
+                                          style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, borderWidth: 1, borderColor: on ? colors.primary : colors.border, backgroundColor: on ? `${colors.primary}22` : colors.muted }}
+                                        >
+                                          <Text style={{ color: on ? colors.primary : colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>{account.name}</Text>
+                                        </Pressable>
+                                      );
+                                    })}
+                                  </ScrollView>
+                                </>
+                              )}
+                              {out ? (
+                                <>
+                                  <Text style={[styles.hint, { color: options.categories.length === 0 || !target.category?.trim() ? colors.destructive : colors.mutedForeground, marginTop: 0 }]}>Which category in {target.groupName}?</Text>
+                                  {options.categories.length === 0 ? (
+                                    <Text style={[styles.hint, { color: colors.destructive, marginTop: 0 }]}>{target.groupName} has no categories yet. Add one there first.</Text>
+                                  ) : (
+                                    <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
+                                      {options.categories.map((category) => {
+                                        const on = target.category === category;
+                                        return (
+                                          <Pressable
+                                            key={category}
+                                            onPress={() => setChoices((current) => chooseOtherBudget(current, item.index, { ...target, category }))}
+                                            accessibilityRole="button"
+                                            accessibilityState={{ selected: on }}
+                                            testID={`mpesa-line-other-budget-category-${item.index}-${category}`}
+                                            style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, borderWidth: 1, borderColor: on ? colors.primary : colors.border, backgroundColor: on ? `${colors.primary}22` : colors.muted }}
+                                          >
+                                            <Text style={{ color: on ? colors.primary : colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>{category}</Text>
+                                          </Pressable>
+                                        );
+                                      })}
+                                    </ScrollView>
+                                  )}
+                                </>
+                              ) : options.incomeSources.length > 0 ? (
+                                <>
+                                  <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0 }]}>Which income source in {target.groupName}? (optional)</Text>
+                                  <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
+                                    {[{ id: null as number | null, name: 'Not sure' }, ...options.incomeSources.map((source) => ({ id: source.id as number | null, name: source.name }))].map((option) => {
+                                      const on = (target.incomeSourceId ?? null) === option.id;
+                                      return (
+                                        <Pressable
+                                          key={option.id ?? 'no'}
+                                          onPress={() => setChoices((current) => chooseOtherBudget(current, item.index, { ...target, incomeSourceId: option.id }))}
+                                          accessibilityRole="button"
+                                          accessibilityState={{ selected: on }}
+                                          testID={`mpesa-line-other-budget-income-${item.index}-${option.id ?? 'no'}`}
+                                          style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, borderWidth: 1, borderColor: on ? colors.primary : colors.border, backgroundColor: on ? `${colors.primary}22` : colors.muted }}
+                                        >
+                                          <Text style={{ color: on ? colors.primary : colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>{option.name}</Text>
+                                        </Pressable>
+                                      );
+                                    })}
+                                  </ScrollView>
+                                </>
+                              ) : null}
+                            </View>
+                          );
+                        })()
+                      ) : null}
+                    </View>
+                  ) : null}
                   {canManageBudget && isShared && item.direction === 'in' && choice?.include && !isMove(choice) && destinationOf(choice) !== 'debt' && parties.length > 0 ? (
                     <View style={{ gap: 6 }} testID={`mpesa-line-contribution-${item.index}`}>
                       <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0 }]}>Is this a member's contribution? Whose?</Text>
@@ -1519,7 +1682,7 @@ export default function MpesaImportScreen() {
                       testID={`mpesa-line-more-${item.index}`}
                     >
                       <Text style={[styles.hint, { color: colors.primary, marginTop: 0, fontFamily: 'Inter_600SemiBold' }]}>
-                        More: debt or loan, between my accounts, savings
+                        More: debt or loan, between my accounts, savings, another budget
                       </Text>
                     </Pressable>
                   ) : null}
