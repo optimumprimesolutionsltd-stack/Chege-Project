@@ -216,6 +216,9 @@ export default function IncomeStreamsReport() {
   const progressHasActivity = progressSpent > 0 || progressCategories.some((category) => category.spentAmount > 0) || (report?.totalFunding ?? 0) > 0;
   const progressUsagePercent = progressBudget > 0 ? Math.round((progressSpent / progressBudget) * 100) : 0;
   const progressFundingGap = report && report.totalExpected > 0 ? report.totalExpected - report.totalFunding : null;
+  // Income less expenses, put beside the two figures it is worked from
+  // rather than left as a subtraction the person has to do themselves.
+  const netIncomeVsExpenses = (report?.totalFunding ?? 0) - progressSpent;
   const progressLoading = monthlySummary.isLoading || monthlyCategories.isLoading || isLoading;
   const progressError = monthlySummary.isError || monthlyCategories.isError || isError;
   const progressStatus = progressBudget <= 0
@@ -385,6 +388,14 @@ export default function IncomeStreamsReport() {
               )}
             </div>
           </div>
+          {!progressLoading && !progressError && progressHasActivity && (
+            <div className="flex items-center justify-between rounded-xl border border-border/60 bg-background/60 px-3 py-2.5" data-testid="report-net-income-vs-expenses">
+              <p className="text-xs font-semibold text-muted-foreground">Income vs. expenses</p>
+              <p className={`font-display text-lg font-bold ${netIncomeVsExpenses < 0 ? "text-destructive" : "text-primary"}`}>
+                {netIncomeVsExpenses >= 0 ? "+" : "−"}{formatKes(Math.abs(netIncomeVsExpenses))}
+              </p>
+            </div>
+          )}
           {!progressLoading && !progressError && (
             <div className="grid gap-2 text-sm sm:grid-cols-3">
               <Link
@@ -392,7 +403,7 @@ export default function IncomeStreamsReport() {
                 className="rounded-xl border border-border/60 bg-background/60 p-3 transition-colors hover:border-primary/40 hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 data-testid="report-open-expense-ledger"
               >
-                <p className="text-xs text-muted-foreground">Spending</p>
+                <p className="text-xs text-muted-foreground">Expenses</p>
                 <p className="mt-1 font-display text-lg font-bold">{formatKes(progressSpent)}</p>
                 <p className="text-xs text-muted-foreground">of {formatKes(progressBudget)} budget</p>
                 <p className="mt-2 text-xs font-semibold text-primary">Open expense ledger →</p>
@@ -402,7 +413,7 @@ export default function IncomeStreamsReport() {
                 className="rounded-xl border border-border/60 bg-background/60 p-3 transition-colors hover:border-primary/40 hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 data-testid="report-open-contribution-ledger"
               >
-                <p className="text-xs text-muted-foreground">Recorded funding</p>
+                <p className="text-xs text-muted-foreground">Income</p>
                 <p className="mt-1 font-display text-lg font-bold">{formatKes(report?.totalFunding ?? 0)}</p>
                 <p className="text-xs text-muted-foreground">
                   {report && report.totalExpected > 0

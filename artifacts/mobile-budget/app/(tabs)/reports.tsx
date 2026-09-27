@@ -393,6 +393,9 @@ export default function ReportsScreen() {
   const fundingGap = incomeStreamReport && incomeStreamReport.totalExpected > 0
     ? incomeStreamReport.totalExpected - incomeStreamReport.totalFunding
     : null;
+  // Income less expenses, put beside the two figures it is worked from
+  // rather than left as a subtraction the person has to do themselves.
+  const netIncomeVsExpenses = (incomeStreamReport?.totalFunding ?? 0) - totalSpent;
   const progressLoading = loadingSummary || loadingCat || loadingIncomeStreams || loadingExp;
   const progressError = summaryError || categoryError || expensesError || incomeStreamsError;
   const progressStatus = totalBudget <= 0
@@ -675,11 +678,22 @@ export default function ReportsScreen() {
                 {overBudgetCount > 0 ? ` ${overBudgetCategoryNames.slice(0, 3).join(', ')}${overBudgetCount > 3 ? ' and other categories' : ''} need${overBudgetCount === 1 ? 's' : ''} attention.` : ''}
               </Text>
             )}
+            {!progressLoading && !progressError && hasMonthlyActivity && (
+              <View
+                style={[styles.netBanner, { backgroundColor: colors.card, borderColor: colors.border }]}
+                testID="reports-net-income-vs-expenses"
+              >
+                <Text style={[styles.netBannerLabel, { color: colors.mutedForeground }]}>Income vs. expenses</Text>
+                <Text style={[styles.netBannerAmount, { color: netIncomeVsExpenses >= 0 ? colors.primary : colors.destructive }]}>
+                  {netIncomeVsExpenses >= 0 ? '+' : '−'}{formatKES(Math.abs(netIncomeVsExpenses))}
+                </Text>
+              </View>
+            )}
             {!progressLoading && !progressError && (
               <View style={styles.progressStats}>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel={`Spending: ${formatKES(totalSpent)} of ${formatKES(totalBudget)} budget. Tap for the category breakdown.`}
+                  accessibilityLabel={`Expenses: ${formatKES(totalSpent)} of ${formatKES(totalBudget)} budget. Tap for the category breakdown.`}
                   accessibilityHint="Jumps to Budget vs Actual"
                   onPress={() => jumpToSection('spending')}
                   style={({ pressed }) => [
@@ -689,7 +703,7 @@ export default function ReportsScreen() {
                   ]}
                 >
                   <View style={styles.progressStatHeading}>
-                    <Text style={[styles.progressStatLabel, { color: colors.mutedForeground }]}>Spending</Text>
+                    <Text style={[styles.progressStatLabel, { color: colors.mutedForeground }]}>Expenses</Text>
                     <Feather name="chevron-right" size={14} color={colors.mutedForeground} />
                   </View>
                   <Text style={[styles.progressStatAmount, { color: colors.foreground }]}>{formatKES(totalSpent)}</Text>
@@ -697,7 +711,7 @@ export default function ReportsScreen() {
                 </Pressable>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel={`Recorded funding: ${formatKES(incomeStreamReport?.totalFunding ?? 0)}. Tap for the income streams.`}
+                  accessibilityLabel={`Income: ${formatKES(incomeStreamReport?.totalFunding ?? 0)}. Tap for the income streams.`}
                   accessibilityHint="Jumps to Income Streams"
                   onPress={() => jumpToSection('income')}
                   style={({ pressed }) => [
@@ -707,7 +721,7 @@ export default function ReportsScreen() {
                   ]}
                 >
                   <View style={styles.progressStatHeading}>
-                    <Text style={[styles.progressStatLabel, { color: colors.mutedForeground }]}>Recorded funding</Text>
+                    <Text style={[styles.progressStatLabel, { color: colors.mutedForeground }]}>Income</Text>
                     <Feather name="chevron-right" size={14} color={colors.mutedForeground} />
                   </View>
                   <Text style={[styles.progressStatAmount, { color: colors.foreground }]}>{formatKES(incomeStreamReport?.totalFunding ?? 0)}</Text>
@@ -1554,6 +1568,9 @@ const styles = StyleSheet.create({
   progressMonth: { fontSize: 11, fontFamily: 'Inter_500Medium' },
   progressMessageRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   progressMessage: { fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 18 },
+  netBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 10, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 8 },
+  netBannerLabel: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
+  netBannerAmount: { fontSize: 18, fontFamily: 'Inter_700Bold' },
   progressStats: { flexDirection: 'row', gap: 8 },
   progressStat: { flex: 1, borderRadius: 10, borderWidth: 1, padding: 10 },
   progressStatPressed: { opacity: 0.72 },
