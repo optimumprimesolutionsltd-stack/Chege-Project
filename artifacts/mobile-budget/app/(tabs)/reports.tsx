@@ -256,17 +256,10 @@ export default function ReportsScreen() {
     refetchExp(); refetchCat(); refetchSummary(); refetchIncomeStreams(); refetchIncomeTrend();
   }, [refetchExp, refetchCat, refetchSummary, refetchIncomeStreams, refetchIncomeTrend]);
 
-  // Only one category links to a stream through this picker at a time, even
-  // though the field itself allows many categories to point at the same
-  // stream — moving the link off whichever category held it keeps that true.
-  const chooseCostCategory = useCallback(async (categoryId: number | null) => {
-    if (!costCategoryFor) return;
-    const { incomeSourceId } = costCategoryFor;
-    const previouslyLinked = categories.find((category) => category.reducesIncomeSourceId === incomeSourceId);
-    setCostCategoryFor(null);
+  const applyCostCategoryChoice = useCallback(async (incomeSourceId: number, previouslyLinkedId: number | null, categoryId: number | null) => {
     try {
-      if (previouslyLinked && previouslyLinked.id !== categoryId) {
-        await updateCostCategory.mutateAsync({ id: previouslyLinked.id, data: { reducesIncomeSourceId: null } });
+      if (previouslyLinkedId != null && previouslyLinkedId !== categoryId) {
+        await updateCostCategory.mutateAsync({ id: previouslyLinkedId, data: { reducesIncomeSourceId: null } });
       }
       if (categoryId != null) {
         await updateCostCategory.mutateAsync({ id: categoryId, data: { reducesIncomeSourceId: incomeSourceId } });
@@ -276,7 +269,32 @@ export default function ReportsScreen() {
     } catch {
       Alert.alert('Could not update the cost category', 'Please try again.');
     }
-  }, [costCategoryFor, categories, updateCostCategory, queryClient, queryParams]);
+  }, [updateCostCategory, queryClient, queryParams]);
+
+  // Only one category links to a stream through this picker at a time, even
+  // though the field itself allows many categories to point at the same
+  // stream — moving the link off whichever category held it keeps that true.
+  // Swapping to a genuinely different category asks first, since it silently
+  // unlinks whatever was there before.
+  const chooseCostCategory = useCallback((categoryId: number | null) => {
+    if (!costCategoryFor) return;
+    const { incomeSourceId, sourceName } = costCategoryFor;
+    const previouslyLinked = categories.find((category) => category.reducesIncomeSourceId === incomeSourceId) ?? null;
+    const newCategory = categoryId != null ? categories.find((category) => category.id === categoryId) : null;
+    setCostCategoryFor(null);
+    if (previouslyLinked && categoryId != null && previouslyLinked.id !== categoryId) {
+      Alert.alert(
+        'Replace the cost category?',
+        `"${previouslyLinked.name}" is currently linked to ${sourceName}. Choosing "${newCategory?.name ?? 'this category'}" instead will unlink it.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Replace', onPress: () => void applyCostCategoryChoice(incomeSourceId, previouslyLinked.id, categoryId) },
+        ],
+      );
+      return;
+    }
+    void applyCostCategoryChoice(incomeSourceId, previouslyLinked?.id ?? null, categoryId);
+  }, [costCategoryFor, categories, applyCostCategoryChoice]);
 
   const exportPdf = useCallback(async () => {
     setIsExporting(true);
@@ -1451,6 +1469,9 @@ export default function ReportsScreen() {
               >
                 <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold' }}>None</Text>
               </Pressable>
+              <Text style={[styles.variance, { color: colors.mutedForeground, marginBottom: 8 }]}>
+                Only categories without sub-categories of their own are listed — a category holding sub-categories carries no spending itself, so link each sub-category separately.
+              </Text>
               {categories
                 .filter((category) => !categories.some((other) => other.parentId === category.id))
                 .map((category) => {

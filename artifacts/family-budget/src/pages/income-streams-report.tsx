@@ -83,9 +83,16 @@ export default function IncomeStreamsReport() {
   // Only one category links to a stream through this picker at a time, even
   // though the field itself allows many categories to point at the same
   // stream — moving the link off whichever category held it keeps that true.
-  const chooseCostCategory = async (incomeSourceId: number, categoryId: number | null) => {
+  const chooseCostCategory = async (incomeSourceId: number, sourceName: string, categoryId: number | null) => {
     const previouslyLinked = categories.find((category) => category.reducesIncomeSourceId === incomeSourceId);
     if (previouslyLinked && previouslyLinked.id === categoryId) return;
+    if (previouslyLinked && categoryId != null) {
+      const newCategory = categories.find((category) => category.id === categoryId);
+      const confirmed = window.confirm(
+        `"${previouslyLinked.name}" is currently linked to ${sourceName}. Choosing "${newCategory?.name ?? "this category"}" instead will unlink it. Replace it?`,
+      );
+      if (!confirmed) return;
+    }
     try {
       if (previouslyLinked) {
         await updateCostCategory.mutateAsync({ id: previouslyLinked.id, data: { reducesIncomeSourceId: null } });
@@ -678,7 +685,7 @@ export default function IncomeStreamsReport() {
                               <select
                                 className="flex h-11 w-full rounded-md border border-input bg-card px-3 py-2 text-sm"
                                 value={leafCategories.find((category) => category.reducesIncomeSourceId === stream.incomeSourceId)?.id ?? ""}
-                                onChange={(event) => void chooseCostCategory(stream.incomeSourceId!, event.target.value ? Number(event.target.value) : null)}
+                                onChange={(event) => void chooseCostCategory(stream.incomeSourceId!, stream.sourceName, event.target.value ? Number(event.target.value) : null)}
                                 data-testid={`income-stream-cost-category-${streamId}`}
                               >
                                 <option value="">None</option>
@@ -691,6 +698,7 @@ export default function IncomeStreamsReport() {
                               </select>
                               <span className="text-xs font-normal text-muted-foreground">
                                 Spending tagged to this category is worked out of {stream.sourceName}&rsquo;s profit every month.
+                                Only categories without sub-categories of their own are listed — a category holding sub-categories carries no spending itself, so link each sub-category separately.
                               </span>
                             </label>
                           )}

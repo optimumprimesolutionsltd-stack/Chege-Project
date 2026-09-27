@@ -44,4 +44,14 @@ describe("linking a category as an income stream's cost", () => {
   it('offers a "None" option to clear the link entirely', () => {
     expect(reportSource).toContain('<option value="">None</option>');
   });
+
+  it("asks before swapping a stream onto a different category, since that silently unlinks the old one", () => {
+    expect(reportSource).toContain("if (previouslyLinked && categoryId != null) {");
+    expect(reportSource).toContain("window.confirm(");
+    expect(reportSource).toContain("if (!confirmed) return;");
+  });
+
+  it("explains why a category with its own sub-categories is left out of the list", () => {
+    expect(reportSource).toContain("Only categories without sub-categories of their own are listed");
+  });
 });

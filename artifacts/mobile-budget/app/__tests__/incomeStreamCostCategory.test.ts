@@ -19,8 +19,8 @@ describe('linking a category as an income stream\'s cost', () => {
   });
 
   it('moves the link off whichever category held it before setting a new one', () => {
-    expect(reports).toContain('const previouslyLinked = categories.find((category) => category.reducesIncomeSourceId === incomeSourceId);');
-    expect(reports).toContain("if (previouslyLinked && previouslyLinked.id !== categoryId)");
+    expect(reports).toContain('const previouslyLinked = categories.find((category) => category.reducesIncomeSourceId === incomeSourceId) ?? null;');
+    expect(reports).toContain("if (previouslyLinkedId != null && previouslyLinkedId !== categoryId)");
     expect(reports).toContain('reducesIncomeSourceId: null');
   });
 
@@ -32,5 +32,18 @@ describe('linking a category as an income stream\'s cost', () => {
   it('offers a "None" option to clear the link entirely', () => {
     expect(reports).toContain('testID="cost-category-none"');
     expect(reports).toContain('chooseCostCategory(null)');
+  });
+
+  it('asks before swapping a stream onto a different category, since that silently unlinks the old one', () => {
+    expect(reports).toContain("if (previouslyLinked && categoryId != null && previouslyLinked.id !== categoryId)");
+    expect(reports).toContain("'Replace the cost category?'");
+  });
+
+  it('does not ask when clearing the link to None, or when there was nothing linked before', () => {
+    expect(reports).toContain('void applyCostCategoryChoice(incomeSourceId, previouslyLinked?.id ?? null, categoryId);');
+  });
+
+  it('explains why a category with its own sub-categories is left out of the list', () => {
+    expect(reports).toContain('Only categories without sub-categories of their own are listed');
   });
 });
