@@ -386,7 +386,8 @@ export const GetBudgetCategoriesResponseItem = zod.object({
   "color": zod.string(),
   "isRecurring": zod.boolean().describe('Whether this budget applies every month'),
   "activeMonth": zod.number().nullish().describe('Month when a one-time budget applies'),
-  "activeYear": zod.number().nullish().describe('Year when a one-time budget applies')
+  "activeYear": zod.number().nullish().describe('Year when a one-time budget applies'),
+  "reducesIncomeSourceId": zod.number().nullish().describe('The income source this category is a cost of earning, if any. Its spending is worked out of that stream\'s profit on the income-streams report instead of only counting against the budget as a whole.')
 })
 export const GetBudgetCategoriesResponse = zod.array(GetBudgetCategoriesResponseItem)
 
@@ -409,7 +410,8 @@ export const CreateBudgetCategoryBody = zod.object({
   "color": zod.string().optional(),
   "isRecurring": zod.boolean().default(createBudgetCategoryBodyIsRecurringDefault),
   "activeMonth": zod.number().min(1).max(createBudgetCategoryBodyActiveMonthMax).nullish(),
-  "activeYear": zod.number().min(createBudgetCategoryBodyActiveYearMin).max(createBudgetCategoryBodyActiveYearMax).nullish()
+  "activeYear": zod.number().min(createBudgetCategoryBodyActiveYearMin).max(createBudgetCategoryBodyActiveYearMax).nullish(),
+  "reducesIncomeSourceId": zod.number().nullish().describe('The income source this category is a cost of earning, if any.')
 })
 
 export const CreateBudgetCategoryResponse = zod.object({
@@ -421,7 +423,8 @@ export const CreateBudgetCategoryResponse = zod.object({
   "color": zod.string(),
   "isRecurring": zod.boolean().describe('Whether this budget applies every month'),
   "activeMonth": zod.number().nullish().describe('Month when a one-time budget applies'),
-  "activeYear": zod.number().nullish().describe('Year when a one-time budget applies')
+  "activeYear": zod.number().nullish().describe('Year when a one-time budget applies'),
+  "reducesIncomeSourceId": zod.number().nullish().describe('The income source this category is a cost of earning, if any. Its spending is worked out of that stream\'s profit on the income-streams report instead of only counting against the budget as a whole.')
 })
 
 
@@ -498,7 +501,8 @@ export const UpdateBudgetCategoryBody = zod.object({
   "color": zod.string().optional(),
   "isRecurring": zod.boolean().optional(),
   "activeMonth": zod.number().min(1).max(updateBudgetCategoryBodyActiveMonthMax).nullish(),
-  "activeYear": zod.number().min(updateBudgetCategoryBodyActiveYearMin).max(updateBudgetCategoryBodyActiveYearMax).nullish()
+  "activeYear": zod.number().min(updateBudgetCategoryBodyActiveYearMin).max(updateBudgetCategoryBodyActiveYearMax).nullish(),
+  "reducesIncomeSourceId": zod.number().nullish().describe('The income source this category is a cost of earning, if any. Send null to clear it.')
 }).describe('Fields to update. A one-time budget requires both activeMonth and activeYear.')
 
 export const UpdateBudgetCategoryResponse = zod.object({
@@ -510,7 +514,8 @@ export const UpdateBudgetCategoryResponse = zod.object({
   "color": zod.string(),
   "isRecurring": zod.boolean().describe('Whether this budget applies every month'),
   "activeMonth": zod.number().nullish().describe('Month when a one-time budget applies'),
-  "activeYear": zod.number().nullish().describe('Year when a one-time budget applies')
+  "activeYear": zod.number().nullish().describe('Year when a one-time budget applies'),
+  "reducesIncomeSourceId": zod.number().nullish().describe('The income source this category is a cost of earning, if any. Its spending is worked out of that stream\'s profit on the income-streams report instead of only counting against the budget as a whole.')
 })
 
 
@@ -855,7 +860,8 @@ export const GetDashboardIncomeStreamsResponse = zod.object({
   "sourceName": zod.string(),
   "ownerId": zod.string().nullish(),
   "ownerName": zod.string(),
-  "total": zod.number().describe('Funding amount in KES'),
+  "total": zod.number().describe('Funding amount in KES, net of any linked cost categories (see `costs`). This is what counts as the stream\'s actual profit.'),
+  "costs": zod.number().describe('Spending this month against categories that name this income source as what they cost (see `BudgetCategory.reducesIncomeSourceId`), already subtracted from `total`. Zero when the stream has no linked cost categories.'),
   "expectedMonthlyAmount": zod.number(),
   "remainingBalance": zod.number().describe('Expected monthly amount less recorded funding'),
   "variance": zod.number().describe('Recorded funding less expected monthly amount'),

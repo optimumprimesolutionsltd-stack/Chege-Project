@@ -1385,6 +1385,75 @@ router.get("/dashboard/spending-by-item", async (req, res): Promise<void> => {
 });
 
 /**
+ * What each income source lost this month to its own cost categories —
+ * stock bought for a side hustle, say — read from `budget_categories.reduces_income_source_id`.
+ *
+ * Kept separate from the funding query above rather than folded into its
+ * CTE: a category can rack up cost with no funding recorded yet in the same
+ * month (stock bought, nothing sold), and that has to reduce the stream all
+ * the same, so this cannot be conditioned on a source having a funding row at
+ * all. Almost every group links nothing, so the common case is one cheap
+ * query that returns no rows.
+ */
+async function incomeStreamCostsBySource(groupId: number, month: number, year: number): Promise<Map<number, number>> {
+  const result = await db.execute(sql`
+    WITH cost_categories AS (
+      SELECT name, reduces_income_source_id
+      FROM budget_categories
+      WHERE group_id = ${groupId} AND reduces_income_source_id IS NOT NULL
+    ),
+    costs AS (
+      -- Explicit category portions of split expenses — the reporting source
+      -- of truth for those, the same as everywhere else a category total is
+      -- read (see budget-categories.ts's rename handler).
+      SELECT alloc.category, alloc.amount
+      FROM expense_category_allocations alloc
+      INNER JOIN expenses expense ON expense.id = alloc.expense_id AND expense.group_id = ${groupId}
+      WHERE alloc.group_id = ${groupId}
+        AND EXTRACT(MONTH FROM expense.date) = ${month}
+        AND EXTRACT(YEAR FROM expense.date) = ${year}
+
+      UNION ALL
+
+      -- Legacy/direct expenses, only when no explicit allocation portions exist.
+      SELECT expense.category, expense.amount
+      FROM expenses expense
+      WHERE expense.group_id = ${groupId}
+        AND EXTRACT(MONTH FROM expense.date) = ${month}
+        AND EXTRACT(YEAR FROM expense.date) = ${year}
+        AND NOT EXISTS (
+          SELECT 1 FROM expense_category_allocations alloc
+          WHERE alloc.expense_id = expense.id AND alloc.group_id = ${groupId}
+        )
+
+      UNION ALL
+
+      -- Bank disbursements charged to the category: money spent from a joint account.
+      SELECT tx.expense_category AS category, tx.amount
+      FROM joint_account_transactions tx
+      WHERE tx.group_id = ${groupId}
+        AND tx.type = 'disbursement'
+        AND tx.expense_category IS NOT NULL
+        AND EXTRACT(MONTH FROM tx.date) = ${month}
+        AND EXTRACT(YEAR FROM tx.date) = ${year}
+    )
+    SELECT cc.reduces_income_source_id AS "incomeSourceId", COALESCE(SUM(costs.amount), 0) AS cost
+    FROM cost_categories cc
+    INNER JOIN costs ON costs.category = cc.name
+    GROUP BY cc.reduces_income_source_id
+  `);
+  const costsByIncomeSourceId = new Map<number, number>();
+  for (const row of result.rows as Array<{ incomeSourceId?: unknown; cost?: unknown }>) {
+    if (row.cost === undefined || row.cost === null) continue;
+    const incomeSourceId = Number(row.incomeSourceId);
+    const cost = Number(row.cost);
+    if (!Number.isFinite(incomeSourceId) || !Number.isFinite(cost)) continue;
+    costsByIncomeSourceId.set(incomeSourceId, cost);
+  }
+  return costsByIncomeSourceId;
+}
+
+/**
  * Funding is attributed at the same unit as the contribution summary:
  * personal expense portions, bank deposits, and personal savings additions.
  * Joint-bank expense portions are intentionally absent so a prior deposit is
@@ -1398,6 +1467,8 @@ router.get("/dashboard/income-streams", async (req, res): Promise<void> => {
   const parsed = GetDashboardIncomeStreamsQueryParams.safeParse(req.query);
   const month = parsed.success && parsed.data.month != null ? Math.round(parsed.data.month) : now.getUTCMonth() + 1;
   const year = parsed.success && parsed.data.year != null ? Math.round(parsed.data.year) : now.getUTCFullYear();
+
+  const costsByIncomeSourceId = await incomeStreamCostsBySource(groupId, month, year);
 
   const result = await db.execute(sql`
     WITH funding AS (
@@ -1581,17 +1652,25 @@ router.get("/dashboard/income-streams", async (req, res): Promise<void> => {
     .from(incomeSourcesTable)
     .leftJoin(usersTable, eq(usersTable.id, incomeSourcesTable.userId))
     .where(eq(incomeSourcesTable.groupId, groupId));
+
   const actualBySource = new Map(rawRows
     .filter((row): row is typeof row & { incomeSourceId: number } => row.incomeSourceId !== null)
     .map((row) => [row.incomeSourceId, row]));
-  const totalFunding = rawRows.reduce((sum, row) => sum + Number(row.total), 0);
+  const unattributed = rawRows.find((row) => row.incomeSourceId === null);
   const totalExpected = sources.reduce((sum, source) => sum + source.expectedMonthlyAmount, 0);
+  // Net of costs, so the denominator every share is taken against already
+  // reflects what a stream actually kept, not what it moved through.
+  const totalFunding = sources.reduce((sum, source) => {
+    const gross = actualBySource.get(source.id);
+    return sum + (gross ? Number(gross.total) : 0) - (costsByIncomeSourceId.get(source.id) ?? 0);
+  }, 0) + (unattributed ? Number(unattributed.total) : 0);
   const streams: Array<{
     incomeSourceId: number | null;
     sourceName: string;
     ownerId: string | null;
     ownerName: string;
     total: number;
+    costs: number;
     expectedMonthlyAmount: number;
     remainingBalance: number;
     variance: number;
@@ -1600,13 +1679,15 @@ router.get("/dashboard/income-streams", async (req, res): Promise<void> => {
     entries: FundingEntry[];
   }> = sources.map((source) => {
     const actual = actualBySource.get(source.id);
-    const total = actual ? Number(actual.total) : 0;
+    const costs = costsByIncomeSourceId.get(source.id) ?? 0;
+    const total = (actual ? Number(actual.total) : 0) - costs;
     return {
       incomeSourceId: source.id,
       sourceName: source.name,
       ownerId: source.userId,
       ownerName: source.ownerName ?? "Member",
       total,
+      costs,
       expectedMonthlyAmount: source.expectedMonthlyAmount,
       remainingBalance: source.expectedMonthlyAmount - total,
       variance: total - source.expectedMonthlyAmount,
@@ -1615,7 +1696,6 @@ router.get("/dashboard/income-streams", async (req, res): Promise<void> => {
       entries: actual ? parseEntries(actual.entries) : [],
     };
   });
-  const unattributed = rawRows.find((row) => row.incomeSourceId === null);
   if (unattributed) {
     const total = Number(unattributed.total);
     streams.push({
@@ -1624,6 +1704,7 @@ router.get("/dashboard/income-streams", async (req, res): Promise<void> => {
       ownerId: null,
       ownerName: unattributed.ownerName,
       total,
+      costs: 0,
       expectedMonthlyAmount: 0,
       remainingBalance: -total,
       variance: total,

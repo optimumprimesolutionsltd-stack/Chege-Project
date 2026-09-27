@@ -14,8 +14,10 @@ export interface IncomeStreamFunding {
   /** @nullable */
   ownerId?: string | null;
   ownerName: string;
-  /** Funding amount in KES */
+  /** Funding amount in KES, net of any linked cost categories (see `costs`). This is what counts as the stream's actual profit. */
   total: number;
+  /** Spending this month against categories that name this income source as what they cost (see `BudgetCategory.reducesIncomeSourceId`), already subtracted from `total`. Zero when the stream has no linked cost categories. */
+  costs: number;
   expectedMonthlyAmount: number;
   /** Expected monthly amount less recorded funding */
   remainingBalance: number;

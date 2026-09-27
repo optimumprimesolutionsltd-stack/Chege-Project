@@ -2354,6 +2354,13 @@ components:
         activeYear:
           type: ["number", "null"]
           description: Year when a one-time budget applies
+        reducesIncomeSourceId:
+          type: ["number", "null"]
+          description: >-
+            The income source this category is a cost of earning, if any. Its
+            spending is worked out of that stream's profit on the
+            income-streams report instead of only counting against the
+            budget as a whole.
       required:
         - id
         - name
@@ -2386,6 +2393,9 @@ components:
           type: ["number", "null"]
           minimum: 2000
           maximum: 2200
+        reducesIncomeSourceId:
+          type: ["number", "null"]
+          description: The income source this category is a cost of earning, if any.
       required:
         - name
         - budgetAmount
@@ -2413,6 +2423,9 @@ components:
           type: ["number", "null"]
           minimum: 2000
           maximum: 2200
+        reducesIncomeSourceId:
+          type: ["number", "null"]
+          description: The income source this category is a cost of earning, if any. Send null to clear it.
 
     BudgetCategoryRecommendation:
       type: object
@@ -2892,7 +2905,16 @@ components:
           type: string
         total:
           type: number
-          description: Funding amount in KES
+          description: >-
+            Funding amount in KES, net of any linked cost categories (see
+            `costs`). This is what counts as the stream's actual profit.
+        costs:
+          type: number
+          description: >-
+            Spending this month against categories that name this income
+            source as what they cost (see `BudgetCategory.reducesIncomeSourceId`),
+            already subtracted from `total`. Zero when the stream has no
+            linked cost categories.
         expectedMonthlyAmount:
           type: number
         remainingBalance:
@@ -2915,6 +2937,7 @@ components:
         - sourceName
         - ownerName
         - total
+        - costs
         - expectedMonthlyAmount
         - remainingBalance
         - variance

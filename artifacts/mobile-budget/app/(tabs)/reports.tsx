@@ -9,6 +9,7 @@ import {
   Pressable,
   Platform,
   Modal,
+  Alert,
   type LayoutChangeEvent,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -22,6 +23,7 @@ import { isoDay, longDay, monthStartIso, orderedRange } from '@/lib/dayRange';
 import { writePdf } from '@/lib/savePdf';
 import { useColors } from '@/hooks/useColors';
 import { PageScrollView } from '@/components/PageScrollReset';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   getDashboardMonthlyReportPdf,
   useGetExpenses,
@@ -34,6 +36,9 @@ import {
   useGetMembers,
   useGetSavingsGoals,
   useGetGroup,
+  useGetBudgetCategories,
+  getGetBudgetCategoriesQueryKey,
+  useUpdateBudgetCategory,
 } from '@workspace/api-client-react';
 import { getCategoryIcon } from '@/lib/categoryIcons';
 import { WorkspaceIdentityRow } from '@/components/WorkspaceIdentityRow';
@@ -174,6 +179,13 @@ export default function ReportsScreen() {
   // A PDF is a copy that can be forwarded, so only an owner or admin makes one
   // (the server refuses everybody else). A Personal budget is its owner's.
   const canDownloadPdf = group?.isPrivate !== false || group?.role === 'owner' || group?.role === 'admin';
+  // Linking a category as a stream's cost is a category edit, and the server
+  // only lets a manager make those.
+  const canManageCostCategories = group?.role === 'owner' || group?.role === 'admin';
+  const queryClient = useQueryClient();
+  const { data: categories = [] } = useGetBudgetCategories();
+  const updateCostCategory = useUpdateBudgetCategory();
+  const [costCategoryFor, setCostCategoryFor] = useState<{ incomeSourceId: number; sourceName: string } | null>(null);
   const insets = useSafeAreaInsets();
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
@@ -243,6 +255,28 @@ export default function ReportsScreen() {
   const onRefresh = useCallback(() => {
     refetchExp(); refetchCat(); refetchSummary(); refetchIncomeStreams(); refetchIncomeTrend();
   }, [refetchExp, refetchCat, refetchSummary, refetchIncomeStreams, refetchIncomeTrend]);
+
+  // Only one category links to a stream through this picker at a time, even
+  // though the field itself allows many categories to point at the same
+  // stream — moving the link off whichever category held it keeps that true.
+  const chooseCostCategory = useCallback(async (categoryId: number | null) => {
+    if (!costCategoryFor) return;
+    const { incomeSourceId } = costCategoryFor;
+    const previouslyLinked = categories.find((category) => category.reducesIncomeSourceId === incomeSourceId);
+    setCostCategoryFor(null);
+    try {
+      if (previouslyLinked && previouslyLinked.id !== categoryId) {
+        await updateCostCategory.mutateAsync({ id: previouslyLinked.id, data: { reducesIncomeSourceId: null } });
+      }
+      if (categoryId != null) {
+        await updateCostCategory.mutateAsync({ id: categoryId, data: { reducesIncomeSourceId: incomeSourceId } });
+      }
+      queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
+      queryClient.invalidateQueries({ queryKey: getGetDashboardIncomeStreamsQueryKey(queryParams) });
+    } catch {
+      Alert.alert('Could not update the cost category', 'Please try again.');
+    }
+  }, [costCategoryFor, categories, updateCostCategory, queryClient, queryParams]);
 
   const exportPdf = useCallback(async () => {
     setIsExporting(true);
@@ -913,6 +947,9 @@ export default function ReportsScreen() {
                 {incomeStreamReport?.streams.map(stream => {
                   const unattributed = stream.incomeSourceId == null;
                   const accent = unattributed ? '#f59e0b' : colors.primary;
+                  const linkedCostCategory = unattributed
+                    ? null
+                    : categories.find((category) => category.reducesIncomeSourceId === stream.incomeSourceId) ?? null;
                   return (
                     <View
                       key={stream.incomeSourceId ?? 'unattributed'}
@@ -941,6 +978,24 @@ export default function ReportsScreen() {
                         <Text style={[styles.variance, { color: stream.remainingBalance < 0 ? colors.primary : colors.mutedForeground }]}>{stream.remainingBalance < 0 ? `${formatKES(Math.abs(stream.remainingBalance))} above expected` : `${formatKES(stream.remainingBalance)} remaining`}</Text>
                         <Text style={[styles.variance, { color: colors.mutedForeground }]}>{stream.transactionCount} {stream.transactionCount === 1 ? 'record' : 'records'}</Text>
                       </View>
+                      {stream.costs > 0 ? (
+                        <Text style={[styles.variance, { color: colors.mutedForeground }]}>
+                          {formatKES(stream.total + stream.costs)} sales − {formatKES(stream.costs)} {linkedCostCategory?.name ?? 'cost'} = {formatKES(stream.total)} profit
+                        </Text>
+                      ) : null}
+                      {!unattributed && canManageCostCategories ? (
+                        <Pressable
+                          onPress={() => setCostCategoryFor({ incomeSourceId: stream.incomeSourceId!, sourceName: stream.sourceName })}
+                          style={styles.costCategoryRow}
+                          accessibilityRole="button"
+                          testID={`income-stream-cost-category-${stream.incomeSourceId}`}
+                        >
+                          <Feather name="link-2" size={13} color={colors.mutedForeground} />
+                          <Text style={[styles.variance, { color: colors.mutedForeground }]}>
+                            {linkedCostCategory ? `Cost category: ${linkedCostCategory.name}` : 'Link a cost category'}
+                          </Text>
+                        </Pressable>
+                      ) : null}
                     </View>
                   );
                 })}
@@ -1352,6 +1407,80 @@ export default function ReportsScreen() {
           </View>
         </View>
       </Modal>
+
+      <Modal
+        visible={costCategoryFor !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setCostCategoryFor(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.detailsSheet, { backgroundColor: colors.card }]}>
+            <View style={styles.detailsHeader}>
+              <View style={styles.detailsTitleBlock}>
+                <View style={[styles.detailsIcon, { backgroundColor: colors.primary + '18' }]}>
+                  <Feather name="link-2" size={18} color={colors.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.detailsTitle, { color: colors.foreground }]}>Cost category</Text>
+                  <Text style={[styles.detailsSubtitle, { color: colors.mutedForeground }]}>
+                    Spending tagged to this category is worked out of {costCategoryFor?.sourceName ?? 'this stream'}&rsquo;s profit every month.
+                  </Text>
+                </View>
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+                onPress={() => setCostCategoryFor(null)}
+                hitSlop={10}
+                style={[styles.detailsCloseButton, { backgroundColor: colors.muted }]}
+              >
+                <Feather name="x" size={18} color={colors.foreground} />
+              </Pressable>
+            </View>
+            <ScrollView
+              style={styles.detailsList}
+              contentContainerStyle={[styles.detailsListContent, { paddingBottom: Math.max(insets.bottom, 16) }]}
+              showsVerticalScrollIndicator={false}
+            >
+              <Pressable
+                onPress={() => void chooseCostCategory(null)}
+                style={[styles.costCategoryOption, { borderColor: colors.border }]}
+                accessibilityRole="button"
+                testID="cost-category-none"
+              >
+                <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold' }}>None</Text>
+              </Pressable>
+              {categories
+                .filter((category) => !categories.some((other) => other.parentId === category.id))
+                .map((category) => {
+                  const selected = category.reducesIncomeSourceId === costCategoryFor?.incomeSourceId;
+                  const linkedElsewhere = category.reducesIncomeSourceId != null && !selected;
+                  return (
+                    <Pressable
+                      key={category.id}
+                      onPress={() => void chooseCostCategory(category.id)}
+                      style={[
+                        styles.costCategoryOption,
+                        { borderColor: colors.border },
+                        selected && { backgroundColor: `${colors.primary}18` },
+                      ]}
+                      accessibilityRole="button"
+                      testID={`cost-category-${category.id}`}
+                    >
+                      <Text style={{ color: colors.foreground, fontFamily: selected ? 'Inter_600SemiBold' : 'Inter_400Regular' }}>
+                        {category.name}{selected ? '  ✓' : ''}
+                      </Text>
+                      {linkedElsewhere ? (
+                        <Text style={[styles.variance, { color: colors.mutedForeground }]}>Already linked to another stream</Text>
+                      ) : null}
+                    </Pressable>
+                  );
+                })}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1504,6 +1633,8 @@ const styles = StyleSheet.create({
   incomeStreamOwner: { fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: 1 },
   incomeStreamAmount: { fontSize: 13, fontFamily: 'Inter_700Bold' },
   incomeStreamMeta: { flexDirection: 'row', justifyContent: 'space-between', gap: 10 },
+  costCategoryRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 },
+  costCategoryOption: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 8 },
   incomeTrendHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   incomeTrendBars: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 8 },
 

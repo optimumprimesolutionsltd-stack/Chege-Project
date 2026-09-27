@@ -26,4 +26,9 @@ export interface BudgetCategoryInput {
      * @nullable
      */
   activeYear?: number | null;
+  /**
+     * The income source this category is a cost of earning, if any.
+     * @nullable
+     */
+  reducesIncomeSourceId?: number | null;
 }
