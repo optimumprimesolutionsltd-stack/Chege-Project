@@ -208,3 +208,23 @@ describe('two hundred entries stay light', () => {
   });
 });
 
+// Saving two hundred statement entries one at a time, each its own round trip, was reported
+// as taking too much time. A handful now travel to the server together.
+describe('saving does not wait for one round trip before starting the next', () => {
+  const screen = read('app/mpesa-import.tsx');
+  it('builds the list once, then runs it through the pool instead of a plain sequential loop', () => {
+    expect(screen).toContain('runPool(toSave, SAVE_CONCURRENCY');
+    expect(screen).not.toMatch(/for \(const item of lines\) \{\s*const choice = choices\[item\.index\];\s*if \(!choice\?\.include \|\| !isRecordable\(item\)\) continue;\s*const built = buildPostings/);
+  });
+
+  it('shows how far it has got, instead of a bare spinner', () => {
+    expect(screen).toContain("setSaveProgress({ done: 0, total: toSave.length });");
+    expect(screen).toContain('mpesa-save-progress');
+    expect(screen).toContain('Saving {saveProgress.done} of {saveProgress.total}');
+  });
+
+  it('clears the progress once saving is finished, whether it worked or not', () => {
+    expect(screen).toContain('} finally {\n      setSaveProgress(null);\n      setSaving(false);');
+  });
+});
+
