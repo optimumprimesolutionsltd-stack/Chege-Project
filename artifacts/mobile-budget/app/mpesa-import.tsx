@@ -67,6 +67,7 @@ import { ACTIVE_WORKSPACE_STORAGE_KEY } from '@/lib/workspace';
 import { formatExact } from '@/lib/formatExact';
 import { StatementReader, type ReaderJob } from '@/components/StatementReader';
 import { rememberMpesaCard } from '@/lib/mpesaCard';
+import { keepScreenAwakeWhileSaving, letScreenSleepAgain } from '@/lib/keepAwake';
 import { runPool, savePosting, SAVE_CONCURRENCY, type PostingApi } from '@/lib/savePosting';
 import { parseStoredRules, payeeKey, payeeName, ruleLabel, rulesStorageKey, withRule, withoutRule, type PayeeRules } from '@/lib/payeeLearning';
 import { saveDebtLinks } from '@/lib/debtReversal';
@@ -880,6 +881,7 @@ export default function MpesaImportScreen() {
       return;
     }
     setSaving(true);
+    void keepScreenAwakeWhileSaving();
     const result: Outcome = { saved: 0, repeats: 0, failed: [] };
     const savedIndexes = new Set<number>();
     // Who each debt entry was for, kept so deleting it can offer to put that person's balance back.
@@ -919,6 +921,7 @@ export default function MpesaImportScreen() {
     } finally {
       setSaveProgress(null);
       setSaving(false);
+      letScreenSleepAgain();
       if (statementReading) {
         const stamp = { date: todayIso(), description: 'Saved from your statement' };
         const marked = lines.map((item) => (savedIndexes.has(item.index) ? { ...item, alreadyRecorded: stamp } : item));

@@ -130,3 +130,12 @@ describe("saving does not wait for one round trip before starting the next (web)
     expect(page).toContain('} finally {\n      setSaveProgress(null);\n      setSaving(false);');
   });
 });
+
+// From "does the app keep working behind the scenes?": a laptop or phone locking mid-save
+// used to just leave it half finished. The Wake Lock API keeps the screen on while it runs.
+describe("keeping the screen on while saving (web)", () => {
+  it("is asked for right when saving starts, and released whether saving worked or not", () => {
+    expect(page).toContain("setSaving(true);\n    void keepScreenAwakeWhileSaving();");
+    expect(page).toContain("setSaving(false);\n      letScreenSleepAgain();");
+  });
+});
