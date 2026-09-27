@@ -1448,7 +1448,13 @@ export default function MpesaImportScreen() {
                           return (
                             <Pressable
                               key={option.id ?? 'no'}
-                              onPress={() => setChoices((current) => chooseTransfer(current, item.index, option.id))}
+                              onPress={() => {
+                                // Keeps this whole section open even after "No" clears it back
+                                // to a plain category — otherwise the shared gate below closes
+                                // and the very options being switched to disappear with it.
+                                setOpenMore((current) => new Set(current).add(item.index));
+                                setChoices((current) => chooseTransfer(current, item.index, option.id));
+                              }}
                               accessibilityRole="button"
                               accessibilityState={{ selected: on }}
                               testID={`mpesa-line-move-${item.index}-${option.id ?? 'no'}`}
@@ -1479,7 +1485,10 @@ export default function MpesaImportScreen() {
                           return (
                             <Pressable
                               key={option.id ?? 'no'}
-                              onPress={() => setChoices((current) => chooseSavings(current, item.index, option.id))}
+                              onPress={() => {
+                                setOpenMore((current) => new Set(current).add(item.index));
+                                setChoices((current) => chooseSavings(current, item.index, option.id));
+                              }}
                               accessibilityRole="button"
                               accessibilityState={{ selected: on }}
                               testID={`mpesa-line-savings-${item.index}-${option.id ?? 'no'}`}
@@ -1503,6 +1512,7 @@ export default function MpesaImportScreen() {
                               key={option.id ?? 'no'}
                               disabled={loadingOtherBudget !== null}
                               onPress={async () => {
+                                setOpenMore((current) => new Set(current).add(item.index));
                                 if (option.id === null) {
                                   setChoices((current) => chooseOtherBudget(current, item.index, null));
                                   return;
@@ -1924,7 +1934,13 @@ export default function MpesaImportScreen() {
             </Pressable>
             <Pressable
               onPress={() => {
-                if (debtFor) setDebt(debtFor.index, null);
+                if (debtFor) {
+                  // Keeps the other destination options in view afterward — otherwise the
+                  // shared gate they sit behind closes the moment this reverts to a plain
+                  // category, hiding the very options being switched to.
+                  setOpenMore((current) => new Set(current).add(debtFor.index));
+                  setDebt(debtFor.index, null);
+                }
                 setDebtFor(null);
               }}
               style={styles.secondary}

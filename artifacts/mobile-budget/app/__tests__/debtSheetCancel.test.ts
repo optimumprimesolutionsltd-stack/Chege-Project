@@ -16,7 +16,7 @@ describe('the debt/loan sheet has a true cancel', () => {
   });
 
   it('is distinct from the deliberate "not a debt" answer, which does write a change', () => {
-    expect(source).toContain('if (debtFor) setDebt(debtFor.index, null);');
+    expect(source).toContain('setDebt(debtFor.index, null);');
     expect(source).toContain('No, it is not a debt or loan');
   });
 });
