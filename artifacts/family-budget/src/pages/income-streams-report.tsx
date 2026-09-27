@@ -80,31 +80,35 @@ export default function IncomeStreamsReport() {
     () => categories.filter((category) => !categories.some((other) => other.parentId === category.id)),
     [categories],
   );
-  // Only one category links to a stream through this picker at a time, even
-  // though the field itself allows many categories to point at the same
-  // stream — moving the link off whichever category held it keeps that true.
-  const chooseCostCategory = async (incomeSourceId: number, sourceName: string, categoryId: number | null) => {
-    const previouslyLinked = categories.find((category) => category.reducesIncomeSourceId === incomeSourceId);
-    if (previouslyLinked && previouslyLinked.id === categoryId) return;
-    if (previouslyLinked && categoryId != null) {
-      const newCategory = categories.find((category) => category.id === categoryId);
-      const confirmed = window.confirm(
-        `"${previouslyLinked.name}" is currently linked to ${sourceName}. Choosing "${newCategory?.name ?? "this category"}" instead will unlink it. Replace it?`,
-      );
-      if (!confirmed) return;
-    }
+  const applyCostCategoryChange = async (categoryId: number, reducesIncomeSourceId: number | null) => {
     try {
-      if (previouslyLinked) {
-        await updateCostCategory.mutateAsync({ id: previouslyLinked.id, data: { reducesIncomeSourceId: null } });
-      }
-      if (categoryId != null) {
-        await updateCostCategory.mutateAsync({ id: categoryId, data: { reducesIncomeSourceId: incomeSourceId } });
-      }
+      await updateCostCategory.mutateAsync({ id: categoryId, data: { reducesIncomeSourceId } });
       await queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
       await queryClient.invalidateQueries({ queryKey: getGetDashboardIncomeStreamsQueryKey({ month, year }) });
     } catch {
-      // The select reverts to whatever the next categories fetch says is true.
+      // The checkbox reverts to whatever the next categories fetch says is true.
     }
+  };
+  // Any number of categories can reduce the same stream's profit at once —
+  // toggling one on or off never disturbs any other category already linked
+  // to it. A category already linked to a DIFFERENT stream asks first, since
+  // a category can only ever be the cost of one stream at a time.
+  const toggleCostCategory = async (
+    incomeSourceId: number,
+    sourceName: string,
+    category: { id: number; name: string; reducesIncomeSourceId?: number | null },
+  ) => {
+    if (category.reducesIncomeSourceId === incomeSourceId) {
+      await applyCostCategoryChange(category.id, null);
+      return;
+    }
+    if (category.reducesIncomeSourceId != null) {
+      const confirmed = window.confirm(
+        `"${category.name}" currently reduces a different stream's profit. Linking it to ${sourceName} instead will unlink it there. Move it?`,
+      );
+      if (!confirmed) return;
+    }
+    await applyCostCategoryChange(category.id, incomeSourceId);
   };
   // What the monthly PDF includes beyond its summary cards.
   const [includeBudget, setIncludeBudget] = useState(true);
@@ -684,34 +688,40 @@ export default function IncomeStreamsReport() {
                         </div>
                         {stream.costs > 0 && (
                           <p className="mt-1 text-xs text-muted-foreground">
-                            {formatKes(stream.total + stream.costs)} sales − {formatKes(stream.costs)} {leafCategories.find((category) => category.reducesIncomeSourceId === stream.incomeSourceId)?.name ?? "cost"} = {formatKes(stream.total)} profit
+                            {formatKes(stream.total + stream.costs)} sales − {formatKes(stream.costs)} {leafCategories.filter((category) => category.reducesIncomeSourceId === stream.incomeSourceId).map((category) => category.name).join(", ") || "cost"} = {formatKes(stream.total)} profit
                           </p>
                         )}
                       </button>
                       {isExpanded && (
                         <div id={`income-stream-${streamId}-activity`} className="border-t border-border/60 pt-4">
                           {!unattributed && canManageCostCategories && (
-                            <label className="mb-4 flex flex-col gap-1.5 text-sm font-medium text-foreground">
-                              Cost category (optional)
-                              <select
-                                className="flex h-11 w-full rounded-md border border-input bg-card px-3 py-2 text-sm"
-                                value={leafCategories.find((category) => category.reducesIncomeSourceId === stream.incomeSourceId)?.id ?? ""}
-                                onChange={(event) => void chooseCostCategory(stream.incomeSourceId!, stream.sourceName, event.target.value ? Number(event.target.value) : null)}
-                                data-testid={`income-stream-cost-category-${streamId}`}
-                              >
-                                <option value="">None</option>
-                                {leafCategories.map((category) => (
-                                  <option key={category.id} value={category.id}>
-                                    {category.name}
-                                    {category.reducesIncomeSourceId != null && category.reducesIncomeSourceId !== stream.incomeSourceId ? " (linked elsewhere)" : ""}
-                                  </option>
-                                ))}
-                              </select>
+                            <div className="mb-4 flex flex-col gap-1.5">
+                              <p className="text-sm font-medium text-foreground">Cost categories</p>
+                              <div className="flex flex-col gap-1.5 rounded-md border border-input bg-card p-2" data-testid={`income-stream-cost-category-${streamId}`}>
+                                {leafCategories.map((category) => {
+                                  const checked = category.reducesIncomeSourceId === stream.incomeSourceId;
+                                  const linkedElsewhere = category.reducesIncomeSourceId != null && !checked;
+                                  return (
+                                    <label key={category.id} className="flex items-center justify-between gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted/50">
+                                      <span className="flex items-center gap-2">
+                                        <input
+                                          type="checkbox"
+                                          checked={checked}
+                                          onChange={() => void toggleCostCategory(stream.incomeSourceId!, stream.sourceName, category)}
+                                          data-testid={`income-stream-cost-category-${streamId}-${category.id}`}
+                                        />
+                                        {category.name}
+                                      </span>
+                                      {linkedElsewhere && <span className="text-xs text-muted-foreground">reduces another stream</span>}
+                                    </label>
+                                  );
+                                })}
+                              </div>
                               <span className="text-xs font-normal text-muted-foreground">
-                                Spending tagged to this category is worked out of {stream.sourceName}&rsquo;s profit every month.
+                                Spending tagged to any category checked above is worked out of {stream.sourceName}&rsquo;s profit every month. Check as many as apply.
                                 Only categories without sub-categories of their own are listed — a category holding sub-categories carries no spending itself, so link each sub-category separately.
                               </span>
-                            </label>
+                            </div>
                           )}
                           <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                             <div>

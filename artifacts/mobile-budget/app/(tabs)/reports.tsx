@@ -256,14 +256,9 @@ export default function ReportsScreen() {
     refetchExp(); refetchCat(); refetchSummary(); refetchIncomeStreams(); refetchIncomeTrend();
   }, [refetchExp, refetchCat, refetchSummary, refetchIncomeStreams, refetchIncomeTrend]);
 
-  const applyCostCategoryChoice = useCallback(async (incomeSourceId: number, previouslyLinkedId: number | null, categoryId: number | null) => {
+  const applyCostCategoryChange = useCallback(async (categoryId: number, reducesIncomeSourceId: number | null) => {
     try {
-      if (previouslyLinkedId != null && previouslyLinkedId !== categoryId) {
-        await updateCostCategory.mutateAsync({ id: previouslyLinkedId, data: { reducesIncomeSourceId: null } });
-      }
-      if (categoryId != null) {
-        await updateCostCategory.mutateAsync({ id: categoryId, data: { reducesIncomeSourceId: incomeSourceId } });
-      }
+      await updateCostCategory.mutateAsync({ id: categoryId, data: { reducesIncomeSourceId } });
       queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
       queryClient.invalidateQueries({ queryKey: getGetDashboardIncomeStreamsQueryKey(queryParams) });
     } catch {
@@ -271,30 +266,30 @@ export default function ReportsScreen() {
     }
   }, [updateCostCategory, queryClient, queryParams]);
 
-  // Only one category links to a stream through this picker at a time, even
-  // though the field itself allows many categories to point at the same
-  // stream — moving the link off whichever category held it keeps that true.
-  // Swapping to a genuinely different category asks first, since it silently
-  // unlinks whatever was there before.
-  const chooseCostCategory = useCallback((categoryId: number | null) => {
+  // Any number of categories can reduce the same stream's profit at once —
+  // toggling one on or off never disturbs any other category already linked
+  // to it. A category already linked to a DIFFERENT stream asks first,
+  // since a category can only ever be the cost of one stream at a time.
+  const toggleCostCategory = useCallback((category: { id: number; name: string; reducesIncomeSourceId?: number | null }) => {
     if (!costCategoryFor) return;
     const { incomeSourceId, sourceName } = costCategoryFor;
-    const previouslyLinked = categories.find((category) => category.reducesIncomeSourceId === incomeSourceId) ?? null;
-    const newCategory = categoryId != null ? categories.find((category) => category.id === categoryId) : null;
-    setCostCategoryFor(null);
-    if (previouslyLinked && categoryId != null && previouslyLinked.id !== categoryId) {
+    if (category.reducesIncomeSourceId === incomeSourceId) {
+      void applyCostCategoryChange(category.id, null);
+      return;
+    }
+    if (category.reducesIncomeSourceId != null) {
       Alert.alert(
-        'Replace the cost category?',
-        `"${previouslyLinked.name}" is currently linked to ${sourceName}. Choosing "${newCategory?.name ?? 'this category'}" instead will unlink it.`,
+        'Move this category?',
+        `"${category.name}" currently reduces a different stream's profit. Linking it to ${sourceName} instead will unlink it there.`,
         [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Replace', onPress: () => void applyCostCategoryChoice(incomeSourceId, previouslyLinked.id, categoryId) },
+          { text: 'Move it', onPress: () => void applyCostCategoryChange(category.id, incomeSourceId) },
         ],
       );
       return;
     }
-    void applyCostCategoryChoice(incomeSourceId, previouslyLinked?.id ?? null, categoryId);
-  }, [costCategoryFor, categories, applyCostCategoryChoice]);
+    void applyCostCategoryChange(category.id, incomeSourceId);
+  }, [costCategoryFor, applyCostCategoryChange]);
 
   const exportPdf = useCallback(async () => {
     setIsExporting(true);
@@ -979,9 +974,9 @@ export default function ReportsScreen() {
                 {incomeStreamReport?.streams.map(stream => {
                   const unattributed = stream.incomeSourceId == null;
                   const accent = unattributed ? '#f59e0b' : colors.primary;
-                  const linkedCostCategory = unattributed
-                    ? null
-                    : categories.find((category) => category.reducesIncomeSourceId === stream.incomeSourceId) ?? null;
+                  const linkedCostCategories = unattributed
+                    ? []
+                    : categories.filter((category) => category.reducesIncomeSourceId === stream.incomeSourceId);
                   return (
                     <View
                       key={stream.incomeSourceId ?? 'unattributed'}
@@ -1012,7 +1007,7 @@ export default function ReportsScreen() {
                       </View>
                       {stream.costs > 0 ? (
                         <Text style={[styles.variance, { color: colors.mutedForeground }]}>
-                          {formatKES(stream.total + stream.costs)} sales − {formatKES(stream.costs)} {linkedCostCategory?.name ?? 'cost'} = {formatKES(stream.total)} profit
+                          {formatKES(stream.total + stream.costs)} sales − {formatKES(stream.costs)} {linkedCostCategories.map((category) => category.name).join(', ') || 'cost'} = {formatKES(stream.total)} profit
                         </Text>
                       ) : null}
                       {!unattributed && canManageCostCategories ? (
@@ -1024,7 +1019,9 @@ export default function ReportsScreen() {
                         >
                           <Feather name="link-2" size={13} color={colors.mutedForeground} />
                           <Text style={[styles.variance, { color: colors.mutedForeground }]}>
-                            {linkedCostCategory ? `Cost category: ${linkedCostCategory.name}` : 'Link a cost category'}
+                            {linkedCostCategories.length > 0
+                              ? `Cost categor${linkedCostCategories.length === 1 ? 'y' : 'ies'}: ${linkedCostCategories.map((category) => category.name).join(', ')}`
+                              : 'Link a cost category'}
                           </Text>
                         </Pressable>
                       ) : null}
@@ -1454,9 +1451,9 @@ export default function ReportsScreen() {
                   <Feather name="link-2" size={18} color={colors.primary} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.detailsTitle, { color: colors.foreground }]}>Cost category</Text>
+                  <Text style={[styles.detailsTitle, { color: colors.foreground }]}>Cost categories</Text>
                   <Text style={[styles.detailsSubtitle, { color: colors.mutedForeground }]}>
-                    Spending tagged to this category is worked out of {costCategoryFor?.sourceName ?? 'this stream'}&rsquo;s profit every month.
+                    Spending tagged to any category checked below is worked out of {costCategoryFor?.sourceName ?? 'this stream'}&rsquo;s profit every month. Check as many as apply.
                   </Text>
                 </View>
               </View>
@@ -1475,14 +1472,6 @@ export default function ReportsScreen() {
               contentContainerStyle={[styles.detailsListContent, { paddingBottom: Math.max(insets.bottom, 16) }]}
               showsVerticalScrollIndicator={false}
             >
-              <Pressable
-                onPress={() => void chooseCostCategory(null)}
-                style={[styles.costCategoryOption, { borderColor: colors.border }]}
-                accessibilityRole="button"
-                testID="cost-category-none"
-              >
-                <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold' }}>None</Text>
-              </Pressable>
               <Text style={[styles.variance, { color: colors.mutedForeground, marginBottom: 8 }]}>
                 Only categories without sub-categories of their own are listed — a category holding sub-categories carries no spending itself, so link each sub-category separately.
               </Text>
@@ -1494,20 +1483,21 @@ export default function ReportsScreen() {
                   return (
                     <Pressable
                       key={category.id}
-                      onPress={() => void chooseCostCategory(category.id)}
+                      onPress={() => toggleCostCategory(category)}
                       style={[
                         styles.costCategoryOption,
                         { borderColor: colors.border },
                         selected && { backgroundColor: `${colors.primary}18` },
                       ]}
-                      accessibilityRole="button"
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: selected }}
                       testID={`cost-category-${category.id}`}
                     >
                       <Text style={{ color: colors.foreground, fontFamily: selected ? 'Inter_600SemiBold' : 'Inter_400Regular' }}>
                         {category.name}{selected ? '  ✓' : ''}
                       </Text>
                       {linkedElsewhere ? (
-                        <Text style={[styles.variance, { color: colors.mutedForeground }]}>Already linked to another stream</Text>
+                        <Text style={[styles.variance, { color: colors.mutedForeground }]}>Reduces another stream — tap to move it here</Text>
                       ) : null}
                     </Pressable>
                   );

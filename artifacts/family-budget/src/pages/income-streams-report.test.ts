@@ -24,16 +24,18 @@ describe("linking a category as an income stream's cost", () => {
     expect(reportSource).toContain("!unattributed && canManageCostCategories");
   });
 
-  it("shows the sales-minus-cost breakdown once a category is linked", () => {
+  it("shows the sales-minus-cost breakdown, naming every linked category", () => {
     expect(reportSource).toContain("stream.costs > 0");
     expect(reportSource).toContain("sales − ");
+    expect(reportSource).toContain('leafCategories.filter((category) => category.reducesIncomeSourceId === stream.incomeSourceId).map((category) => category.name).join(", ")');
     expect(reportSource).toContain('= {formatKes(stream.total)} profit');
   });
 
-  it("moves the link off whichever category held it before setting a new one", () => {
-    expect(reportSource).toContain("const previouslyLinked = categories.find((category) => category.reducesIncomeSourceId === incomeSourceId);");
-    expect(reportSource).toContain("if (previouslyLinked && previouslyLinked.id === categoryId) return;");
-    expect(reportSource).toContain("reducesIncomeSourceId: null");
+  it("toggles a category on or off a stream without touching any other category already linked to it", () => {
+    expect(reportSource).toContain("const toggleCostCategory = async (");
+    expect(reportSource).toContain("if (category.reducesIncomeSourceId === incomeSourceId) {");
+    expect(reportSource).toContain("await applyCostCategoryChange(category.id, null);");
+    expect(reportSource).toContain("await applyCostCategoryChange(category.id, incomeSourceId);");
   });
 
   it("invalidates both the category list and this month's income streams after a change", () => {
@@ -41,12 +43,13 @@ describe("linking a category as an income stream's cost", () => {
     expect(reportSource).toContain("getGetDashboardIncomeStreamsQueryKey({ month, year })");
   });
 
-  it('offers a "None" option to clear the link entirely', () => {
-    expect(reportSource).toContain('<option value="">None</option>');
+  it("renders every leaf category as its own checkbox", () => {
+    expect(reportSource).toContain('type="checkbox"');
+    expect(reportSource).toContain("checked={checked}");
   });
 
-  it("asks before swapping a stream onto a different category, since that silently unlinks the old one", () => {
-    expect(reportSource).toContain("if (previouslyLinked && categoryId != null) {");
+  it("asks before moving a category off a different stream it already reduces", () => {
+    expect(reportSource).toContain("if (category.reducesIncomeSourceId != null) {");
     expect(reportSource).toContain("window.confirm(");
     expect(reportSource).toContain("if (!confirmed) return;");
   });
