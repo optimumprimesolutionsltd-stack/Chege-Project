@@ -1315,6 +1315,11 @@ export interface JointAccountTransaction {
      */
   runningBalance?: number | null;
   description: string;
+  /**
+     * A plain note against the entry, the same as expenses already have.
+     * @nullable
+     */
+  notes?: string | null;
   madeById?: string | null;
   madeByName?: string | null;
   /**
@@ -1445,6 +1450,11 @@ export interface DepositInput {
      */
   amount: number;
   description: string;
+  /**
+     * A plain note against the entry, the same as expenses already have.
+     * @maxLength 1000
+     */
+  notes?: string;
   date: string;
   /**
      * The month this deposit was for, when that differs from the month it arrived — April's dues paid in September, or June's paid in April. Omit for the month it arrived in. Must be given with appliesToYear.
@@ -1501,6 +1511,11 @@ export interface DisbursementInput {
      */
   amount: number;
   description?: string;
+  /**
+     * A plain note against the entry, the same as expenses already have.
+     * @maxLength 1000
+     */
+  notes?: string;
   date: string;
   /**
      * ID of the household member responsible for this disbursement. Omit or pass null for Joint bank. Must be a valid household member ID when non-null.
@@ -1559,6 +1574,12 @@ export interface UpdateJointAccountTransactionInput {
   amount: number;
   /** Optional supporting detail; withdrawals fall back to their category */
   description?: string;
+  /**
+     * A plain note against the entry. Omit to leave it unchanged; null or empty clears it.
+     * @maxLength 1000
+     * @nullable
+     */
+  notes?: string | null;
   date: string;
   /** @nullable */
   madeById?: string | null;

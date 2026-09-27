@@ -13,6 +13,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { formatKes, formatDate } from "@/lib/utils";
 import { movableOnDay, summariseDays } from "@/lib/move-day";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -20,7 +21,7 @@ import { Link } from "wouter";
 import { ALREADY_GONE_MESSAGE, ALREADY_GONE_TITLE, isNotFound } from "@/lib/stale-entry";
 import { fetchDebtLinks, offerDebtReversal } from "@/lib/debt-reversal";
 import type { DebtEntryLink } from "@/lib/debt-links";
-import { Repeat, Trash2, Pencil, ArrowDownLeft, ArrowUpRight, Loader2, Landmark, TrendingUp, TrendingDown, Plus, Flag } from "lucide-react";
+import { Repeat, Trash2, Pencil, ArrowDownLeft, ArrowUpRight, Loader2, Landmark, TrendingUp, TrendingDown, Plus, Flag, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@workspace/replit-auth-web";
@@ -61,6 +62,7 @@ type EditableTransaction = {
   amount: number;
   runningBalance?: number | null;
   description: string;
+  notes?: string | null;
   date: string;
   madeById?: string | null;
   incomeSourceId?: number | null;
@@ -257,6 +259,9 @@ export default function Bank() {
   const [mode, setMode] = useState<"deposit" | "disbursement" | "transfer" | "bank_transfer" | null>(null);
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
+  // A plain note against the entry, the same as expenses already have. Never read by any
+  // total or report; somewhere to keep anything else worth remembering about it.
+  const [notes, setNotes] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
 
   // Deposit attribution — null = The group, string[] = named member IDs
@@ -663,6 +668,7 @@ export default function Bank() {
     setAmount("");
     setChargeAmount("");
     setDescription("");
+    setNotes("");
     setDepositorAmounts({});
     setExpenseCategory("");
     setWithdrawalDestinationKind("category");
@@ -718,6 +724,7 @@ export default function Bank() {
     setAmount("");
     setChargeAmount("");
     setDescription("");
+    setNotes("");
     setDate(new Date().toISOString().split("T")[0]);
     setDepositorIds(!isSharedWorkspace && user?.id ? [user.id] : (!canManageShared && user?.id ? [user.id] : []));
     setDepositorAmounts({});
@@ -767,6 +774,7 @@ export default function Bank() {
     setDescription(transactionMode === "transfer"
       ? tx.description.replace(/^Transfer (?:to|from) savings —\s*/, "")
       : tx.description);
+    setNotes(tx.notes ?? "");
     setDate(tx.date);
     // This editor works in member ids, so portions credited to a contributor
     // recorded by name are not editable here. They are skipped rather than
@@ -1043,6 +1051,8 @@ export default function Bank() {
           data: {
             amount: total,
             description: description.trim() || expenseCategory,
+            // Omitted leaves the note as it was; empty clears it.
+            notes: notes.trim() || null,
             date,
             madeById: mode === "deposit"
               ? (contributorSplits.length > 0 ? undefined : !isSharedWorkspace ? user?.id : depositorIds[0] ?? null)
@@ -1065,6 +1075,7 @@ export default function Bank() {
             data: {
               amount: total,
               description,
+              notes: notes.trim() || undefined,
               date,
               contributorSplits: depositorIds.map((userId) => ({
                 userId,
@@ -1081,6 +1092,7 @@ export default function Bank() {
             data: {
               amount: total,
               description,
+              notes: notes.trim() || undefined,
               date,
               madeById,
               ...(madeById && incomeSourceId ? { incomeSourceId } : {}),
@@ -1095,6 +1107,7 @@ export default function Bank() {
           data: {
             amount: total,
             description: description.trim() || lentToParty?.name || expenseCategory,
+            notes: notes.trim() || undefined,
             date,
             madeById: !isSharedWorkspace ? user?.id : withdrawerId,
             accountId: selectedAccountId ?? undefined,
@@ -2175,6 +2188,20 @@ export default function Bank() {
                   />
                 </div>}
 
+                {(mode === "deposit" || mode === "disbursement") && <div className="space-y-2 sm:col-span-2">
+                  <label className="text-sm font-semibold text-foreground">
+                    Notes <span className="font-normal text-muted-foreground">(optional)</span>
+                  </label>
+                  <Textarea
+                    data-testid="input-notes"
+                    placeholder="Anything else worth keeping about this entry"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    className="bg-card"
+                    rows={2}
+                  />
+                </div>}
+
                 {mode === "transfer" && <div className="space-y-4 sm:col-span-2">
                   <div className="space-y-2">
                     <label className="text-sm font-semibold text-foreground">Transfer direction</label>
@@ -2628,12 +2655,21 @@ export default function Bank() {
                         : <ArrowUpRight className="w-5 h-5 text-destructive" />}
                     </div>
                     <div className="min-w-0">
-                      <p className="font-semibold text-foreground truncate">
-                        {isBankTransfer
-                          ? `${isDeposit ? "From" : "To"} ${tx.bankTransferAccountName ?? "bank account"}`
-                          : isTransfer
-                          ? `${tx.transferDirection === "to_savings" ? "Bank → Savings" : "Savings → Bank"}: ${tx.savingsGoalName ?? "Savings goal"}`
-                          : !isDeposit && tx.expenseCategory ? tx.expenseCategory : tx.description}
+                      <p className="flex items-center gap-1.5 font-semibold text-foreground">
+                        <span className="truncate">
+                          {isBankTransfer
+                            ? `${isDeposit ? "From" : "To"} ${tx.bankTransferAccountName ?? "bank account"}`
+                            : isTransfer
+                            ? `${tx.transferDirection === "to_savings" ? "Bank → Savings" : "Savings → Bank"}: ${tx.savingsGoalName ?? "Savings goal"}`
+                            : !isDeposit && tx.expenseCategory ? tx.expenseCategory : tx.description}
+                        </span>
+                        {tx.notes ? (
+                          <FileText
+                            className="h-3 w-3 shrink-0 text-muted-foreground"
+                            aria-label={`Has a note: ${tx.notes}`}
+                            data-testid={`bank-has-notes-${tx.id}`}
+                          />
+                        ) : null}
                       </p>
                       <p className="text-xs text-muted-foreground mt-0.5" data-testid={`tx-meta-${tx.id}`}>
                         {isBankTransfer
