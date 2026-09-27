@@ -80,7 +80,7 @@ type Outcome = { saved: number; repeats: number; failed: Array<{ what: string; w
 
 import { readStatementPages, StatementPasswordError } from "@/lib/statement-file";
 import { rememberMpesaCard } from "@/lib/mpesa-card";
-import { savePosting, type PostingApi } from "@/lib/save-posting";
+import { runPool, savePosting, SAVE_CONCURRENCY, type PostingApi } from "@/lib/save-posting";
 import { parseStoredRules, payeeKey, payeeName, ruleLabel, rulesStorageKey, withRule, withoutRule, type PayeeRules } from "@/lib/payee-learning";
 import { saveDebtLinks } from "@/lib/debt-reversal";
 import type { DebtEntryLink } from "@/lib/debt-links";
@@ -155,6 +155,9 @@ export default function MpesaImportPage() {
   const [view, setView] = useState<ReviewView>("all");
   const [chargeCategory, setChargeCategory] = useState("");
   const [saving, setSaving] = useState(false);
+  // How far a save has got, so two hundred entries travelling to the server together does
+  // not just sit behind a spinner with no sign of life.
+  const [saveProgress, setSaveProgress] = useState<{ done: number; total: number } | null>(null);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   // Names the person gave payees, kept in this browser for this budget.
   const [nicknames, setNicknames] = useState<NicknameMap>({});
@@ -516,19 +519,24 @@ export default function MpesaImportPage() {
     const savedIndexes = new Set<number>();
     // Who each debt entry was for, kept so deleting it can offer to put that person's balance back.
     const debtLinks: DebtEntryLink[] = [];
+    // Worked out once, so a handful of these can travel to the server together instead of
+    // waiting for each round trip before starting the next.
+    const toSave = lines.flatMap((item) => {
+      const choice = choices[item.index];
+      if (!choice?.include || !isRecordable(item)) return [];
+      const built = buildPostings(item, choice, {
+        accountId,
+        userId: user?.id,
+        isShared,
+        today: todayIso(),
+        chargeCategory,
+        incomeSources,
+      });
+      return built ? [{ item, choice, built }] : [];
+    });
+    setSaveProgress({ done: 0, total: toSave.length });
     try {
-      for (const item of lines) {
-        const choice = choices[item.index];
-        if (!choice?.include || !isRecordable(item)) continue;
-        const built = buildPostings(item, choice, {
-          accountId,
-          userId: user?.id,
-          isShared,
-          today: todayIso(),
-          chargeCategory,
-          incomeSources,
-        });
-        if (!built) continue;
+      await runPool(toSave, SAVE_CONCURRENCY, async ({ item, choice, built }) => {
         try {
           const posted = await savePosting(built, postingApi, accountId);
           if (choice.debt && posted.id) debtLinks.push({ transactionId: posted.id, partyId: choice.debt.partyId, kind: choice.debt.kind });
@@ -539,9 +547,12 @@ export default function MpesaImportPage() {
           const message = error instanceof Error ? error.message : "It was not saved.";
           if (/already recorded/i.test(message)) result.repeats += 1;
           else result.failed.push({ what: item.description ?? "A message", why: message });
+        } finally {
+          setSaveProgress((current) => (current ? { ...current, done: current.done + 1 } : current));
         }
-      }
+      });
     } finally {
+      setSaveProgress(null);
       setSaving(false);
       if (statementReading) {
         const stamp = { date: todayIso(), description: "Saved from your statement" };
@@ -1221,8 +1232,17 @@ export default function MpesaImportPage() {
             ) : null}
             <div className="flex gap-3">
               <Button variant="outline" onClick={() => { setLines(null); setChoices({}); setStatementNote(null); setStatementReading(null); }}>Start again</Button>
-              <Button onClick={saveAll} disabled={saving || !summary || summary.count === 0} className="flex-1" data-testid="mpesa-import-save">
-                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : `Save ${summary?.count ?? 0} ${summary?.count === 1 ? "entry" : "entries"}`}
+              <Button onClick={saveAll} disabled={saving || !summary || summary.count === 0} className="flex-1 gap-2" data-testid="mpesa-import-save">
+                {saving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    {saveProgress && saveProgress.total > 0 ? (
+                      <span data-testid="mpesa-save-progress">Saving {saveProgress.done} of {saveProgress.total}</span>
+                    ) : null}
+                  </>
+                ) : (
+                  `Save ${summary?.count ?? 0} ${summary?.count === 1 ? "entry" : "entries"}`
+                )}
               </Button>
             </div>
           </div>

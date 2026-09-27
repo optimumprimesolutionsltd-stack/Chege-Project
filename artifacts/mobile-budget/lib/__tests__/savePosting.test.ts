@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildPostings, type PostingContext, type PreviewLine } from '@/lib/mpesaImport';
-import { savePosting, type PostingApi } from '@/lib/savePosting';
+import { runPool, savePosting, SAVE_CONCURRENCY, type PostingApi } from '@/lib/savePosting';
 
 const ctx: PostingContext = { accountId: 9, userId: 'u1', isShared: false, today: '2026-09-25', chargeCategory: 'Bank charges' };
 const line = (over: Partial<PreviewLine>): PreviewLine => ({
@@ -74,5 +74,59 @@ describe('saving one line', () => {
     const broken: PostingApi = { ...api, disbursement: async () => { throw new Error('already recorded'); } };
     const built = buildPostings(line({}), { include: true, category: 'Food' }, ctx)!;
     await expect(savePosting(built, broken, 9)).rejects.toThrow('already recorded');
+  });
+});
+
+// Saving a statement one entry at a time was the whole wait: two hundred round trips, one
+// after another. runPool is what lets a handful travel to the server together instead.
+describe('runPool', () => {
+  it('runs every item exactly once, whatever order they land in', async () => {
+    const seen: number[] = [];
+    await runPool([1, 2, 3, 4, 5], 2, async (n) => {
+      seen.push(n);
+    });
+    expect([...seen].sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5]);
+  });
+
+  it('never has more than the limit in flight at once', async () => {
+    let current = 0;
+    let max = 0;
+    const items = Array.from({ length: 10 }, (_, i) => i);
+    await runPool(items, 3, async () => {
+      current += 1;
+      max = Math.max(max, current);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      current -= 1;
+    });
+    expect(max).toBeLessThanOrEqual(3);
+    // Proves it actually overlaps rather than accidentally running one at a time.
+    expect(max).toBeGreaterThan(1);
+  });
+
+  it('never opens more workers than there are items', async () => {
+    let current = 0;
+    let max = 0;
+    await runPool([1, 2], 6, async () => {
+      current += 1;
+      max = Math.max(max, current);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      current -= 1;
+    });
+    expect(max).toBeLessThanOrEqual(2);
+  });
+
+  it('does nothing for an empty list', async () => {
+    let calls = 0;
+    await runPool([], 3, async () => {
+      calls += 1;
+    });
+    expect(calls).toBe(0);
+  });
+});
+
+describe('SAVE_CONCURRENCY', () => {
+  it('is a handful, not one at a time and not dozens of connections at once', () => {
+    expect(SAVE_CONCURRENCY).toBeGreaterThanOrEqual(2);
+    expect(SAVE_CONCURRENCY).toBeLessThanOrEqual(10);
   });
 });

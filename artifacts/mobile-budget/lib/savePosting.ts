@@ -56,3 +56,33 @@ export async function savePosting(built: Built, api: PostingApi, mpesaAccountId:
     return { id, feeFailed: true };
   }
 }
+
+/**
+ * How many entries travel to the server at once when saving a list. Small on purpose: the
+ * point is to stop waiting for one round trip before starting the next, not to open dozens
+ * of connections at once.
+ */
+export const SAVE_CONCURRENCY = 6;
+
+/**
+ * Runs `task` over `items`, at most `limit` at once.
+ *
+ * Saving a statement one entry at a time was the whole wait: each is its own round trip to
+ * the server, and on a slow connection two hundred of them, one after another, is what
+ * "taking too much time" felt like. A handful travelling together cuts that down. JavaScript
+ * still runs one line of code at a time, so results are recorded exactly as if the entries
+ * had come back one by one — nothing here needs a lock.
+ */
+export async function runPool<T>(items: readonly T[], limit: number, task: (item: T) => Promise<void>): Promise<void> {
+  let next = 0;
+  const workerCount = Math.max(1, Math.min(limit, items.length));
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (next < items.length) {
+        const item = items[next];
+        next += 1;
+        await task(item);
+      }
+    }),
+  );
+}

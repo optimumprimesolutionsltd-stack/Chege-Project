@@ -67,7 +67,7 @@ import { ACTIVE_WORKSPACE_STORAGE_KEY } from '@/lib/workspace';
 import { formatExact } from '@/lib/formatExact';
 import { StatementReader, type ReaderJob } from '@/components/StatementReader';
 import { rememberMpesaCard } from '@/lib/mpesaCard';
-import { savePosting, type PostingApi } from '@/lib/savePosting';
+import { runPool, savePosting, SAVE_CONCURRENCY, type PostingApi } from '@/lib/savePosting';
 import { parseStoredRules, payeeKey, payeeName, ruleLabel, rulesStorageKey, withRule, withoutRule, type PayeeRules } from '@/lib/payeeLearning';
 import { saveDebtLinks } from '@/lib/debtReversal';
 import type { DebtEntryLink } from '@/lib/debtLinks';
@@ -395,6 +395,9 @@ export default function MpesaImportScreen() {
   const [recat, setRecat] = useState<Record<number, string>>({});
   const [recategorising, setRecategorising] = useState(false);
   const [saving, setSaving] = useState(false);
+  // How far a save has got, so two hundred entries travelling to the server together does
+  // not just sit behind a spinner with no sign of life.
+  const [saveProgress, setSaveProgress] = useState<{ done: number; total: number } | null>(null);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   // Unfinished work survives an update restart, a crash, or a switch of budget.
   const pendingChoicesRef = React.useRef<Record<number, Choice> | null>(null);
@@ -881,19 +884,24 @@ export default function MpesaImportScreen() {
     const savedIndexes = new Set<number>();
     // Who each debt entry was for, kept so deleting it can offer to put that person's balance back.
     const debtLinks: DebtEntryLink[] = [];
+    // Worked out once, so a handful of these can travel to the server together instead of
+    // waiting for each round trip before starting the next.
+    const toSave = lines.flatMap((item) => {
+      const choice = choices[item.index];
+      if (!choice?.include || !isRecordable(item)) return [];
+      const built = buildPostings(item, choice, {
+        accountId,
+        userId: user?.id,
+        isShared,
+        today: todayIso(),
+        chargeCategory,
+        incomeSources,
+      });
+      return built ? [{ item, choice, built }] : [];
+    });
+    setSaveProgress({ done: 0, total: toSave.length });
     try {
-      for (const item of lines) {
-        const choice = choices[item.index];
-        if (!choice?.include || !isRecordable(item)) continue;
-        const built = buildPostings(item, choice, {
-          accountId,
-          userId: user?.id,
-          isShared,
-          today: todayIso(),
-          chargeCategory,
-          incomeSources,
-        });
-        if (!built) continue;
+      await runPool(toSave, SAVE_CONCURRENCY, async ({ item, choice, built }) => {
         try {
           const posted = await savePosting(built, postingApi, accountId);
           if (choice.debt && posted.id) debtLinks.push({ transactionId: posted.id, partyId: choice.debt.partyId, kind: choice.debt.kind });
@@ -904,9 +912,12 @@ export default function MpesaImportScreen() {
           const message = error instanceof Error ? error.message : 'It was not saved.';
           if (/already recorded/i.test(message)) result.repeats += 1;
           else result.failed.push({ what: item.description ?? 'A message', why: message });
+        } finally {
+          setSaveProgress((current) => (current ? { ...current, done: current.done + 1 } : current));
         }
-      }
+      });
     } finally {
+      setSaveProgress(null);
       setSaving(false);
       if (statementReading) {
         const stamp = { date: todayIso(), description: 'Saved from your statement' };
@@ -1612,7 +1623,18 @@ export default function MpesaImportScreen() {
             accessibilityRole="button"
             testID="mpesa-import-save"
           >
-            {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Save {summary?.count ?? 0} {summary?.count === 1 ? 'entry' : 'entries'}</Text>}
+            {saving ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <ActivityIndicator color="#fff" />
+                {saveProgress && saveProgress.total > 0 ? (
+                  <Text style={styles.primaryText} testID="mpesa-save-progress">
+                    Saving {saveProgress.done} of {saveProgress.total}
+                  </Text>
+                ) : null}
+              </View>
+            ) : (
+              <Text style={styles.primaryText}>Save {summary?.count ?? 0} {summary?.count === 1 ? 'entry' : 'entries'}</Text>
+            )}
           </Pressable>
         </View>
       ) : null}
