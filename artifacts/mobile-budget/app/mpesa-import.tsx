@@ -121,6 +121,15 @@ const todayIso = () => new Date(Date.now() + 3 * 3_600_000).toISOString().slice(
 /** A statement is kept this long, so it can be worked through over days. */
 const STATEMENT_DRAFT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
+/**
+ * How far a finger may drift during a tap on the debt/loan sheet before it
+ * stops counting as a press. A real tap is never perfectly still, and this
+ * sheet nests a small scrollable party list next to plain buttons — without
+ * this, Android's gesture negotiation between the two occasionally reads an
+ * ordinary tap as the start of a scroll and drops it, so it takes a few tries.
+ */
+const PRESS_RETENTION_OFFSET = { top: 20, left: 20, right: 20, bottom: 20 };
+
 type Outcome = { saved: number; repeats: number; failed: Array<{ what: string; why: string }> };
 
 /**
@@ -1844,7 +1853,7 @@ export default function MpesaImportScreen() {
             <Text style={[styles.hint, { color: colors.mutedForeground }]}>
               Choose who, and what it is. Jamvi will offer to update what you owe or are owed once everything is saved.
             </Text>
-            <ScrollView style={{ maxHeight: 160 }}>
+            <ScrollView style={{ maxHeight: 160 }} keyboardShouldPersistTaps="handled">
               {parties.map((party) => {
                 const on = debtFor?.partyId === party.id;
                 return (
@@ -1854,6 +1863,8 @@ export default function MpesaImportScreen() {
                     style={[styles.option, on && { backgroundColor: `${colors.primary}18` }]}
                     accessibilityRole="button"
                     testID={`mpesa-debt-party-${party.id}`}
+                    hitSlop={6}
+                    pressRetentionOffset={PRESS_RETENTION_OFFSET}
                   >
                     <Text style={{ color: colors.foreground, fontFamily: on ? 'Inter_600SemiBold' : 'Inter_400Regular' }}>{party.name}</Text>
                   </Pressable>
@@ -1872,6 +1883,8 @@ export default function MpesaImportScreen() {
                     style={[styles.categoryButton, { borderColor: on ? colors.primary : colors.border, backgroundColor: on ? `${colors.primary}18` : colors.muted }]}
                     accessibilityRole="button"
                     testID={`mpesa-debt-kind-${kind}`}
+                    hitSlop={6}
+                    pressRetentionOffset={PRESS_RETENTION_OFFSET}
                   >
                     <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>{DEBT_LABEL[kind]}</Text>
                   </Pressable>
@@ -1887,6 +1900,8 @@ export default function MpesaImportScreen() {
               style={[styles.primary, { backgroundColor: colors.primary, opacity: debtFor?.partyId && debtFor.kind ? 1 : 0.5 }]}
               accessibilityRole="button"
               testID="mpesa-debt-save"
+              hitSlop={6}
+              pressRetentionOffset={PRESS_RETENTION_OFFSET}
             >
               <Text style={styles.primaryText}>Save</Text>
             </Pressable>
@@ -1897,6 +1912,8 @@ export default function MpesaImportScreen() {
               }}
               style={styles.secondary}
               accessibilityRole="button"
+              hitSlop={6}
+              pressRetentionOffset={PRESS_RETENTION_OFFSET}
             >
               <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold' }}>No, it is not a debt or loan</Text>
             </Pressable>
