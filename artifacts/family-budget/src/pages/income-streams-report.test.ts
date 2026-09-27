@@ -55,3 +55,27 @@ describe("linking a category as an income stream's cost", () => {
     expect(reportSource).toContain("Only categories without sub-categories of their own are listed");
   });
 });
+
+describe("the Income vs Expenses comparison on the monthly summary", () => {
+  it("calls the income figure Income, not the old jargon, paired with Expenses", () => {
+    expect(reportSource).toContain('data-testid="report-open-contribution-ledger"');
+    expect(reportSource).toContain('<p className="text-xs text-muted-foreground">Income</p>');
+    expect(reportSource).toContain('<p className="text-xs text-muted-foreground">Expenses</p>');
+  });
+
+  it("shows a computed net figure rather than leaving the subtraction to the reader", () => {
+    expect(reportSource).toContain("const netIncomeVsExpenses = (report?.totalFunding ?? 0) - progressSpent;");
+    expect(reportSource).toContain('data-testid="report-net-income-vs-expenses"');
+    expect(reportSource).toContain('netIncomeVsExpenses < 0 ? "text-destructive" : "text-primary"');
+  });
+
+  it("only shows the net figure once there is something to compare", () => {
+    expect(reportSource).toContain("!progressLoading && !progressError && progressHasActivity && (");
+  });
+
+  it("leaves the deeper expected-vs-actual income breakdown as is", () => {
+    // A different, legitimate context: paired against "Expected income", not
+    // against expenses, so the old wording still reads correctly there.
+    expect(reportSource).toContain('<p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Recorded funding</p>');
+  });
+});
