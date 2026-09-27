@@ -2,7 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -222,7 +224,10 @@ function CategorySheet({
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={styles.sheetBackdrop}>
+      <KeyboardAvoidingView
+        style={styles.sheetBackdrop}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
         <View style={[styles.sheet, { backgroundColor: colors.card, borderColor: colors.border, paddingBottom: 24 + insets.bottom }]}>
           <View style={styles.sheetHeader}>
             <Text style={[styles.sheetTitle, { color: colors.foreground }]}>What was it for?</Text>
@@ -336,7 +341,7 @@ function CategorySheet({
             )}
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -1953,7 +1958,7 @@ export default function MpesaImportScreen() {
       </Modal>
 
       <Modal visible={naming !== null} animationType="slide" transparent onRequestClose={() => setNaming(null)}>
-        <View style={styles.sheetBackdrop}>
+        <KeyboardAvoidingView style={styles.sheetBackdrop} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <View style={[styles.sheet, { backgroundColor: colors.card, borderColor: colors.border, padding: 16, paddingBottom: 16 + Math.max(insets.bottom, 24), gap: 10 }]}>
             <Text style={[styles.sheetTitle, { color: colors.foreground }]}>What do you call this?</Text>
             <Text style={[styles.hint, { color: colors.mutedForeground }]}>
@@ -1985,11 +1990,11 @@ export default function MpesaImportScreen() {
               <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold' }}>Cancel</Text>
             </Pressable>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal visible={reporting !== null} animationType="slide" transparent onRequestClose={() => setReporting(null)}>
-        <View style={styles.sheetBackdrop}>
+        <KeyboardAvoidingView style={styles.sheetBackdrop} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <View style={[styles.sheet, { backgroundColor: colors.card, borderColor: colors.border, padding: 16, paddingBottom: 16 + Math.max(insets.bottom, 24), gap: 10 }]}>
             <Text style={[styles.sheetTitle, { color: colors.foreground }]}>Send this message</Text>
             <Text style={[styles.hint, { color: colors.mutedForeground }]}>
@@ -2018,7 +2023,7 @@ export default function MpesaImportScreen() {
               <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold' }}>Cancel</Text>
             </Pressable>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <CategorySheet visible={picking !== null} budgetName={group?.name} onPick={chooseCategory} onClose={() => setPicking(null)} />
