@@ -1672,8 +1672,10 @@ export default function MpesaImportScreen() {
                               onPress={() => setDebtFor({ index: item.index, partyId: guess?.id ?? null, kind: null })}
                               accessibilityRole="button"
                               testID={`mpesa-line-debt-open-${item.index}`}
+                              hitSlop={10}
+                              style={{ paddingVertical: 6 }}
                             >
-                              <Text style={[styles.hint, { color: colors.primary, fontFamily: 'Inter_600SemiBold' }]}>
+                              <Text style={[styles.hint, { color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 15 }]}>
                                 Debt, loan, or paid through your account?
                               </Text>
                             </Pressable>
