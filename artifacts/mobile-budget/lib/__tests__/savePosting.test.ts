@@ -18,6 +18,7 @@ function fakeApi() {
     bankToBank: async (data) => { calls.push(['bankToBank', data as Record<string, unknown>]); next += 2; return { outgoing: { id: next - 1 }, incoming: { id: next } }; },
     toSavings: async (data) => { calls.push(['toSavings', data as Record<string, unknown>]); return { id: (next += 1) }; },
     fromSavings: async (data) => { calls.push(['fromSavings', data as Record<string, unknown>]); return { id: (next += 1) }; },
+    otherBudget: async (groupId, direction, data) => { calls.push(['otherBudget', { groupId, direction, ...(data as Record<string, unknown>) }]); return { id: (next += 1) }; },
   };
   return { api, calls };
 }
@@ -128,5 +129,40 @@ describe('SAVE_CONCURRENCY', () => {
   it('is a handful, not one at a time and not dozens of connections at once', () => {
     expect(SAVE_CONCURRENCY).toBeGreaterThanOrEqual(2);
     expect(SAVE_CONCURRENCY).toBeLessThanOrEqual(10);
+  });
+});
+
+describe('a line recorded in a different budget entirely', () => {
+  const otherBudget = { groupId: 5, groupName: 'Side hustle', accountId: 3, accountName: 'M-Pesa', category: 'Stock' };
+
+  it('records money out there, by its own account and category, with the charge staying on this budget', async () => {
+    const { api, calls } = fakeApi();
+    const built = buildPostings(line({}), { include: true, category: '', otherBudget }, ctx)!;
+    expect(built.kind).toBe('other-budget');
+    const posted = await savePosting(built, api, 9);
+    expect(calls.map(([name]) => name)).toEqual(['otherBudget', 'disbursement']);
+    expect(calls[0][1]).toMatchObject({ groupId: 5, direction: 'out', accountId: 3, expenseCategory: 'Stock' });
+    expect(calls[1][1]).toMatchObject({ amount: 25 });
+    expect(calls[1][1]).not.toHaveProperty('chargeForTransactionId');
+    expect(posted).toEqual({ id: undefined, feeFailed: false });
+  });
+
+  it('records money in there, with an income source when one was chosen, and no charge', async () => {
+    const { api, calls } = fakeApi();
+    const inbound = buildPostings(
+      line({ direction: 'in', type: 'person_receipt', fee: null }),
+      { include: true, category: '', otherBudget: { ...otherBudget, incomeSourceId: 9, category: undefined } },
+      ctx,
+    )!;
+    await savePosting(inbound, api, 9);
+    expect(calls.map(([name]) => name)).toEqual(['otherBudget']);
+    expect(calls[0][1]).toMatchObject({ groupId: 5, direction: 'in', accountId: 3, incomeSourceId: 9 });
+  });
+
+  it('reports a charge that did not save without treating the entry as failed', async () => {
+    const { api } = fakeApi();
+    const broken: PostingApi = { ...api, disbursement: async () => { throw new Error('nope'); } };
+    const built = buildPostings(line({}), { include: true, category: '', otherBudget }, ctx)!;
+    expect(await savePosting(built, broken, 9)).toEqual({ id: undefined, feeFailed: true });
   });
 });

@@ -63,18 +63,40 @@ export type Choice = {
    * sheet under their name instead of under whoever is saving it.
    */
   contributorId?: number | null;
+  /**
+   * A plain note against the entry, the same as expenses already have. Only carried through
+   * for an ordinary deposit or disbursement — a move, a savings transfer and a contribution
+   * do not accept one yet.
+   */
+  notes?: string;
+  /**
+   * Records this line in a budget the person manages other than the one being worked in —
+   * a side hustle run as its own project, say, buying stock from and selling it back into the
+   * same M-Pesa account. Chosen once per line: which budget, which of its accounts, and either
+   * a category in it (money out) or, optionally, one of its income sources (money in).
+   */
+  otherBudget?: {
+    groupId: number;
+    groupName: string;
+    accountId: number;
+    accountName: string;
+    category?: string;
+    incomeSourceId?: number | null;
+  } | null;
 };
 
 /**
  * Where a line goes, in one word. A line goes to exactly one place: a category (ordinary
  * spending or income), a debt with a person or company, a move between the person's own
- * accounts, a savings goal, or a group member's contribution. Everything that has to
- * treat these differently asks this instead of checking each field on its own.
+ * accounts, a savings goal, a group member's contribution, or a different budget entirely.
+ * Everything that has to treat these differently asks this instead of checking each field
+ * on its own.
  */
-export type Destination = 'category' | 'debt' | 'transfer' | 'savings' | 'contribution';
+export type Destination = 'category' | 'debt' | 'transfer' | 'savings' | 'contribution' | 'other-budget';
 
 export function destinationOf(choice: Choice | undefined): Destination {
   if (!choice) return 'category';
+  if (choice.otherBudget) return 'other-budget';
   if (choice.transferTo) return 'transfer';
   if (choice.savingsGoalId) return 'savings';
   if (choice.contributorId) return 'contribution';
@@ -82,10 +104,14 @@ export function destinationOf(choice: Choice | undefined): Destination {
   return 'category';
 }
 
-/** Money that only moves between the person's own places: not spending, not income, needing no category. */
+/**
+ * Money that is not this budget's own income or spending: it moves between the person's own
+ * places, or it is being recorded in a different budget entirely. Needs no category, no debt
+ * link and no income source here.
+ */
 export const isMove = (choice: Choice | undefined): boolean => {
   const destination = destinationOf(choice);
-  return destination === 'transfer' || destination === 'savings';
+  return destination === 'transfer' || destination === 'savings' || destination === 'other-budget';
 };
 
 type PastPosting = { type: string; description: string; expenseCategory?: string | null; incomeSourceId?: number | null };
@@ -329,6 +355,11 @@ export function snippetFor(pasted: string, receipt: string | null, length = 90):
 /** Why a ticked line cannot be saved yet, or null when it can. */
 export function problemWith(line: PreviewLine, choice: Choice | undefined): string | null {
   if (!choice?.include || !isRecordable(line)) return null;
+  if (choice.otherBudget) {
+    if (!choice.otherBudget.accountId) return `Choose an account in ${choice.otherBudget.groupName}.`;
+    if (line.direction === 'out' && !choice.otherBudget.category?.trim()) return `Choose what it was for in ${choice.otherBudget.groupName}.`;
+    return null;
+  }
   // Money moved between the person's own places is not spending, so it needs no category.
   if (isMove(choice)) return null;
   // Money lent is not spending, so it needs no category; paying a debt back does.
@@ -367,17 +398,28 @@ export function reviewCounts(lines: readonly PreviewLine[], choices: Record<numb
   return counts;
 }
 
-export type Summary = { count: number; moneyIn: number; moneyOut: number; fees: number; missingCategory: number; moves: number };
+export type Summary = {
+  count: number;
+  moneyIn: number;
+  moneyOut: number;
+  fees: number;
+  missingCategory: number;
+  moves: number;
+  /** Recorded in a different budget entirely: not this budget's income or spending either. */
+  toOtherBudgets: number;
+};
 
 export function summarise(lines: readonly PreviewLine[], choices: Record<number, Choice>): Summary {
-  const summary: Summary = { count: 0, moneyIn: 0, moneyOut: 0, fees: 0, missingCategory: 0, moves: 0 };
+  const summary: Summary = { count: 0, moneyIn: 0, moneyOut: 0, fees: 0, missingCategory: 0, moves: 0, toOtherBudgets: 0 };
   for (const line of lines) {
     const choice = choices[line.index];
     if (!choice?.include || !isRecordable(line) || line.amount === null) continue;
     summary.count += 1;
     if (isMove(choice)) {
-      // A move between the person's own places is neither money in nor money out; only its charge is a cost.
-      summary.moves += 1;
+      // A move between the person's own places, or a line going to a different budget
+      // entirely, is neither money in nor money out here; only its charge is a cost.
+      if (destinationOf(choice) === 'other-budget') summary.toOtherBudgets += 1;
+      else summary.moves += 1;
       if (line.direction === 'out') summary.fees += line.fee ?? 0;
       continue;
     }
@@ -431,6 +473,39 @@ export function buildPostings(line: PreviewLine, choice: Choice, ctx: PostingCon
         }
       : null;
 
+  // Recorded in a different budget entirely, by its own account and category or income source.
+  // The M-Pesa charge, if any, is still a real cost on this budget's own account, so it stays
+  // here — but it cannot be linked to the entry it came with, which lives in another budget's
+  // own history now.
+  if (choice.otherBudget) {
+    const target = choice.otherBudget;
+    return {
+      kind: 'other-budget' as const,
+      groupId: target.groupId,
+      direction: line.direction,
+      main:
+        line.direction === 'in'
+          ? {
+              amount: line.amount,
+              description,
+              date,
+              accountId: target.accountId,
+              ...(target.incomeSourceId ? { incomeSourceId: target.incomeSourceId } : {}),
+              ...(receipt ? { mpesaReceipt: receipt } : {}),
+            }
+          : {
+              amount: line.amount,
+              description,
+              date,
+              accountId: target.accountId,
+              expenseCategory: (target.category ?? '').trim(),
+              destinationKind: 'category' as const,
+              ...(receipt ? { mpesaReceipt: receipt } : {}),
+            },
+      fee: moveFee,
+    };
+  }
+
   // Into or out of a savings goal: one savings transfer, whole shillings, with the receipt on it.
   if (choice.savingsGoalId) {
     return {
@@ -477,6 +552,7 @@ export function buildPostings(line: PreviewLine, choice: Choice, ctx: PostingCon
         contributorSplits: [{ contributorId: choice.contributorId, amount: line.amount }],
         accountId: ctx.accountId,
         ...(receipt ? { mpesaReceipt: receipt } : {}),
+        ...(choice.notes?.trim() ? { notes: choice.notes.trim() } : {}),
       },
       fee: null,
     };
@@ -500,6 +576,7 @@ export function buildPostings(line: PreviewLine, choice: Choice, ctx: PostingCon
         ...(choice.debt?.kind === 'repaid' ? { settlesContributorId: choice.debt.partyId } : {}),
         ...(choice.debt?.kind === 'borrowed' ? { isBorrowing: true } : {}),
         ...(receipt ? { mpesaReceipt: receipt } : {}),
+        ...(choice.notes?.trim() ? { notes: choice.notes.trim() } : {}),
       },
       fee: null,
     };
@@ -521,6 +598,7 @@ export function buildPostings(line: PreviewLine, choice: Choice, ctx: PostingCon
         : { expenseCategory: choice.category.trim(), destinationKind: 'category' as const }),
       accountId: ctx.accountId,
       ...(receipt ? { mpesaReceipt: receipt } : {}),
+      ...(choice.notes?.trim() ? { notes: choice.notes.trim() } : {}),
     },
     fee:
       line.fee && line.fee > 0 && ctx.chargeCategory.trim()
@@ -613,7 +691,7 @@ export function categoryChanges(
 }
 
 // Choosing one place for a line un-chooses the others, so a line is only ever in one.
-const noOtherPlace = { debt: null, incomeSourceId: null, sourceAuto: false, transferTo: null, savingsGoalId: null, contributorId: null } as const;
+const noOtherPlace = { debt: null, incomeSourceId: null, sourceAuto: false, transferTo: null, savingsGoalId: null, contributorId: null, otherBudget: null } as const;
 
 /** Sets, or with null clears, the other account of a move between the person's own accounts. */
 export function chooseTransfer(choices: Record<number, Choice>, index: number, accountId: number | null): Record<number, Choice> {
@@ -634,6 +712,14 @@ export function chooseContribution(choices: Record<number, Choice>, index: numbe
   const current = choices[index];
   if (!current) return choices;
   return { ...choices, [index]: contributorId ? { ...current, ...noOtherPlace, contributorId } : { ...current, contributorId: null } };
+}
+
+/** Sets, or with null clears, which other budget a line is recorded in — and which of its
+ *  accounts, plus a category (money out) or income source (money in, optional) within it. */
+export function chooseOtherBudget(choices: Record<number, Choice>, index: number, otherBudget: Choice['otherBudget'] | null): Record<number, Choice> {
+  const current = choices[index];
+  if (!current) return choices;
+  return { ...choices, [index]: otherBudget ? { ...current, ...noOtherPlace, otherBudget } : { ...current, otherBudget: null } };
 }
 
 /** Savings transfers take whole shillings only, and only a payment that could be recorded at all. */

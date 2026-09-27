@@ -22,6 +22,7 @@ TWINS = {
     'mpesaDebts.ts': ('mpesa-debts.ts', {'./mpesaImport': './mpesa-import'}),
     'payeeLearning.ts': ('payee-learning.ts', {}),
     'savePosting.ts': ('save-posting.ts', {'./mpesaImport': './mpesa-import'}),
+    'otherBudgetOptions.ts': ('other-budget-options.ts', {}),
 }
 
 
