@@ -1521,9 +1521,9 @@ export default function MpesaImportScreen() {
                               accessibilityRole="button"
                               accessibilityState={{ selected: on }}
                               testID={`mpesa-line-other-budget-${item.index}-${option.id ?? 'no'}`}
-                              style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, borderWidth: 1, borderColor: on ? colors.primary : colors.border, backgroundColor: on ? `${colors.primary}22` : colors.muted, opacity: loadingOtherBudget === option.id ? 0.6 : 1 }}
+                              style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, borderWidth: 1, borderColor: on ? colors.primary : colors.border, backgroundColor: on ? `${colors.primary}22` : colors.muted, opacity: option.id !== null && loadingOtherBudget === option.id ? 0.6 : 1 }}
                             >
-                              {loadingOtherBudget === option.id ? (
+                              {option.id !== null && loadingOtherBudget === option.id ? (
                                 <ActivityIndicator size="small" color={colors.primary} />
                               ) : (
                                 <Text style={{ color: on ? colors.primary : colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>{option.name}</Text>
