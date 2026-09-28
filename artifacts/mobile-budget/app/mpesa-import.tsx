@@ -382,7 +382,7 @@ export default function MpesaImportScreen() {
   const accountId = selectedAccountId ?? guessedAccount;
   const { data: account } = useGetJointAccount(accountId ? { accountId } : undefined);
   const history = useMemo(
-    () => ((account?.transactions ?? []) as Array<{ type: string; description: string; expenseCategory?: string | null; incomeSourceId?: number | null }>),
+    () => ((account?.transactions ?? []) as Array<{ type: string; description: string; expenseCategory?: string | null; incomeSourceId?: number | null; chargeForTransactionId?: number | null }>),
     [account],
   );
   // Where money in can be said to have come from: the person's own sources in a
