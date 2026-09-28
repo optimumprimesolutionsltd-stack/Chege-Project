@@ -9,6 +9,8 @@
  */
 export type ReaderMessage =
   | { type: 'ready' }
+  /** A page has been read, so the screen can say how far along it is. */
+  | { type: 'progress'; page: number; of: number }
   | { type: 'pages'; pages: Array<Array<{ str: string; x: number; y: number; w: number }>> }
   | { type: 'error'; name?: string; code?: number; message: string };
 
@@ -45,6 +47,7 @@ window.__read = async (base64, password) => {
           .filter((item) => typeof item.str === 'string' && item.str.trim() !== '')
           .map((item) => ({ str: item.str, x: item.transform[4], y: item.transform[5], w: item.width })),
       );
+      post({ type: 'progress', page: number, of: doc.numPages });
     }
     post({ type: 'pages', pages });
   } catch (error) {
