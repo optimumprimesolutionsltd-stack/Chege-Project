@@ -14,6 +14,8 @@ import {
   requireTransactionEligibility,
 } from "../lib/activeGroup";
 
+import { notAReversal } from "../lib/reversal-links";
+
 const router = Router();
 
 /** Returns a human-readable name from a user record, using email prefix as fallback */
@@ -117,6 +119,7 @@ router.get("/contributions/deposits", async (req, res): Promise<void> => {
     WHERE t.group_id = ${groupId}
       AND t.type = 'deposit'
       AND t.bank_transfer_id IS NULL
+      ${notAReversal(sql`t.id`)}
       AND COALESCE(s.user_id, t.made_by_id) IS NOT NULL
       AND EXTRACT(MONTH FROM t.date) = ${Math.round(month)}
       AND EXTRACT(YEAR FROM t.date) = ${Math.round(year)}

@@ -29,6 +29,7 @@ import { createContributionReportPdf } from "../lib/contribution-report-pdf";
 import { createContributionStatementPdf } from "../lib/contribution-statement-pdf";
 import { groupVerifyCode } from "../lib/contribution-verification";
 import { nairobiNow } from "../lib/nairobiTime";
+import { notAReversal } from "../lib/reversal-links";
 import {
   CONTRIBUTOR_NAME_MAX,
   contributorNameMessage,
@@ -104,6 +105,7 @@ export async function loadContributionStatement(
         AND ${jointAccountTxTable.type} = 'deposit'
         AND ${jointAccountTxTable.bankTransferId} IS NULL
         AND ${jointAccountTxTable.settlesContributorId} IS NULL
+        ${notAReversal(jointAccountTxTable.id)}
         AND NOT ${jointAccountTxTable.isBorrowing}
         AND ${jointAccountTxTable.date} >= make_date(${earliest.year}, ${earliest.month}, 1)`),
   ]);
@@ -124,6 +126,7 @@ export async function loadContributionStatement(
       AND t.type = 'deposit'
       AND t.bank_transfer_id IS NULL
       AND t.settles_contributor_id IS NULL
+      ${notAReversal(sql`t.id`)}
       AND NOT t.is_borrowing
       AND t.date >= make_date(${earliest.year}, ${earliest.month}, 1)
     GROUP BY t.id, t.date, t.description, t.amount, b.name
@@ -569,6 +572,7 @@ export async function loadContributionGrid(groupId: number, monthsBack: number):
         AND ${jointAccountTxTable.type} = 'deposit'
         AND ${jointAccountTxTable.bankTransferId} IS NULL
         AND ${jointAccountTxTable.settlesContributorId} IS NULL
+        ${notAReversal(jointAccountTxTable.id)}
         AND NOT ${jointAccountTxTable.isBorrowing}
         AND make_date(
               COALESCE(${jointAccountTxTable.appliesToYear}, EXTRACT(YEAR FROM ${jointAccountTxTable.date}))::int,
