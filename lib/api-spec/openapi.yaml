@@ -3830,7 +3830,11 @@ components:
             posting show its fee again instead of quietly gaining a second one.
         expenseCategory:
           type: string
-          description: Required budget category this disbursement is paying for
+          description: >-
+            The budget category this disbursement is paying for. Required,
+            except for money lent (isLending) and for a payment to somebody you
+            owe (settlesContributorId), where the cost may already have been
+            recorded when the debt was taken on. Without one it is not spending.
         destinationKind:
           type: string
           enum: [category, other]
@@ -3866,7 +3870,11 @@ components:
           description: Preserved for deposits unless explicitly changed
         expenseCategory:
           type: string
-          description: Required for withdrawals; deposits ignore this field
+          nullable: true
+          description: >-
+            Required for withdrawals, except one paying somebody you owe, where
+            null takes the category off. Omitted keeps the one recorded.
+            Deposits ignore this field.
         sourceKind:
           type: string
           enum: [income_source, other]

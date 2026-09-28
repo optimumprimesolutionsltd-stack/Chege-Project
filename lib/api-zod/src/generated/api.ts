@@ -1216,7 +1216,7 @@ export const CreateDisbursementBody = zod.object({
   "isLending": zod.boolean().optional().describe('Money lent, leaving the account. Not spending — you expect it back and it is now owed to you — so it carries no category, which is what keeps it out of every spending total.'),
   "settlesContributorId": zod.number().min(1).optional().describe('Who the money went to, when it went to a party: somebody you owe being paid, or somebody being lent to. Stored so reopening the posting can say who it was for rather than leaving an empty picker that invites a guess.'),
   "chargeForTransactionId": zod.number().min(1).optional().describe('The posting this bank charge came with. The fee stays its own row, so what is owed moves by the payment alone, but the link lets the posting show its fee again instead of quietly gaining a second one.'),
-  "expenseCategory": zod.string().optional().describe('Required budget category this disbursement is paying for'),
+  "expenseCategory": zod.string().optional().describe('The budget category this disbursement is paying for. Required, except for money lent (isLending) and for a payment to somebody you owe (settlesContributorId), where the cost may already have been recorded when the debt was taken on. Without one it is not spending.'),
   "destinationKind": zod.enum(['category', 'other']).optional().describe('Choose other only when the required description is a narration.'),
   "accountId": zod.number().min(1).optional()
 })
@@ -1532,7 +1532,7 @@ export const UpdateJointAccountTransactionBody = zod.object({
   "date": zod.coerce.date(),
   "madeById": zod.string().nullish(),
   "incomeSourceId": zod.number().nullish().describe('Preserved for deposits unless explicitly changed'),
-  "expenseCategory": zod.string().optional().describe('Required for withdrawals; deposits ignore this field'),
+  "expenseCategory": zod.string().nullish().describe('Required for withdrawals, except one paying somebody you owe, where null takes the category off. Omitted keeps the one recorded. Deposits ignore this field.'),
   "sourceKind": zod.enum(['income_source', 'other']).optional(),
   "destinationKind": zod.enum(['category', 'other']).optional(),
   "contributorSplits": zod.array(zod.object({

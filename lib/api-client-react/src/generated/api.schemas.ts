@@ -1556,7 +1556,7 @@ export interface DisbursementInput {
      * @minimum 1
      */
   chargeForTransactionId?: number;
-  /** Required budget category this disbursement is paying for */
+  /** The budget category this disbursement is paying for. Required, except for money lent (isLending) and for a payment to somebody you owe (settlesContributorId), where the cost may already have been recorded when the debt was taken on. Without one it is not spending. */
   expenseCategory?: string;
   /** Choose other only when the required description is a narration. */
   destinationKind?: DisbursementInputDestinationKind;
@@ -1610,8 +1610,8 @@ export interface UpdateJointAccountTransactionInput {
      * @nullable
      */
   incomeSourceId?: number | null;
-  /** Required for withdrawals; deposits ignore this field */
-  expenseCategory?: string;
+  /** Required for withdrawals, except one paying somebody you owe, where null takes the category off. Omitted keeps the one recorded. Deposits ignore this field. */
+  expenseCategory?: string | null;
   sourceKind?: UpdateJointAccountTransactionInputSourceKind;
   destinationKind?: UpdateJointAccountTransactionInputDestinationKind;
   /** Replacement contributor portions for a deposit. Send an empty array to remove existing splits. */

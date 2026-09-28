@@ -167,10 +167,13 @@ const DisbursementInput = z.object({
   destinationKind: z.enum(["category", "other"]).optional(),
   accountId: z.number().int().positive().optional(),
 }).superRefine((value, ctx) => {
-  // A missing category is only ever allowed because the row is a loan. Left
-  // to the schema alone, any withdrawal could quietly lose its category and
+  // A missing category is only ever allowed because the row is a loan, or a
+  // payment to somebody you owe. Paying off a debt is not a new cost when the
+  // cost was recorded as the debt was taken on (stock bought on credit), so it
+  // may carry none; when it was not, the person paying picks one. Left to the
+  // schema alone, any other withdrawal could quietly lose its category and
   // drop out of spending.
-  if (!value.isLending && !value.expenseCategory) {
+  if (!value.isLending && value.settlesContributorId === undefined && !value.expenseCategory) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["expenseCategory"], message: "Choose a valid budget category." });
   }
 });
@@ -181,7 +184,8 @@ const UpdateJointAccountInput = z.object({
   date: z.string().min(1),
   madeById: z.string().nullable().optional(),
   incomeSourceId: z.number().int().positive().nullable().optional(),
-  expenseCategory: z.string().trim().min(1).max(80).optional(),
+  // Null takes the category off, which only a payment to somebody you owe may do.
+  expenseCategory: z.string().trim().min(1).max(80).nullable().optional(),
   // Omitted leaves whoever was recorded alone: an edit that never touches the
   // party must not drop it.
   settlesContributorId: z.number().int().positive().nullable().optional(),
@@ -597,7 +601,12 @@ async function loadBankStatement(groupId: number, accountId: number, from: strin
       id: tx.id,
       date: tx.date,
       description: tx.description ?? "",
-      detail: tx.expenseCategory ?? (tx.isLending ? "Lent out" : tx.isBorrowing ? "Borrowed" : null),
+      detail: tx.expenseCategory ?? (
+        tx.isLending ? "Lent out"
+          : tx.isBorrowing ? "Borrowed"
+            : !isIn && tx.settlesContributorId !== null ? "Debt payment"
+              : null
+      ),
       moneyIn: isIn ? amount : 0,
       moneyOut: isIn ? 0 : amount,
       balance: Math.round(running * 100) / 100,
@@ -1020,9 +1029,11 @@ router.post("/joint-account/disbursement", async (req, res): Promise<void> => {
   }
   const disbursementClash = await alreadyRecorded(groupId, parsed.data.mpesaReceipt);
   if (disbursementClash) { res.status(409).json(disbursementClash); return; }
-  // Lending carries no category, so there is nothing to canonicalise, look up
-  // or refuse for being a heading.
-  const expenseCategory = isLending ? null : canonicalExpenseCategoryName(parsed.data.expenseCategory ?? "");
+  // Lending carries no category, nor does a debt payment given none, so there
+  // is nothing to canonicalise, look up or refuse for being a heading.
+  const expenseCategory = isLending || !parsed.data.expenseCategory
+    ? null
+    : canonicalExpenseCategoryName(parsed.data.expenseCategory);
   if (isLending && !description.trim()) {
     res.status(400).json({ error: "Say who the money was lent to." });
     return;
@@ -1071,7 +1082,7 @@ router.post("/joint-account/disbursement", async (req, res): Promise<void> => {
       mpesaReceipt: parsed.data.mpesaReceipt ?? null,
       // Description is a supporting note. When omitted, retain a meaningful
       // non-null value while reports remain anchored on expenseCategory.
-      description: description || expenseCategory || "Lent out",
+      description: description || expenseCategory || (isLending ? "Lent out" : "Debt payment"),
       notes: parsed.data.notes?.trim() || null,
       date,
       madeById,
@@ -1640,10 +1651,19 @@ router.put("/joint-account/:id", async (req, res): Promise<void> => {
   // the edit when none came. The row itself is the authority: an edit cannot
   // turn ordinary spending into a loan, or the reverse, by omission.
   const editingALoanOut = existing.isLending === true;
-  const expenseCategory = editingALoanOut
+  // A payment to somebody you owe may carry no category (see DisbursementInput),
+  // and an edit may take one off - null clears it - but only while the row is
+  // still paying somebody. Everything else keeps needing a category.
+  const paysAParty = (parsed.data.settlesContributorId === undefined
+    ? existing.settlesContributorId
+    : parsed.data.settlesContributorId) != null;
+  const categoryAsked = parsed.data.expenseCategory === null
+    ? ""
+    : parsed.data.expenseCategory ?? existing.expenseCategory ?? "";
+  const expenseCategory = editingALoanOut || (paysAParty && !categoryAsked)
     ? null
-    : canonicalExpenseCategoryName(parsed.data.expenseCategory ?? existing.expenseCategory ?? "");
-  if (!editingALoanOut && !expenseCategory) {
+    : canonicalExpenseCategoryName(categoryAsked);
+  if (!editingALoanOut && !paysAParty && !expenseCategory) {
     res.status(400).json({ error: "Choose a valid budget category." });
     return;
   }

@@ -29,8 +29,8 @@ export interface UpdateJointAccountTransactionInput {
      * @nullable
      */
   incomeSourceId?: number | null;
-  /** Required for withdrawals; deposits ignore this field */
-  expenseCategory?: string;
+  /** Required for withdrawals, except one paying somebody you owe, where null takes the category off. Omitted keeps the one recorded. Deposits ignore this field. */
+  expenseCategory?: string | null;
   sourceKind?: UpdateJointAccountTransactionInputSourceKind;
   destinationKind?: UpdateJointAccountTransactionInputDestinationKind;
   /** Replacement contributor portions for a deposit. Send an empty array to remove existing splits. */
