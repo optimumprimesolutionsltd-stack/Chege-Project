@@ -566,3 +566,23 @@ export const debtEntryLinksTable = pgTable("debt_entry_links", {
 ]);
 
 export type DebtEntryLink = typeof debtEntryLinksTable.$inferSelect;
+
+/**
+ * Which payment a "money back" deposit reversed (migration 0047).
+ *
+ * Linked, the two cancel: the deposit is not income and the payment is not
+ * spending. The payment drops out of spending by losing its category, which
+ * every spending total filters on; originalCategory keeps it for unlinking.
+ * A side table so that, if it is ever missing, no ordinary bank entry fails.
+ */
+export const reversalLinksTable = pgTable("reversal_links", {
+  reversalTransactionId: integer("reversal_transaction_id").primaryKey().references(() => jointAccountTxTable.id, { onDelete: "cascade" }),
+  originalTransactionId: integer("original_transaction_id").notNull().unique().references(() => jointAccountTxTable.id, { onDelete: "cascade" }),
+  groupId: integer("group_id").notNull().references(() => groupsTable.id, { onDelete: "cascade" }),
+  originalCategory: text("original_category"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("reversal_links_group_idx").on(table.groupId),
+]);
+
+export type ReversalLink = typeof reversalLinksTable.$inferSelect;
