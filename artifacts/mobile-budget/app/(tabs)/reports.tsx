@@ -604,6 +604,29 @@ export default function ReportsScreen() {
           refreshControl={<RefreshControl refreshing={false} onRefresh={onRefresh} tintColor={colors.primary} />}
           showsVerticalScrollIndicator={false}
         >
+          {/* Income first: a list of expenses cannot be judged without what
+              came in to pay for them, so this is what they are checked against. */}
+          <Pressable
+            onPress={() => router.push('/income-ledger')}
+            accessibilityRole="button"
+            accessibilityLabel="See all your income in one list"
+            testID="open-income-ledger"
+            style={({ pressed }) => [
+              styles.spendOnCard,
+              { backgroundColor: colors.card, borderColor: colors.border },
+              pressed && { opacity: 0.85 },
+            ]}
+          >
+            <Feather name="arrow-down-circle" size={18} color={colors.primary} />
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={[styles.spendOnTitle, { color: colors.foreground }]}>All income</Text>
+              <Text style={[styles.spendOnSub, { color: colors.mutedForeground }]} numberOfLines={2}>
+                Everything that came in between two dates, to check your expenses against.
+              </Text>
+            </View>
+            <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+          </Pressable>
+
           {/* Every other way in goes through a category or a named thing
               first. This is the one that answers "what happened". */}
           <Pressable
