@@ -100,7 +100,8 @@ describe("editing a loan out is not refused for having no category", () => {
   });
 
   it("still demands a category for an ordinary withdrawal", () => {
-    expect((bank.match(/Choose a valid budget category\./g) ?? []).length).toBe(4);
+    // Five: the fifth is a transfer that was not a transfer, kept as money out.
+    expect((bank.match(/Choose a valid budget category\./g) ?? []).length).toBe(5);
   });
 });
 

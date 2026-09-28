@@ -342,6 +342,13 @@ export default function BankScreen() {
   const [addingGoal, setAddingGoal] = useState(false);
   const [transferDirection, setTransferDirection] = useState<'to_savings' | 'from_savings'>('to_savings');
   const [bankTransferDestinationId, setBankTransferDestinationId] = useState<number | null>(null);
+  /**
+   * The transfer being corrected. Both halves change together through their own
+   * endpoint; the accounts stay as they were, so they are shown, not offered.
+   */
+  const [editingTransfer, setEditingTransfer] = useState<{ id: string; kind: 'deposit' | 'disbursement'; fromName: string; toName: string; otherName: string } | null>(null);
+  /** Set by "This wasn't a transfer": the half being kept as an ordinary entry. */
+  const [unpairKeepId, setUnpairKeepId] = useState<number | null>(null);
 
   // Derived: for income sources, only show when exactly one depositor is selected
   const singleDepositorId = depositorIds.length === 1 ? depositorIds[0] : null;
@@ -421,7 +428,7 @@ export default function BankScreen() {
     if (accountStorageKey) AsyncStorage.setItem(accountStorageKey, String(accountId)).catch(() => {});
   };
   const canEditTransaction = (tx: Tx) =>
-    (canManageAccount && !tx.bankTransferId) || (
+    canManageAccount || (
       tx.type === 'deposit' &&
       tx.madeById === user?.id &&
       tx.date === todayIso() &&
@@ -538,6 +545,8 @@ export default function BankScreen() {
       return;
     }
     setEditingTransactionId(null);
+    setEditingTransfer(null);
+    setUnpairKeepId(null);
     setTxType(type);
     setAmount('');
     setDescription('');
@@ -587,6 +596,8 @@ export default function BankScreen() {
     setModalVisible(false);
     setNewCategoryName('');
     setEditingTransactionId(null);
+    setEditingTransfer(null);
+    setUnpairKeepId(null);
     setSitting(null);
   };
 
@@ -629,6 +640,8 @@ export default function BankScreen() {
    */
   const finishEntry = (keepOpen: boolean, recorded: { amount: number; direction: 'in' | 'out' }) => {
     setEditingTransactionId(null);
+    setEditingTransfer(null);
+    setUnpairKeepId(null);
     if (!keepOpen) {
       setModalVisible(false);
       setSitting(null);
@@ -981,9 +994,38 @@ export default function BankScreen() {
     );
   };
 
+  /** A transfer opens as a transfer: both halves are corrected together. */
+  const openTransferEdit = (tx: Tx, transferId: string) => {
+    const here = data?.accountName ?? 'this account';
+    const there = accounts.find((account) => account.id === tx.bankTransferAccountId)?.name ?? 'the other account';
+    const kind = tx.type === 'deposit' ? 'deposit' : 'disbursement';
+    setTxType('bank_transfer');
+    setEditingTransactionId(tx.id);
+    setEditingTransfer({
+      id: transferId,
+      kind,
+      fromName: kind === 'disbursement' ? here : there,
+      toName: kind === 'disbursement' ? there : here,
+      otherName: there,
+    });
+    setUnpairKeepId(null);
+    setAmount(String(tx.amount));
+    setDescription(tx.description);
+    setNotes(tx.notes ?? '');
+    setDate(tx.date);
+    setExpenseCategory('');
+    setShowCategoryPicker(false);
+    setShowDatePicker(false);
+    setModalVisible(true);
+  };
+
   const openEdit = (tx: Tx) => {
     if (!canEditTransaction(tx)) {
       Alert.alert('This transaction is locked', 'Members can correct only their own deposits dated today. Ask an admin to correct an earlier or shared bank record.');
+      return;
+    }
+    if (tx.bankTransferId) {
+      openTransferEdit(tx, tx.bankTransferId);
       return;
     }
     const type: TxType = tx.savingsGoalId
@@ -1677,6 +1719,27 @@ export default function BankScreen() {
       }
       return;
     }
+    if (txType === 'bank_transfer' && editingTransfer) {
+      if (!description.trim()) {
+        Alert.alert('Narration required', 'Add a short narration for this transfer.');
+        return;
+      }
+      setSubmitting(true);
+      try {
+        await customFetch(`/api/joint-account/transfers/bank-to-bank/${editingTransfer.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ amount: parsed, narration: description.trim(), date }),
+        });
+        finishEntry(false, { amount: parsed, direction: 'out' });
+        await invalidateAccounts();
+      } catch (err: unknown) {
+        Alert.alert('Could not change the transfer', err instanceof Error ? err.message : 'Nothing was changed.');
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
     if (txType === 'bank_transfer') {
       if (!selectedAccountId || !bankTransferDestinationId || selectedAccountId === bankTransferDestinationId) {
         Alert.alert('Choose another account', 'Source and destination bank accounts must be different.');
@@ -1779,6 +1842,18 @@ export default function BankScreen() {
               })(),
             }))
           : [];
+        // "This wasn't a transfer": first the other half goes and this one stops
+        // being a transfer, then it is saved like any other entry.
+        if (unpairKeepId !== null && editingTransfer) {
+          await customFetch(`/api/joint-account/transfers/bank-to-bank/${editingTransfer.id}/unpair`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              keepTransactionId: unpairKeepId,
+              ...(txType === 'disbursement' ? { expenseCategory: expenseCategory.trim() } : {}),
+            }),
+          });
+        }
         await updateTransaction({
           id: editingTransactionId,
           data: {
@@ -2958,7 +3033,7 @@ export default function BankScreen() {
 
               <Text style={[styles.sheetTitle, { color: colors.foreground }]}>
                 {editingTransactionId !== null
-                  ? `Edit ${isDeposit ? 'money in' : isTransfer ? 'savings move' : 'money out'}`
+                  ? `Edit ${isBankTransfer ? 'transfer' : isDeposit ? 'money in' : isTransfer ? 'savings move' : 'money out'}`
                   : isDeposit ? 'Add Money to Account' : isTransfer ? 'Move Money To or From Savings' : isBankTransfer ? 'Move Money Between Your Accounts' : 'Take Money Out'}
               </Text>
 
@@ -3379,7 +3454,39 @@ export default function BankScreen() {
                   />
                 </>
               )}
-              {isBankTransfer && (
+              {isBankTransfer && editingTransfer ? (
+                <View style={{ marginBottom: 14, gap: 8 }} testID="bank-transfer-edit-summary">
+                  <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>
+                    From {editingTransfer.fromName} to {editingTransfer.toName}
+                  </Text>
+                  <Text style={{ color: colors.mutedForeground, fontSize: 12, fontFamily: 'Inter_400Regular' }}>
+                    Both sides of the transfer change together.
+                  </Text>
+                  <TouchableOpacity
+                    style={[styles.memberPill, { alignSelf: 'flex-start', backgroundColor: colors.muted, borderColor: colors.border }]}
+                    onPress={() => {
+                      setUnpairKeepId(editingTransactionId);
+                      setTxType(editingTransfer.kind);
+                      if (editingTransfer.kind === 'disbursement') {
+                        setWithdrawDest('other');
+                        setWithdrawerId(!isSharedWorkspace ? user?.id ?? null : null);
+                      } else {
+                        setDepositorIds(!isSharedWorkspace && user?.id ? [user.id] : []);
+                      }
+                    }}
+                    testID="bank-transfer-not-a-transfer"
+                  >
+                    <Text style={[styles.memberPillText, { color: colors.foreground }]}>This wasn't a transfer</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+              {unpairKeepId !== null && editingTransfer ? (
+                <Text style={{ color: '#f59e0b', fontSize: 12, fontFamily: 'Inter_400Regular', marginBottom: 10 }} testID="bank-transfer-unpair-note">
+                  Saving records this as ordinary {editingTransfer.kind === 'disbursement' ? 'money out' : 'money in'} and removes the matching
+                  entry in {editingTransfer.otherName}.
+                </Text>
+              ) : null}
+              {isBankTransfer && !editingTransfer && (
                 <>
                   {/* "From" was a label showing whichever account happened to be
                       selected behind the sheet, with no way to change it here —
@@ -3452,7 +3559,7 @@ export default function BankScreen() {
                   the amount, a repayment of 5,000 with a 50 charge would offer
                   to take 5,050 off the loan when only 5,000 reached it. */}
               {chargeCanApply ? (
-                <View testID="bank-charge-block" style={{ marginBottom: 14 }}>
+                <View testID="bank-charge-block" style={{ marginBottom: 14, display: editingTransfer ? 'none' : 'flex' }}>
                   <Text style={[styles.label, { color: colors.mutedForeground }]}>
                     Bank charge <Text style={{ fontWeight: '400', fontSize: 11 }}>(optional)</Text>
                   </Text>
