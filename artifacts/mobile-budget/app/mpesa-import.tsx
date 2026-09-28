@@ -672,6 +672,21 @@ export default function MpesaImportScreen() {
     AsyncStorage.getItem(CHARGE_CATEGORY_KEY).then((stored) => stored && setChargeCategory(stored)).catch(() => {});
   }, []);
 
+  // Every budget has built-in charge categories (the server makes sure). When
+  // they are there, fees go to them without asking, the same every time; a
+  // budget without them yet keeps the picker, so an import never stalls.
+  const builtInCharge = useMemo(
+    () => categories.find((row) => row.name.trim().toLowerCase() === 'm-pesa charges')?.name ?? null,
+    [categories],
+  );
+  const fulizaCategory = useMemo(
+    () => categories.find((row) => row.name.trim().toLowerCase() === 'fuliza charges')?.name ?? null,
+    [categories],
+  );
+  useEffect(() => {
+    if (builtInCharge) setChargeCategory(builtInCharge);
+  }, [builtInCharge]);
+
   const readMessages = async (pasted: string = text) => {
     if (!pasted.trim()) {
       Alert.alert('Paste your messages', 'Copy them from your Messages app, then paste them here.');
@@ -831,7 +846,8 @@ export default function MpesaImportScreen() {
   useEffect(() => { setFulizaSaved(false); }, [fuliza?.receipt]);
   const recordFulizaCharges = async () => {
     if (!fuliza || !accountId || fulizaSaving) return;
-    if (!chargeCategory.trim()) {
+    const category = fulizaCategory ?? chargeCategory.trim();
+    if (!category) {
       setPicking('charge');
       Alert.alert('Where do charges go?', 'Choose the category your bank and M-Pesa charges are filed under, then tap again.');
       return;
@@ -842,7 +858,7 @@ export default function MpesaImportScreen() {
         data: {
           amount: fuliza.amount,
           description: `Fuliza charges ${fuliza.from} to ${fuliza.to}`,
-          expenseCategory: chargeCategory.trim(),
+          expenseCategory: category,
           date: fuliza.to,
           accountId,
           madeById: isShared ? null : user?.id ?? null,
@@ -1808,7 +1824,11 @@ export default function MpesaImportScreen() {
               );
             })}
 
-            {summary && summary.fees > 0 ? (
+            {summary && summary.fees > 0 && builtInCharge ? (
+              <Text style={[styles.hint, { color: colors.mutedForeground }]} testID="mpesa-charge-built-in">
+                M-Pesa charges on these are filed under {builtInCharge}.
+              </Text>
+            ) : summary && summary.fees > 0 ? (
               <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <Text style={[styles.label, { color: colors.mutedForeground }]}>Where do the M-Pesa charges go?</Text>
                 <Pressable

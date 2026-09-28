@@ -83,8 +83,9 @@ describe('on the import screen', () => {
     expect(screen).toContain('testID="mpesa-fuliza-record"');
   });
 
-  it('files them under the charges category, dated at the end of the statement, with the receipt', () => {
-    expect(screen).toContain('expenseCategory: chargeCategory.trim(),');
+  it('files them under Fuliza charges, dated at the end of the statement, with the receipt', () => {
+    expect(screen).toContain('const category = fulizaCategory ?? chargeCategory.trim();');
+    expect(screen).toContain('expenseCategory: category,');
     expect(screen).toContain('date: fuliza.to,');
     expect(screen).toContain('mpesaReceipt: fuliza.receipt,');
   });
@@ -103,5 +104,15 @@ describe('on the import screen', () => {
 
   it('says when it is only partly fees', () => {
     expect(screen).toContain('It is only all fees if no Fuliza loan was already open when this statement');
+  });
+
+  it('files M-Pesa charges under the built-in category without asking, when the budget has it', () => {
+    expect(screen).toContain("row.name.trim().toLowerCase() === 'm-pesa charges'");
+    expect(screen).toContain('if (builtInCharge) setChargeCategory(builtInCharge);');
+    expect(screen).toContain('testID="mpesa-charge-built-in"');
+  });
+
+  it('keeps the picker for a budget without the built-in categories yet, so an import never stalls', () => {
+    expect(screen).toContain(') : summary && summary.fees > 0 ? (');
   });
 });

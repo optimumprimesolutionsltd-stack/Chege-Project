@@ -12,6 +12,7 @@ import { getActiveGroupId, requireGroupManager, requireTransactionEligibility } 
 import { categoryPackChildren, categoryPackForKind, categoryPackRows, normalizedCategoryPackKind, priorityTiersForKind, subcategorySuggestions } from "../lib/categoryPacks";
 
 import { canonicalExpenseCategoryName } from "../lib/categoryNames";
+import { BUILT_IN_LOCKED_MESSAGE, ensureChargeCategories, isBuiltInCategoryName } from "../lib/built-in-categories";
 
 const router = Router();
 const UNCATEGORIZED_CATEGORY = "Uncategorized";
@@ -78,6 +79,9 @@ async function getCategoryRecommendationPreview(groupId: number) {
 router.get("/budget-categories", async (req, res) => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
+  // Every budget has the built-in charge categories. Never allowed to cost the
+  // list: if this fails, the categories are shown without them.
+  await ensureChargeCategories(groupId).catch(() => {});
   const categories = await db
     .select()
     .from(budgetCategoriesTable)
@@ -623,6 +627,15 @@ router.put("/budget-categories/:id", async (req, res) => {
     .where(and(eq(budgetCategoriesTable.id, id), eq(budgetCategoriesTable.groupId, groupId)))
     .limit(1);
   if (!existing) { res.status(404).json({ error: "Category not found" }); return; }
+  // A built-in charge category takes a budget, a colour or a priority like any
+  // other, but keeps its name and place, and stays: imports file fees there.
+  if (isBuiltInCategoryName(existing.name) && (
+    (parsed.data.name !== undefined && parsed.data.name.trim().toLowerCase() !== existing.name.trim().toLowerCase())
+    || (parsed.data.parentId !== undefined && parsed.data.parentId !== existing.parentId)
+  )) {
+    res.status(400).json({ error: BUILT_IN_LOCKED_MESSAGE });
+    return;
+  }
   if (parsed.data.parentId != null) {
     const rejection = await parentRejection(groupId, parsed.data.parentId, id);
     if (rejection) { res.status(400).json({ error: rejection }); return; }
@@ -708,6 +721,15 @@ router.delete("/budget-categories/:id", async (req, res) => {
   if (!requireGroupManager(req, res)) return;
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const [target] = await db
+    .select({ name: budgetCategoriesTable.name })
+    .from(budgetCategoriesTable)
+    .where(and(eq(budgetCategoriesTable.id, id), eq(budgetCategoriesTable.groupId, groupId)))
+    .limit(1);
+  if (target && isBuiltInCategoryName(target.name)) {
+    res.status(400).json({ error: BUILT_IN_LOCKED_MESSAGE });
+    return;
+  }
   // Checked before attempting the delete so the answer names the reason. The
   // foreign key would refuse it anyway, but only with a constraint violation.
   const [child] = await db
