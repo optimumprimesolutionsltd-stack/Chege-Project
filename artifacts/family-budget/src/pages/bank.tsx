@@ -2485,8 +2485,8 @@ export default function Bank() {
                           {(depositorIds.length === 0 ? groupSources : depositSources).map(src => (
                             <option key={src.id} value={src.id}>
                               {src.name}
-                              {depositorIds.length === 0 && src.userId
-                                ? ` — ${(members ?? []).find((m) => m.userId === src.userId)?.userName?.split(" ")[0] ?? "member"}`
+                              {depositorIds.length === 0
+                                ? ` — ${(members ?? []).find((m) => m.userId === src.userId)?.userName?.split(" ")[0] ?? "not a current member"}`
                                 : ""}
                             </option>
                           ))}
@@ -2495,7 +2495,7 @@ export default function Bank() {
                         <p className="text-xs text-muted-foreground">
                           {singleDepositorId
                             ? "Select a saved stream or choose Other and add a narration."
-                            : "This deposit is attributed to the The group. Choose Other to explain a non-salary source."}
+                            : "The group is money that isn't any one member's: interest, a refund, a gift from outside. It doesn't count towards anybody's contribution. Picking a stream puts the deposit under its owner."}
                         </p>
                       </div>
                     )}
