@@ -186,9 +186,17 @@ describe('a charge belongs to the posting it came with', () => {
 describe('the charge category is asked once, not on every posting', () => {
   it('shows a note instead of the picker once it is settled, on both screens', () => {
     const web = readFileSync('../family-budget/src/pages/bank.tsx', 'utf8');
-    expect(bank).toContain('chargeToPost > 0 && chargeCategoryIsSettled ?');
+    expect(bank).toContain('chargeToPost > 0 && chargeCategoryIsSettled && !changingChargeCategory ?');
     expect(bank).toContain('testID="bank-charge-category-note"');
-    expect(web).toContain('chargeToPost > 0 && chargeCategoryIsSettled ?');
+    expect(web).toContain('chargeToPost > 0 && chargeCategoryIsSettled && !changingChargeCategory ?');
     expect(web).toContain('data-testid="bank-charge-category-note"');
+  });
+
+  it('keeps a way to change it, which closes again once a category is picked', () => {
+    const web = readFileSync('../family-budget/src/pages/bank.tsx', 'utf8');
+    expect(bank).toContain('testID="bank-charge-category-change"');
+    expect(web).toContain('data-testid="bank-charge-category-change"');
+    expect(bank).toMatch(/AsyncStorage\.setItem\(CHARGE_CATEGORY_KEY, name\)[^\n]*\n\s*setChangingChargeCategory\(false\)/);
+    expect(web).toMatch(/setChargeCategory\(event\.target\.value\);\s*setChangingChargeCategory\(false\)/);
   });
 });

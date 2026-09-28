@@ -271,6 +271,8 @@ export default function Bank() {
   // The bank's own fee on a withdrawal or transfer: a second posting, filed
   // under a category of its own.
   const [chargeAmount, setChargeAmount] = useState("");
+  // The settled fee category is stated, not offered; "Change" reopens the picker for this posting.
+  const [changingChargeCategory, setChangingChargeCategory] = useState(false);
   const [chargeCategory, setChargeCategory] = useState(() => {
     try { return window.localStorage.getItem(CHARGE_CATEGORY_KEY) ?? ""; } catch { return ""; }
   });
@@ -667,6 +669,7 @@ export default function Bank() {
   const resetForNextEntry = () => {
     setAmount("");
     setChargeAmount("");
+    setChangingChargeCategory(false);
     setDescription("");
     setNotes("");
     setDepositorAmounts({});
@@ -723,6 +726,7 @@ export default function Bank() {
     }
     setAmount("");
     setChargeAmount("");
+    setChangingChargeCategory(false);
     setDescription("");
     setNotes("");
     setDate(new Date().toISOString().split("T")[0]);
@@ -769,6 +773,7 @@ export default function Bank() {
     // one does not silently stack a second fee on the first.
     const feeOnThis = (account?.transactions ?? []).find((row) => row.chargeForTransactionId === tx.id);
     setChargeAmount(feeOnThis ? String(feeOnThis.amount) : "");
+    setChangingChargeCategory(false);
     if (feeOnThis?.expenseCategory) setChargeCategory(feeOnThis.expenseCategory);
     setAmount(String(tx.amount));
     setDescription(transactionMode === "transfer"
@@ -1977,10 +1982,18 @@ export default function Bank() {
                       className="h-12 bg-card"
                     />
                     <AmountCalcRow value={chargeAmount} onChange={setChargeAmount} testId="bank-charge" />
-                    {chargeToPost > 0 && chargeCategoryIsSettled ? (
+                    {chargeToPost > 0 && chargeCategoryIsSettled && !changingChargeCategory ? (
                       <p className="text-xs text-muted-foreground" data-testid="bank-charge-category-note">
                         The {formatKes(chargeToPost)} fee is saved on its own under {chargeCategory.trim()}. The category for the
-                        payment itself is chosen below.
+                        payment itself is chosen below.{" "}
+                        <button
+                          type="button"
+                          className="font-semibold text-primary underline-offset-2 hover:underline"
+                          onClick={() => { chargeSearch.setQuery(""); setChangingChargeCategory(true); }}
+                          data-testid="bank-charge-category-change"
+                        >
+                          Change
+                        </button>
                       </p>
                     ) : chargeToPost > 0 ? (
                       <div className="space-y-2">
@@ -1994,6 +2007,7 @@ export default function Bank() {
                           value={chargeCategory}
                           onChange={(event) => {
                             setChargeCategory(event.target.value);
+                            setChangingChargeCategory(false);
                             try { window.localStorage.setItem(CHARGE_CATEGORY_KEY, event.target.value); } catch { /* remembered only when storage allows */ }
                           }}
                         >
