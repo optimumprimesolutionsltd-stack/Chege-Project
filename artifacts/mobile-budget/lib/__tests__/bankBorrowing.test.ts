@@ -226,7 +226,7 @@ describe('neither lending nor borrowing asks for a category', () => {
   });
 
   it('does not demand one either', () => {
-    expect(bank).toContain("if (txType === 'disbursement' && withdrawDest !== 'savings' && withdrawDest !== 'lend' && !expenseCategory.trim()) {");
+    expect(bank).toContain("if (txType === 'disbursement' && withdrawDest !== 'savings' && withdrawDest !== 'lend' && withdrawDest !== 'party' && !expenseCategory.trim()) {");
   });
 
   it('never asks on a deposit at all, which is where borrowing lives', () => {
@@ -240,7 +240,7 @@ describe('neither lending nor borrowing asks for a category', () => {
 // design, so saving one demanded a category it must never have.
 describe('editing a posting keeps what kind it is', () => {
   it('restores the destination from the row', () => {
-    expect(bank).toContain("setWithdrawDest(type === 'disbursement' ? (tx.isLending ? 'lend' : 'other') : null);");
+    expect(bank).toContain("? (tx.isLending ? 'lend' : tx.settlesContributorId ? 'party' : 'other')");
   });
 
   it('sets it exactly once, so nothing later undoes it', () => {
