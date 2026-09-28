@@ -230,6 +230,22 @@ describe('where money in came from', () => {
     expect(built?.main).toMatchObject({ incomeSourceId: 4, madeById: 'u2' });
   });
 
+  it('falls back to the current user when the source\'s owner is no longer a member', () => {
+    // A source can outlive the member it once belonged to - removed from the
+    // budget, or a data problem never quite cleaned up. Failing the whole
+    // entry over that attribution would be worse than just recording it as
+    // whoever is doing the import now.
+    const built = buildPostings(money({}), { include: true, category: '', incomeSourceId: 4 }, { ...ctx, incomeSources: sources, memberIds: ['u1'] });
+    expect(built?.main).toMatchObject({ incomeSourceId: 4, madeById: 'u1' });
+  });
+
+  it('still names the source\'s owner when memberIds is not supplied at all', () => {
+    // Older call sites, and anywhere the member list genuinely is not known,
+    // keep today's behaviour rather than silently reattributing everything.
+    const built = buildPostings(money({}), { include: true, category: '', incomeSourceId: 4 }, { ...ctx, incomeSources: sources });
+    expect(built?.main).toMatchObject({ incomeSourceId: 4, madeById: 'u2' });
+  });
+
   it('records no source when none is chosen, and none for a debt', () => {
     const none = buildPostings(money({}), { include: true, category: '' }, { ...ctx, incomeSources: sources });
     expect(none?.main).not.toHaveProperty('incomeSourceId');

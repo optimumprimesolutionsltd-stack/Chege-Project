@@ -34,6 +34,7 @@ import {
   useGetGroup,
   useGetJointAccount,
   useGetJointAccounts,
+  useGetMembers,
   useGetWorkspaces,
   useSelectWorkspace,
   type Workspace,
@@ -394,6 +395,12 @@ export default function MpesaImportScreen() {
       ),
     staleTime: 30_000,
   });
+  // A source can outlive the member it once belonged to (removed from the
+  // budget, or a data problem never quite cleaned up) - checked against this
+  // so a deposit still saves, attributed to whoever is doing the import now,
+  // instead of failing outright over an attribution nobody asked for.
+  const { data: members = [] } = useGetMembers();
+  const memberIds = useMemo(() => members.map((member) => member.userId), [members]);
 
   const [text, setText] = useState('');
   const [reading, setReading] = useState(false);
@@ -950,6 +957,7 @@ export default function MpesaImportScreen() {
         today: todayIso(),
         chargeCategory,
         incomeSources,
+        memberIds,
       });
       return built ? [{ item, choice, built }] : [];
     });
