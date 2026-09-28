@@ -429,6 +429,16 @@ export default function BankScreen() {
     ? members
     : members.filter((member) => member.userId === user?.id);
 
+  /**
+   * Whose stream it is, for The group's list, which holds everybody's. Without it
+   * a stream showed there and not under the member expected to own it, with
+   * nothing to say why. An owner missing from the member list says so.
+   */
+  const sourceOwnerLabel = (userId: string | null | undefined): string => {
+    const owner = userId ? members.find((member) => member.userId === userId) : undefined;
+    return owner ? owner.userName?.split(' ')[0] ?? 'Member' : 'not a current member';
+  };
+
   // Fetch income sources for selected depositor (single named only)
   // Whose income streams to offer: the person depositing, when it is one
   // named person, and the group's when the money is coming from the joint
@@ -3781,6 +3791,12 @@ export default function BankScreen() {
                       );
                     })}
                   </View>}
+                  {isSharedWorkspace && canManageShared && depositorIds.length === 0 ? (
+                    <Text style={{ color: colors.mutedForeground, fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 6 }} testID="bank-deposit-group-note">
+                      The group is money that isn't any one member's: interest, a refund, a gift from outside. It doesn't
+                      count towards anybody's contribution.
+                    </Text>
+                  ) : null}
 
                   {/* Per-depositor split rows (multi only) */}
                   {validDepositorIds.length > 1 && (() => {
@@ -3880,6 +3896,7 @@ export default function BankScreen() {
                             ]}
                           >
                             {src.name}
+                            {!singleDepositorId ? ` · ${sourceOwnerLabel(src.userId)}` : ''}
                           </Text>
                         </TouchableOpacity>
                       );
