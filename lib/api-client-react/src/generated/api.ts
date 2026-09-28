@@ -82,6 +82,7 @@ import type {
   IncomeStreamTrendReport,
   JointAccountSummary,
   JointAccountTransaction,
+  LinkReversalInput,
   Member,
   MonthTrend,
   MpesaParseResult,
@@ -92,6 +93,7 @@ import type {
   PhotoUploadUrlResponse,
   ProfilePhotoInput,
   RequestPhotoUploadInput,
+  ReversalOptions,
   SavingsGoal,
   SavingsGoalContributeInput,
   SavingsGoalContribution,
@@ -3489,6 +3491,228 @@ export const useDeleteJointAccountTransaction = <TError = ErrorType<ErrorRespons
         TContext
       > => {
       return useMutation(getDeleteJointAccountTransactionMutationOptions(options));
+    }
+
+export const getGetReversalUrl = (id: number,) => {
+
+
+
+
+  return `/api/joint-account/${id}/reversal`
+}
+
+/**
+ * For a deposit: the payment it is linked to, if any, and the payments it could reverse - ordinary payments in this budget of exactly the same amount, dated on or up to 60 days before it, not already reversed.
+ * @summary What a money-back deposit reverses, and the payments it could
+ */
+export const getReversal = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<ReversalOptions> => {
+
+  return customFetch<ReversalOptions>(getGetReversalUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetReversalQueryKey = (id: number,) => {
+    return [
+    `/api/joint-account/${id}/reversal`
+    ] as const;
+    }
+
+
+export const getGetReversalQueryOptions = <TData = Awaited<ReturnType<typeof getReversal>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getReversal>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetReversalQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getReversal>>> = ({ signal }) => getReversal(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getReversal>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetReversalQueryResult = NonNullable<Awaited<ReturnType<typeof getReversal>>>
+export type GetReversalQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary What a money-back deposit reverses, and the payments it could
+ */
+
+export function useGetReversal<TData = Awaited<ReturnType<typeof getReversal>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getReversal>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetReversalQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getLinkReversalUrl = (id: number,) => {
+
+
+
+
+  return `/api/joint-account/${id}/reversal`
+}
+
+/**
+ * Neither then counts: the deposit is not income and the payment is not spending. The payment's category is kept, to be restored on unlinking.
+ * @summary Link a money-back deposit to the payment it reversed
+ */
+export const linkReversal = async (id: number,
+    linkReversalInput: LinkReversalInput, options?: Parameters<typeof customFetch>[1]): Promise<ReversalOptions> => {
+
+  return customFetch<ReversalOptions>(getLinkReversalUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(linkReversalInput)
+  }
+);}
+
+
+
+
+
+export const getLinkReversalMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof linkReversal>>, TError,{id: number;data: BodyType<LinkReversalInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof linkReversal>>, TError,{id: number;data: BodyType<LinkReversalInput>}, TContext> => {
+
+const mutationKey = ['linkReversal'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof linkReversal>>, {id: number;data: BodyType<LinkReversalInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  linkReversal(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type LinkReversalMutationResult = NonNullable<Awaited<ReturnType<typeof linkReversal>>>
+    export type LinkReversalMutationBody = BodyType<LinkReversalInput>
+    export type LinkReversalMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Link a money-back deposit to the payment it reversed
+ */
+export const useLinkReversal = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof linkReversal>>, TError,{id: number;data: BodyType<LinkReversalInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof linkReversal>>,
+        TError,
+        {id: number;data: BodyType<LinkReversalInput>},
+        TContext
+      > => {
+      return useMutation(getLinkReversalMutationOptions(options));
+    }
+
+export const getUnlinkReversalUrl = (id: number,) => {
+
+
+
+
+  return `/api/joint-account/${id}/reversal`
+}
+
+/**
+ * @summary Undo a reversal link, putting both entries back as they were
+ */
+export const unlinkReversal = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<ReversalOptions> => {
+
+  return customFetch<ReversalOptions>(getUnlinkReversalUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getUnlinkReversalMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unlinkReversal>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof unlinkReversal>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['unlinkReversal'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof unlinkReversal>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  unlinkReversal(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UnlinkReversalMutationResult = NonNullable<Awaited<ReturnType<typeof unlinkReversal>>>
+
+    export type UnlinkReversalMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Undo a reversal link, putting both entries back as they were
+ */
+export const useUnlinkReversal = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unlinkReversal>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof unlinkReversal>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getUnlinkReversalMutationOptions(options));
     }
 
 export const getGetJointAccountsUrl = () => {

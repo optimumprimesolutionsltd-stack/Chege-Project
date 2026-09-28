@@ -1105,6 +1105,12 @@ export const GetJointAccountResponse = zod.object({
   "chargeForTransactionId": zod.number().nullish().describe('The posting this bank charge came with, if it is one.'),
   "settlesContributorId": zod.number().nullish().describe('The party a repayment settled, so an editor can reopen it as a repayment rather than as ordinary money in.'),
   "debtPartyName": zod.string().nullish().describe('The person or business a borrowing, a loan out or a repayment was with, when known, so the entry can be titled by them.'),
+  "reversal": zod.object({
+  "role": zod.enum(['money_back', 'reversed_payment']).describe('money_back for the deposit, reversed_payment for the payment it undid'),
+  "otherTransactionId": zod.number(),
+  "otherDescription": zod.string(),
+  "otherDate": zod.string()
+}).nullish().describe('Set when this entry is half of a reversal: a money-back deposit and the payment it reversed. Neither half counts as income or spending.'),
   "savingsGoalId": zod.number().nullish().describe('Linked savings goal for a bank transfer'),
   "savingsGoalName": zod.string().nullish(),
   "transferDirection": zod.string().nullish().describe('to_savings or from_savings for linked transfers'),
@@ -1225,6 +1231,12 @@ export const CreateDepositResponse = zod.object({
   "chargeForTransactionId": zod.number().nullish().describe('The posting this bank charge came with, if it is one.'),
   "settlesContributorId": zod.number().nullish().describe('The party a repayment settled, so an editor can reopen it as a repayment rather than as ordinary money in.'),
   "debtPartyName": zod.string().nullish().describe('The person or business a borrowing, a loan out or a repayment was with, when known, so the entry can be titled by them.'),
+  "reversal": zod.object({
+  "role": zod.enum(['money_back', 'reversed_payment']).describe('money_back for the deposit, reversed_payment for the payment it undid'),
+  "otherTransactionId": zod.number(),
+  "otherDescription": zod.string(),
+  "otherDate": zod.string()
+}).nullish().describe('Set when this entry is half of a reversal: a money-back deposit and the payment it reversed. Neither half counts as income or spending.'),
   "savingsGoalId": zod.number().nullish().describe('Linked savings goal for a bank transfer'),
   "savingsGoalName": zod.string().nullish(),
   "transferDirection": zod.string().nullish().describe('to_savings or from_savings for linked transfers'),
@@ -1300,6 +1312,12 @@ export const CreateDisbursementResponse = zod.object({
   "chargeForTransactionId": zod.number().nullish().describe('The posting this bank charge came with, if it is one.'),
   "settlesContributorId": zod.number().nullish().describe('The party a repayment settled, so an editor can reopen it as a repayment rather than as ordinary money in.'),
   "debtPartyName": zod.string().nullish().describe('The person or business a borrowing, a loan out or a repayment was with, when known, so the entry can be titled by them.'),
+  "reversal": zod.object({
+  "role": zod.enum(['money_back', 'reversed_payment']).describe('money_back for the deposit, reversed_payment for the payment it undid'),
+  "otherTransactionId": zod.number(),
+  "otherDescription": zod.string(),
+  "otherDate": zod.string()
+}).nullish().describe('Set when this entry is half of a reversal: a money-back deposit and the payment it reversed. Neither half counts as income or spending.'),
   "savingsGoalId": zod.number().nullish().describe('Linked savings goal for a bank transfer'),
   "savingsGoalName": zod.string().nullish(),
   "transferDirection": zod.string().nullish().describe('to_savings or from_savings for linked transfers'),
@@ -1365,6 +1383,12 @@ export const TransferBankToSavingsResponse = zod.object({
   "chargeForTransactionId": zod.number().nullish().describe('The posting this bank charge came with, if it is one.'),
   "settlesContributorId": zod.number().nullish().describe('The party a repayment settled, so an editor can reopen it as a repayment rather than as ordinary money in.'),
   "debtPartyName": zod.string().nullish().describe('The person or business a borrowing, a loan out or a repayment was with, when known, so the entry can be titled by them.'),
+  "reversal": zod.object({
+  "role": zod.enum(['money_back', 'reversed_payment']).describe('money_back for the deposit, reversed_payment for the payment it undid'),
+  "otherTransactionId": zod.number(),
+  "otherDescription": zod.string(),
+  "otherDate": zod.string()
+}).nullish().describe('Set when this entry is half of a reversal: a money-back deposit and the payment it reversed. Neither half counts as income or spending.'),
   "savingsGoalId": zod.number().nullish().describe('Linked savings goal for a bank transfer'),
   "savingsGoalName": zod.string().nullish(),
   "transferDirection": zod.string().nullish().describe('to_savings or from_savings for linked transfers'),
@@ -1430,6 +1454,12 @@ export const TransferSavingsToBankResponse = zod.object({
   "chargeForTransactionId": zod.number().nullish().describe('The posting this bank charge came with, if it is one.'),
   "settlesContributorId": zod.number().nullish().describe('The party a repayment settled, so an editor can reopen it as a repayment rather than as ordinary money in.'),
   "debtPartyName": zod.string().nullish().describe('The person or business a borrowing, a loan out or a repayment was with, when known, so the entry can be titled by them.'),
+  "reversal": zod.object({
+  "role": zod.enum(['money_back', 'reversed_payment']).describe('money_back for the deposit, reversed_payment for the payment it undid'),
+  "otherTransactionId": zod.number(),
+  "otherDescription": zod.string(),
+  "otherDate": zod.string()
+}).nullish().describe('Set when this entry is half of a reversal: a money-back deposit and the payment it reversed. Neither half counts as income or spending.'),
   "savingsGoalId": zod.number().nullish().describe('Linked savings goal for a bank transfer'),
   "savingsGoalName": zod.string().nullish(),
   "transferDirection": zod.string().nullish().describe('to_savings or from_savings for linked transfers'),
@@ -1501,6 +1531,12 @@ export const TransferBankToBankResponse = zod.object({
   "chargeForTransactionId": zod.number().nullish().describe('The posting this bank charge came with, if it is one.'),
   "settlesContributorId": zod.number().nullish().describe('The party a repayment settled, so an editor can reopen it as a repayment rather than as ordinary money in.'),
   "debtPartyName": zod.string().nullish().describe('The person or business a borrowing, a loan out or a repayment was with, when known, so the entry can be titled by them.'),
+  "reversal": zod.object({
+  "role": zod.enum(['money_back', 'reversed_payment']).describe('money_back for the deposit, reversed_payment for the payment it undid'),
+  "otherTransactionId": zod.number(),
+  "otherDescription": zod.string(),
+  "otherDate": zod.string()
+}).nullish().describe('Set when this entry is half of a reversal: a money-back deposit and the payment it reversed. Neither half counts as income or spending.'),
   "savingsGoalId": zod.number().nullish().describe('Linked savings goal for a bank transfer'),
   "savingsGoalName": zod.string().nullish(),
   "transferDirection": zod.string().nullish().describe('to_savings or from_savings for linked transfers'),
@@ -1536,6 +1572,12 @@ export const TransferBankToBankResponse = zod.object({
   "chargeForTransactionId": zod.number().nullish().describe('The posting this bank charge came with, if it is one.'),
   "settlesContributorId": zod.number().nullish().describe('The party a repayment settled, so an editor can reopen it as a repayment rather than as ordinary money in.'),
   "debtPartyName": zod.string().nullish().describe('The person or business a borrowing, a loan out or a repayment was with, when known, so the entry can be titled by them.'),
+  "reversal": zod.object({
+  "role": zod.enum(['money_back', 'reversed_payment']).describe('money_back for the deposit, reversed_payment for the payment it undid'),
+  "otherTransactionId": zod.number(),
+  "otherDescription": zod.string(),
+  "otherDate": zod.string()
+}).nullish().describe('Set when this entry is half of a reversal: a money-back deposit and the payment it reversed. Neither half counts as income or spending.'),
   "savingsGoalId": zod.number().nullish().describe('Linked savings goal for a bank transfer'),
   "savingsGoalName": zod.string().nullish(),
   "transferDirection": zod.string().nullish().describe('to_savings or from_savings for linked transfers'),
@@ -1626,6 +1668,12 @@ export const UpdateJointAccountTransactionResponse = zod.object({
   "chargeForTransactionId": zod.number().nullish().describe('The posting this bank charge came with, if it is one.'),
   "settlesContributorId": zod.number().nullish().describe('The party a repayment settled, so an editor can reopen it as a repayment rather than as ordinary money in.'),
   "debtPartyName": zod.string().nullish().describe('The person or business a borrowing, a loan out or a repayment was with, when known, so the entry can be titled by them.'),
+  "reversal": zod.object({
+  "role": zod.enum(['money_back', 'reversed_payment']).describe('money_back for the deposit, reversed_payment for the payment it undid'),
+  "otherTransactionId": zod.number(),
+  "otherDescription": zod.string(),
+  "otherDate": zod.string()
+}).nullish().describe('Set when this entry is half of a reversal: a money-back deposit and the payment it reversed. Neither half counts as income or spending.'),
   "savingsGoalId": zod.number().nullish().describe('Linked savings goal for a bank transfer'),
   "savingsGoalName": zod.string().nullish(),
   "transferDirection": zod.string().nullish().describe('to_savings or from_savings for linked transfers'),
@@ -1653,6 +1701,96 @@ export const DeleteJointAccountTransactionParams = zod.object({
 
 export const DeleteJointAccountTransactionResponse = zod.object({
   "success": zod.boolean()
+})
+
+
+/**
+ * For a deposit: the payment it is linked to, if any, and the payments it could reverse - ordinary payments in this budget of exactly the same amount, dated on or up to 60 days before it, not already reversed.
+ * @summary What a money-back deposit reverses, and the payments it could
+ */
+export const GetReversalParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetReversalResponse = zod.object({
+  "available": zod.boolean().describe('False until the server has its reversal table; nothing can be linked before then.'),
+  "linked": zod.object({
+  "id": zod.number(),
+  "date": zod.string(),
+  "description": zod.string(),
+  "amount": zod.number(),
+  "expenseCategory": zod.string().nullable(),
+  "accountName": zod.string().nullable()
+}).nullable(),
+  "candidates": zod.array(zod.object({
+  "id": zod.number(),
+  "date": zod.string(),
+  "description": zod.string(),
+  "amount": zod.number(),
+  "expenseCategory": zod.string().nullable(),
+  "accountName": zod.string().nullable()
+}))
+})
+
+
+/**
+ * Neither then counts: the deposit is not income and the payment is not spending. The payment's category is kept, to be restored on unlinking.
+ * @summary Link a money-back deposit to the payment it reversed
+ */
+export const LinkReversalParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const LinkReversalBody = zod.object({
+  "originalTransactionId": zod.number()
+})
+
+export const LinkReversalResponse = zod.object({
+  "available": zod.boolean().describe('False until the server has its reversal table; nothing can be linked before then.'),
+  "linked": zod.object({
+  "id": zod.number(),
+  "date": zod.string(),
+  "description": zod.string(),
+  "amount": zod.number(),
+  "expenseCategory": zod.string().nullable(),
+  "accountName": zod.string().nullable()
+}).nullable(),
+  "candidates": zod.array(zod.object({
+  "id": zod.number(),
+  "date": zod.string(),
+  "description": zod.string(),
+  "amount": zod.number(),
+  "expenseCategory": zod.string().nullable(),
+  "accountName": zod.string().nullable()
+}))
+})
+
+
+/**
+ * @summary Undo a reversal link, putting both entries back as they were
+ */
+export const UnlinkReversalParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UnlinkReversalResponse = zod.object({
+  "available": zod.boolean().describe('False until the server has its reversal table; nothing can be linked before then.'),
+  "linked": zod.object({
+  "id": zod.number(),
+  "date": zod.string(),
+  "description": zod.string(),
+  "amount": zod.number(),
+  "expenseCategory": zod.string().nullable(),
+  "accountName": zod.string().nullable()
+}).nullable(),
+  "candidates": zod.array(zod.object({
+  "id": zod.number(),
+  "date": zod.string(),
+  "description": zod.string(),
+  "amount": zod.number(),
+  "expenseCategory": zod.string().nullable(),
+  "accountName": zod.string().nullable()
+}))
 })
 
 

@@ -1,0 +1,110 @@
+import { readFileSync } from "node:fs";
+import { afterEach, describe, expect, it } from "vitest";
+import { sql } from "drizzle-orm";
+import { notAReversal, reversalLinksReady, setReversalLinksReadyForTests } from "../reversal-links";
+
+const bank = readFileSync("src/routes/joint-account.ts", "utf8");
+const dashboard = readFileSync("src/routes/dashboard.ts", "utf8");
+const contributors = readFileSync("src/routes/contributors.ts", "utf8");
+const contributions = readFileSync("src/routes/contributions.ts", "utf8");
+const index = readFileSync("src/index.ts", "utf8");
+const migration = readFileSync("../../lib/db/migrations/0047_reversal_links.sql", "utf8");
+const journal = JSON.parse(readFileSync("../../lib/db/migrations/meta/_journal.json", "utf8")) as { entries: Array<{ tag: string; when: number }> };
+
+afterEach(() => setReversalLinksReadyForTests(false));
+
+// Migrations are run by hand after a deploy, and a query naming a missing
+// table fails outright. So nothing changes until the table is known to exist.
+describe("before the table exists", () => {
+  it("adds nothing to any income figure", () => {
+    expect(reversalLinksReady()).toBe(false);
+    const fragment = notAReversal(sql`t.id`) as unknown as { queryChunks: unknown[] };
+    expect(JSON.stringify(fragment.queryChunks)).not.toContain("reversal_links");
+  });
+
+  it("is made by the server itself, after it is listening, and never stops a boot", () => {
+    expect(index).toContain("void ensureReversalLinks();");
+    expect(index.indexOf("void ensureReversalLinks();")).toBeGreaterThan(index.indexOf("app.listen("));
+  });
+});
+
+describe("once it exists", () => {
+  it("leaves a linked money-back deposit out", () => {
+    setReversalLinksReadyForTests(true);
+    const fragment = notAReversal(sql`t.id`) as unknown as { queryChunks: unknown[] };
+    expect(JSON.stringify(fragment.queryChunks)).toContain("NOT EXISTS (SELECT 1 FROM reversal_links rl WHERE rl.reversal_transaction_id = ");
+  });
+
+  it("is left out of every income figure", () => {
+    expect((dashboard.match(/\$\{notAReversal\(/g) ?? []).length).toBeGreaterThanOrEqual(11);
+    expect((contributors.match(/\$\{notAReversal\(/g) ?? []).length).toBe(3);
+    expect((contributions.match(/\$\{notAReversal\(/g) ?? []).length).toBe(1);
+  });
+});
+
+describe("the migration", () => {
+  it("is idempotent, so a server that made the table itself is not broken by migrate", () => {
+    expect(migration).toContain('CREATE TABLE IF NOT EXISTS "reversal_links"');
+    expect(migration).toContain('CREATE INDEX IF NOT EXISTS "reversal_links_group_idx"');
+  });
+
+  it("is registered after the one before it, so drizzle does not silently skip it", () => {
+    const at = journal.entries.findIndex((entry) => entry.tag === "0047_reversal_links");
+    expect(at).toBeGreaterThan(0);
+    expect(journal.entries[at].when).toBeGreaterThan(journal.entries[at - 1].when);
+  });
+});
+
+describe("linking a reversal", () => {
+  it("takes only money in that could be money back", () => {
+    expect(bank).toContain('if (tx.type !== "deposit") return "Only money coming in can be a reversal.";');
+    expect(bank).toContain('return "Borrowed money, or money paid back to you, is not a reversal.";');
+  });
+
+  it("takes only an ordinary payment, never a transfer or an expense's bank portion", () => {
+    expect(bank).toContain('if (tx.type !== "disbursement") return "Only a payment can be reversed.";');
+    expect(bank).toContain('if (tx.expenseId !== null) return "This payment belongs to an expense. Edit or delete the expense instead.";');
+  });
+
+  it("insists on exactly the same amount, and money back no earlier than the payment", () => {
+    expect(bank).toContain("A reversal gives back exactly what was paid. These amounts differ.");
+    expect(bank).toContain("Money cannot come back before it was paid.");
+  });
+
+  it("offers candidates from this budget, of the same amount, within 60 days before, not already reversed", () => {
+    expect(bank).toContain("const REVERSAL_WINDOW_DAYS = 60;");
+    expect(bank).toContain("AND ${jointAccountTxTable.amount} = ${deposit.amount}");
+    expect(bank).toContain("AND NOT EXISTS (SELECT 1 FROM reversal_links rl WHERE rl.original_transaction_id = ${jointAccountTxTable.id})");
+  });
+
+  it("links and sets the payment's category aside together, keeping it for unlinking", () => {
+    const post = bank.slice(bank.indexOf('router.post("/joint-account/:id/reversal"'), bank.indexOf('router.delete("/joint-account/:id/reversal"'));
+    expect(post).toContain("await db.transaction(async (trx) => {");
+    expect(post).toContain("originalCategory: original.expenseCategory,");
+    expect(post).toContain(".set({ expenseCategory: null })");
+    expect(post).toContain("if (!requireGroupManager(req, res)) return;");
+  });
+
+  it("puts the category back on unlinking, unless the payment has since been given one", () => {
+    const del = bank.slice(bank.indexOf('router.delete("/joint-account/:id/reversal"'));
+    expect(del).toContain(".set({ expenseCategory: link.originalCategory })");
+    expect(del).toContain("isNull(jointAccountTxTable.expenseCategory),");
+  });
+});
+
+describe("either half is protected while linked", () => {
+  it("refuses an edit", () => {
+    const put = bank.slice(bank.indexOf('router.put("/joint-account/:id"'));
+    expect(put).toContain("const reversedEdit = await refuseWhileReversed(existing.id, groupId);");
+  });
+
+  it("refuses a delete", () => {
+    const del = bank.slice(bank.indexOf('router.delete("/joint-account/:id", async'));
+    expect(del).toContain("const reversedDelete = await refuseWhileReversed(parsed.data.id, groupId);");
+  });
+
+  it("says which half it is and what to do", () => {
+    expect(bank).toContain("This money back is linked to the payment it reversed. Unlink it first.");
+    expect(bank).toContain("This payment was reversed and is linked to its money back. Unlink it first.");
+  });
+});

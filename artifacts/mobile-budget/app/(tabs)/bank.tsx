@@ -26,6 +26,7 @@ const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
 import { router, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useColors } from '@/hooks/useColors';
+import { ReversalLink } from '@/components/ReversalLink';
 import { useListEditor } from '@/hooks/useListEditor';
 import { movableOnDay, summariseDays } from '@/lib/moveDay';
 import { formatExact } from '@/lib/formatExact';
@@ -121,6 +122,8 @@ type Tx = {
   chargeForTransactionId?: number | null;
   isBorrowing?: boolean | null;
   settlesContributorId?: number | null;
+  /** Half of a reversal: a money-back deposit, or the payment it undid. */
+  reversal?: { role: 'money_back' | 'reversed_payment'; otherTransactionId: number; otherDescription: string; otherDate: string } | null;
   /** Who a borrowing, a loan out or a repayment was with, when known. */
   debtPartyName?: string | null;
   /** The month a deposit was for, when that is not the month it arrived. */
@@ -2683,6 +2686,8 @@ export default function BankScreen() {
                       ? `${dep ? 'From' : 'To'} ${item.bankTransferAccountName ?? 'bank account'}`
                       : item.savingsGoalId
                       ? `${item.transferDirection === 'to_savings' ? 'Bank → Savings' : 'Savings → Bank'}: ${item.savingsGoalName ?? 'Savings goal'}`
+                      : dep && item.reversal?.role === 'money_back' ? `Money back · reverses ${item.reversal.otherDescription}`
+                      : !dep && item.reversal?.role === 'reversed_payment' ? `Reversed · ${item.description}`
                       : dep && item.isBorrowing ? (item.debtPartyName ? `Borrowed from ${item.debtPartyName}` : 'Borrowed money')
                       : dep && item.settlesContributorId && item.debtPartyName ? `Repaid by ${item.debtPartyName}`
                       : !dep && item.isLending ? (item.debtPartyName ? `Lent to ${item.debtPartyName}` : 'Money lent out')
@@ -4556,6 +4561,15 @@ export default function BankScreen() {
                   ) : null}
                 </>
               )}
+
+              {/* Money back linked to the payment it reversed, or the payment's note. */}
+              {editingTransaction ? (
+                <ReversalLink
+                  transaction={editingTransaction as never}
+                  canManage={canManageAccount}
+                  onChanged={invalidateBalance}
+                />
+              ) : null}
 
               {/* Expense category (disbursements only) */}
               {isWithdrawal && withdrawDest !== 'savings' && withdrawDest !== 'lend' && (

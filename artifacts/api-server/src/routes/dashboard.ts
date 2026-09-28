@@ -42,6 +42,7 @@ import { buildIncomeLedger, type IncomeDepositRow, type IncomeSplitRow } from ".
 import { createMonthlyReportPdf } from "../lib/monthly-report-pdf";
 import { GROUP_ATTRIBUTION } from "../lib/attribution";
 import { nairobiNow } from "../lib/nairobiTime";
+import { notAReversal } from "../lib/reversal-links";
 
 const router = Router();
 const UNCATEGORIZED_CATEGORY = "Uncategorized";
@@ -155,6 +156,7 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
         AND t.type = 'deposit'
         AND t.bank_transfer_id IS NULL
         AND t.settles_contributor_id IS NULL
+        ${notAReversal(sql`t.id`)}
         AND NOT t.is_borrowing
         AND EXTRACT(MONTH FROM t.date) = ${month}
         AND EXTRACT(YEAR FROM t.date) = ${year}
@@ -619,6 +621,7 @@ router.get("/dashboard/activity", async (req, res): Promise<void> => {
           AND ${jointAccountTxTable.type} = 'deposit'
           AND ${jointAccountTxTable.bankTransferId} IS NULL
           AND ${jointAccountTxTable.settlesContributorId} IS NULL
+          ${notAReversal(jointAccountTxTable.id)}
           AND NOT ${jointAccountTxTable.isBorrowing}
           AND EXTRACT(MONTH FROM ${jointAccountTxTable.date}) = ${month}
           AND EXTRACT(YEAR FROM ${jointAccountTxTable.date}) = ${year}
@@ -638,6 +641,7 @@ router.get("/dashboard/activity", async (req, res): Promise<void> => {
           AND ${jointAccountTxTable.type} = 'deposit'
           AND ${jointAccountTxTable.bankTransferId} IS NULL
           AND ${jointAccountTxTable.settlesContributorId} IS NULL
+          ${notAReversal(jointAccountTxTable.id)}
           AND NOT ${jointAccountTxTable.isBorrowing}
           AND EXTRACT(MONTH FROM ${jointAccountTxTable.date}) = ${month}
           AND EXTRACT(YEAR FROM ${jointAccountTxTable.date}) = ${year}
@@ -1239,6 +1243,7 @@ router.get("/dashboard/income-ledger", async (req, res): Promise<void> => {
       WHERE t.group_id = ${groupId}
         AND t.type = 'deposit'
         AND t.bank_transfer_id IS NULL
+        ${notAReversal(sql`t.id`)}
         AND t.date >= ${from}
         AND t.date <= ${to}
         ${search ? sql`AND t.description ILIKE ${search} ESCAPE '!'` : sql``}
@@ -1612,6 +1617,7 @@ router.get("/dashboard/income-streams", async (req, res): Promise<void> => {
         AND deposit.type = 'deposit'
           AND deposit.bank_transfer_id IS NULL
         AND deposit.settles_contributor_id IS NULL
+        ${notAReversal(sql`deposit.id`)}
         AND NOT deposit.is_borrowing
         AND deposit.transfer_direction IS DISTINCT FROM 'from_savings'
         AND EXTRACT(MONTH FROM deposit.date) = ${month}
@@ -1627,6 +1633,7 @@ router.get("/dashboard/income-streams", async (req, res): Promise<void> => {
         AND deposit.type = 'deposit'
         AND deposit.bank_transfer_id IS NULL
         AND deposit.settles_contributor_id IS NULL
+        ${notAReversal(sql`deposit.id`)}
         AND NOT deposit.is_borrowing
         AND deposit.transfer_direction IS DISTINCT FROM 'from_savings'
         AND EXTRACT(MONTH FROM deposit.date) = ${month}
@@ -1879,6 +1886,7 @@ router.get("/dashboard/income-streams-trend", async (req, res): Promise<void> =>
         AND deposit.type = 'deposit'
         AND deposit.bank_transfer_id IS NULL
         AND deposit.settles_contributor_id IS NULL
+        ${notAReversal(sql`deposit.id`)}
         AND NOT deposit.is_borrowing
         AND deposit.transfer_direction IS DISTINCT FROM 'from_savings'
         AND deposit.date >= ${rangeStart}::date AND deposit.date < ${rangeEndExclusive}::date
@@ -1891,6 +1899,7 @@ router.get("/dashboard/income-streams-trend", async (req, res): Promise<void> =>
         AND deposit.type = 'deposit'
         AND deposit.bank_transfer_id IS NULL
         AND deposit.settles_contributor_id IS NULL
+        ${notAReversal(sql`deposit.id`)}
         AND NOT deposit.is_borrowing
         AND deposit.transfer_direction IS DISTINCT FROM 'from_savings'
         AND deposit.date >= ${rangeStart}::date AND deposit.date < ${rangeEndExclusive}::date
@@ -1999,6 +2008,7 @@ router.get("/dashboard/period-totals", async (req, res): Promise<void> => {
           WHEN bank_tx.type = 'deposit'
             AND bank_tx.bank_transfer_id IS NULL
             AND bank_tx.settles_contributor_id IS NULL
+            ${notAReversal(sql`bank_tx.id`)}
             AND NOT bank_tx.is_borrowing
             AND bank_tx.transfer_direction IS DISTINCT FROM 'from_savings'
           THEN bank_tx.amount
@@ -2008,6 +2018,7 @@ router.get("/dashboard/period-totals", async (req, res): Promise<void> => {
           WHERE bank_tx.type = 'deposit'
             AND bank_tx.bank_transfer_id IS NULL
             AND bank_tx.settles_contributor_id IS NULL
+            ${notAReversal(sql`bank_tx.id`)}
             AND NOT bank_tx.is_borrowing
             AND bank_tx.transfer_direction IS DISTINCT FROM 'from_savings'
         ) AS bank_deposit_count,
@@ -2238,6 +2249,7 @@ router.get("/dashboard/monthly-report.pdf", async (req, res): Promise<void> => {
         INNER JOIN joint_account_transactions deposit ON deposit.id = split.transaction_id AND deposit.group_id = ${groupId}
         WHERE split.group_id = ${groupId} AND deposit.type = 'deposit'
           AND deposit.bank_transfer_id IS NULL
+          ${notAReversal(sql`deposit.id`)}
           AND deposit.transfer_direction IS DISTINCT FROM 'from_savings'
           AND deposit.date >= ${rangeFrom} AND deposit.date <= ${rangeTo}
         UNION ALL
@@ -2245,6 +2257,7 @@ router.get("/dashboard/monthly-report.pdf", async (req, res): Promise<void> => {
         FROM joint_account_transactions deposit
         WHERE deposit.group_id = ${groupId} AND deposit.type = 'deposit'
           AND deposit.bank_transfer_id IS NULL
+          ${notAReversal(sql`deposit.id`)}
           AND deposit.transfer_direction IS DISTINCT FROM 'from_savings'
           AND deposit.date >= ${rangeFrom} AND deposit.date <= ${rangeTo}
           AND NOT EXISTS (SELECT 1 FROM joint_account_deposit_splits split WHERE split.transaction_id = deposit.id AND split.group_id = ${groupId})
