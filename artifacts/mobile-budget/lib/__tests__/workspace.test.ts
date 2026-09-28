@@ -89,6 +89,25 @@ describe("mobile workspace transitions", () => {
     await expect(hasValidMobileWorkspaceSelection({ storage, workspaces: [{ id: 42 }] })).resolves.toBe(false);
   });
 
+  // An update restarts the app; if the workspace list fails to load at that
+  // moment (offline, server mid-deploy) the person must not be sent back to the
+  // chooser as if they had no workspace.
+  it("keeps the stored workspace when the list could not be fetched, but still needs one stored", async () => {
+    const storage = { getItem: vi.fn(async (): Promise<string | null> => "42") };
+    await expect(hasValidMobileWorkspaceSelection({ storage, workspaces: null })).resolves.toBe(true);
+    storage.getItem.mockResolvedValueOnce(null);
+    await expect(hasValidMobileWorkspaceSelection({ storage, workspaces: null })).resolves.toBe(false);
+    // An empty list that did load still means no workspace.
+    await expect(hasValidMobileWorkspaceSelection({ storage, workspaces: [] })).resolves.toBe(false);
+  });
+
+  it("the launch check passes 'unknown' rather than an empty list when the fetch failed", async () => {
+    const { readFileSync } = await import("node:fs");
+    const layout = readFileSync("app/_layout.tsx", "utf8");
+    expect(layout).toContain("workspaces: workspacesUnknown ? null : workspaces");
+    expect(layout).toContain("const workspacesUnknown = workspaceList === undefined && workspacesFailed;");
+  });
+
   it("clears the workspace selection after leaving so the chooser can resolve what remains", async () => {
     const steps: string[] = [];
     const leave = vi.fn(async () => {

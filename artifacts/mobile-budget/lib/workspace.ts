@@ -45,17 +45,24 @@ export async function isMobileBudgetChooserComplete({
 /**
  * A stored workspace id is only a preference, never proof of access. Verify it
  * against the signed-in person's current workspace list before opening tabs.
+ *
+ * `null` means the list could not be fetched (offline, or the server restarting
+ * mid-deploy), which is not the same as an empty list. Treating it as empty sent
+ * people who were fully set up back to the budget chooser whenever an update
+ * restarted the app at a bad moment. The stored choice stands until the list
+ * says otherwise; the server still checks access on every request.
  */
 export async function hasValidMobileWorkspaceSelection({
   storage,
   workspaces,
 }: {
   storage: Pick<WorkspaceStorage, "getItem">;
-  workspaces: ReadonlyArray<{ id: number }>;
+  workspaces: ReadonlyArray<{ id: number }> | null;
 }): Promise<boolean> {
   try {
     const storedId = await storage.getItem?.(ACTIVE_WORKSPACE_STORAGE_KEY);
     if (!storedId || !/^\d+$/.test(storedId)) return false;
+    if (workspaces === null) return true;
     return workspaces.some((workspace) => workspace.id === Number(storedId));
   } catch {
     return false;

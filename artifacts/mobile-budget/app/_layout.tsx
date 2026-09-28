@@ -199,14 +199,19 @@ function RootLayoutNav() {
     })();
   }, [isAuthenticated, isTabsHome]);
   const {
-    data: workspaces = NO_WORKSPACES,
+    data: workspaceList,
     isLoading: loadingWorkspaces,
+    isError: workspacesFailed,
   } = useGetWorkspaces({
     query: {
       queryKey: getGetWorkspacesQueryKey(),
       enabled: isAuthenticated && !!user?.id && !user?.needsDisplayName,
     },
   });
+
+  const workspaces = workspaceList ?? NO_WORKSPACES;
+  // Could not be fetched at all: unknown, not empty. See hasValidMobileWorkspaceSelection.
+  const workspacesUnknown = workspaceList === undefined && workspacesFailed;
 
   // An update restarts the app on Home. If somebody accepted it from another
   // screen, that screen was noted just before the restart: go back to it once
@@ -364,7 +369,7 @@ function RootLayoutNav() {
     setCheckingChooser(true);
     void Promise.all([
       isMobileBudgetChooserComplete({ userId: user.id, storage: AsyncStorage }),
-      hasValidMobileWorkspaceSelection({ storage: AsyncStorage, workspaces }),
+      hasValidMobileWorkspaceSelection({ storage: AsyncStorage, workspaces: workspacesUnknown ? null : workspaces }),
     ])
       .then(([chooserComplete, hasValidSelection]) => {
         if (!active) return;
@@ -387,7 +392,7 @@ function RootLayoutNav() {
     // `workspaces.length` rather than `workspaces`: a fresh array reference on
     // every render (query refetch, structural-sharing miss) must not re-fire
     // this effect. The count is enough to know the list is ready.
-  }, [isLoading, isAuthenticated, user?.id, user?.needsDisplayName, currentRoute, loadingWorkspaces, workspaces.length]);
+  }, [isLoading, isAuthenticated, user?.id, user?.needsDisplayName, currentRoute, loadingWorkspaces, workspaces.length, workspacesUnknown]);
 
   if (isLoading || checkingChooser) {
     return <AppLoading />;
