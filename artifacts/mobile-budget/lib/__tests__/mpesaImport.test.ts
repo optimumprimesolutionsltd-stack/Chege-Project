@@ -230,13 +230,15 @@ describe('where money in came from', () => {
     expect(built?.main).toMatchObject({ incomeSourceId: 4, madeById: 'u2' });
   });
 
-  it('falls back to the current user when the source\'s owner is no longer a member', () => {
-    // A source can outlive the member it once belonged to - removed from the
-    // budget, or a data problem never quite cleaned up. Failing the whole
-    // entry over that attribution would be worse than just recording it as
-    // whoever is doing the import now.
+  it('drops the source (rather than mismatching it with the current user) when its owner is no longer a member', () => {
+    // The server requires the depositor to be exactly the source's owner, not
+    // merely any current member - so a source that cannot be paired with a
+    // real depositor is dropped instead of guessed at. Recording the deposit
+    // plainly beats failing the whole entry over an attribution nobody was
+    // trying to get right just now.
     const built = buildPostings(money({}), { include: true, category: '', incomeSourceId: 4 }, { ...ctx, incomeSources: sources, memberIds: ['u1'] });
-    expect(built?.main).toMatchObject({ incomeSourceId: 4, madeById: 'u1' });
+    expect(built?.main).not.toHaveProperty('incomeSourceId');
+    expect(built?.main).toMatchObject({ madeById: 'u1' });
   });
 
   it('still names the source\'s owner when memberIds is not supplied at all', () => {
