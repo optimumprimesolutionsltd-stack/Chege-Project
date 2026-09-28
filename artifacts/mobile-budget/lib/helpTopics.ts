@@ -280,6 +280,12 @@ export const HELP_SECTIONS: HelpSection[] = [
         keywords: ['report', 'summary', 'month'],
       },
       {
+        question: 'See all your income in one list',
+        steps: ['Reports tab, then All income.'],
+        route: '/income-ledger',
+        keywords: ['income', 'money in', 'salary', 'received', 'ledger', 'list'],
+      },
+      {
         question: 'See every expense in one list',
         steps: ['Reports tab, then the expense ledger.'],
         route: '/expense-ledger',

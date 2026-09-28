@@ -56,6 +56,7 @@ import type {
   GetDashboardCategoryBreakdownParams,
   GetDashboardCategoryLedgerParams,
   GetDashboardExpenseLedgerParams,
+  GetDashboardIncomeLedgerParams,
   GetDashboardIncomeStreamsParams,
   GetDashboardIncomeStreamsTrendParams,
   GetDashboardMonthlyReportPdfParams,
@@ -75,6 +76,7 @@ import type {
   GroupInviteLink,
   GroupInviteLinkCreated,
   HealthStatus,
+  IncomeLedger,
   IncomeSource,
   IncomeStreamReport,
   IncomeStreamTrendReport,
@@ -2086,6 +2088,91 @@ export function useGetDashboardExpenseLedger<TData = Awaited<ReturnType<typeof g
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetDashboardExpenseLedgerQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetDashboardIncomeLedgerUrl = (params?: GetDashboardIncomeLedgerParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/dashboard/income-ledger?${stringifiedParams}` : `/api/dashboard/income-ledger`
+}
+
+/**
+ * The money-in side of the expense ledger, so spending can be checked against what came in. One row per deposit that counts as income, by the same rule as the income-stream report: transfers between your own accounts, money borrowed, money paid back to you and money moved in from savings are not income and are left out of the list. They are totalled separately under otherMoneyIn, so the list can still be reconciled against a bank or M-Pesa statement. With no date range the answer covers the selected month.
+ * @summary Every piece of income in one list, newest first
+ */
+export const getDashboardIncomeLedger = async (params?: GetDashboardIncomeLedgerParams, options?: Parameters<typeof customFetch>[1]): Promise<IncomeLedger> => {
+
+  return customFetch<IncomeLedger>(getGetDashboardIncomeLedgerUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetDashboardIncomeLedgerQueryKey = (params?: GetDashboardIncomeLedgerParams,) => {
+    return [
+    `/api/dashboard/income-ledger`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetDashboardIncomeLedgerQueryOptions = <TData = Awaited<ReturnType<typeof getDashboardIncomeLedger>>, TError = ErrorType<unknown>>(params?: GetDashboardIncomeLedgerParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDashboardIncomeLedger>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetDashboardIncomeLedgerQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDashboardIncomeLedger>>> = ({ signal }) => getDashboardIncomeLedger(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getDashboardIncomeLedger>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetDashboardIncomeLedgerQueryResult = NonNullable<Awaited<ReturnType<typeof getDashboardIncomeLedger>>>
+export type GetDashboardIncomeLedgerQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Every piece of income in one list, newest first
+ */
+
+export function useGetDashboardIncomeLedger<TData = Awaited<ReturnType<typeof getDashboardIncomeLedger>>, TError = ErrorType<unknown>>(
+ params?: GetDashboardIncomeLedgerParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDashboardIncomeLedger>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetDashboardIncomeLedgerQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

@@ -714,6 +714,58 @@ paths:
               schema:
                 $ref: "#/components/schemas/ExpenseLedger"
 
+  /dashboard/income-ledger:
+    get:
+      operationId: getDashboardIncomeLedger
+      tags: [dashboard]
+      summary: Every piece of income in one list, newest first
+      description: >-
+        The money-in side of the expense ledger, so spending can be checked
+        against what came in. One row per deposit that counts as income, by the
+        same rule as the income-stream report: transfers between your own
+        accounts, money borrowed, money paid back to you and money moved in from
+        savings are not income and are left out of the list. They are totalled
+        separately under otherMoneyIn, so the list can still be reconciled
+        against a bank or M-Pesa statement. With no date range the answer
+        covers the selected month.
+      parameters:
+        - name: month
+          in: query
+          schema:
+            type: number
+            minimum: 1
+            maximum: 12
+        - name: year
+          in: query
+          schema:
+            type: number
+        - name: from
+          in: query
+          description: >-
+            Start of an exact day range (YYYY-MM-DD). Must be given together
+            with `to`, and overrides the month.
+          schema:
+            type: string
+            pattern: '^\d{4}-\d{2}-\d{2}$'
+        - name: to
+          in: query
+          description: End of the day range (YYYY-MM-DD), inclusive.
+          schema:
+            type: string
+            pattern: '^\d{4}-\d{2}-\d{2}$'
+        - name: q
+          in: query
+          description: Narrows the list to descriptions containing this text, ignoring case.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Every piece of income in the period, newest first
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IncomeLedger"
+
   /dashboard/spending-by-item:
     get:
       operationId: getDashboardSpendingByItem
@@ -2774,6 +2826,80 @@ components:
         - to
         - total
         - entries
+
+    IncomeLedgerEntry:
+      type: object
+      properties:
+        id:
+          type: string
+        transactionId:
+          type: number
+          description: The bank posting this row is, for opening it
+        date:
+          type: string
+        description:
+          type: string
+        amount:
+          type: number
+        streams:
+          type: array
+          description: >-
+            The income stream it came from, or several when the deposit was split
+            between people or streams. "No income stream" when none was chosen.
+          items:
+            type: string
+        receivedFrom:
+          type: string
+          description: Who brought the money in, or several names joined with " + "
+        accountName:
+          type: string
+          nullable: true
+          description: The account it landed in, when the group has named accounts
+      required:
+        - id
+        - transactionId
+        - date
+        - description
+        - amount
+        - streams
+        - receivedFrom
+        - accountName
+
+    IncomeLedger:
+      type: object
+      properties:
+        from:
+          type: string
+        to:
+          type: string
+        total:
+          type: number
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/IncomeLedgerEntry"
+        otherMoneyIn:
+          type: object
+          description: >-
+            Money that arrived in the period without being income. Not in total,
+            not in entries; here so the two can still be matched to a statement.
+          properties:
+            borrowed:
+              type: number
+            repaidToYou:
+              type: number
+            fromSavings:
+              type: number
+          required:
+            - borrowed
+            - repaidToYou
+            - fromSavings
+      required:
+        - from
+        - to
+        - total
+        - entries
+        - otherMoneyIn
 
     SpendingByItemRow:
       type: object
