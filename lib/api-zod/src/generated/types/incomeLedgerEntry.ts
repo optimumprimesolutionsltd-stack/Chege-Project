@@ -5,6 +5,7 @@
  * Jamvi API — personal and group money management
  * OpenAPI spec version: 0.1.0
  */
+import type { IncomeLedgerPortion } from './incomeLedgerPortion';
 
 export interface IncomeLedgerEntry {
   id: string;
@@ -19,4 +20,6 @@ export interface IncomeLedgerEntry {
   receivedFrom: string;
   /** The account it landed in, when the group has named accounts */
   accountName: string | null;
+  /** How much of the amount came from each stream. One portion for an unsplit deposit; a split one names each stream with its own share. */
+  portions: IncomeLedgerPortion[];
 }

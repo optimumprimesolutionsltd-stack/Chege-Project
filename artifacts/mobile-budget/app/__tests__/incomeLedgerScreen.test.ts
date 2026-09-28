@@ -49,9 +49,35 @@ describe('money that came in without being income', () => {
   // total, never in it.
   it('is shown under the total rather than counted in it', () => {
     expect(screen).toContain('testID="income-ledger-other-money-in"');
-    expect(screen).toContain("`KES ${formatKES(data?.total ?? 0)}`");
+    expect(screen).toContain("formatKES(Math.abs(data?.total ?? 0))");
     expect(screen).toContain('other?.borrowed');
     expect(screen).toContain('other?.repaidToYou');
     expect(screen).toContain('other?.fromSavings');
+  });
+});
+
+// A side hustle's income is its profit: sales less what it cost to run, which
+// is spending in the categories linked to it on Reports.
+describe('each income stream shows what it earned, not what it sold', () => {
+  it('takes its cards from the server, which knows each stream\'s costs', () => {
+    expect(screen).toContain('(data?.streams ?? []).map((stream) => {');
+  });
+
+  it('shows received less costs, and the profit or loss', () => {
+    expect(screen).toContain('`Received ${formatKES(group.received)} − costs ${formatKES(group.costs)}`');
+    expect(screen).toContain("{group.net < 0 ? 'loss' : 'profit'}");
+  });
+
+  it('puts a split deposit under each stream at that stream\'s share only', () => {
+    expect(screen).toContain('.filter((portion) => portion.incomeSourceId === stream.incomeSourceId)');
+    expect(screen).toContain('renderEntry(entry, index, share)');
+  });
+
+  it('explains the headline when costs came off it', () => {
+    expect(screen).toContain('testID="income-ledger-net-of-costs"');
+  });
+
+  it('keeps the date view at full amounts', () => {
+    expect(screen).toContain('day.rows.map((entry, index) => renderEntry(entry, index))');
   });
 });

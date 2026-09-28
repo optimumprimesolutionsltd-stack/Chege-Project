@@ -602,6 +602,12 @@ export interface ExpenseLedger {
   entries: ExpenseLedgerEntry[];
 }
 
+export interface IncomeLedgerPortion {
+  /** Null when no stream was chosen, or the stream is not this group's */
+  incomeSourceId: number | null;
+  amount: number;
+}
+
 export interface IncomeLedgerEntry {
   id: string;
   /** The bank posting this row is, for opening it */
@@ -615,6 +621,20 @@ export interface IncomeLedgerEntry {
   receivedFrom: string;
   /** The account it landed in, when the group has named accounts */
   accountName: string | null;
+  /** How much of the amount came from each stream. One portion for an unsplit deposit; a split one names each stream with its own share. */
+  portions: IncomeLedgerPortion[];
+}
+
+/**
+ * One income stream over the period: what it brought in, what it cost to run (spending in the categories linked to it on Reports), and the difference, which is what it actually earned.
+ */
+export interface IncomeLedgerStream {
+  incomeSourceId: number | null;
+  name: string;
+  received: number;
+  costs: number;
+  /** received less costs. Negative is a loss. */
+  net: number;
 }
 
 /**
@@ -629,7 +649,14 @@ export type IncomeLedgerOtherMoneyIn = {
 export interface IncomeLedger {
   from: string;
   to: string;
+  /** What was earned: everything received, less what the income streams cost to run. A side hustle counts its profit, not its sales. */
   total: number;
+  /** Everything received, before any stream's costs. */
+  received: number;
+  /** Spending in categories linked to an income stream. */
+  costs: number;
+  /** Each stream's received, costs and net, largest net first. */
+  streams: IncomeLedgerStream[];
   entries: IncomeLedgerEntry[];
   /** Money that arrived in the period without being income. Not in total, not in entries; here so the two can still be matched to a statement. */
   otherMoneyIn: IncomeLedgerOtherMoneyIn;

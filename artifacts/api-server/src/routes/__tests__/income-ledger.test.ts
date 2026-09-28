@@ -65,7 +65,8 @@ describe("GET /dashboard/income-ledger", () => {
         { id: 5, date: "2026-09-06", description: "Loan from Mum", amount: 10000, incomeSourceId: null, makerName: "Chege", accountName: "Equity", kind: "borrowed" },
       ] })
       .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [{ id: 1, name: "Chege – Salary" }] });
+      .mockResolvedValueOnce({ rows: [{ id: 1, name: "Chege – Salary" }] })
+      .mockResolvedValueOnce({ rows: [{ incomeSourceId: 1, cost: 30000 }] });
 
     const response = await request(buildApp())
       .get("/dashboard/income-ledger")
@@ -75,7 +76,9 @@ describe("GET /dashboard/income-ledger", () => {
     expect(response.body).toMatchObject({
       from: "2026-09-01",
       to: "2026-09-30",
-      total: 80000,
+      total: 50000,
+      received: 80000,
+      costs: 30000,
       otherMoneyIn: { borrowed: 10000, repaidToYou: 0, fromSavings: 0 },
     });
     expect(response.body.entries).toEqual([
@@ -91,7 +94,8 @@ describe("GET /dashboard/income-ledger", () => {
     const queries = sqlMock.mock.results
       .map((result) => result.value as { strings: TemplateStringsArray; values: unknown[] })
       .filter((call) => /FROM (joint_account_transactions|joint_account_deposit_splits|income_sources)/.test(sqlText(call)));
-    expect(queries).toHaveLength(3);
+    // Deposits, their portions, the group's streams, and what each stream cost.
+    expect(queries).toHaveLength(4);
     for (const query of queries) expect(query.values).toContain(7);
 
     const deposits = sqlText(queries[0]);
@@ -114,5 +118,25 @@ describe("GET /dashboard/income-ledger", () => {
 
     expect(response.status).toBe(400);
     expect(mockedDb.execute).not.toHaveBeenCalled();
+  });
+
+  it("leaves stream costs out while searching, since the receipts are only some of them", async () => {
+    mockedDb.execute.mockResolvedValue({ rows: [] });
+
+    await request(buildApp()).get("/dashboard/income-ledger").query({ from: "2026-09-01", to: "2026-09-30", q: "equity" });
+
+    expect(mockedDb.execute).toHaveBeenCalledTimes(3);
+  });
+
+  it("works out stream costs over the same days as the receipts", async () => {
+    mockedDb.execute.mockResolvedValue({ rows: [] });
+
+    await request(buildApp()).get("/dashboard/income-ledger").query({ from: "2026-09-01", to: "2026-09-28" });
+
+    const costs = sqlMock.mock.results
+      .map((result) => result.value as { strings: TemplateStringsArray; values: unknown[] })
+      .find((call) => sqlText(call).includes("reduces_income_source_id IS NOT NULL"))!;
+    expect(costs.values).toContain("2026-09-01");
+    expect(costs.values).toContain("2026-09-28");
   });
 });

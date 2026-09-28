@@ -1218,7 +1218,7 @@ router.get("/dashboard/income-ledger", async (req, res): Promise<void> => {
   // Transfers between the group's own accounts (bank_transfer_id) are left out
   // entirely: they are neither income nor money arriving from outside. Every
   // other deposit is fetched and sorted into income or otherMoneyIn by kind.
-  const [deposits, splits, streams] = await Promise.all([
+  const [deposits, splits, streams, costsByStream] = await Promise.all([
     db.execute(sql`
       SELECT t.id,
              t.date::text AS date,
@@ -1246,6 +1246,7 @@ router.get("/dashboard/income-ledger", async (req, res): Promise<void> => {
     db.execute(sql`
       SELECT split.transaction_id AS "transactionId",
              split.income_source_id AS "incomeSourceId",
+             split.amount::float8 AS amount,
              COALESCE(contributor.name, person.preferred_name, person.first_name) AS "personName"
       FROM joint_account_deposit_splits split
       INNER JOIN joint_account_transactions t
@@ -1260,6 +1261,9 @@ router.get("/dashboard/income-ledger", async (req, res): Promise<void> => {
       ORDER BY split.id
     `),
     db.execute(sql`SELECT id, name FROM income_sources WHERE group_id = ${groupId}`),
+    // A search narrows the receipts to some descriptions; taking every
+    // stream's running costs off that would be comparing different things.
+    search ? Promise.resolve(new Map<number, number>()) : incomeStreamCostsBySource(groupId, from, to),
   ]);
 
   res.json(buildIncomeLedger({
@@ -1268,6 +1272,7 @@ router.get("/dashboard/income-ledger", async (req, res): Promise<void> => {
     deposits: deposits.rows as IncomeDepositRow[],
     splits: splits.rows as IncomeSplitRow[],
     streamNames: new Map((streams.rows as { id: number; name: string }[]).map((row) => [Number(row.id), row.name])),
+    costsByStream,
   }));
 });
 
@@ -1482,7 +1487,12 @@ router.get("/dashboard/spending-by-item", async (req, res): Promise<void> => {
  * all. Almost every group links nothing, so the common case is one cheap
  * query that returns no rows.
  */
-async function incomeStreamCostsBySource(groupId: number, month: number, year: number): Promise<Map<number, number>> {
+/**
+ * What each income stream cost to run between two days, inclusive: spending in
+ * every category linked to it (Reports' Cost categories picker). A stream's
+ * profit is what it brought in less this.
+ */
+async function incomeStreamCostsBySource(groupId: number, from: string, to: string): Promise<Map<number, number>> {
   const result = await db.execute(sql`
     WITH cost_categories AS (
       SELECT name, reduces_income_source_id
@@ -1497,8 +1507,8 @@ async function incomeStreamCostsBySource(groupId: number, month: number, year: n
       FROM expense_category_allocations alloc
       INNER JOIN expenses expense ON expense.id = alloc.expense_id AND expense.group_id = ${groupId}
       WHERE alloc.group_id = ${groupId}
-        AND EXTRACT(MONTH FROM expense.date) = ${month}
-        AND EXTRACT(YEAR FROM expense.date) = ${year}
+        AND expense.date >= ${from}
+        AND expense.date <= ${to}
 
       UNION ALL
 
@@ -1506,8 +1516,8 @@ async function incomeStreamCostsBySource(groupId: number, month: number, year: n
       SELECT expense.category, expense.amount
       FROM expenses expense
       WHERE expense.group_id = ${groupId}
-        AND EXTRACT(MONTH FROM expense.date) = ${month}
-        AND EXTRACT(YEAR FROM expense.date) = ${year}
+        AND expense.date >= ${from}
+        AND expense.date <= ${to}
         AND NOT EXISTS (
           SELECT 1 FROM expense_category_allocations alloc
           WHERE alloc.expense_id = expense.id AND alloc.group_id = ${groupId}
@@ -1521,8 +1531,8 @@ async function incomeStreamCostsBySource(groupId: number, month: number, year: n
       WHERE tx.group_id = ${groupId}
         AND tx.type = 'disbursement'
         AND tx.expense_category IS NOT NULL
-        AND EXTRACT(MONTH FROM tx.date) = ${month}
-        AND EXTRACT(YEAR FROM tx.date) = ${year}
+        AND tx.date >= ${from}
+        AND tx.date <= ${to}
     )
     SELECT cc.reduces_income_source_id AS "incomeSourceId", COALESCE(SUM(costs.amount), 0) AS cost
     FROM cost_categories cc
@@ -1555,7 +1565,11 @@ router.get("/dashboard/income-streams", async (req, res): Promise<void> => {
   const month = parsed.success && parsed.data.month != null ? Math.round(parsed.data.month) : now.getUTCMonth() + 1;
   const year = parsed.success && parsed.data.year != null ? Math.round(parsed.data.year) : now.getUTCFullYear();
 
-  const costsByIncomeSourceId = await incomeStreamCostsBySource(groupId, month, year);
+  const costsByIncomeSourceId = await incomeStreamCostsBySource(
+    groupId,
+    `${year}-${String(month).padStart(2, "0")}-01`,
+    new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10),
+  );
 
   const result = await db.execute(sql`
     WITH funding AS (

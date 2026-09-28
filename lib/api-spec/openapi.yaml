@@ -2855,6 +2855,13 @@ components:
           type: string
           nullable: true
           description: The account it landed in, when the group has named accounts
+        portions:
+          type: array
+          description: >-
+            How much of the amount came from each stream. One portion for an
+            unsplit deposit; a split one names each stream with its own share.
+          items:
+            $ref: "#/components/schemas/IncomeLedgerPortion"
       required:
         - id
         - transactionId
@@ -2864,6 +2871,46 @@ components:
         - streams
         - receivedFrom
         - accountName
+        - portions
+
+    IncomeLedgerPortion:
+      type: object
+      properties:
+        incomeSourceId:
+          type: number
+          nullable: true
+          description: Null when no stream was chosen, or the stream is not this group's
+        amount:
+          type: number
+      required:
+        - incomeSourceId
+        - amount
+
+    IncomeLedgerStream:
+      type: object
+      description: >-
+        One income stream over the period: what it brought in, what it cost to
+        run (spending in the categories linked to it on Reports), and the
+        difference, which is what it actually earned.
+      properties:
+        incomeSourceId:
+          type: number
+          nullable: true
+        name:
+          type: string
+        received:
+          type: number
+        costs:
+          type: number
+        net:
+          type: number
+          description: received less costs. Negative is a loss.
+      required:
+        - incomeSourceId
+        - name
+        - received
+        - costs
+        - net
 
     IncomeLedger:
       type: object
@@ -2874,6 +2921,20 @@ components:
           type: string
         total:
           type: number
+          description: >-
+            What was earned: everything received, less what the income streams
+            cost to run. A side hustle counts its profit, not its sales.
+        received:
+          type: number
+          description: Everything received, before any stream's costs.
+        costs:
+          type: number
+          description: Spending in categories linked to an income stream.
+        streams:
+          type: array
+          description: Each stream's received, costs and net, largest net first.
+          items:
+            $ref: "#/components/schemas/IncomeLedgerStream"
         entries:
           type: array
           items:
@@ -2898,6 +2959,9 @@ components:
         - from
         - to
         - total
+        - received
+        - costs
+        - streams
         - entries
         - otherMoneyIn
 

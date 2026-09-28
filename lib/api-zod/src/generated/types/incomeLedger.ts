@@ -7,11 +7,19 @@
  */
 import type { IncomeLedgerEntry } from './incomeLedgerEntry';
 import type { IncomeLedgerOtherMoneyIn } from './incomeLedgerOtherMoneyIn';
+import type { IncomeLedgerStream } from './incomeLedgerStream';
 
 export interface IncomeLedger {
   from: string;
   to: string;
+  /** What was earned: everything received, less what the income streams cost to run. A side hustle counts its profit, not its sales. */
   total: number;
+  /** Everything received, before any stream's costs. */
+  received: number;
+  /** Spending in categories linked to an income stream. */
+  costs: number;
+  /** Each stream's received, costs and net, largest net first. */
+  streams: IncomeLedgerStream[];
   entries: IncomeLedgerEntry[];
   /** Money that arrived in the period without being income. Not in total, not in entries; here so the two can still be matched to a statement. */
   otherMoneyIn: IncomeLedgerOtherMoneyIn;

@@ -811,7 +811,16 @@ export const GetDashboardIncomeLedgerQueryParams = zod.object({
 export const GetDashboardIncomeLedgerResponse = zod.object({
   "from": zod.string(),
   "to": zod.string(),
-  "total": zod.number(),
+  "total": zod.number().describe('What was earned: everything received, less what the income streams cost to run. A side hustle counts its profit, not its sales.'),
+  "received": zod.number().describe('Everything received, before any stream\'s costs.'),
+  "costs": zod.number().describe('Spending in categories linked to an income stream.'),
+  "streams": zod.array(zod.object({
+  "incomeSourceId": zod.number().nullable(),
+  "name": zod.string(),
+  "received": zod.number(),
+  "costs": zod.number(),
+  "net": zod.number().describe('received less costs. Negative is a loss.')
+}).describe('One income stream over the period: what it brought in, what it cost to run (spending in the categories linked to it on Reports), and the difference, which is what it actually earned.')).describe('Each stream\'s received, costs and net, largest net first.'),
   "entries": zod.array(zod.object({
   "id": zod.string(),
   "transactionId": zod.number().describe('The bank posting this row is, for opening it'),
@@ -820,7 +829,11 @@ export const GetDashboardIncomeLedgerResponse = zod.object({
   "amount": zod.number(),
   "streams": zod.array(zod.string()).describe('The income stream it came from, or several when the deposit was split between people or streams. \"No income stream\" when none was chosen.'),
   "receivedFrom": zod.string().describe('Who brought the money in, or several names joined with \" + \"'),
-  "accountName": zod.string().nullable().describe('The account it landed in, when the group has named accounts')
+  "accountName": zod.string().nullable().describe('The account it landed in, when the group has named accounts'),
+  "portions": zod.array(zod.object({
+  "incomeSourceId": zod.number().nullable().describe('Null when no stream was chosen, or the stream is not this group\'s'),
+  "amount": zod.number()
+})).describe('How much of the amount came from each stream. One portion for an unsplit deposit; a split one names each stream with its own share.')
 })),
   "otherMoneyIn": zod.object({
   "borrowed": zod.number(),
