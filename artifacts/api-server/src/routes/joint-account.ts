@@ -264,6 +264,21 @@ const BankToBankTransferInput = z.object({
   mpesaReceipt: z.string().trim().regex(/^[A-Z0-9]{8,15}$/).optional(),
   mpesaAccountId: z.number().int().positive().optional(),
 });
+/** Correcting a transfer: the same fields on both halves, so they cannot disagree. */
+const BankTransferUpdateInput = z.object({
+  amount: NonNegativeBankAmount,
+  narration: z.string().trim().min(1).max(200),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+/**
+ * "This was not a transfer": one half stays as an ordinary entry, the other is
+ * removed. Money out kept needs the category it was spent on.
+ */
+const BankTransferUnpairInput = z.object({
+  keepTransactionId: z.number().int().positive(),
+  expenseCategory: z.string().trim().min(1).max(120).optional(),
+});
+const TransferIdParam = z.object({ transferId: z.string().uuid() });
 const AccountInput = z.object({
   name: z.string().trim().min(1).max(80),
   accountNumber: z.string().trim().min(1).max(40).optional(),
@@ -1237,6 +1252,99 @@ router.post("/joint-account/transfers/bank-to-bank", async (req, res): Promise<v
   });
 });
 
+// PUT /joint-account/transfers/bank-to-bank/:transferId — correct both halves together.
+router.put("/joint-account/transfers/bank-to-bank/:transferId", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  if (!requireGroupManager(req, res)) return;
+  if (!await requireTransactionEligibility(req, res)) return;
+
+  const params = TransferIdParam.safeParse(req.params);
+  const parsed = BankTransferUpdateInput.safeParse(req.body);
+  if (!params.success || !parsed.success) {
+    res.status(400).json({ error: "Enter a positive amount, a date, and a narration." });
+    return;
+  }
+  const { amount, narration, date } = parsed.data;
+  const rows = await db.transaction(async (tx) => {
+    const pair = await tx.select().from(jointAccountTxTable)
+      .where(and(eq(jointAccountTxTable.groupId, groupId), eq(jointAccountTxTable.bankTransferId, params.data.transferId)))
+      .for("update");
+    if (pair.length !== 2) return null;
+    return tx.update(jointAccountTxTable)
+      .set({ amount, description: narration, date })
+      .where(and(eq(jointAccountTxTable.groupId, groupId), eq(jointAccountTxTable.bankTransferId, params.data.transferId)))
+      .returning();
+  });
+  if (!rows) {
+    res.status(404).json({ error: "Transfer not found." });
+    return;
+  }
+  const outgoing = rows.find((row) => row.type === "disbursement")!;
+  const incoming = rows.find((row) => row.type === "deposit")!;
+  res.json({
+    transferId: params.data.transferId,
+    outgoing: await enrichTx(outgoing, groupId),
+    incoming: await enrichTx(incoming, groupId),
+  });
+});
+
+// POST /joint-account/transfers/bank-to-bank/:transferId/unpair — it was not a
+// transfer after all (an M-Pesa payment to a company, filed as a move to a bank).
+router.post("/joint-account/transfers/bank-to-bank/:transferId/unpair", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  if (!requireGroupManager(req, res)) return;
+  if (!await requireTransactionEligibility(req, res)) return;
+
+  const params = TransferIdParam.safeParse(req.params);
+  const parsed = BankTransferUnpairInput.safeParse(req.body);
+  if (!params.success || !parsed.success) {
+    res.status(400).json({ error: "Say which half to keep." });
+    return;
+  }
+  const { keepTransactionId, expenseCategory } = parsed.data;
+  if (expenseCategory) {
+    const [category] = await db
+      .select({ id: budgetCategoriesTable.id })
+      .from(budgetCategoriesTable)
+      .where(and(eq(budgetCategoriesTable.name, expenseCategory), eq(budgetCategoriesTable.groupId, groupId)))
+      .limit(1);
+    if (!category) {
+      res.status(400).json({ error: "Choose a valid budget category." });
+      return;
+    }
+  }
+  const result = await db.transaction(async (tx) => {
+    const pair = await tx.select().from(jointAccountTxTable)
+      .where(and(eq(jointAccountTxTable.groupId, groupId), eq(jointAccountTxTable.bankTransferId, params.data.transferId)))
+      .for("update");
+    const kept = pair.find((row) => row.id === keepTransactionId);
+    const other = pair.find((row) => row.id !== keepTransactionId);
+    if (pair.length !== 2 || !kept || !other) return { error: "Transfer not found.", status: 404 as const };
+    // Money out is spending once it is no longer a move, and spending has a category.
+    if (kept.type === "disbursement" && !expenseCategory) {
+      return { error: "Choose the category this payment was for.", status: 400 as const };
+    }
+    await tx.delete(jointAccountTxTable)
+      .where(and(eq(jointAccountTxTable.id, other.id), eq(jointAccountTxTable.groupId, groupId)));
+    const [updated] = await tx.update(jointAccountTxTable)
+      .set({
+        bankTransferId: null,
+        bankTransferAccountId: null,
+        ...(kept.type === "disbursement" ? { expenseCategory } : {}),
+      })
+      .where(and(eq(jointAccountTxTable.id, kept.id), eq(jointAccountTxTable.groupId, groupId)))
+      .returning();
+    return { updated };
+  });
+  if (!("updated" in result) || !result.updated) {
+    res.status(result.status ?? 400).json({ error: result.error ?? "Could not change the transfer." });
+    return;
+  }
+  res.json(await enrichTx(result.updated, groupId));
+});
+
 // PUT /joint-account/:id — edit a transaction without changing its type.
 router.put("/joint-account/:id", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
@@ -1253,7 +1361,7 @@ router.put("/joint-account/:id", async (req, res): Promise<void> => {
     .limit(1);
   if (!existing) { res.status(404).json({ error: "Not found" }); return; }
   if (existing.bankTransferId !== null) {
-    res.status(409).json({ error: "Bank-to-bank transfers cannot be edited. Delete the transfer pair and record a corrected transfer." });
+    res.status(409).json({ error: "Edit a bank-to-bank transfer as a transfer, so both halves change together." });
     return;
   }
   const requestedAccountId = parsed.data.accountId === undefined ? existing.accountId : parsed.data.accountId;
