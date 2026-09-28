@@ -97,22 +97,23 @@ export default function IncomeLedgerScreen() {
     return grouped;
   }, [entries]);
 
-  // A deposit split between two streams is filed under both names together,
-  // at its full amount, rather than guessed apart.
-  const streamGroups = useMemo(() => {
-    const groups = new Map<string, { key: string; label: string; total: number; count: number; rows: typeof entries }>();
-    for (const entry of entries) {
-      const label = entry.streams.join(' + ');
-      const group = groups.get(label) ?? { key: `s:${label}`, label, total: 0, count: 0, rows: [] };
-      group.total += entry.amount;
-      group.count += 1;
-      group.rows.push(entry);
-      groups.set(label, group);
-    }
-    return [...groups.values()].sort((a, b) => b.total - a.total);
-  }, [entries]);
+  // One card per stream, as the server worked it out: what it brought in, what
+  // it cost to run (the categories linked to it on Reports) and what it
+  // actually earned. A split deposit sits under each of its streams at that
+  // stream's share, so the rows under a card add up to its "received".
+  const streamGroups = useMemo(() => (data?.streams ?? []).map((stream) => {
+    const rows = entries.flatMap((entry) => {
+      const share = entry.portions
+        .filter((portion) => portion.incomeSourceId === stream.incomeSourceId)
+        .reduce((sum, portion) => sum + portion.amount, 0);
+      return share > 0 || entry.portions.some((portion) => portion.incomeSourceId === stream.incomeSourceId)
+        ? [{ entry, share }]
+        : [];
+    });
+    return { ...stream, key: `s:${stream.incomeSourceId ?? 'none'}`, rows };
+  }), [data?.streams, entries]);
 
-  const renderEntry = (entry: (typeof entries)[number], index: number) => (
+  const renderEntry = (entry: (typeof entries)[number], index: number, share?: number) => (
     <View
       key={entry.id}
       accessible
@@ -129,7 +130,7 @@ export default function IncomeLedgerScreen() {
           {[entry.streams.join(' + '), entry.receivedFrom, entry.accountName].filter(Boolean).join(' · ')}
         </Text>
       </View>
-      <Text style={[styles.rowAmount, { color: colors.foreground }]}>{formatKES(entry.amount)}</Text>
+      <Text style={[styles.rowAmount, { color: colors.foreground }]}>{formatKES(share ?? entry.amount)}</Text>
     </View>
   );
 
@@ -141,22 +142,37 @@ export default function IncomeLedgerScreen() {
           onPress={() => toggleGroup(group.key)}
           accessibilityRole="button"
           accessibilityState={{ expanded: isOpen }}
-          accessibilityLabel={`${group.label}, ${group.count} ${group.count === 1 ? 'entry' : 'entries'}, ${formatKES(group.total)} shillings`}
+          accessibilityLabel={`${group.name}, ${group.net < 0 ? 'a loss of' : 'earned'} ${formatKES(Math.abs(group.net))} shillings${group.costs > 0 ? `: received ${formatKES(group.received)}, costs ${formatKES(group.costs)}` : ''}`}
           testID={`income-ledger-group-${group.key}`}
           style={styles.groupHeader}
         >
           <View style={styles.rowText}>
-            <Text style={[styles.rowDesc, { color: colors.foreground }]} numberOfLines={1}>{group.label}</Text>
-            <Text style={[styles.rowMeta, { color: colors.mutedForeground }]}>
-              {group.count} {group.count === 1 ? 'entry' : 'entries'}
+            <Text style={[styles.rowDesc, { color: colors.foreground }]} numberOfLines={1}>{group.name}</Text>
+            <Text style={[styles.rowMeta, { color: colors.mutedForeground }]} numberOfLines={2} testID={`income-ledger-group-sum-${group.key}`}>
+              {group.costs > 0
+                ? `Received ${formatKES(group.received)} − costs ${formatKES(group.costs)}`
+                : `${group.rows.length} ${group.rows.length === 1 ? 'entry' : 'entries'}`}
             </Text>
           </View>
-          <Text style={[styles.rowAmount, { color: colors.foreground }]}>{formatKES(group.total)}</Text>
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text style={[styles.rowAmount, { color: group.net < 0 ? '#ef4444' : colors.foreground }]}>
+              {group.net < 0 ? `−${formatKES(Math.abs(group.net))}` : formatKES(group.net)}
+            </Text>
+            {group.costs > 0 ? (
+              <Text style={[styles.rowMeta, { color: group.net < 0 ? '#ef4444' : colors.mutedForeground }]}>
+                {group.net < 0 ? 'loss' : 'profit'}
+              </Text>
+            ) : null}
+          </View>
           <Feather name={isOpen ? 'chevron-up' : 'chevron-down'} size={16} color={colors.mutedForeground} />
         </Pressable>
         {isOpen ? (
           <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderColor: colors.border, paddingHorizontal: 14 }}>
-            {group.rows.map(renderEntry)}
+            {group.rows.length === 0 ? (
+              <Text style={[styles.rowMeta, { color: colors.mutedForeground, paddingVertical: 11 }]}>
+                Nothing came in from this stream between these dates.
+              </Text>
+            ) : group.rows.map(({ entry, share }, index) => renderEntry(entry, index, share))}
           </View>
         ) : null}
       </View>
@@ -247,13 +263,21 @@ export default function IncomeLedgerScreen() {
 
         <View style={[styles.totalCard, { backgroundColor: colors.muted, borderColor: colors.border }]}>
           <Text style={[styles.totalValue, { color: colors.foreground }]}>
-            {isLoading ? 'Loading…' : `KES ${formatKES(data?.total ?? 0)}`}
+            {isLoading ? 'Loading…' : `KES ${(data?.total ?? 0) < 0 ? '−' : ''}${formatKES(Math.abs(data?.total ?? 0))}`}
           </Text>
           <Text style={[styles.totalCaption, { color: colors.mutedForeground }]}>
             {isLoading
               ? ' '
               : `${entries.length} ${entries.length === 1 ? 'entry' : 'entries'} · ${longDay(rangeFrom)} – ${longDay(rangeTo)}`}
           </Text>
+          {!isLoading && (data?.costs ?? 0) > 0 ? (
+            <Text
+              style={[styles.totalCaption, { color: colors.mutedForeground, marginTop: 4, textAlign: 'center' }]}
+              testID="income-ledger-net-of-costs"
+            >
+              Received KES {formatKES(data?.received ?? 0)} less KES {formatKES(data?.costs ?? 0)} your side hustles cost to run
+            </Text>
+          ) : null}
           {!isLoading && otherParts.length > 0 ? (
             <Text
               style={[styles.totalCaption, { color: colors.mutedForeground, marginTop: 4, textAlign: 'center' }]}
@@ -313,7 +337,7 @@ export default function IncomeLedgerScreen() {
             <View key={day.date} style={styles.day}>
               <Text style={[styles.dayHeading, { color: colors.mutedForeground }]}>{longDay(day.date)}</Text>
               <View style={[styles.dayCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                {day.rows.map(renderEntry)}
+                {day.rows.map((entry, index) => renderEntry(entry, index))}
               </View>
             </View>
           ))

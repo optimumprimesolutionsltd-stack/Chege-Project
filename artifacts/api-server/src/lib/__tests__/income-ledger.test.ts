@@ -25,8 +25,10 @@ const streamNames = new Map([
   [2, "Lydiah – EISH"],
 ]);
 
-function build(deposits: IncomeDepositRow[], splits: IncomeSplitRow[] = []) {
-  return buildIncomeLedger({ from: "2026-09-01", to: "2026-09-30", deposits, splits, streamNames });
+function build(deposits: IncomeDepositRow[], splits: IncomeSplitRow[] = [], costs: [number, number][] = []) {
+  return buildIncomeLedger({
+    from: "2026-09-01", to: "2026-09-30", deposits, splits, streamNames, costsByStream: new Map(costs),
+  });
 }
 
 describe("the income ledger", () => {
@@ -63,9 +65,9 @@ describe("the income ledger", () => {
     const ledger = build(
       [deposit({ id: 9, amount: 30000, incomeSourceId: 1, makerName: "Chege" })],
       [
-        { transactionId: 9, incomeSourceId: 2, personName: "Lydiah" },
-        { transactionId: 9, incomeSourceId: 1, personName: "Chege" },
-        { transactionId: 9, incomeSourceId: 2, personName: "Lydiah" },
+        { transactionId: 9, incomeSourceId: 2, personName: "Lydiah", amount: 10000 },
+        { transactionId: 9, incomeSourceId: 1, personName: "Chege", amount: 15000 },
+        { transactionId: 9, incomeSourceId: 2, personName: "Lydiah", amount: 5000 },
       ],
     );
 
@@ -89,7 +91,7 @@ describe("the income ledger", () => {
     const ledger = build([deposit({ id: 1, makerName: null })], []);
     expect(ledger.entries[0].receivedFrom).toBe(NOT_RECORDED);
 
-    const split = build([deposit({ id: 2 })], [{ transactionId: 2, incomeSourceId: 1, personName: null }]);
+    const split = build([deposit({ id: 2 })], [{ transactionId: 2, incomeSourceId: 1, personName: null, amount: 1000 }]);
     expect(split.entries[0].receivedFrom).toBe(NOT_RECORDED);
   });
 
@@ -103,8 +105,74 @@ describe("the income ledger", () => {
       from: "2026-09-01",
       to: "2026-09-30",
       total: 0,
+      received: 0,
+      costs: 0,
+      streams: [],
       entries: [],
       otherMoneyIn: { borrowed: 0, repaidToYou: 0, fromSavings: 0 },
     });
+  });
+});
+
+// A side hustle's income is what it made, not what it sold for: sales less the
+// cost of goods and running costs, i.e. spending in the categories linked to it.
+describe("a side hustle counts its profit", () => {
+  it("takes each stream's costs off what it brought in", () => {
+    const ledger = build(
+      [
+        deposit({ id: 1, amount: 164622, incomeSourceId: 1 }),
+        deposit({ id: 2, amount: 50000, incomeSourceId: 2 }),
+      ],
+      [],
+      [[1, 100000]],
+    );
+
+    expect(ledger.streams).toEqual([
+      { incomeSourceId: 1, name: "Chege – Salary", received: 164622, costs: 100000, net: 64622 },
+      { incomeSourceId: 2, name: "Lydiah – EISH", received: 50000, costs: 0, net: 50000 },
+    ]);
+    expect(ledger.received).toBe(214622);
+    expect(ledger.costs).toBe(100000);
+    expect(ledger.total).toBe(114622);
+  });
+
+  it("shows a loss as a loss, not as nothing", () => {
+    const ledger = build([deposit({ id: 1, amount: 20000, incomeSourceId: 1 })], [], [[1, 26000]]);
+    expect(ledger.streams[0].net).toBe(-6000);
+    expect(ledger.total).toBe(-6000);
+  });
+
+  it("counts a stream that cost money in a period it sold nothing", () => {
+    const ledger = build([deposit({ id: 1, amount: 30000, incomeSourceId: 2 })], [], [[1, 4000]]);
+    expect(ledger.streams.find((stream) => stream.incomeSourceId === 1)).toEqual(
+      { incomeSourceId: 1, name: "Chege – Salary", received: 0, costs: 4000, net: -4000 },
+    );
+    expect(ledger.total).toBe(26000);
+  });
+
+  it("ignores costs linked to a stream the group does not own", () => {
+    const ledger = build([deposit({ id: 1, amount: 30000, incomeSourceId: 2 })], [], [[99, 4000]]);
+    expect(ledger.costs).toBe(0);
+    expect(ledger.total).toBe(30000);
+  });
+
+  it("credits each stream of a split deposit with its own share only", () => {
+    const ledger = build(
+      [deposit({ id: 9, amount: 30000 })],
+      [
+        { transactionId: 9, incomeSourceId: 1, personName: "Chege", amount: 20000 },
+        { transactionId: 9, incomeSourceId: 2, personName: "Lydiah", amount: 10000 },
+      ],
+    );
+    expect(ledger.streams.map((stream) => [stream.incomeSourceId, stream.received])).toEqual([[1, 20000], [2, 10000]]);
+    expect(ledger.entries[0].portions).toEqual([
+      { incomeSourceId: 1, amount: 20000 },
+      { incomeSourceId: 2, amount: 10000 },
+    ]);
+  });
+
+  it("keeps money with no stream as received in full, since nothing is linked to it", () => {
+    const ledger = build([deposit({ id: 1, amount: 3000, incomeSourceId: null })], [], [[1, 500]]);
+    expect(ledger.streams.find((stream) => stream.incomeSourceId === null)).toMatchObject({ received: 3000, costs: 0, net: 3000 });
   });
 });

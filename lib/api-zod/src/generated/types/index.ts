@@ -95,6 +95,8 @@ export * from './healthStatus';
 export * from './incomeLedger';
 export * from './incomeLedgerEntry';
 export * from './incomeLedgerOtherMoneyIn';
+export * from './incomeLedgerPortion';
+export * from './incomeLedgerStream';
 export * from './incomeSource';
 export * from './incomeStreamEntry';
 export * from './incomeStreamEntryRecordType';

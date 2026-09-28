@@ -32,14 +32,17 @@ export type IncomeSplitRow = {
   transactionId: number;
   incomeSourceId: number | null;
   personName: string | null;
+  amount: number;
 };
 
 export const NO_INCOME_STREAM = "No income stream";
 export const NOT_RECORDED = "Not recorded";
 
-function distinctInOrder(values: string[]): string[] {
+function distinctInOrder<T>(values: T[]): T[] {
   return [...new Set(values)];
 }
+
+const cents = (value: number) => Math.round(value * 100) / 100;
 
 export function buildIncomeLedger(input: {
   from: string;
@@ -49,6 +52,9 @@ export function buildIncomeLedger(input: {
   /** Every income stream the group owns, by id. A stream id that is not here
    *  was deleted or belongs to somebody else, and reads as no stream. */
   streamNames: Map<number, string>;
+  /** What each stream cost to run over the period: spending in the categories
+   *  linked to it. A side hustle's income is its profit, not its sales. */
+  costsByStream: Map<number, number>;
 }) {
   const splitsByDeposit = new Map<number, IncomeSplitRow[]>();
   for (const split of input.splits) {
@@ -57,10 +63,12 @@ export function buildIncomeLedger(input: {
     splitsByDeposit.set(split.transactionId, list);
   }
 
-  const streamName = (id: number | null) =>
-    (id != null ? input.streamNames.get(id) : undefined) ?? NO_INCOME_STREAM;
+  // A stream id the group does not own reads as no stream, the same as none.
+  const ownStream = (id: number | null) => (id != null && input.streamNames.has(Number(id)) ? Number(id) : null);
+  const streamName = (id: number | null) => (id != null ? input.streamNames.get(id) : undefined) ?? NO_INCOME_STREAM;
 
   const otherMoneyIn = { borrowed: 0, repaidToYou: 0, fromSavings: 0 };
+  const receivedByStream = new Map<number | null, number>();
   const entries = [];
 
   for (const deposit of input.deposits) {
@@ -70,13 +78,17 @@ export function buildIncomeLedger(input: {
     if (deposit.kind === "from_savings") { otherMoneyIn.fromSavings += amount; continue; }
 
     // A split deposit names its streams and people on its portions; the
-    // deposit's own columns only speak for an unsplit one.
-    const portions = splitsByDeposit.get(deposit.id) ?? [];
-    const streams = portions.length > 0
-      ? distinctInOrder(portions.map((portion) => streamName(portion.incomeSourceId)))
-      : [streamName(deposit.incomeSourceId)];
-    const people = portions.length > 0
-      ? distinctInOrder(portions.map((portion) => portion.personName?.trim() || NOT_RECORDED))
+    // deposit's own columns only speak for an unsplit one. Each stream is
+    // credited with its own share, never the whole deposit.
+    const splits = splitsByDeposit.get(deposit.id) ?? [];
+    const portions = splits.length > 0
+      ? splits.map((split) => ({ incomeSourceId: ownStream(split.incomeSourceId), amount: Number(split.amount) }))
+      : [{ incomeSourceId: ownStream(deposit.incomeSourceId), amount }];
+    for (const portion of portions) {
+      receivedByStream.set(portion.incomeSourceId, (receivedByStream.get(portion.incomeSourceId) ?? 0) + portion.amount);
+    }
+    const people = splits.length > 0
+      ? distinctInOrder(splits.map((split) => split.personName?.trim() || NOT_RECORDED))
       : [deposit.makerName?.trim() || NOT_RECORDED];
 
     entries.push({
@@ -85,18 +97,38 @@ export function buildIncomeLedger(input: {
       date: String(deposit.date),
       description: deposit.description,
       amount,
-      streams,
+      streams: distinctInOrder(portions.map((portion) => streamName(portion.incomeSourceId))),
       receivedFrom: people.join(" + "),
       accountName: deposit.accountName ?? null,
+      portions,
     });
   }
 
   entries.sort((a, b) => (a.date === b.date ? b.transactionId - a.transactionId : b.date.localeCompare(a.date)));
 
+  // Every stream that brought money in, and every one that cost something to
+  // run even in a period when it sold nothing - that is a loss, and hiding it
+  // would overstate what was earned.
+  const streamIds = distinctInOrder<number | null>([
+    ...receivedByStream.keys(),
+    ...[...input.costsByStream.keys()].filter((id) => input.streamNames.has(id)),
+  ]);
+  const streams = streamIds.map((id) => {
+    const received = cents(receivedByStream.get(id) ?? 0);
+    const costs = cents(id == null ? 0 : input.costsByStream.get(id) ?? 0);
+    return { incomeSourceId: id, name: streamName(id), received, costs, net: cents(received - costs) };
+  }).sort((a, b) => b.net - a.net || a.name.localeCompare(b.name));
+
+  const received = cents(entries.reduce((sum, entry) => sum + entry.amount, 0));
+  const costs = cents(streams.reduce((sum, stream) => sum + stream.costs, 0));
+
   return {
     from: input.from,
     to: input.to,
-    total: entries.reduce((sum, entry) => sum + entry.amount, 0),
+    total: cents(received - costs),
+    received,
+    costs,
+    streams,
     entries,
     otherMoneyIn,
   };
