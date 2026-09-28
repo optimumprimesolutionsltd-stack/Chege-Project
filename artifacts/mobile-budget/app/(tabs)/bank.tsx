@@ -453,6 +453,18 @@ export default function BankScreen() {
     enabled: txType === 'deposit' && (!!singleDepositorId || depositorIds.length === 0),
   });
 
+  // Every stream in the budget, so money in can be titled by where it came from,
+  // the way spending is titled by its category.
+  const { data: allIncomeSources = [] } = useQuery<MemberIncomeSource[]>({
+    queryKey: ['income-sources', '__group__'],
+    queryFn: () => customFetch<MemberIncomeSource[]>('/api/income-sources'),
+    staleTime: 30_000,
+  });
+  const incomeSourceNames = useMemo(
+    () => new Map(allIncomeSources.map((src) => [src.id, src.name])),
+    [allIncomeSources],
+  );
+
   // Fetch income sources for the selected withdrawer (withdrawal destination chips)
   const { data: withdrawSources = [] } = useQuery<MemberIncomeSource[]>({
     queryKey: ['income-sources', withdrawerId],
@@ -2064,6 +2076,16 @@ export default function BankScreen() {
    * Without this the field opened blank, so anybody adding one to a posting
    * that already had a fee got a second fee on top of the first, silently.
    */
+  /**
+   * A payment filed under the fee category, which is what the M-Pesa import
+   * did to a 75,000 debt payment before #429. The fee row itself is exempt.
+   */
+  const paymentFiledAsCharge =
+    isWithdrawal &&
+    expenseCategory.trim() !== '' &&
+    expenseCategory.trim().toLocaleLowerCase() === chargeCategory.trim().toLocaleLowerCase() &&
+    !transactions.some((row) => row.id === editingTransactionId && row.chargeForTransactionId != null);
+
   const existingCharge = editingTransactionId === null
     ? null
     : transactions.find((row) => row.chargeForTransactionId === editingTransactionId) ?? null;
@@ -2542,7 +2564,9 @@ export default function BankScreen() {
                       ? `${dep ? 'From' : 'To'} ${item.bankTransferAccountName ?? 'bank account'}`
                       : item.savingsGoalId
                       ? `${item.transferDirection === 'to_savings' ? 'Bank → Savings' : 'Savings → Bank'}: ${item.savingsGoalName ?? 'Savings goal'}`
-                      : !dep && item.expenseCategory ? item.expenseCategory : item.description}
+                      : !dep && item.expenseCategory ? item.expenseCategory
+                      : dep && item.incomeSourceId && incomeSourceNames.get(item.incomeSourceId) ? incomeSourceNames.get(item.incomeSourceId)
+                      : item.description}
                   </Text>
                   {item.notes ? (
                     <Feather
@@ -4012,7 +4036,7 @@ export default function BankScreen() {
                   >
                     <Text style={{ flex: 1, color: withdrawDest === 'party' || withdrawDest === 'lend' ? colors.foreground : colors.mutedForeground, fontFamily: 'Inter_400Regular' }}>
                       {withdrawDest === 'party'
-                        ? selectedParty ? `Paying ${selectedParty.name}` : 'Paying somebody I owe'
+                        ? selectedParty ? `Paying ${selectedParty.name}` : 'Paying a person or business I owe'
                         : withdrawDest === 'lend'
                           ? lentToParty ? `Lending to ${lentToParty.name}` : 'Lending it out'
                           : 'Ordinary spending'}
@@ -4043,7 +4067,7 @@ export default function BankScreen() {
                         }}
                         testID="bank-withdraw-dest-party"
                       >
-                        <Text style={{ color: colors.dropdownForeground, fontFamily: 'Inter_400Regular' }}>Someone I owe</Text>
+                        <Text style={{ color: colors.dropdownForeground, fontFamily: 'Inter_400Regular' }}>A person or business I owe</Text>
                         <Text style={{ color: colors.dropdownMutedForeground, fontFamily: 'Inter_400Regular', fontSize: 12 }}>
                           Paying down what you owe them. Still spending — the money is gone.
                         </Text>
@@ -4073,6 +4097,10 @@ export default function BankScreen() {
                     </View>
                   )}
 
+                  {/* Paying a debt or lending already says where the money goes: to
+                      them. The row offered income streams there, and tapping one
+                      quietly turned the debt payment back into ordinary spending. */}
+                  {withdrawDest !== 'party' && withdrawDest !== 'lend' ? (<>
                   <Text style={[styles.label, { color: colors.mutedForeground }]}>
                     Where is this money going?{' '}
                     <Text style={{ fontWeight: '400', fontSize: 11 }}>* required</Text>
@@ -4170,6 +4198,7 @@ export default function BankScreen() {
                       );
                     })()}
                   </View>
+                  </>) : null}
 
                   {/* Who is being paid, and what still stands between you. */}
                   {withdrawDest === 'party' || withdrawDest === 'lend' ? (
@@ -4271,8 +4300,8 @@ export default function BankScreen() {
                         </View>
                       )}
                       <Text style={{ color: colors.mutedForeground, fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 4 }}>
-                        The category below says what kind of cost this was. Once it saves, Jamvi offers to take the
-                        payment off what you owe.
+                        Choose below what this payment was for (for example Stock). The bank charge is filed on its
+                        own. Once it saves, Jamvi offers to take the payment off what you owe.
                       </Text>
                     </>
                   ) : null}
@@ -4400,6 +4429,12 @@ export default function BankScreen() {
                       color={colors.mutedForeground}
                     />
                   </TouchableOpacity>
+                  {paymentFiledAsCharge ? (
+                    <Text style={{ color: '#f59e0b', fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 4 }} testID="bank-category-is-charge-warning">
+                      This whole payment is filed under {expenseCategory.trim()}, the same as bank fees, so all of it counts
+                      as a charge. Pick what the payment was for.
+                    </Text>
+                  ) : null}
                   {showCategoryPicker && (
                     <View style={[styles.categoryDropdown, { borderColor: colors.dropdownBorder, backgroundColor: colors.dropdownBackground }]}>
                       <CategorySearchBox value={categorySearch} onChange={setCategorySearch} testID="withdraw-category-search" />
