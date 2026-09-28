@@ -72,11 +72,41 @@ describe('paying somebody you owe', () => {
     expect(bank).toContain('finalDescription = description.trim() || selectedParty?.name || finalDescription;');
   });
 
-  it('still asks what kind of cost it was', () => {
-    // The money did leave, so it is spending and belongs to a category. The
-    // books-correct reading — principal is a balance-sheet movement, only
-    // interest is a cost — is a later question, and a bigger one.
-    expect(bank).toContain('Choose below what this payment was for');
+});
+
+// Paying off what you owe is not new spending when the cost was recorded as
+// the debt was taken on (stock bought on credit). Asking for a category again
+// counted it twice. It is not always so - sometimes the purchase was never
+// entered - so a category is optional here, not gone.
+describe('paying off a debt needs no category', () => {
+  it('does not demand one', () => {
+    expect(bank).toContain("withdrawDest !== 'lend' && withdrawDest !== 'party' && !expenseCategory.trim()) {");
+  });
+
+  it('says the category is optional, and when to use it', () => {
+    expect(bank).toContain('optional — only if this purchase was never recorded');
+    expect(bank).toContain('Paying off what you owe is not new spending, so no category is needed.');
+    expect(bank).toContain("'None — just paying off the debt'");
+  });
+
+  it('can take a chosen category off again', () => {
+    expect(bank).toContain('testID="bank-category-clear"');
+  });
+
+  it('sends no category on a new payment given none, so it stays out of spending', () => {
+    expect(bank).toMatch(/withdrawDest === 'party' && !expenseCategory\.trim\(\)\r?\n\s+\? \{\}/);
+  });
+
+  it('clears the category on an edit given none', () => {
+    expect(bank).toMatch(/withdrawDest === 'party' && !expenseCategory\.trim\(\)\r?\n\s+\? \{ expenseCategory: null \}/);
+  });
+
+  it('reopens a payment to somebody as one', () => {
+    expect(bank).toContain("tx.settlesContributorId ? 'party' : 'other'");
+  });
+
+  it('names the payee on an uncategorised payment in the list', () => {
+    expect(bank).toContain("`Paid to ${item.debtPartyName}` : 'Debt payment'");
   });
 });
 

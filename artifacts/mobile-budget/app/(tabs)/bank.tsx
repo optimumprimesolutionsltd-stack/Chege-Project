@@ -1094,7 +1094,11 @@ export default function BankScreen() {
     // A loan out has no category by design, so opening one as ordinary
     // spending demands a category it must never have. There is only one
     // assignment of this: an earlier one was silently overwritten here.
-    setWithdrawDest(type === 'disbursement' ? (tx.isLending ? 'lend' : 'other') : null);
+    // A payment to somebody you owe reopens as one, so it keeps its optional
+    // category rather than being made to find one as ordinary spending.
+    setWithdrawDest(type === 'disbursement'
+      ? (tx.isLending ? 'lend' : tx.settlesContributorId ? 'party' : 'other')
+      : null);
     setWithdrawSourceName(null);
     setWithdrawGoalId(tx.savingsGoalId ?? null);
     setShowGoalPicker(false);
@@ -1668,7 +1672,9 @@ export default function BankScreen() {
       Alert.alert('That category is not in this budget', 'Pick one from the list below.');
       return;
     }
-    if (txType === 'disbursement' && withdrawDest !== 'savings' && withdrawDest !== 'lend' && !expenseCategory.trim()) {
+    // Paying somebody you owe needs no category: the cost was usually recorded
+    // when the debt was taken on, and paying it off is not a second one.
+    if (txType === 'disbursement' && withdrawDest !== 'savings' && withdrawDest !== 'lend' && withdrawDest !== 'party' && !expenseCategory.trim()) {
       Alert.alert('Category required', 'Choose or add a category for this withdrawal.');
       return;
     }
@@ -1874,7 +1880,11 @@ export default function BankScreen() {
             ...(txType === 'disbursement'
               ? withdrawDest === 'lend'
                 ? { isLending: true as const }
-                : { expenseCategory, destinationKind: withdrawDest === 'other' ? 'other' : 'category' }
+                // A debt payment left without a category is sent as null,
+                // which takes off any the posting had.
+                : withdrawDest === 'party' && !expenseCategory.trim()
+                  ? { expenseCategory: null }
+                  : { expenseCategory, destinationKind: withdrawDest === 'other' ? 'other' : 'category' }
               : {}),
             // Omitted when nothing was chosen, so an edit that never touched
             // the party leaves whoever is recorded alone.
@@ -1978,7 +1988,11 @@ export default function BankScreen() {
             // on a category being present.
             ...(withdrawDest === 'lend'
               ? { isLending: true }
-              : { expenseCategory, destinationKind: withdrawDest === 'other' ? 'other' : 'category' }),
+              // Paying somebody you owe with no category: a debt payment, not
+              // spending, so it keeps out of the totals the way a loan does.
+              : withdrawDest === 'party' && !expenseCategory.trim()
+                ? {}
+                : { expenseCategory, destinationKind: withdrawDest === 'other' ? 'other' : 'category' }),
             ...(withdrawDest === 'lend' || withdrawDest === 'party'
               ? { settlesContributorId: withdrawPartyId ?? undefined }
               : {}),
@@ -2673,6 +2687,7 @@ export default function BankScreen() {
                       : dep && item.settlesContributorId && item.debtPartyName ? `Repaid by ${item.debtPartyName}`
                       : !dep && item.isLending ? (item.debtPartyName ? `Lent to ${item.debtPartyName}` : 'Money lent out')
                       : !dep && item.expenseCategory ? item.expenseCategory
+                      : !dep && item.settlesContributorId ? (item.debtPartyName ? `Paid to ${item.debtPartyName}` : 'Debt payment')
                       : dep && item.incomeSourceId && incomeSourceNames.get(item.incomeSourceId) ? incomeSourceNames.get(item.incomeSourceId)
                       : item.description}
                   </Text>
@@ -4440,7 +4455,8 @@ export default function BankScreen() {
                         </View>
                       )}
                       <Text style={{ color: colors.mutedForeground, fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 4 }}>
-                        Choose below what this payment was for (for example Stock). The bank charge is filed on its
+                        Paying off what you owe is not new spending, so no category is needed. Only choose one below
+                        if what you bought was never recorded (for example Stock). The bank charge is filed on its
                         own. Once it saves, Jamvi offers to take the payment off what you owe.
                       </Text>
                     </>
@@ -4544,8 +4560,11 @@ export default function BankScreen() {
               {/* Expense category (disbursements only) */}
               {isWithdrawal && withdrawDest !== 'savings' && withdrawDest !== 'lend' && (
                 <>
-                  <Text style={[styles.label, { color: colors.mutedForeground }]}>
-                    Category <Text style={{ fontWeight: '400', color: '#f87171' }}>* required</Text>
+                  <Text style={[styles.label, { color: colors.mutedForeground }]} testID="bank-category-label">
+                    Category{' '}
+                    {withdrawDest === 'party'
+                      ? <Text style={{ fontWeight: '400', fontSize: 11 }}>optional — only if this purchase was never recorded</Text>
+                      : <Text style={{ fontWeight: '400', color: '#f87171' }}>* required</Text>}
                   </Text>
                   <TouchableOpacity
                     style={[styles.input, styles.pickerButton, { borderColor: colors.border, backgroundColor: colors.muted }]}
@@ -4561,8 +4580,20 @@ export default function BankScreen() {
                         flex: 1,
                       }}
                     >
-                      {expenseCategory || 'Choose a category'}
+                      {expenseCategory || (withdrawDest === 'party' ? 'None — just paying off the debt' : 'Choose a category')}
                     </Text>
+                    {withdrawDest === 'party' && expenseCategory ? (
+                      <Pressable
+                        onPress={() => { setExpenseCategory(''); setShowCategoryPicker(false); }}
+                        hitSlop={8}
+                        accessibilityRole="button"
+                        accessibilityLabel="Remove the category, so this is only a debt payment"
+                        testID="bank-category-clear"
+                        style={{ marginRight: 8 }}
+                      >
+                        <Feather name="x" size={16} color={colors.mutedForeground} />
+                      </Pressable>
+                    ) : null}
                     <Feather
                       name={showCategoryPicker ? 'chevron-up' : 'chevron-down'}
                       size={16}

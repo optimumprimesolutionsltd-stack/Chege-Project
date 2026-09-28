@@ -34,7 +34,7 @@ describe("a withdrawal can say it was lent", () => {
 // is not a cost.
 describe("it stays out of spending without a new filter anywhere", () => {
   it("carries no category", () => {
-    expect(bank).toContain('const expenseCategory = isLending ? null : canonicalExpenseCategoryName(parsed.data.expenseCategory ?? "");');
+    expect(bank).toContain("const expenseCategory = isLending || !parsed.data.expenseCategory");
   });
 
   it("relies on the filter every spending total already has", () => {
@@ -50,11 +50,11 @@ describe("it stays out of spending without a new filter anywhere", () => {
   });
 });
 
-describe("a missing category is allowed only because it was lent", () => {
+describe("a missing category is allowed only because it was lent, or paid somebody owed", () => {
   it("is refused on any other withdrawal", () => {
     // Left to the schema alone, any withdrawal could quietly lose its category
     // and drop out of spending.
-    expect(bank).toContain("if (!value.isLending && !value.expenseCategory) {");
+    expect(bank).toContain("if (!value.isLending && value.settlesContributorId === undefined && !value.expenseCategory) {");
     expect(bank).toContain('message: "Choose a valid budget category."');
   });
 
@@ -71,7 +71,7 @@ describe("a missing category is allowed only because it was lent", () => {
   });
 
   it("still gives the row something to be called", () => {
-    expect(bank).toContain('description: description || expenseCategory || "Lent out",');
+    expect(bank).toContain('description: description || expenseCategory || (isLending ? "Lent out" : "Debt payment"),');
   });
 });
 
@@ -82,7 +82,7 @@ describe("a missing category is allowed only because it was lent", () => {
 describe("editing a loan out is not refused for having no category", () => {
   it("does not demand one when the row is a loan", () => {
     expect(bank).toContain("const editingALoanOut = existing.isLending === true;");
-    expect(bank).toContain("if (!editingALoanOut && !expenseCategory) {");
+    expect(bank).toContain("if (!editingALoanOut && !paysAParty && !expenseCategory) {");
   });
 
   it("takes the row as the authority, not the request", () => {

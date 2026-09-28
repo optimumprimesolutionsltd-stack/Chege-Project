@@ -24,7 +24,7 @@ describe('a withdrawal into savings is a transfer', () => {
     // Money set aside belongs to no category, and the old flow made it borrow
     // one — which is what put it in a budget it had nothing to do with.
     // Lending joined savings in having no category: it is not a cost either.
-    expect(bank).toContain("if (txType === 'disbursement' && withdrawDest !== 'savings' && withdrawDest !== 'lend' && !expenseCategory.trim()) {");
+    expect(bank).toContain("if (txType === 'disbursement' && withdrawDest !== 'savings' && withdrawDest !== 'lend' && withdrawDest !== 'party' && !expenseCategory.trim()) {");
     expect(bank).toContain("{isWithdrawal && withdrawDest !== 'savings' && withdrawDest !== 'lend' && (");
   });
 
