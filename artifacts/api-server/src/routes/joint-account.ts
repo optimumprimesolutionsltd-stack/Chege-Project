@@ -14,7 +14,7 @@ import {
   bankAccountsTable,
   groupsTable,
 } from "@workspace/db";
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
@@ -368,20 +368,25 @@ async function debtPartyNameFor(
 ): Promise<string | null> {
   if (!tx.isBorrowing && !tx.isLending && !tx.settlesContributorId) return null;
   try {
+    // The row's own party is the one somebody chose on this posting, and wins.
+    // A link written earlier - an M-Pesa import's guess - could name somebody
+    // else, and titling the row after it said "Paid to Ujenzi" on a payment
+    // the form showed going to Hermda.
+    if (tx.settlesContributorId) {
+      const [party] = await db
+        .select({ name: groupContributorsTable.name })
+        .from(groupContributorsTable)
+        .where(and(eq(groupContributorsTable.id, tx.settlesContributorId), eq(groupContributorsTable.groupId, groupId)))
+        .limit(1);
+      if (party) return party.name;
+    }
     const [linked] = await db
       .select({ name: groupContributorsTable.name })
       .from(debtEntryLinksTable)
       .innerJoin(groupContributorsTable, eq(groupContributorsTable.id, debtEntryLinksTable.partyId))
       .where(and(eq(debtEntryLinksTable.transactionId, tx.id), eq(debtEntryLinksTable.groupId, groupId)))
       .limit(1);
-    if (linked) return linked.name;
-    if (!tx.settlesContributorId) return null;
-    const [party] = await db
-      .select({ name: groupContributorsTable.name })
-      .from(groupContributorsTable)
-      .where(and(eq(groupContributorsTable.id, tx.settlesContributorId), eq(groupContributorsTable.groupId, groupId)))
-      .limit(1);
-    return party?.name ?? null;
+    return linked?.name ?? null;
   } catch {
     return null;
   }
@@ -1641,6 +1646,7 @@ router.put("/joint-account/:id", async (req, res): Promise<void> => {
       }
       return row;
     });
+    await debtLinkFollowsParty(updated.id, groupId, updated.settlesContributorId);
     res.json(await enrichTx(updated, groupId));
     return;
   }
@@ -1711,8 +1717,31 @@ router.put("/joint-account/:id", async (req, res): Promise<void> => {
     })
     .where(and(eq(jointAccountTxTable.id, existing.id), eq(jointAccountTxTable.groupId, groupId)))
     .returning();
+  await debtLinkFollowsParty(updated.id, groupId, updated.settlesContributorId);
   res.json(await enrichTx(updated, groupId));
 });
+
+/**
+ * Point a posting's debt link at the party the posting now names.
+ *
+ * The link records whose balance an entry changed, and is read when the entry
+ * is deleted to put that change back. Choosing a different payee on an edit
+ * left it naming the old one - an M-Pesa import's "paying back Ujenzi" stayed
+ * on a payment since set to Hermda - so deleting it would have given the money
+ * back to the wrong party. The kind is kept: it is still the same sort of
+ * entry. Balances are not moved here; that stays a choice the person makes.
+ */
+async function debtLinkFollowsParty(transactionId: number, groupId: number, partyId: number | null): Promise<void> {
+  if (partyId === null) return;
+  await db
+    .update(debtEntryLinksTable)
+    .set({ partyId })
+    .where(and(
+      eq(debtEntryLinksTable.transactionId, transactionId),
+      eq(debtEntryLinksTable.groupId, groupId),
+      ne(debtEntryLinksTable.partyId, partyId),
+    ));
+}
 
 // DELETE /joint-account/:id
 router.delete("/joint-account/:id", async (req, res): Promise<void> => {
