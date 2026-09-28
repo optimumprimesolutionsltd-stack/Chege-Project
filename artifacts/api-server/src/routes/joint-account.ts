@@ -13,8 +13,9 @@ import {
   incomeSourcesTable,
   bankAccountsTable,
   groupsTable,
+  reversalLinksTable,
 } from "@workspace/db";
-import { and, eq, inArray, isNull, ne, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
@@ -28,6 +29,7 @@ import { canonicalExpenseCategoryName } from "../lib/categoryNames";
 import { headingAmong, postingToHeadingError } from "../lib/category-headings";
 import { memberLedgerName } from "../lib/contributor-name";
 import { GROUP_ATTRIBUTION } from "../lib/attribution";
+import { reversalLinksReady } from "../lib/reversal-links";
 import { createBankStatementPdf } from "../lib/bank-statement-pdf";
 
 const router = Router();
@@ -392,6 +394,64 @@ async function debtPartyNameFor(
   }
 }
 
+type ReversalLinkRow = typeof reversalLinksTable.$inferSelect;
+
+/** The link this entry is half of, whichever half it is, or null. */
+async function reversalLinkFor(transactionId: number, groupId: number): Promise<ReversalLinkRow | null> {
+  if (!reversalLinksReady()) return null;
+  const [link] = await db
+    .select()
+    .from(reversalLinksTable)
+    .where(and(
+      eq(reversalLinksTable.groupId, groupId),
+      or(
+        eq(reversalLinksTable.reversalTransactionId, transactionId),
+        eq(reversalLinksTable.originalTransactionId, transactionId),
+      ),
+    ))
+    .limit(1);
+  return link ?? null;
+}
+
+/**
+ * How the list should show an entry that is half of a reversal. Read
+ * defensively, like debtPartyNameFor: a label is never worth failing the list.
+ */
+async function reversalPairingFor(
+  tx: typeof jointAccountTxTable.$inferSelect,
+  groupId: number,
+): Promise<{ role: "money_back" | "reversed_payment"; otherTransactionId: number; otherDescription: string; otherDate: string } | null> {
+  try {
+    const link = await reversalLinkFor(tx.id, groupId);
+    if (!link) return null;
+    const isMoneyBack = link.reversalTransactionId === tx.id;
+    const otherId = isMoneyBack ? link.originalTransactionId : link.reversalTransactionId;
+    const [other] = await db
+      .select({ description: jointAccountTxTable.description, date: jointAccountTxTable.date })
+      .from(jointAccountTxTable)
+      .where(and(eq(jointAccountTxTable.id, otherId), eq(jointAccountTxTable.groupId, groupId)))
+      .limit(1);
+    if (!other) return null;
+    return {
+      role: isMoneyBack ? "money_back" : "reversed_payment",
+      otherTransactionId: otherId,
+      otherDescription: other.description ?? "",
+      otherDate: String(other.date),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** A refusal for touching either half of a linked reversal, or null when it is not one. */
+async function refuseWhileReversed(transactionId: number, groupId: number): Promise<string | null> {
+  const link = await reversalLinkFor(transactionId, groupId);
+  if (!link) return null;
+  return link.reversalTransactionId === transactionId
+    ? "This money back is linked to the payment it reversed. Unlink it first."
+    : "This payment was reversed and is linked to its money back. Unlink it first.";
+}
+
 async function enrichTx(
   tx: typeof jointAccountTxTable.$inferSelect,
   groupId: number,
@@ -439,6 +499,7 @@ async function enrichTx(
       : null,
   ]);
   const debtPartyName = await debtPartyNameFor(tx, groupId);
+  const reversal = await reversalPairingFor(tx, groupId);
   const madeByName = contributorSplits.length === 1
     ? (contributorSplits[0].userName ?? "Member")
     : contributorSplits.length > 1
@@ -459,6 +520,8 @@ async function enrichTx(
     // Who the money was borrowed from, lent to, or paid back by, so the entry
     // can be titled by them ("Borrowed from KCB") rather than by the bank's text.
     debtPartyName,
+    // Half of a reversal: a money-back deposit, or the payment it undid.
+    reversal,
     savingsGoalId: tx.savingsGoalId ?? null,
     savingsGoalName: savingsGoal?.name ?? null,
     transferDirection: tx.transferDirection ?? null,
@@ -1380,6 +1443,10 @@ router.put("/joint-account/:id", async (req, res): Promise<void> => {
     res.status(409).json({ error: "Edit a bank-to-bank transfer as a transfer, so both halves change together." });
     return;
   }
+  // Editing either half could give the payment its category back, or change an
+  // amount the link was made on, while it still claims to be cancelled out.
+  const reversedEdit = await refuseWhileReversed(existing.id, groupId);
+  if (reversedEdit) { res.status(409).json({ error: reversedEdit }); return; }
   const requestedAccountId = parsed.data.accountId === undefined ? existing.accountId : parsed.data.accountId;
   const accountId = await requireAccountId(requestedAccountId ?? undefined, groupId, res);
   if (accountId === null) return;
@@ -1743,6 +1810,187 @@ async function debtLinkFollowsParty(transactionId: number, groupId: number, part
     ));
 }
 
+// ── Reversals ────────────────────────────────────────────────────────────────
+// A money-back deposit linked to the payment it undid. Linked, neither counts:
+// the deposit is left out of income (see lib/reversal-links.ts) and the payment
+// out of spending, by having its category set aside in the link. See 0047.
+
+const REVERSAL_WINDOW_DAYS = 60;
+
+type TxRow = typeof jointAccountTxTable.$inferSelect;
+
+const sameAmount = (a: unknown, b: unknown) => Math.round(Number(a) * 100) === Math.round(Number(b) * 100);
+
+/** Why this deposit cannot be a money-back at all, or null when it can. */
+function notAMoneyBack(tx: TxRow): string | null {
+  if (tx.type !== "deposit") return "Only money coming in can be a reversal.";
+  if (tx.bankTransferId !== null || tx.savingsGoalId !== null || tx.transferDirection !== null) {
+    return "A transfer between your own accounts or savings is not a reversal.";
+  }
+  if (tx.isBorrowing || tx.settlesContributorId !== null) {
+    return "Borrowed money, or money paid back to you, is not a reversal.";
+  }
+  return null;
+}
+
+/** Why this payment cannot be the one reversed, or null when it can. */
+function notReversible(tx: TxRow): string | null {
+  if (tx.type !== "disbursement") return "Only a payment can be reversed.";
+  if (tx.bankTransferId !== null || tx.savingsGoalId !== null || tx.transferDirection !== null) {
+    return "A transfer between your own accounts or savings cannot be reversed here.";
+  }
+  if (tx.expenseId !== null) return "This payment belongs to an expense. Edit or delete the expense instead.";
+  return null;
+}
+
+async function reversalOptions(deposit: TxRow, groupId: number) {
+  if (!reversalLinksReady()) return { available: false, linked: null, candidates: [] };
+  const toCandidate = (row: TxRow & { accountName?: string | null }) => ({
+    id: row.id,
+    date: String(row.date),
+    description: row.description ?? "",
+    amount: Number(row.amount),
+    expenseCategory: row.expenseCategory ?? null,
+    accountName: row.accountName ?? null,
+  });
+
+  const link = await reversalLinkFor(deposit.id, groupId);
+  if (link && link.reversalTransactionId === deposit.id) {
+    const [original] = await db
+      .select({ tx: jointAccountTxTable, accountName: bankAccountsTable.name })
+      .from(jointAccountTxTable)
+      .leftJoin(bankAccountsTable, eq(bankAccountsTable.id, jointAccountTxTable.accountId))
+      .where(and(eq(jointAccountTxTable.id, link.originalTransactionId), eq(jointAccountTxTable.groupId, groupId)))
+      .limit(1);
+    return {
+      available: true,
+      // Shown with the category it will get back, not the empty one it has while linked.
+      linked: original ? { ...toCandidate({ ...original.tx, accountName: original.accountName }), expenseCategory: link.originalCategory } : null,
+      candidates: [],
+    };
+  }
+  if (link || notAMoneyBack(deposit)) return { available: true, linked: null, candidates: [] };
+
+  // Same budget, same amount, on or up to 60 days before, an ordinary payment,
+  // and not already reversed by anything.
+  const rows = await db
+    .select({ tx: jointAccountTxTable, accountName: bankAccountsTable.name })
+    .from(jointAccountTxTable)
+    .leftJoin(bankAccountsTable, eq(bankAccountsTable.id, jointAccountTxTable.accountId))
+    .where(sql`${jointAccountTxTable.groupId} = ${groupId}
+      AND ${jointAccountTxTable.type} = 'disbursement'
+      AND ${jointAccountTxTable.amount} = ${deposit.amount}
+      AND ${jointAccountTxTable.bankTransferId} IS NULL
+      AND ${jointAccountTxTable.savingsGoalId} IS NULL
+      AND ${jointAccountTxTable.transferDirection} IS NULL
+      AND ${jointAccountTxTable.expenseId} IS NULL
+      AND ${jointAccountTxTable.date} <= ${deposit.date}
+      AND ${jointAccountTxTable.date} >= (${deposit.date}::date - ${REVERSAL_WINDOW_DAYS})
+      AND NOT EXISTS (SELECT 1 FROM reversal_links rl WHERE rl.original_transaction_id = ${jointAccountTxTable.id})`)
+    .orderBy(sql`${jointAccountTxTable.date} DESC, ${jointAccountTxTable.id} DESC`)
+    .limit(10);
+  return {
+    available: true,
+    linked: null,
+    candidates: rows.map((row) => toCandidate({ ...row.tx, accountName: row.accountName })),
+  };
+}
+
+async function loadTx(id: number, groupId: number): Promise<TxRow | null> {
+  const [row] = await db
+    .select()
+    .from(jointAccountTxTable)
+    .where(and(eq(jointAccountTxTable.id, id), eq(jointAccountTxTable.groupId, groupId)))
+    .limit(1);
+  return row ?? null;
+}
+
+// GET /joint-account/:id/reversal — what this deposit reverses, or could.
+router.get("/joint-account/:id/reversal", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  const params = IdParam.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: "Invalid id" }); return; }
+  const deposit = await loadTx(params.data.id, groupId);
+  if (!deposit) { res.status(404).json({ error: "Not found" }); return; }
+  res.json(await reversalOptions(deposit, groupId));
+});
+
+// POST /joint-account/:id/reversal — link this deposit to the payment it reversed.
+router.post("/joint-account/:id/reversal", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  if (!requireGroupManager(req, res)) return;
+  const params = IdParam.safeParse(req.params);
+  const body = z.object({ originalTransactionId: z.number().int().positive() }).safeParse(req.body);
+  if (!params.success || !body.success) { res.status(400).json({ error: "Invalid input" }); return; }
+  if (!reversalLinksReady()) {
+    res.status(503).json({ error: "Reversals are not available yet. Try again in a minute." });
+    return;
+  }
+
+  const [deposit, original] = await Promise.all([
+    loadTx(params.data.id, groupId),
+    loadTx(body.data.originalTransactionId, groupId),
+  ]);
+  if (!deposit || !original) { res.status(404).json({ error: "Not found" }); return; }
+  const problem = notAMoneyBack(deposit) ?? notReversible(original)
+    ?? (!sameAmount(deposit.amount, original.amount) ? "A reversal gives back exactly what was paid. These amounts differ." : null)
+    ?? (String(original.date) > String(deposit.date) ? "Money cannot come back before it was paid." : null);
+  if (problem) { res.status(400).json({ error: problem }); return; }
+  if (await reversalLinkFor(deposit.id, groupId) || await reversalLinkFor(original.id, groupId)) {
+    res.status(409).json({ error: "One of these is already part of a reversal." });
+    return;
+  }
+
+  // Together: a link without its category set aside would leave the payment
+  // counted as spending while the money back had stopped counting as income.
+  await db.transaction(async (trx) => {
+    await trx.insert(reversalLinksTable).values({
+      reversalTransactionId: deposit.id,
+      originalTransactionId: original.id,
+      groupId,
+      originalCategory: original.expenseCategory,
+    });
+    await trx
+      .update(jointAccountTxTable)
+      .set({ expenseCategory: null })
+      .where(and(eq(jointAccountTxTable.id, original.id), eq(jointAccountTxTable.groupId, groupId)));
+  });
+  res.json(await reversalOptions(deposit, groupId));
+});
+
+// DELETE /joint-account/:id/reversal — put both entries back as they were.
+router.delete("/joint-account/:id/reversal", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  if (!requireGroupManager(req, res)) return;
+  const params = IdParam.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: "Invalid id" }); return; }
+  const link = await reversalLinkFor(params.data.id, groupId);
+  if (link) {
+    await db.transaction(async (trx) => {
+      // Only if still empty: nothing since has given it a category of its own.
+      await trx
+        .update(jointAccountTxTable)
+        .set({ expenseCategory: link.originalCategory })
+        .where(and(
+          eq(jointAccountTxTable.id, link.originalTransactionId),
+          eq(jointAccountTxTable.groupId, groupId),
+          isNull(jointAccountTxTable.expenseCategory),
+        ));
+      await trx
+        .delete(reversalLinksTable)
+        .where(and(
+          eq(reversalLinksTable.reversalTransactionId, link.reversalTransactionId),
+          eq(reversalLinksTable.groupId, groupId),
+        ));
+    });
+  }
+  const deposit = await loadTx(link?.reversalTransactionId ?? params.data.id, groupId);
+  res.json(deposit ? await reversalOptions(deposit, groupId) : { available: reversalLinksReady(), linked: null, candidates: [] });
+});
+
 // DELETE /joint-account/:id
 router.delete("/joint-account/:id", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
@@ -1751,6 +1999,11 @@ router.delete("/joint-account/:id", async (req, res): Promise<void> => {
 
   const parsed = IdParam.safeParse(req.params);
   if (!parsed.success) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  // Deleting the money back would drop the link and leave the payment with no
+  // category for good; deleting the payment would bring the money back as income.
+  const reversedDelete = await refuseWhileReversed(parsed.data.id, groupId);
+  if (reversedDelete) { res.status(409).json({ error: reversedDelete }); return; }
 
   const deleteResult = await db.transaction(async (tx) => {
     const [existing] = await tx

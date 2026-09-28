@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { DepositContributorSplit } from './depositContributorSplit';
+import type { ReversalPairing } from './reversalPairing';
 
 export interface JointAccountTransaction {
   /**
@@ -63,6 +64,8 @@ export interface JointAccountTransaction {
      * @nullable
      */
   debtPartyName?: string | null;
+  /** Set when this entry is half of a reversal: a money-back deposit and the payment it reversed. Neither half counts as income or spending. */
+  reversal?: ReversalPairing | null;
   /**
      * Linked savings goal for a bank transfer
      * @nullable

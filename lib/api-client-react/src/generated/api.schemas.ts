@@ -132,6 +132,45 @@ export interface HealthStatus {
   status: string;
 }
 
+/**
+ * money_back for the deposit, reversed_payment for the payment it undid
+ */
+export type ReversalPairingRole = typeof ReversalPairingRole[keyof typeof ReversalPairingRole];
+
+
+export const ReversalPairingRole = {
+  money_back: 'money_back',
+  reversed_payment: 'reversed_payment',
+} as const;
+
+export interface ReversalPairing {
+  /** money_back for the deposit, reversed_payment for the payment it undid */
+  role: ReversalPairingRole;
+  otherTransactionId: number;
+  otherDescription: string;
+  otherDate: string;
+}
+
+export interface ReversalCandidate {
+  id: number;
+  date: string;
+  description: string;
+  amount: number;
+  expenseCategory: string | null;
+  accountName: string | null;
+}
+
+export interface ReversalOptions {
+  /** False until the server has its reversal table; nothing can be linked before then. */
+  available: boolean;
+  linked: ReversalCandidate | null;
+  candidates: ReversalCandidate[];
+}
+
+export interface LinkReversalInput {
+  originalTransactionId: number;
+}
+
 export interface ErrorResponse {
   error: string;
 }
@@ -1428,6 +1467,8 @@ export interface JointAccountTransaction {
      * @nullable
      */
   debtPartyName?: string | null;
+  /** Set when this entry is half of a reversal: a money-back deposit and the payment it reversed. Neither half counts as income or spending. */
+  reversal?: ReversalPairing | null;
   /**
      * Linked savings goal for a bank transfer
      * @nullable
