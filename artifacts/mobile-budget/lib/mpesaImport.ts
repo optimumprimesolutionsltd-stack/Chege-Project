@@ -569,18 +569,22 @@ export function buildPostings(line: PreviewLine, choice: Choice, ctx: PostingCon
     // A source is only for income: a repayment or a loan is not, so it takes none.
     const source = choice.incomeSourceId && !choice.debt ? ctx.incomeSources?.find((entry) => entry.id === choice.incomeSourceId) : undefined;
     // A source belongs to one member, and the server only accepts the deposit
-    // when it names that member - but a source whose owner is not currently
-    // a member (removed, or a data problem) would otherwise fail the whole
-    // entry over an attribution nobody was trying to get right just now.
+    // when it names exactly that member as who made it - not merely any
+    // current member. A source whose owner is not currently a member
+    // (removed, or a data problem) can't be paired with anyone truthfully,
+    // so the source is dropped rather than guessing a depositor for it -
+    // recording the deposit plainly beats failing the whole entry over an
+    // attribution nobody was trying to get right just now.
     const sourceOwnerIsMember = source?.userId != null && (!ctx.memberIds || ctx.memberIds.includes(source.userId));
+    const usableSource = sourceOwnerIsMember ? source : undefined;
     return {
       kind: 'deposit' as const,
       main: {
         amount: line.amount,
         description,
         date,
-        madeById: sourceOwnerIsMember ? source!.userId : ctx.userId,
-        ...(source ? { incomeSourceId: source.id } : {}),
+        madeById: usableSource?.userId ?? ctx.userId,
+        ...(usableSource ? { incomeSourceId: usableSource.id } : {}),
         accountId: ctx.accountId,
         // They paid back what they owed you, or you borrowed from them: neither
         // is income, and the server keeps both out of the income figures.
