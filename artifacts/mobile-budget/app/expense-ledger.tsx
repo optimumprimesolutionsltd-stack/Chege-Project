@@ -15,6 +15,7 @@ import { router } from 'expo-router';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import {
   getGetDashboardExpenseLedgerQueryKey,
+  useGetBudgetCategories,
   useGetDashboardExpenseLedger,
 } from '@workspace/api-client-react';
 import { isoDay, longDay, monthStartIso, orderedRange } from '@/lib/dayRange';
@@ -81,6 +82,40 @@ export default function ExpenseLedgerScreen() {
   const categoryGroups = useMemo(() => groupByCategory(entries), [entries]);
   const itemGroups = useMemo(() => groupByItem(entries), [entries]);
 
+  // A category linked to an income stream (see the Cost categories picker on
+  // Reports) is the cost of earning that stream's sales, already worked out
+  // of its profit there — it is not a personal expense, so it is split out
+  // here rather than left to inflate this screen's "expenses" total too.
+  const { data: budgetCategories = [] } = useGetBudgetCategories();
+  const costCategoryNames = useMemo(
+    () => new Set(
+      budgetCategories
+        .filter((category) => category.reducesIncomeSourceId != null)
+        .map((category) => category.name.trim().toLocaleLowerCase('en-KE')),
+    ),
+    [budgetCategories],
+  );
+  const isCostOfGoodsSold = (group: { key: string }) =>
+    group.key.startsWith('c:') && costCategoryNames.has(group.key.slice(2));
+  const expenseCategoryGroups = useMemo(
+    () => categoryGroups.filter((group) => !isCostOfGoodsSold(group)),
+    [categoryGroups, costCategoryNames],
+  );
+  const cogsCategoryGroups = useMemo(
+    () => categoryGroups.filter((group) => isCostOfGoodsSold(group)),
+    [categoryGroups, costCategoryNames],
+  );
+  const cogsTotal = useMemo(
+    () => entries.reduce((sum, entry) => {
+      const [only, ...rest] = entry.categories;
+      const isSingleCostCategory = only != null && rest.length === 0 &&
+        costCategoryNames.has(only.trim().toLocaleLowerCase('en-KE'));
+      return isSingleCostCategory ? sum + entry.amount : sum;
+    }, 0),
+    [entries, costCategoryNames],
+  );
+  const expensesTotal = (data?.total ?? 0) - cogsTotal;
+
   // Days are already newest-first from the server; this only groups them so
   // each date is announced once rather than repeated down the column.
   const days = useMemo(() => {
@@ -120,6 +155,36 @@ export default function ExpenseLedgerScreen() {
         </View>
         <Text style={[styles.rowAmount, { color: colors.foreground }]}>{formatKES(entry.amount)}</Text>
       </Pressable>
+    );
+  };
+
+  const renderGroup = (group: (typeof categoryGroups)[number]) => {
+    const isOpen = opened.has(group.key);
+    return (
+      <View key={group.key} style={[styles.groupCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <Pressable
+          onPress={() => toggleGroup(group.key)}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: isOpen }}
+          accessibilityLabel={`${group.label}, ${group.count} ${group.count === 1 ? 'entry' : 'entries'}, ${formatKES(group.total)} shillings`}
+          testID={`expense-ledger-group-${group.key}`}
+          style={styles.groupHeader}
+        >
+          <View style={styles.rowText}>
+            <Text style={[styles.rowDesc, { color: colors.foreground }]} numberOfLines={1}>{group.label}</Text>
+            <Text style={[styles.rowMeta, { color: colors.mutedForeground }]}>
+              {group.count} {group.count === 1 ? 'entry' : 'entries'}
+            </Text>
+          </View>
+          <Text style={[styles.rowAmount, { color: colors.foreground }]}>{formatKES(group.total)}</Text>
+          <Feather name={isOpen ? 'chevron-up' : 'chevron-down'} size={16} color={colors.mutedForeground} />
+        </Pressable>
+        {isOpen ? (
+          <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderColor: colors.border, paddingHorizontal: 14 }}>
+            {group.rows.map(renderEntry)}
+          </View>
+        ) : null}
+      </View>
     );
   };
 
@@ -207,13 +272,18 @@ export default function ExpenseLedgerScreen() {
 
         <View style={[styles.totalCard, { backgroundColor: colors.muted, borderColor: colors.border }]}>
           <Text style={[styles.totalValue, { color: colors.foreground }]}>
-            {isLoading ? 'Loading…' : `KES ${formatKES(data?.total)}`}
+            {isLoading ? 'Loading…' : `KES ${formatKES(expensesTotal)}`}
           </Text>
           <Text style={[styles.totalCaption, { color: colors.mutedForeground }]}>
             {isLoading
               ? ' '
               : `${entries.length} ${entries.length === 1 ? 'entry' : 'entries'} · ${longDay(rangeFrom)} – ${longDay(rangeTo)}`}
           </Text>
+          {!isLoading && cogsTotal > 0 ? (
+            <Text style={[styles.totalCaption, { color: colors.mutedForeground, marginTop: 4 }]}>
+              + KES {formatKES(cogsTotal)} cost of goods sold, already worked out of its stream&rsquo;s profit
+            </Text>
+          ) : null}
         </View>
 
         <View style={[styles.segment, { borderColor: colors.border, backgroundColor: colors.muted }]} testID="expense-ledger-views">
@@ -259,36 +329,23 @@ export default function ExpenseLedgerScreen() {
                 : 'No expenses recorded between these dates.'}
             </Text>
           </View>
-        ) : view !== 'date' ? (
-          (view === 'category' ? categoryGroups : itemGroups).map((group) => {
-            const isOpen = opened.has(group.key);
-            return (
-              <View key={group.key} style={[styles.groupCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <Pressable
-                  onPress={() => toggleGroup(group.key)}
-                  accessibilityRole="button"
-                  accessibilityState={{ expanded: isOpen }}
-                  accessibilityLabel={`${group.label}, ${group.count} ${group.count === 1 ? 'entry' : 'entries'}, ${formatKES(group.total)} shillings`}
-                  testID={`expense-ledger-group-${group.key}`}
-                  style={styles.groupHeader}
-                >
-                  <View style={styles.rowText}>
-                    <Text style={[styles.rowDesc, { color: colors.foreground }]} numberOfLines={1}>{group.label}</Text>
-                    <Text style={[styles.rowMeta, { color: colors.mutedForeground }]}>
-                      {group.count} {group.count === 1 ? 'entry' : 'entries'}
-                    </Text>
-                  </View>
-                  <Text style={[styles.rowAmount, { color: colors.foreground }]}>{formatKES(group.total)}</Text>
-                  <Feather name={isOpen ? 'chevron-up' : 'chevron-down'} size={16} color={colors.mutedForeground} />
-                </Pressable>
-                {isOpen ? (
-                  <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderColor: colors.border, paddingHorizontal: 14 }}>
-                    {group.rows.map(renderEntry)}
-                  </View>
-                ) : null}
-              </View>
-            );
-          })
+        ) : view === 'category' ? (
+          <>
+            {expenseCategoryGroups.map(renderGroup)}
+            {cogsCategoryGroups.length > 0 ? (
+              <>
+                <Text style={[styles.sectionHeading, { color: colors.mutedForeground }]}>
+                  Cost of goods sold
+                </Text>
+                <Text style={[styles.noteText, { color: colors.mutedForeground, textAlign: 'left', marginTop: -6 }]}>
+                  Linked to an income stream on Reports — already worked out of its profit there, not counted as a personal expense.
+                </Text>
+                {cogsCategoryGroups.map(renderGroup)}
+              </>
+            ) : null}
+          </>
+        ) : view === 'item' ? (
+          itemGroups.map(renderGroup)
         ) : (
           days.map((day) => (
             <View key={day.date} style={styles.day}>
@@ -329,6 +386,7 @@ const styles = StyleSheet.create({
   segment: { flexDirection: 'row', borderWidth: 1, borderRadius: 12, padding: 3, gap: 3 },
   segmentButton: { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 9 },
   segmentText: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
+  sectionHeading: { fontSize: 11, fontFamily: 'Inter_600SemiBold', textTransform: 'uppercase', letterSpacing: 0.4, marginTop: 4 },
   groupCard: { borderWidth: 1, borderRadius: 14, overflow: 'hidden' },
   groupHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 13 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 11 },

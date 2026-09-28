@@ -46,6 +46,28 @@ describe('opening an entry', () => {
   });
 });
 
+describe('cost of goods sold is not a personal expense', () => {
+  // A category linked to an income stream (Reports' Cost categories picker)
+  // is the cost of earning that stream's sales, already worked out of its
+  // profit there. Counting it again here would make a profitable side hustle
+  // look like it made this screen's "expenses" bigger.
+  it('splits categories linked to an income stream out of the category groups', () => {
+    expect(screen).toContain('category.reducesIncomeSourceId != null');
+    expect(screen).toContain('const expenseCategoryGroups = useMemo(');
+    expect(screen).toContain('const cogsCategoryGroups = useMemo(');
+  });
+
+  it('subtracts cost-of-goods-sold spending from the headline total', () => {
+    expect(screen).toContain('const expensesTotal = (data?.total ?? 0) - cogsTotal;');
+    expect(screen).toContain('KES ${formatKES(expensesTotal)}');
+  });
+
+  it('labels the split section rather than hiding the spending', () => {
+    expect(screen).toContain('Cost of goods sold');
+    expect(screen).toContain('cogsCategoryGroups.map(renderGroup)');
+  });
+});
+
 describe('the layout survives a narrow phone', () => {
   it('lets the description shrink rather than starving it', () => {
     for (const rule of ['headerText: { flex: 1, minWidth: 0 }', 'rowText: { flex: 1, minWidth: 0 }']) {

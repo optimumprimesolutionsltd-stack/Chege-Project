@@ -62,7 +62,8 @@ describe('the All expenses screen', () => {
   it('offers the three views and files entries into expandable groups', () => {
     expect(screen).toContain("['category', 'By category']");
     expect(screen).toContain("['item', 'By item']");
-    expect(screen).toContain('(view === \'category\' ? categoryGroups : itemGroups).map');
+    expect(screen).toContain('expenseCategoryGroups.map(renderGroup)');
+    expect(screen).toContain('itemGroups.map(renderGroup)');
     expect(screen).toContain('group.rows.map(renderEntry)');
   });
 });
