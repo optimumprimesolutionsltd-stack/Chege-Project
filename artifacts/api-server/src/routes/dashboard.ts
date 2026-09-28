@@ -24,6 +24,7 @@ import {
   GetDashboardCategoryLedgerQueryParams,
   GetDashboardSpendingByItemQueryParams,
   GetDashboardExpenseLedgerQueryParams,
+  GetDashboardIncomeLedgerQueryParams,
   GetDashboardActivityQueryParams,
   GetDashboardIncomeStreamsQueryParams,
   GetDashboardIncomeStreamsResponse,
@@ -37,6 +38,7 @@ import { effectiveBudgets, totalBudget as sumBudget } from "@workspace/category-
 import { getActiveGroupId, requireGroupManager } from "../lib/activeGroup";
 import { buildContributionHistory, historyMonths } from "../lib/contribution-history";
 import { buildIncomeStreamTrend } from "../lib/income-stream-trend";
+import { buildIncomeLedger, type IncomeDepositRow, type IncomeSplitRow } from "../lib/income-ledger";
 import { createMonthlyReportPdf } from "../lib/monthly-report-pdf";
 import { GROUP_ATTRIBUTION } from "../lib/attribution";
 import { nairobiNow } from "../lib/nairobiTime";
@@ -1182,6 +1184,91 @@ router.get("/dashboard/expense-ledger", async (req, res): Promise<void> => {
     total: entries.reduce((sum, entry) => sum + entry.amount, 0),
     entries,
   });
+});
+
+// Every piece of income in one list — the other half of the expense ledger.
+// What counts as income, and why, is in lib/income-ledger.ts.
+router.get("/dashboard/income-ledger", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+
+  const parsed = GetDashboardIncomeLedgerQueryParams.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid query" });
+    return;
+  }
+  const { from: askedFrom, to: askedTo, q } = parsed.data;
+  if ((askedFrom == null) !== (askedTo == null)) {
+    res.status(400).json({ error: "Give both a start and an end date, or neither." });
+    return;
+  }
+
+  const now = nairobiNow();
+  const month = parsed.data.month ?? now.getUTCMonth() + 1;
+  const year = parsed.data.year ?? now.getUTCFullYear();
+  const [from, to] = askedFrom != null && askedTo != null
+    ? (askedFrom <= askedTo ? [askedFrom, askedTo] : [askedTo, askedFrom])
+    : [
+        `${year}-${String(month).padStart(2, "0")}-01`,
+        new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10),
+      ];
+
+  const search = q?.trim() ? `%${q.trim().replace(/[!%_]/g, (ch) => `!${ch}`)}%` : null;
+
+  // Transfers between the group's own accounts (bank_transfer_id) are left out
+  // entirely: they are neither income nor money arriving from outside. Every
+  // other deposit is fetched and sorted into income or otherMoneyIn by kind.
+  const [deposits, splits, streams] = await Promise.all([
+    db.execute(sql`
+      SELECT t.id,
+             t.date::text AS date,
+             t.description,
+             t.amount::float8 AS amount,
+             t.income_source_id AS "incomeSourceId",
+             COALESCE(maker.preferred_name, maker.first_name) AS "makerName",
+             account.name AS "accountName",
+             CASE
+               WHEN t.is_borrowing THEN 'borrowed'
+               WHEN t.settles_contributor_id IS NOT NULL THEN 'repaid'
+               WHEN t.transfer_direction = 'from_savings' THEN 'from_savings'
+               ELSE 'income'
+             END AS kind
+      FROM joint_account_transactions t
+      LEFT JOIN users maker ON maker.id = t.made_by_id
+      LEFT JOIN bank_accounts account ON account.id = t.account_id AND account.group_id = ${groupId}
+      WHERE t.group_id = ${groupId}
+        AND t.type = 'deposit'
+        AND t.bank_transfer_id IS NULL
+        AND t.date >= ${from}
+        AND t.date <= ${to}
+        ${search ? sql`AND t.description ILIKE ${search} ESCAPE '!'` : sql``}
+    `),
+    db.execute(sql`
+      SELECT split.transaction_id AS "transactionId",
+             split.income_source_id AS "incomeSourceId",
+             COALESCE(contributor.name, person.preferred_name, person.first_name) AS "personName"
+      FROM joint_account_deposit_splits split
+      INNER JOIN joint_account_transactions t
+        ON t.id = split.transaction_id AND t.group_id = ${groupId}
+      LEFT JOIN group_contributors contributor
+        ON contributor.id = split.contributor_id AND contributor.group_id = ${groupId}
+      LEFT JOIN users person ON person.id = split.user_id
+      WHERE split.group_id = ${groupId}
+        AND t.type = 'deposit'
+        AND t.date >= ${from}
+        AND t.date <= ${to}
+      ORDER BY split.id
+    `),
+    db.execute(sql`SELECT id, name FROM income_sources WHERE group_id = ${groupId}`),
+  ]);
+
+  res.json(buildIncomeLedger({
+    from,
+    to,
+    deposits: deposits.rows as IncomeDepositRow[],
+    splits: splits.rows as IncomeSplitRow[],
+    streamNames: new Map((streams.rows as { id: number; name: string }[]).map((row) => [Number(row.id), row.name])),
+  }));
 });
 
 /**
