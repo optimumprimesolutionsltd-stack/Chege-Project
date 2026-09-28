@@ -404,9 +404,15 @@ export default function MpesaImportScreen() {
 
   const [text, setText] = useState('');
   const [reading, setReading] = useState(false);
+  // How far a statement has got, so a long one does not look frozen: opening
+  // the file, reading page by page, then checking what is already recorded.
+  const [readProgress, setReadProgress] = useState<{ stage: 'opening' | 'reading' | 'checking'; page?: number; of?: number } | null>(null);
   // A statement PDF: read on this phone, with its password used only here.
   const [statementFile, setStatementFile] = useState<ChosenStatement | null>(null);
   const [statementPassword, setStatementPassword] = useState('');
+  // Shown on request: a statement password is long and typed blind, and one
+  // wrong digit only shows up as "Wrong password" after the file is read.
+  const [showStatementPassword, setShowStatementPassword] = useState(false);
   const [readerJob, setReaderJob] = useState<ReaderJob | null>(null);
   const [statementNote, setStatementNote] = useState<string | null>(null);
   const [statementReading, setStatementReading] = useState<StatementReading | null>(null);
@@ -731,10 +737,12 @@ export default function MpesaImportScreen() {
   const readStatement = async () => {
     if (!statementFile || readerJob) return;
     setReading(true);
+    setReadProgress({ stage: 'opening' });
     try {
       setReaderJob({ base64: await statementBase64(statementFile.uri), password: statementPassword });
     } catch (error: unknown) {
       setReading(false);
+      setReadProgress(null);
       Alert.alert('Could not read the statement', error instanceof Error ? error.message : 'Please try again.');
     }
   };
@@ -742,6 +750,10 @@ export default function MpesaImportScreen() {
   // The hidden page has read the PDF (or said why it could not): turn it into the same list a paste makes.
   const onStatementRead = async (result: ReaderMessage) => {
     if (result.type === 'ready') return;
+    if (result.type === 'progress') {
+      setReadProgress({ stage: 'reading', page: result.page, of: result.of });
+      return;
+    }
     setReaderJob(null);
     try {
       if (result.type === 'error') {
@@ -760,6 +772,7 @@ export default function MpesaImportScreen() {
         throw new Error('This statement does not add up, so Jamvi will not risk recording wrong amounts. Paste your messages instead.');
       }
       const reading = statementLines(rows);
+      setReadProgress({ stage: 'checking' });
       const checked = await markRecorded(reading.lines);
       const known = parseStoredNicknames(await AsyncStorage.getItem(nicknamesKey).catch(() => null));
       setNicknames(known);
@@ -775,10 +788,12 @@ export default function MpesaImportScreen() {
       setStatementReading({ ...reading, lines: shown });
       setChoices(initialChoices(shown, history, categories.map((row) => row.name), chargeCategory, rules, canManageBudget));
       setStatementPassword('');
+      setShowStatementPassword(false);
     } catch (error: unknown) {
       Alert.alert('Could not read the statement', error instanceof Error ? error.message : 'Please try again.');
     } finally {
       setReading(false);
+      setReadProgress(null);
     }
   };
 
@@ -1195,17 +1210,29 @@ export default function MpesaImportScreen() {
                     {statementFile ? shownFileName(statementFile.name) : 'Choose the statement PDF'}
                   </Text>
                 </Pressable>
-                <TextInput
-                  value={statementPassword}
-                  onChangeText={setStatementPassword}
-                  secureTextEntry
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  placeholder="Statement password"
-                  placeholderTextColor={colors.mutedForeground}
-                  style={[styles.pasteBox, { minHeight: 48, borderColor: colors.border, backgroundColor: colors.muted, color: colors.foreground }]}
-                  testID="mpesa-statement-password"
-                />
+                <View style={{ justifyContent: 'center' }}>
+                  <TextInput
+                    value={statementPassword}
+                    onChangeText={setStatementPassword}
+                    secureTextEntry={!showStatementPassword}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    placeholder="Statement password"
+                    placeholderTextColor={colors.mutedForeground}
+                    style={[styles.pasteBox, { minHeight: 48, paddingRight: 48, borderColor: colors.border, backgroundColor: colors.muted, color: colors.foreground }]}
+                    testID="mpesa-statement-password"
+                  />
+                  <Pressable
+                    onPress={() => setShowStatementPassword((shown) => !shown)}
+                    hitSlop={10}
+                    accessibilityRole="button"
+                    accessibilityLabel={showStatementPassword ? 'Hide the password' : 'Show the password'}
+                    testID="mpesa-statement-password-toggle"
+                    style={{ position: 'absolute', right: 14 }}
+                  >
+                    <Feather name={showStatementPassword ? 'eye-off' : 'eye'} size={20} color={colors.mutedForeground} />
+                  </Pressable>
+                </View>
                 <Pressable
                   onPress={readStatement}
                   disabled={!statementFile || reading}
@@ -1213,8 +1240,26 @@ export default function MpesaImportScreen() {
                   accessibilityRole="button"
                   testID="mpesa-statement-read"
                 >
-                  {readerJob ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Read my statement</Text>}
+                  {reading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Read my statement</Text>}
                 </Pressable>
+                {readProgress ? (
+                  <View style={{ gap: 6 }} testID="mpesa-read-progress" accessibilityLiveRegion="polite">
+                    <Text style={[styles.hint, { color: colors.foreground }]}>
+                      {readProgress.stage === 'opening'
+                        ? 'Opening your statement…'
+                        : readProgress.stage === 'reading'
+                          ? `Reading page ${readProgress.page} of ${readProgress.of}…`
+                          : 'Checking which of these are already recorded…'}
+                    </Text>
+                    <ProgressBar
+                      fraction={readProgress.stage === 'reading' && readProgress.of
+                        ? (readProgress.page ?? 0) / readProgress.of
+                        : readProgress.stage === 'checking' ? 1 : 0}
+                      color={colors.primary}
+                      track={colors.muted}
+                    />
+                  </View>
+                ) : null}
               </View>
             ) : null}
           </>
@@ -1816,6 +1861,14 @@ export default function MpesaImportScreen() {
               </Text>
             </Pressable>
           ) : null}
+          {saveProgress && saveProgress.total > 0 ? (
+            <View style={{ gap: 6 }} testID="mpesa-save-progress-bar" accessibilityLiveRegion="polite">
+              <Text style={[styles.hint, { color: colors.foreground }]}>
+                Saved {saveProgress.done} of {saveProgress.total}. Keep Jamvi open until it finishes.
+              </Text>
+              <ProgressBar fraction={saveProgress.done / saveProgress.total} color={colors.primary} track={colors.muted} />
+            </View>
+          ) : null}
           <Pressable
             onPress={saveAll}
             disabled={saving || !summary || summary.count === 0}
@@ -2056,6 +2109,16 @@ export default function MpesaImportScreen() {
       </Modal>
 
       <CategorySheet visible={picking !== null} budgetName={group?.name} onPick={chooseCategory} onClose={() => setPicking(null)} />
+    </View>
+  );
+}
+
+/** A thin bar filled to `fraction` (0 to 1). */
+function ProgressBar({ fraction, color, track }: { fraction: number; color: string; track: string }) {
+  const filled = Math.max(0, Math.min(1, Number.isFinite(fraction) ? fraction : 0));
+  return (
+    <View style={{ height: 6, borderRadius: 3, backgroundColor: track, overflow: 'hidden' }}>
+      <View style={{ width: `${Math.round(filled * 100)}%`, height: '100%', backgroundColor: color }} />
     </View>
   );
 }
