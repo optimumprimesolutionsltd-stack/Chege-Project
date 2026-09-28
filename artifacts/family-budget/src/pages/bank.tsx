@@ -820,6 +820,12 @@ export default function Bank() {
   const parsedCharge = chargeAmount.trim() === "" ? 0 : readAmount(chargeAmount);
   const chargeToPost = chargeApplies && parsedCharge !== null && parsedCharge > 0 ? parsedCharge : 0;
   const knownCategoryNames = new Set((categories ?? []).map((row) => row.name.trim().toLocaleLowerCase()));
+  // The fee's category is asked once, for the first fee, and not shown as a
+  // choice again: a second category picker in the same form read as the place
+  // to file the payment itself. Categories still loading count as settled;
+  // submit checks it again.
+  const chargeCategoryIsSettled =
+    chargeCategory.trim() !== "" && ((categories ?? []).length === 0 || knownCategoryNames.has(chargeCategory.trim().toLocaleLowerCase()));
 
   /**
    * The bank's fee, as its own posting after the one it belongs to. Written by
@@ -1971,7 +1977,12 @@ export default function Bank() {
                       className="h-12 bg-card"
                     />
                     <AmountCalcRow value={chargeAmount} onChange={setChargeAmount} testId="bank-charge" />
-                    {chargeToPost > 0 ? (
+                    {chargeToPost > 0 && chargeCategoryIsSettled ? (
+                      <p className="text-xs text-muted-foreground" data-testid="bank-charge-category-note">
+                        The {formatKes(chargeToPost)} fee is saved on its own under {chargeCategory.trim()}. The category for the
+                        payment itself is chosen below.
+                      </p>
+                    ) : chargeToPost > 0 ? (
                       <div className="space-y-2">
                         <label className="text-sm font-semibold text-foreground">
                           Charge category <span className="text-destructive">*</span>

@@ -179,3 +179,16 @@ describe('a charge belongs to the posting it came with', () => {
     expect(bank).toContain('transactions.find((row) => row.chargeForTransactionId === editingTransactionId)');
   });
 });
+
+// A second category picker in the same form read as the place to file the
+// payment itself: a 75,000 payment went in as a bank charge. Once the fee's
+// category is known it is stated, not offered.
+describe('the charge category is asked once, not on every posting', () => {
+  it('shows a note instead of the picker once it is settled, on both screens', () => {
+    const web = readFileSync('../family-budget/src/pages/bank.tsx', 'utf8');
+    expect(bank).toContain('chargeToPost > 0 && chargeCategoryIsSettled ?');
+    expect(bank).toContain('testID="bank-charge-category-note"');
+    expect(web).toContain('chargeToPost > 0 && chargeCategoryIsSettled ?');
+    expect(web).toContain('data-testid="bank-charge-category-note"');
+  });
+});

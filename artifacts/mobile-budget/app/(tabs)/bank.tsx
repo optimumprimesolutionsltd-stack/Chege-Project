@@ -2033,6 +2033,14 @@ export default function BankScreen() {
   );
   const chargeCategoryIsReal =
     chargeCategory.trim() !== '' && knownCategoryNames.has(chargeCategory.trim().toLocaleLowerCase());
+  /**
+   * The fee's category is asked once, for the first fee, and not shown as a
+   * choice again. A second category picker in the same form read as the place
+   * to file the payment itself: a 75,000 payment was filed as a bank charge.
+   * Categories still loading count as settled; submit checks it again.
+   */
+  const chargeCategoryIsSettled =
+    chargeCategory.trim() !== '' && (categories.length === 0 || chargeCategoryIsReal);
 
   /**
    * The fee already recorded against the posting being edited.
@@ -3384,7 +3392,12 @@ export default function BankScreen() {
                     style={[styles.input, { borderColor: colors.border, backgroundColor: colors.muted, color: colors.foreground }]}
                     testID="bank-charge-amount"
                   />
-                  {chargeToPost > 0 ? (
+                  {chargeToPost > 0 && chargeCategoryIsSettled ? (
+                    <Text style={{ color: colors.mutedForeground, fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 6 }} testID="bank-charge-category-note">
+                      The KES {formatKES(chargeToPost)} fee is saved on its own under {chargeCategory.trim()}. The category for the
+                      payment itself is chosen below.
+                    </Text>
+                  ) : chargeToPost > 0 ? (
                     <>
                       <Text style={[styles.label, { color: colors.mutedForeground, marginTop: 8 }]}>
                         Charge category <Text style={{ fontWeight: '400', color: '#f87171' }}>* required</Text>
