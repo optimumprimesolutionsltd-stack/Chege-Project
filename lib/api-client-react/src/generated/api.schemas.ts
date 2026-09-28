@@ -602,6 +602,39 @@ export interface ExpenseLedger {
   entries: ExpenseLedgerEntry[];
 }
 
+export interface IncomeLedgerEntry {
+  id: string;
+  /** The bank posting this row is, for opening it */
+  transactionId: number;
+  date: string;
+  description: string;
+  amount: number;
+  /** The income stream it came from, or several when the deposit was split between people or streams. "No income stream" when none was chosen. */
+  streams: string[];
+  /** Who brought the money in, or several names joined with " + " */
+  receivedFrom: string;
+  /** The account it landed in, when the group has named accounts */
+  accountName: string | null;
+}
+
+/**
+ * Money that arrived in the period without being income. Not in total, not in entries; here so the two can still be matched to a statement.
+ */
+export type IncomeLedgerOtherMoneyIn = {
+  borrowed: number;
+  repaidToYou: number;
+  fromSavings: number;
+};
+
+export interface IncomeLedger {
+  from: string;
+  to: string;
+  total: number;
+  entries: IncomeLedgerEntry[];
+  /** Money that arrived in the period without being income. Not in total, not in entries; here so the two can still be matched to a statement. */
+  otherMoneyIn: IncomeLedgerOtherMoneyIn;
+}
+
 export interface SpendingByItemRow {
   /** The name as it was last typed, standing for every spelling of it */
   description: string;
@@ -1866,6 +1899,29 @@ to?: string;
 };
 
 export type GetDashboardExpenseLedgerParams = {
+/**
+ * @minimum 1
+ * @maximum 12
+ */
+month?: number;
+year?: number;
+/**
+ * Start of an exact day range (YYYY-MM-DD). Must be given together with `to`, and overrides the month.
+ * @pattern ^\d{4}-\d{2}-\d{2}$
+ */
+from?: string;
+/**
+ * End of the day range (YYYY-MM-DD), inclusive.
+ * @pattern ^\d{4}-\d{2}-\d{2}$
+ */
+to?: string;
+/**
+ * Narrows the list to descriptions containing this text, ignoring case.
+ */
+q?: string;
+};
+
+export type GetDashboardIncomeLedgerParams = {
 /**
  * @minimum 1
  * @maximum 12

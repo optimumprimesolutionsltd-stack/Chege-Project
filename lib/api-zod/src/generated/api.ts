@@ -791,6 +791,46 @@ export const GetDashboardExpenseLedgerResponse = zod.object({
 
 
 /**
+ * The money-in side of the expense ledger, so spending can be checked against what came in. One row per deposit that counts as income, by the same rule as the income-stream report: transfers between your own accounts, money borrowed, money paid back to you and money moved in from savings are not income and are left out of the list. They are totalled separately under otherMoneyIn, so the list can still be reconciled against a bank or M-Pesa statement. With no date range the answer covers the selected month.
+ * @summary Every piece of income in one list, newest first
+ */
+export const getDashboardIncomeLedgerQueryMonthMax = 12;
+
+export const getDashboardIncomeLedgerQueryFromRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const getDashboardIncomeLedgerQueryToRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+export const GetDashboardIncomeLedgerQueryParams = zod.object({
+  "month": zod.coerce.number().min(1).max(getDashboardIncomeLedgerQueryMonthMax).optional(),
+  "year": zod.coerce.number().optional(),
+  "from": zod.coerce.string().regex(getDashboardIncomeLedgerQueryFromRegExp).optional().describe('Start of an exact day range (YYYY-MM-DD). Must be given together with `to`, and overrides the month.'),
+  "to": zod.coerce.string().regex(getDashboardIncomeLedgerQueryToRegExp).optional().describe('End of the day range (YYYY-MM-DD), inclusive.'),
+  "q": zod.coerce.string().optional().describe('Narrows the list to descriptions containing this text, ignoring case.')
+})
+
+export const GetDashboardIncomeLedgerResponse = zod.object({
+  "from": zod.string(),
+  "to": zod.string(),
+  "total": zod.number(),
+  "entries": zod.array(zod.object({
+  "id": zod.string(),
+  "transactionId": zod.number().describe('The bank posting this row is, for opening it'),
+  "date": zod.string(),
+  "description": zod.string(),
+  "amount": zod.number(),
+  "streams": zod.array(zod.string()).describe('The income stream it came from, or several when the deposit was split between people or streams. \"No income stream\" when none was chosen.'),
+  "receivedFrom": zod.string().describe('Who brought the money in, or several names joined with \" + \"'),
+  "accountName": zod.string().nullable().describe('The account it landed in, when the group has named accounts')
+})),
+  "otherMoneyIn": zod.object({
+  "borrowed": zod.number(),
+  "repaidToYou": zod.number(),
+  "fromSavings": zod.number()
+}).describe('Money that arrived in the period without being income. Not in total, not in entries; here so the two can still be matched to a statement.')
+})
+
+
+/**
  * Groups expenses by their description, so "how much have I spent on Netflix" has an answer even though nobody budgets a category called Netflix. Grouping ignores case and surrounding spaces. With no date range the answer covers the last twelve months.
  * @summary What was spent on each named thing, rather than on each category
  */
