@@ -166,7 +166,8 @@ describe("creating a sub-category", () => {
 
 describe("deleting a category that holds ledgers", () => {
   it("refuses, and names one of them", async () => {
-    selectRows.queue = [[{ name: "Wi-Fi" }]];
+    // The category itself, then the first ledger inside it.
+    selectRows.queue = [[{ name: "Utilities" }], [{ name: "Wi-Fi" }]];
 
     const response = await request(buildApp()).delete("/budget-categories/4");
 
@@ -175,11 +176,20 @@ describe("deleting a category that holds ledgers", () => {
   });
 
   it("allows deleting a category with none", async () => {
-    selectRows.queue = [[]];
+    selectRows.queue = [[{ name: "Garbage" }], []];
 
     const response = await request(buildApp()).delete("/budget-categories/7");
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ success: true });
+  });
+
+  it("refuses to delete a built-in charge category", async () => {
+    selectRows.queue = [[{ name: "M-Pesa charges" }]];
+
+    const response = await request(buildApp()).delete("/budget-categories/9");
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toContain("built in");
   });
 });
