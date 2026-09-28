@@ -30,7 +30,7 @@ import { useListEditor } from '@/hooks/useListEditor';
 import { movableOnDay, summariseDays } from '@/lib/moveDay';
 import { formatExact } from '@/lib/formatExact';
 import { ALREADY_GONE_MESSAGE, ALREADY_GONE_TITLE, isNotFound } from '@/lib/staleEntry';
-import { fetchDebtLinks, offerDebtReversal } from '@/lib/debtReversal';
+import { fetchDebtLinks, offerDebtReversal, saveDebtLinks } from '@/lib/debtReversal';
 import type { DebtEntryLink } from '@/lib/debtLinks';
 import { BankPeriodBar } from '@/components/BankPeriodBar';
 import { inPeriod, nairobiToday, periodFor, summarisePeriod, type PeriodPreset } from '@/lib/bankPeriod';
@@ -121,6 +121,8 @@ type Tx = {
   chargeForTransactionId?: number | null;
   isBorrowing?: boolean | null;
   settlesContributorId?: number | null;
+  /** Who a borrowing, a loan out or a repayment was with, when known. */
+  debtPartyName?: string | null;
   /** The month a deposit was for, when that is not the month it arrived. */
   appliesToMonth?: number | null;
   appliesToYear?: number | null;
@@ -995,7 +997,14 @@ export default function BankScreen() {
       : tx.description);
     setNotes(tx.notes ?? '');
     setDate(tx.date);
-    setExpenseCategory(tx.expenseCategory ?? '');
+    // A payment carrying its own fee, filed under that fee's category, is the
+    // import's old mistake (the 75,000 to Hermda Traders filed as Bank charges):
+    // a payment cannot be its own fee. It opens with the category cleared and
+    // the list open, so the one thing to do is pick what the payment was for.
+    const feeOnThis = data?.transactions.find((row) => row.chargeForTransactionId === tx.id) ?? null;
+    const filedAsItsOwnFee = !!feeOnThis?.expenseCategory && !!tx.expenseCategory &&
+      feeOnThis.expenseCategory.trim().toLocaleLowerCase() === tx.expenseCategory.trim().toLocaleLowerCase();
+    setExpenseCategory(filedAsItsOwnFee ? '' : tx.expenseCategory ?? '');
     setWithdrawPartyId(type === 'disbursement' ? tx.settlesContributorId ?? null : null);
     // The fee already on this posting, if it has one, so editing changes that
     // fee instead of writing another. Blank when it has none, so a fee left in
@@ -1012,7 +1021,7 @@ export default function BankScreen() {
     setAppliesTo(tx.appliesToMonth && tx.appliesToYear
       ? { month: tx.appliesToMonth, year: tx.appliesToYear }
       : null);
-    setShowCategoryPicker(false);
+    setShowCategoryPicker(filedAsItsOwnFee);
     // This editor works in member ids, so portions credited to a contributor
     // recorded by name are skipped rather than turned into somebody else's.
     const splitIds = tx.contributorSplits
@@ -1910,6 +1919,15 @@ export default function BankScreen() {
       const repaidBy = txType === 'deposit' && editingTransactionId === null ? repayingParty : null;
       const borrowedAgainst = txType === 'deposit' && editingTransactionId === null ? borrowTarget : null;
       const borrowedFrom = borrowedFromParty;
+      // Who it was with, kept on the entry so the list can say "Borrowed from
+      // KCB" instead of the bank's own text. The import already did this.
+      if (createdPostingId !== undefined) {
+        if (borrowedAgainst?.kind === 'party' && borrowedFrom) {
+          void saveDebtLinks([{ transactionId: createdPostingId, partyId: borrowedFrom.id, kind: 'borrowed' }]);
+        } else if (lentTo) {
+          void saveDebtLinks([{ transactionId: createdPostingId, partyId: lentTo.id, kind: 'lend' }]);
+        }
+      }
       finishEntry(keepOpen, { amount: parsed + (txType === 'disbursement' ? chargeToPost : 0), direction: txType === 'deposit' ? 'in' : 'out' });
       await invalidateBalance();
       if (repaidBy) {
@@ -2564,6 +2582,9 @@ export default function BankScreen() {
                       ? `${dep ? 'From' : 'To'} ${item.bankTransferAccountName ?? 'bank account'}`
                       : item.savingsGoalId
                       ? `${item.transferDirection === 'to_savings' ? 'Bank → Savings' : 'Savings → Bank'}: ${item.savingsGoalName ?? 'Savings goal'}`
+                      : dep && item.isBorrowing ? (item.debtPartyName ? `Borrowed from ${item.debtPartyName}` : 'Borrowed money')
+                      : dep && item.settlesContributorId && item.debtPartyName ? `Repaid by ${item.debtPartyName}`
+                      : !dep && item.isLending ? (item.debtPartyName ? `Lent to ${item.debtPartyName}` : 'Money lent out')
                       : !dep && item.expenseCategory ? item.expenseCategory
                       : dep && item.incomeSourceId && incomeSourceNames.get(item.incomeSourceId) ? incomeSourceNames.get(item.incomeSourceId)
                       : item.description}

@@ -3555,6 +3555,12 @@ components:
           description: >-
             The party a repayment settled, so an editor can reopen it as a
             repayment rather than as ordinary money in.
+        debtPartyName:
+          type: ["string", "null"]
+          nullable: true
+          description: >-
+            The person or business a borrowing, a loan out or a repayment was
+            with, when known, so the entry can be titled by them.
         savingsGoalId:
           type: ["number", "null"]
           description: Linked savings goal for a bank transfer

@@ -32,3 +32,19 @@ describe('a payment filed under the fee category is pointed out', () => {
     expect(phone).toContain('row.chargeForTransactionId != null);');
   });
 });
+
+// Borrowed money was titled by the bank's text ("Received from KCB"), which
+// reads like income. It is titled by the lender, as money in is by its stream.
+describe('borrowed money is titled by who lent it', () => {
+  it('uses the lender on both screens, and says borrowed even when the lender is unknown', () => {
+    expect(phone).toContain("dep && item.isBorrowing ? (item.debtPartyName ? `Borrowed from ${item.debtPartyName}` : 'Borrowed money')");
+    expect(web).toContain('isDeposit && tx.isBorrowing ? (tx.debtPartyName ? `Borrowed from ${tx.debtPartyName}` : "Borrowed money")');
+  });
+  it('the phone form records the lender when a borrowing is saved', () => {
+    expect(phone).toContain("kind: 'borrowed' }]");
+  });
+  it('a payment carrying its own fee under that fee category opens with the category cleared', () => {
+    expect(phone).toContain("setExpenseCategory(filedAsItsOwnFee ? '' : tx.expenseCategory ?? '');");
+    expect(phone).toContain('setShowCategoryPicker(filedAsItsOwnFee);');
+  });
+});

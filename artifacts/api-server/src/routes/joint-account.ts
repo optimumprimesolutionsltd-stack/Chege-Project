@@ -9,6 +9,7 @@ import {
   savingsGoalContributionsTable,
   jointAccountDepositSplitsTable,
   groupContributorsTable,
+  debtEntryLinksTable,
   incomeSourcesTable,
   bankAccountsTable,
   groupsTable,
@@ -336,6 +337,37 @@ async function requireAccountId(accountId: number | undefined, groupId: number, 
   return resolved;
 }
 
+/**
+ * The person or business a debt entry was with. A repayment names them on the
+ * row itself; a borrowing or a loan out names them in debt_entry_links. Read
+ * defensively: that table is newer than most rows, and a title is never worth
+ * failing the list over.
+ */
+async function debtPartyNameFor(
+  tx: typeof jointAccountTxTable.$inferSelect,
+  groupId: number,
+): Promise<string | null> {
+  if (!tx.isBorrowing && !tx.isLending && !tx.settlesContributorId) return null;
+  try {
+    const [linked] = await db
+      .select({ name: groupContributorsTable.name })
+      .from(debtEntryLinksTable)
+      .innerJoin(groupContributorsTable, eq(groupContributorsTable.id, debtEntryLinksTable.partyId))
+      .where(and(eq(debtEntryLinksTable.transactionId, tx.id), eq(debtEntryLinksTable.groupId, groupId)))
+      .limit(1);
+    if (linked) return linked.name;
+    if (!tx.settlesContributorId) return null;
+    const [party] = await db
+      .select({ name: groupContributorsTable.name })
+      .from(groupContributorsTable)
+      .where(and(eq(groupContributorsTable.id, tx.settlesContributorId), eq(groupContributorsTable.groupId, groupId)))
+      .limit(1);
+    return party?.name ?? null;
+  } catch {
+    return null;
+  }
+}
+
 async function enrichTx(
   tx: typeof jointAccountTxTable.$inferSelect,
   groupId: number,
@@ -382,6 +414,7 @@ async function enrichTx(
         })
       : null,
   ]);
+  const debtPartyName = await debtPartyNameFor(tx, groupId);
   const madeByName = contributorSplits.length === 1
     ? (contributorSplits[0].userName ?? "Member")
     : contributorSplits.length > 1
@@ -399,6 +432,9 @@ async function enrichTx(
     // Which party a repayment settled. Without it the editor reopens a
     // repayment as ordinary money in, and says so on screen.
     settlesContributorId: tx.settlesContributorId ?? null,
+    // Who the money was borrowed from, lent to, or paid back by, so the entry
+    // can be titled by them ("Borrowed from KCB") rather than by the bank's text.
+    debtPartyName,
     savingsGoalId: tx.savingsGoalId ?? null,
     savingsGoalName: savingsGoal?.name ?? null,
     transferDirection: tx.transferDirection ?? null,

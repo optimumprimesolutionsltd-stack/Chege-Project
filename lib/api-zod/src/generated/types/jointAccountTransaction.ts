@@ -59,6 +59,11 @@ export interface JointAccountTransaction {
      */
   settlesContributorId?: number | null;
   /**
+     * The person or business a borrowing, a loan out or a repayment was with, when known, so the entry can be titled by them.
+     * @nullable
+     */
+  debtPartyName?: string | null;
+  /**
      * Linked savings goal for a bank transfer
      * @nullable
      */
