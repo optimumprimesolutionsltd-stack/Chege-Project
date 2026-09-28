@@ -271,6 +271,8 @@ export default function Bank() {
   // The bank's own fee on a withdrawal or transfer: a second posting, filed
   // under a category of its own.
   const [chargeAmount, setChargeAmount] = useState("");
+  // The settled fee category is stated, not offered; "Change" reopens the picker for this posting.
+  const [changingChargeCategory, setChangingChargeCategory] = useState(false);
   const [chargeCategory, setChargeCategory] = useState(() => {
     try { return window.localStorage.getItem(CHARGE_CATEGORY_KEY) ?? ""; } catch { return ""; }
   });
@@ -667,6 +669,7 @@ export default function Bank() {
   const resetForNextEntry = () => {
     setAmount("");
     setChargeAmount("");
+    setChangingChargeCategory(false);
     setDescription("");
     setNotes("");
     setDepositorAmounts({});
@@ -723,6 +726,7 @@ export default function Bank() {
     }
     setAmount("");
     setChargeAmount("");
+    setChangingChargeCategory(false);
     setDescription("");
     setNotes("");
     setDate(new Date().toISOString().split("T")[0]);
@@ -769,6 +773,7 @@ export default function Bank() {
     // one does not silently stack a second fee on the first.
     const feeOnThis = (account?.transactions ?? []).find((row) => row.chargeForTransactionId === tx.id);
     setChargeAmount(feeOnThis ? String(feeOnThis.amount) : "");
+    setChangingChargeCategory(false);
     if (feeOnThis?.expenseCategory) setChargeCategory(feeOnThis.expenseCategory);
     setAmount(String(tx.amount));
     setDescription(transactionMode === "transfer"
@@ -820,6 +825,12 @@ export default function Bank() {
   const parsedCharge = chargeAmount.trim() === "" ? 0 : readAmount(chargeAmount);
   const chargeToPost = chargeApplies && parsedCharge !== null && parsedCharge > 0 ? parsedCharge : 0;
   const knownCategoryNames = new Set((categories ?? []).map((row) => row.name.trim().toLocaleLowerCase()));
+  // The fee's category is asked once, for the first fee, and not shown as a
+  // choice again: a second category picker in the same form read as the place
+  // to file the payment itself. Categories still loading count as settled;
+  // submit checks it again.
+  const chargeCategoryIsSettled =
+    chargeCategory.trim() !== "" && ((categories ?? []).length === 0 || knownCategoryNames.has(chargeCategory.trim().toLocaleLowerCase()));
 
   /**
    * The bank's fee, as its own posting after the one it belongs to. Written by
@@ -1971,7 +1982,20 @@ export default function Bank() {
                       className="h-12 bg-card"
                     />
                     <AmountCalcRow value={chargeAmount} onChange={setChargeAmount} testId="bank-charge" />
-                    {chargeToPost > 0 ? (
+                    {chargeToPost > 0 && chargeCategoryIsSettled && !changingChargeCategory ? (
+                      <p className="text-xs text-muted-foreground" data-testid="bank-charge-category-note">
+                        The {formatKes(chargeToPost)} fee is saved on its own under {chargeCategory.trim()}. The category for the
+                        payment itself is chosen below.{" "}
+                        <button
+                          type="button"
+                          className="font-semibold text-primary underline-offset-2 hover:underline"
+                          onClick={() => { chargeSearch.setQuery(""); setChangingChargeCategory(true); }}
+                          data-testid="bank-charge-category-change"
+                        >
+                          Change
+                        </button>
+                      </p>
+                    ) : chargeToPost > 0 ? (
                       <div className="space-y-2">
                         <label className="text-sm font-semibold text-foreground">
                           Charge category <span className="text-destructive">*</span>
@@ -1983,6 +2007,7 @@ export default function Bank() {
                           value={chargeCategory}
                           onChange={(event) => {
                             setChargeCategory(event.target.value);
+                            setChangingChargeCategory(false);
                             try { window.localStorage.setItem(CHARGE_CATEGORY_KEY, event.target.value); } catch { /* remembered only when storage allows */ }
                           }}
                         >

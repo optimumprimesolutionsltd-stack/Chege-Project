@@ -302,6 +302,8 @@ export default function BankScreen() {
   const [chargeAmount, setChargeAmount] = useState('');
   const [chargeCategory, setChargeCategory] = useState('');
   const [showChargeCategoryPicker, setShowChargeCategoryPicker] = useState(false);
+  // The settled fee category is stated, not offered; "Change" reopens the picker for this posting.
+  const [changingChargeCategory, setChangingChargeCategory] = useState(false);
   const [showRepayPicker, setShowRepayPicker] = useState(false);
   /**
    * The same question the deposit side asks, asked on the way out.
@@ -408,6 +410,7 @@ export default function BankScreen() {
   const rememberChargeCategory = (name: string) => {
     setChargeCategory(name);
     AsyncStorage.setItem(CHARGE_CATEGORY_KEY, name).catch(() => {});
+    setChangingChargeCategory(false);
   };
 
   const selectAccount = (accountId: number) => {
@@ -539,6 +542,7 @@ export default function BankScreen() {
     // Cleared between postings: the next line in a sitting is rarely charged
     // the same fee, and a charge carried over would be invented money out.
     setChargeAmount('');
+    setChangingChargeCategory(false);
     // The category stays put. It is the same expense every time, and picking
     // it afresh per posting is how a month's charges end up scattered across
     // categories and never total.
@@ -586,6 +590,7 @@ export default function BankScreen() {
     // Cleared between postings: the next line in a sitting is rarely charged
     // the same fee, and a charge carried over would be invented money out.
     setChargeAmount('');
+    setChangingChargeCategory(false);
     // The category stays put. It is the same expense every time, and picking
     // it afresh per posting is how a month's charges end up scattered across
     // categories and never total.
@@ -975,6 +980,7 @@ export default function BankScreen() {
     // the field from the last posting cannot be added to this one by opening it.
     const chargeOnThis = data?.transactions.find((row) => row.chargeForTransactionId === tx.id) ?? null;
     setChargeAmount(chargeOnThis ? String(chargeOnThis.amount) : '');
+    setChangingChargeCategory(false);
     if (chargeOnThis?.expenseCategory) setChargeCategory(chargeOnThis.expenseCategory);
     // What kind of money it was, restored from the row rather than reset.
     // Reopening a repayment as "ordinary money in" is not just cosmetic: it is
@@ -2033,6 +2039,14 @@ export default function BankScreen() {
   );
   const chargeCategoryIsReal =
     chargeCategory.trim() !== '' && knownCategoryNames.has(chargeCategory.trim().toLocaleLowerCase());
+  /**
+   * The fee's category is asked once, for the first fee, and not shown as a
+   * choice again. A second category picker in the same form read as the place
+   * to file the payment itself: a 75,000 payment was filed as a bank charge.
+   * Categories still loading count as settled; submit checks it again.
+   */
+  const chargeCategoryIsSettled =
+    chargeCategory.trim() !== '' && (categories.length === 0 || chargeCategoryIsReal);
 
   /**
    * The fee already recorded against the posting being edited.
@@ -3384,7 +3398,20 @@ export default function BankScreen() {
                     style={[styles.input, { borderColor: colors.border, backgroundColor: colors.muted, color: colors.foreground }]}
                     testID="bank-charge-amount"
                   />
-                  {chargeToPost > 0 ? (
+                  {chargeToPost > 0 && chargeCategoryIsSettled && !changingChargeCategory ? (
+                    <Text style={{ color: colors.mutedForeground, fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 6 }} testID="bank-charge-category-note">
+                      The KES {formatKES(chargeToPost)} fee is saved on its own under {chargeCategory.trim()}. The category for the
+                      payment itself is chosen below.{' '}
+                      <Text
+                        style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}
+                        onPress={() => { setCategorySearch(''); setChangingChargeCategory(true); setShowChargeCategoryPicker(true); }}
+                        testID="bank-charge-category-change"
+                        accessibilityRole="button"
+                      >
+                        Change
+                      </Text>
+                    </Text>
+                  ) : chargeToPost > 0 ? (
                     <>
                       <Text style={[styles.label, { color: colors.mutedForeground, marginTop: 8 }]}>
                         Charge category <Text style={{ fontWeight: '400', color: '#f87171' }}>* required</Text>
