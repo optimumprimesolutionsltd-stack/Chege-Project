@@ -16,7 +16,7 @@
  */
 export type PayeeRules = Record<string, string>;
 
-type Past = { type: string; description: string; expenseCategory?: string | null };
+type Past = { type: string; description: string; expenseCategory?: string | null; chargeForTransactionId?: number | null };
 
 const clean = (value: string) => value.trim().replace(/\s+/g, " ").toLocaleLowerCase("en-KE");
 
@@ -40,7 +40,19 @@ export function distinctiveWords(description: string): string[] {
   return [...new Set(words)];
 }
 
-const spending = (history: readonly Past[]) => history.filter((posting) => posting.type === "disbursement" && posting.expenseCategory && posting.description);
+/**
+ * A fee recorded alongside a payment: "Bank charge — Equity Paybill (…)" under the
+ * charges category. It carries the payee"s name but says nothing about where that
+ * payee"s money goes, so learning from it filed the payment itself under bank
+ * charges. Worst where the payments themselves carry no category (a debt being paid
+ * off): the fees were then the only thing that payee had ever been filed under.
+ * Unlinked fees exist too (one saved beside an entry in another budget), hence the name.
+ */
+export const isFeePosting = (posting: Past): boolean =>
+  posting.chargeForTransactionId != null || /^bank charge\s*[—–-]/i.test(posting.description.trim());
+
+const spending = (history: readonly Past[]) =>
+  history.filter((posting) => posting.type === "disbursement" && posting.expenseCategory && posting.description && !isFeePosting(posting));
 
 const exists = (category: string, categoryNames: readonly string[]) => categoryNames.length === 0 || categoryNames.includes(category);
 

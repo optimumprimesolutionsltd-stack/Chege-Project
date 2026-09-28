@@ -158,3 +158,31 @@ describe('both screens tell a member what they cannot do', () => {
   });
 });
 
+
+describe('a fee never teaches its payment where to go', () => {
+  // Paying a debt through a paybill: the payments carry no category, the fee
+  // beside each one is "Bank charge — <payee>" under Bank charges. The fees were
+  // the only thing that payee had ever been filed under, so the next payment to
+  // it arrived pre-filled as a bank charge.
+  const payee = 'Equity Paybill Account (0090261272177)';
+  const history = [
+    { type: 'disbursement', description: payee, expenseCategory: null },
+    { type: 'disbursement', description: `Bank charge — ${payee}`, expenseCategory: 'Bank charges', chargeForTransactionId: 1 },
+    { type: 'disbursement', description: payee, expenseCategory: null },
+    { type: 'disbursement', description: `Bank charge — ${payee}`, expenseCategory: 'Bank charges', chargeForTransactionId: 3 },
+    // Saved beside an entry in another budget, so it has no link: still a fee.
+    { type: 'disbursement', description: 'Bank charge — Equity Paybill Account (111)', expenseCategory: 'Bank charges' },
+  ];
+  const line: PreviewLine = {
+    index: 0, status: 'ready', reason: null, receipt: 'TESTFEE001', direction: 'out', type: 'paybill_payment', amount: 75000,
+    description: payee, named: true, date: '2026-09-21', fee: 108, mpesaBalance: 0, alreadyRecorded: null,
+  };
+  it('suggests nothing rather than Bank charges', () => {
+    expect(fuzzyCategory(payee, history, ['Bank charges'])).toBe('');
+    expect(initialChoices([line], history, ['Bank charges'], 'Bank charges')[0].category).toBe('');
+  });
+  it('still learns from real spending to the same payee', () => {
+    const paid = [...history, { type: 'disbursement', description: payee, expenseCategory: 'Hermda traders' }];
+    expect(initialChoices([line], paid, ['Bank charges', 'Hermda traders'], 'Bank charges')[0].category).toBe('Hermda traders');
+  });
+});

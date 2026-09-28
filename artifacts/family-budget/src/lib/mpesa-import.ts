@@ -1,5 +1,5 @@
 import type { DebtLink } from "./mpesa-debts";
-import { fuzzyCategory, ruleCategory, wordCategory, type PayeeRules } from "./payee-learning";
+import { fuzzyCategory, isFeePosting, ruleCategory, wordCategory, type PayeeRules } from "./payee-learning";
 
 export type AlreadyRecorded = {
   date: string | null;
@@ -114,7 +114,7 @@ export const isMove = (choice: Choice | undefined): boolean => {
   return destination === "transfer" || destination === "savings" || destination === "other-budget";
 };
 
-type PastPosting = { type: string; description: string; expenseCategory?: string | null; incomeSourceId?: number | null };
+type PastPosting = { type: string; description: string; expenseCategory?: string | null; incomeSourceId?: number | null; chargeForTransactionId?: number | null };
 
 const clean = (value: string) => value.trim().replace(/\s+/g, " ").toLocaleLowerCase("en-KE");
 
@@ -128,7 +128,7 @@ export function suggestCategory(description: string, history: readonly PastPosti
   if (!wanted) return "";
   const counts = new Map<string, number>();
   for (const posting of history) {
-    if (posting.type !== "disbursement" || !posting.expenseCategory) continue;
+    if (posting.type !== "disbursement" || !posting.expenseCategory || isFeePosting(posting)) continue;
     if (clean(posting.description) !== wanted) continue;
     counts.set(posting.expenseCategory, (counts.get(posting.expenseCategory) ?? 0) + 1);
   }
