@@ -256,15 +256,30 @@ export default function ReportsScreen() {
     refetchExp(); refetchCat(); refetchSummary(); refetchIncomeStreams(); refetchIncomeTrend();
   }, [refetchExp, refetchCat, refetchSummary, refetchIncomeStreams, refetchIncomeTrend]);
 
+  /**
+   * What a tap has asked for, shown at once. The tick used to wait for the save
+   * and then for the category list to come back, so on a slow connection a tap
+   * seemed to do nothing and people tapped again.
+   */
+  const [pendingCost, setPendingCost] = useState<Record<number, number | null>>({});
   const applyCostCategoryChange = useCallback(async (categoryId: number, reducesIncomeSourceId: number | null) => {
+    setPendingCost((current) => ({ ...current, [categoryId]: reducesIncomeSourceId }));
     try {
       await updateCostCategory.mutateAsync({ id: categoryId, data: { reducesIncomeSourceId } });
-      queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
-      queryClient.invalidateQueries({ queryKey: getGetDashboardIncomeStreamsQueryKey(queryParams) });
+      await queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
+      void queryClient.invalidateQueries({ queryKey: getGetDashboardIncomeStreamsQueryKey(queryParams) });
     } catch {
       Alert.alert('Could not update the cost category', 'Please try again.');
+    } finally {
+      setPendingCost((current) => {
+        const next = { ...current };
+        delete next[categoryId];
+        return next;
+      });
     }
   }, [updateCostCategory, queryClient, queryParams]);
+  const costLinkOf = (category: { id: number; reducesIncomeSourceId?: number | null }) =>
+    category.id in pendingCost ? pendingCost[category.id] : category.reducesIncomeSourceId ?? null;
 
   // Any number of categories can reduce the same stream's profit at once —
   // toggling one on or off never disturbs any other category already linked
@@ -273,11 +288,12 @@ export default function ReportsScreen() {
   const toggleCostCategory = useCallback((category: { id: number; name: string; reducesIncomeSourceId?: number | null }) => {
     if (!costCategoryFor) return;
     const { incomeSourceId, sourceName } = costCategoryFor;
-    if (category.reducesIncomeSourceId === incomeSourceId) {
+    const linkedTo = costLinkOf(category);
+    if (linkedTo === incomeSourceId) {
       void applyCostCategoryChange(category.id, null);
       return;
     }
-    if (category.reducesIncomeSourceId != null) {
+    if (linkedTo != null) {
       Alert.alert(
         'Move this category?',
         `"${category.name}" currently reduces a different stream's profit. Linking it to ${sourceName} instead will unlink it there.`,
@@ -289,7 +305,7 @@ export default function ReportsScreen() {
       return;
     }
     void applyCostCategoryChange(category.id, incomeSourceId);
-  }, [costCategoryFor, applyCostCategoryChange]);
+  }, [costCategoryFor, applyCostCategoryChange, pendingCost]);
 
   const exportPdf = useCallback(async () => {
     setIsExporting(true);
@@ -1483,8 +1499,9 @@ export default function ReportsScreen() {
               {categories
                 .filter((category) => !categories.some((other) => other.parentId === category.id))
                 .map((category) => {
-                  const selected = category.reducesIncomeSourceId === costCategoryFor?.incomeSourceId;
-                  const linkedElsewhere = category.reducesIncomeSourceId != null && !selected;
+                  const linkedTo = costLinkOf(category);
+                  const selected = linkedTo === costCategoryFor?.incomeSourceId;
+                  const linkedElsewhere = linkedTo != null && !selected;
                   return (
                     <Pressable
                       key={category.id}
@@ -1508,6 +1525,18 @@ export default function ReportsScreen() {
                   );
                 })}
             </ScrollView>
+            {/* Each tick saves as it is tapped; this only says the job is done,
+                which a sheet with no button at the foot never did. */}
+            <Pressable
+              onPress={() => setCostCategoryFor(null)}
+              accessibilityRole="button"
+              style={{ margin: 16, marginBottom: Math.max(insets.bottom, 16), borderRadius: 12, paddingVertical: 14, alignItems: 'center', backgroundColor: colors.primary }}
+              testID="cost-categories-done"
+            >
+              <Text style={{ color: '#fff', fontFamily: 'Inter_600SemiBold' }}>
+                {Object.keys(pendingCost).length > 0 ? 'Saving…' : 'Done'}
+              </Text>
+            </Pressable>
           </View>
         </View>
       </Modal>
