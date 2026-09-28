@@ -43,6 +43,11 @@ describe('borrowed money is titled by who lent it', () => {
   it('the phone form records the lender when a borrowing is saved', () => {
     expect(phone).toContain("kind: 'borrowed' }]");
   });
+  it('opening a borrowed entry shows who lent it, and an edit can change it', () => {
+    expect(phone).toContain("link.kind === 'borrowed');");
+    expect(phone).toContain("current?.kind === 'none' ? { kind: 'party', id: lender.partyId } : current");
+    expect(phone).toContain('const linkedPostingId = createdPostingId ?? editingTransactionId ?? undefined;');
+  });
   it('a payment carrying its own fee under that fee category opens with the category cleared', () => {
     expect(phone).toContain("setExpenseCategory(filedAsItsOwnFee ? '' : tx.expenseCategory ?? '');");
     expect(phone).toContain('setShowCategoryPicker(filedAsItsOwnFee);');

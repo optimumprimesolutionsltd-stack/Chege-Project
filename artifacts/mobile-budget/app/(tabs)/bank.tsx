@@ -1018,6 +1018,15 @@ export default function BankScreen() {
     // the screen telling somebody their record says something it does not.
     setRepayingPartyId(type === 'deposit' ? tx.settlesContributorId ?? null : null);
     setBorrowTarget(type === 'deposit' && tx.isBorrowing ? { kind: 'none' } : null);
+    // Who it was borrowed from lives in debt_entry_links, not on the row, so
+    // it is read back here. Without this an edit showed "Borrowed money" and
+    // nothing of who lent it. Only fills a choice nobody has made yet.
+    if (type === 'deposit' && tx.isBorrowing) {
+      void fetchDebtLinks([tx.id]).then((links) => {
+        const lender = links.find((link) => link.transactionId === tx.id && link.kind === 'borrowed');
+        if (lender) setBorrowTarget((current) => (current?.kind === 'none' ? { kind: 'party', id: lender.partyId } : current));
+      });
+    }
     setAppliesTo(tx.appliesToMonth && tx.appliesToYear
       ? { month: tx.appliesToMonth, year: tx.appliesToYear }
       : null);
@@ -1921,11 +1930,14 @@ export default function BankScreen() {
       const borrowedFrom = borrowedFromParty;
       // Who it was with, kept on the entry so the list can say "Borrowed from
       // KCB" instead of the bank's own text. The import already did this.
-      if (createdPostingId !== undefined) {
-        if (borrowedAgainst?.kind === 'party' && borrowedFrom) {
-          void saveDebtLinks([{ transactionId: createdPostingId, partyId: borrowedFrom.id, kind: 'borrowed' }]);
-        } else if (lentTo) {
-          void saveDebtLinks([{ transactionId: createdPostingId, partyId: lentTo.id, kind: 'lend' }]);
+      // On an edit it is the entry being edited, so a lender chosen or changed
+      // there sticks too (the link is one row per entry, replaced on save).
+      const linkedPostingId = createdPostingId ?? editingTransactionId ?? undefined;
+      if (linkedPostingId !== undefined) {
+        if (txType === 'deposit' && borrowTarget?.kind === 'party' && borrowedFrom) {
+          void saveDebtLinks([{ transactionId: linkedPostingId, partyId: borrowedFrom.id, kind: 'borrowed' }]);
+        } else if (txType === 'disbursement' && lentToParty) {
+          void saveDebtLinks([{ transactionId: linkedPostingId, partyId: lentToParty.id, kind: 'lend' }]);
         }
       }
       finishEntry(keepOpen, { amount: parsed + (txType === 'disbursement' ? chargeToPost : 0), direction: txType === 'deposit' ? 'in' : 'out' });
