@@ -9,7 +9,7 @@ const bank = readFileSync('app/(tabs)/bank.tsx', 'utf8');
 describe('paying somebody you owe', () => {
   it('offers the party as a destination', () => {
     expect(bank).toContain('testID="bank-withdraw-dest-party"');
-    expect(bank).toContain('Someone I owe');
+    expect(bank).toContain('A person or business I owe');
   });
 
   it('is offered before anybody has been recorded', () => {
@@ -76,7 +76,7 @@ describe('paying somebody you owe', () => {
     // The money did leave, so it is spending and belongs to a category. The
     // books-correct reading — principal is a balance-sheet movement, only
     // interest is a cost — is a later question, and a bigger one.
-    expect(bank).toContain('The category below says what kind of cost this was.');
+    expect(bank).toContain('Choose below what this payment was for');
   });
 });
 

@@ -382,6 +382,18 @@ export default function Bank() {
   // With nobody chosen yet, offer every member's streams instead of an empty
   // list: picking one names its owner as the depositor. A shared-group deposit
   // must belong to a person anyway, so this saves a step rather than adding one.
+  // Every stream in the budget, so money in can be titled by where it came from,
+  // the way spending is titled by its category.
+  const { data: allIncomeSources = [] } = useQuery<MemberIncomeSource[]>({
+    queryKey: ["income-sources", "__all__"],
+    queryFn: async () => {
+      const res = await fetch("/api/income-sources", { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    staleTime: 30_000,
+  });
+  const incomeSourceNames = new Map(allIncomeSources.map((src) => [src.id, src.name]));
   const { data: groupSources = [] } = useQuery<MemberIncomeSource[]>({
     queryKey: ["income-sources", "__group__"],
     queryFn: async () => {
@@ -2556,7 +2568,7 @@ export default function Bank() {
                           onClick={() => setWithdrawalDestinationKind("party")}
                           data-testid="button-dest-party"
                         >
-                          Someone I owe
+                          Person or business I owe
                         </Button>
                         <Button type="button" variant={withdrawalDestinationKind === "other" ? "default" : "outline"} onClick={() => setWithdrawalDestinationKind("other")}>Other</Button>
                         <Button
@@ -2686,7 +2698,9 @@ export default function Bank() {
                             ? `${isDeposit ? "From" : "To"} ${tx.bankTransferAccountName ?? "bank account"}`
                             : isTransfer
                             ? `${tx.transferDirection === "to_savings" ? "Bank → Savings" : "Savings → Bank"}: ${tx.savingsGoalName ?? "Savings goal"}`
-                            : !isDeposit && tx.expenseCategory ? tx.expenseCategory : tx.description}
+                            : !isDeposit && tx.expenseCategory ? tx.expenseCategory
+                            : isDeposit && tx.incomeSourceId && incomeSourceNames.get(tx.incomeSourceId) ? incomeSourceNames.get(tx.incomeSourceId)
+                            : tx.description}
                         </span>
                         {tx.notes ? (
                           <FileText

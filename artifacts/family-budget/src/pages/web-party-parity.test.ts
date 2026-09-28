@@ -40,7 +40,7 @@ describe("the amount field does arithmetic here too", () => {
 describe("paying somebody you owe", () => {
   it("offers the party as a destination", () => {
     expect(bank).toContain('data-testid="button-dest-party"');
-    expect(bank).toContain("Someone I owe");
+    expect(bank).toContain("Person or business I owe");
   });
 
   it("still sends a destination the API knows", () => {
