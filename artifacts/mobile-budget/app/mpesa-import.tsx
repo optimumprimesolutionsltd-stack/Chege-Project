@@ -80,7 +80,7 @@ import { saveDebtLinks } from '@/lib/debtReversal';
 import type { DebtEntryLink } from '@/lib/debtLinks';
 import { canReadStatements, chooseStatement, statementBase64, type ChosenStatement } from '@/lib/statementFile';
 import { shownFileName } from '@/lib/shownFileName';
-import { reconcile, statementLines, type StatementReading } from '@/lib/statementImport';
+import { fulizaChargeOverlap, fulizaCharges, reconcile, statementLines, type StatementReading } from '@/lib/statementImport';
 import { checkRunningBalance, readStatementRows, resolveDirections } from '@/lib/statementTable';
 import type { ReaderMessage } from '@/lib/statementReaderHtml';
 import { fetchOtherBudgetOptions, type OtherBudgetOptions } from '@/lib/otherBudgetOptions';
@@ -817,6 +817,49 @@ export default function MpesaImportScreen() {
     setPicking(null);
   };
 
+  // Fuliza's fees: repayments above draws, which nothing else records. Offered
+  // as one charge for the statement, once, and not over days already covered.
+  const fuliza = useMemo(() => (statementReading ? fulizaCharges(statementReading) : null), [statementReading]);
+  const fulizaCheck = useMemo(() => {
+    if (!fuliza) return null;
+    const receipts = ((account?.transactions ?? []) as Array<{ mpesaReceipt?: string | null }>).map((row) => row.mpesaReceipt);
+    return fulizaChargeOverlap(fuliza, receipts);
+  }, [fuliza, account]);
+  const [fulizaSaving, setFulizaSaving] = useState(false);
+  const [fulizaSaved, setFulizaSaved] = useState(false);
+  // A different statement starts unrecorded, whatever the last one was.
+  useEffect(() => { setFulizaSaved(false); }, [fuliza?.receipt]);
+  const recordFulizaCharges = async () => {
+    if (!fuliza || !accountId || fulizaSaving) return;
+    if (!chargeCategory.trim()) {
+      setPicking('charge');
+      Alert.alert('Where do charges go?', 'Choose the category your bank and M-Pesa charges are filed under, then tap again.');
+      return;
+    }
+    setFulizaSaving(true);
+    try {
+      await createDisbursement({
+        data: {
+          amount: fuliza.amount,
+          description: `Fuliza charges ${fuliza.from} to ${fuliza.to}`,
+          expenseCategory: chargeCategory.trim(),
+          date: fuliza.to,
+          accountId,
+          madeById: isShared ? null : user?.id ?? null,
+          mpesaReceipt: fuliza.receipt,
+        } as never,
+      });
+      setFulizaSaved(true);
+    } catch (error: unknown) {
+      // The receipt makes a second recording of the same statement a clash.
+      const status = (error as { status?: number } | null)?.status;
+      if (status === 409) setFulizaSaved(true);
+      else Alert.alert('Could not record the Fuliza charges', error instanceof Error ? error.message : 'Please try again.');
+    } finally {
+      setFulizaSaving(false);
+    }
+  };
+
   // Would saving these leave the account moved as far as the statement says M-Pesa moved?
   const balanceCheck = useMemo(
     () => (statementReading && lines ? reconcile({ ...statementReading, lines }, (line) => choices[line.index]?.include === true) : null),
@@ -1263,6 +1306,44 @@ export default function MpesaImportScreen() {
                       </Text>
                     ))}
                   </>
+                ) : null}
+                {fuliza && canManageBudget ? (
+                  <View style={{ gap: 6, marginTop: 4 }} testID="mpesa-fuliza-charges">
+                    <Text style={[styles.hint, { color: colors.foreground }]}>
+                      You paid Fuliza back KES {formatExact(fuliza.amount)} more than you borrowed. That is almost certainly Fuliza's daily
+                      fees, a real cost nothing else records. It is only all fees if no Fuliza loan was already open when this statement
+                      starts, or still open when it ends.
+                    </Text>
+                    {fulizaSaved || fulizaCheck?.sameStatement ? (
+                      <Text style={[styles.hint, { color: colors.mutedForeground }]} testID="mpesa-fuliza-recorded">
+                        Recorded: KES {formatExact(fuliza.amount)} of Fuliza charges for {fuliza.from} to {fuliza.to}.
+                      </Text>
+                    ) : (
+                      <>
+                        {fulizaCheck?.overlapsFrom ? (
+                          <Text style={[styles.hint, { color: colors.destructive }]} testID="mpesa-fuliza-overlap">
+                            Fuliza charges are already recorded for {fulizaCheck.overlapsFrom} to {fulizaCheck.overlapsTo}, which overlaps
+                            this statement. Recording these too would count the shared days' fees twice.
+                          </Text>
+                        ) : null}
+                        <Pressable
+                          onPress={recordFulizaCharges}
+                          disabled={fulizaSaving}
+                          style={[styles.primary, { backgroundColor: fulizaCheck?.overlapsFrom ? colors.muted : colors.primary, opacity: fulizaSaving ? 0.6 : 1 }]}
+                          accessibilityRole="button"
+                          testID="mpesa-fuliza-record"
+                        >
+                          {fulizaSaving
+                            ? <ActivityIndicator color="#fff" />
+                            : (
+                              <Text style={[styles.primaryText, fulizaCheck?.overlapsFrom ? { color: colors.foreground } : null]}>
+                                Record KES {formatExact(fuliza.amount)} as Fuliza charges
+                              </Text>
+                            )}
+                        </Pressable>
+                      </>
+                    )}
+                  </View>
                 ) : null}
                 <Text style={[styles.hint, { color: colors.mutedForeground }]}>
                   Your account also has to start at KES {formatExact(balanceCheck.opening)} for it to end at KES {formatExact(balanceCheck.closing)}.

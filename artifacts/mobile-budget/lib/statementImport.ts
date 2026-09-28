@@ -29,6 +29,9 @@ export interface StatementReading {
   /** The statement's balance before its first entry and after its last; null when it cannot be worked out. */
   opening: number | null;
   closing: number | null;
+  /** The first and last day the statement has entries for; null when it has none. */
+  firstDate?: string | null;
+  lastDate?: string | null;
 }
 
 const DRAW = /^OverDraft of Credit Party/i;
@@ -247,7 +250,30 @@ export function statementLines(rows: readonly StatementRow[]): StatementReading 
     leftOutNet: round(leftOutNet),
     opening,
     closing,
+    firstDate: chronological.length > 0 ? dateOf(chronological[0].time) : null,
+    lastDate: chronological.length > 0 ? dateOf(chronological[chronological.length - 1].time) : null,
   };
+}
+
+/**
+ * What Fuliza cost over the statement, when it can be read off it.
+ *
+ * Draws and repayments are both left out, because borrowing is not income and
+ * repaying is not spending. But Fuliza charges a fee on every day a loan is
+ * open, taken as part of the repayments, so over a statement the repayments
+ * come to more than the draws - and that difference is a real cost nothing
+ * else records. It is only the fees if every loan in it opened and closed
+ * inside the statement; the screen says so.
+ *
+ * `receipt` stands in for an M-Pesa code, from the first and last
+ * day of the statement, so its charges are recognised if recorded twice. Real
+ * codes are ten characters; this is fourteen, so they cannot collide.
+ */
+export function fulizaCharges(reading: StatementReading): { amount: number; from: string; to: string; receipt: string } | null {
+  const amount = Math.round((reading.loanRepaymentTotal - reading.loanDrawTotal) * 100) / 100;
+  if (amount < 0.01 || !reading.firstDate || !reading.lastDate) return null;
+  const compact = (day: string) => day.slice(2).replace(/-/g, '');
+  return { amount, from: reading.firstDate, to: reading.lastDate, receipt: `FZ${compact(reading.firstDate)}${compact(reading.lastDate)}` };
 }
 
 export interface Reconciliation {
@@ -294,4 +320,31 @@ export function reconcile(reading: StatementReading, included: (line: PreviewLin
     gap: round(statementChange - saved - alreadyIn),
     parts,
   };
+}
+
+/**
+ * Whether a Fuliza charge already recorded in this account covers any of the
+ * same days. Its receipt names its first and last day (see fulizaCharges), so
+ * two statements that overlap - 1 to 28 September, then 15 September to 15
+ * October - are caught before the fees for the shared days are counted twice.
+ */
+export function fulizaChargeOverlap(
+  charge: { from: string; to: string; receipt: string },
+  recordedReceipts: readonly (string | null | undefined)[],
+): { sameStatement: boolean; overlapsFrom: string | null; overlapsTo: string | null } {
+  const day = (compact: string) => `20${compact.slice(0, 2)}-${compact.slice(2, 4)}-${compact.slice(4, 6)}`;
+  let overlapsFrom: string | null = null;
+  let overlapsTo: string | null = null;
+  for (const receipt of recordedReceipts) {
+    const match = receipt?.match(/^FZ(\d{6})(\d{6})$/);
+    if (!match) continue;
+    if (receipt === charge.receipt) return { sameStatement: true, overlapsFrom: null, overlapsTo: null };
+    const from = day(match[1]);
+    const to = day(match[2]);
+    if (from <= charge.to && to >= charge.from) {
+      overlapsFrom = from;
+      overlapsTo = to;
+    }
+  }
+  return { sameStatement: false, overlapsFrom, overlapsTo };
 }
