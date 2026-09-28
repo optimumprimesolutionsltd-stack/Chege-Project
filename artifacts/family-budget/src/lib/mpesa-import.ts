@@ -444,6 +444,13 @@ export type PostingContext = {
   chargeCategory: string;
   /** The income sources, so a deposit can name the member a source belongs to. */
   incomeSources?: ReadonlyArray<{ id: number; userId?: string | null }>;
+  /**
+   * Who is currently a member of this budget. A source whose owner has left,
+   * or was never quite recorded as one - some other data problem, not a
+   * choice made here - would otherwise fail the whole entry at save time
+   * over an attribution nobody was trying to get right in the first place.
+   */
+  memberIds?: ReadonlyArray<string>;
 };
 
 /**
@@ -561,14 +568,18 @@ export function buildPostings(line: PreviewLine, choice: Choice, ctx: PostingCon
   if (line.direction === "in") {
     // A source is only for income: a repayment or a loan is not, so it takes none.
     const source = choice.incomeSourceId && !choice.debt ? ctx.incomeSources?.find((entry) => entry.id === choice.incomeSourceId) : undefined;
+    // A source belongs to one member, and the server only accepts the deposit
+    // when it names that member - but a source whose owner is not currently
+    // a member (removed, or a data problem) would otherwise fail the whole
+    // entry over an attribution nobody was trying to get right just now.
+    const sourceOwnerIsMember = source?.userId != null && (!ctx.memberIds || ctx.memberIds.includes(source.userId));
     return {
       kind: "deposit" as const,
       main: {
         amount: line.amount,
         description,
         date,
-        // A source belongs to one member, and the server only accepts it when the deposit names that member.
-        madeById: source?.userId ?? ctx.userId,
+        madeById: sourceOwnerIsMember ? source!.userId : ctx.userId,
         ...(source ? { incomeSourceId: source.id } : {}),
         accountId: ctx.accountId,
         // They paid back what they owed you, or you borrowed from them: neither
