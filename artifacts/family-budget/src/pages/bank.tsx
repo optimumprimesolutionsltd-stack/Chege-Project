@@ -2698,6 +2698,9 @@ export default function Bank() {
                             ? `${isDeposit ? "From" : "To"} ${tx.bankTransferAccountName ?? "bank account"}`
                             : isTransfer
                             ? `${tx.transferDirection === "to_savings" ? "Bank → Savings" : "Savings → Bank"}: ${tx.savingsGoalName ?? "Savings goal"}`
+                            : isDeposit && tx.isBorrowing ? (tx.debtPartyName ? `Borrowed from ${tx.debtPartyName}` : "Borrowed money")
+                            : isDeposit && tx.settlesContributorId && tx.debtPartyName ? `Repaid by ${tx.debtPartyName}`
+                            : !isDeposit && tx.isLending ? (tx.debtPartyName ? `Lent to ${tx.debtPartyName}` : "Money lent out")
                             : !isDeposit && tx.expenseCategory ? tx.expenseCategory
                             : isDeposit && tx.incomeSourceId && incomeSourceNames.get(tx.incomeSourceId) ? incomeSourceNames.get(tx.incomeSourceId)
                             : tx.description}
