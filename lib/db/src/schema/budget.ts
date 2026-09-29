@@ -81,6 +81,13 @@ export const budgetCategoriesTable = pgTable("budget_categories", {
   // anybody's cost of earning, carry null and are never involved in the
   // profit subtraction on the income-streams report.
   reducesIncomeSourceId: integer("reduces_income_source_id").references(() => incomeSourcesTable.id, { onDelete: "set null" }),
+  // For a category linked to an income stream: what kind of cost it is on
+  // that business's profit and loss. "cogs" - cost of goods sold, what the
+  // things sold cost (stock, fuel for a generator) - comes off sales first to
+  // give gross profit; "expense" - the cost of running it (repairs, rent of a
+  // stall) - then comes off gross profit to give net profit. Existing links
+  // were all treated as the first, so that is the default (migration 0048).
+  costKind: text("cost_kind").notNull().default("cogs"),
 }, (table) => [
   check(
     "budget_categories_name_valid_check",

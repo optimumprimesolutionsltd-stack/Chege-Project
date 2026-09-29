@@ -5,6 +5,7 @@
  * Jamvi API — personal and group money management
  * OpenAPI spec version: 0.1.0
  */
+import type { BudgetCategoryCostKind } from './budgetCategoryCostKind';
 
 export interface BudgetCategory {
   id: number;
@@ -36,4 +37,6 @@ export interface BudgetCategory {
      * @nullable
      */
   reducesIncomeSourceId?: number | null;
+  /** For a category linked to an income stream, what kind of cost it is on that business's profit and loss: cogs (cost of goods sold, comes off sales to give gross profit) or expense (running cost, comes off gross profit to give net profit). */
+  costKind?: BudgetCategoryCostKind;
 }
