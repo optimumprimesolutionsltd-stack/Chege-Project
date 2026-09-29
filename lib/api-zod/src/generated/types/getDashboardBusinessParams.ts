@@ -21,4 +21,8 @@ from?: string;
  * @pattern ^d{4}-d{2}-d{2}$
  */
 to?: string;
+/**
+ * When true, each statement also carries the entries behind its sales and each cost, each cost's share of sales, and the same figures for the period of the same length just before.
+ */
+detail?: boolean;
 };

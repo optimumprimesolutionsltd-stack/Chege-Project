@@ -5,8 +5,15 @@
  * Jamvi API — personal and group money management
  * OpenAPI spec version: 0.1.0
  */
+import type { BusinessEntry } from './businessEntry';
 
 export interface BusinessCostLine {
   category: string;
   amount: number;
+  /** With detail, this cost as a percentage of sales; null when nothing sold. */
+  shareOfSales?: number | null;
+  /** With detail, the newest entries behind this cost. */
+  entries?: BusinessEntry[];
+  /** With detail, how many more entries there are beyond those listed. */
+  more?: number;
 }

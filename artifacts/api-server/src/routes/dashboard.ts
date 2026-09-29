@@ -40,7 +40,7 @@ import { getActiveGroupId, requireGroupManager } from "../lib/activeGroup";
 import { buildContributionHistory, historyMonths } from "../lib/contribution-history";
 import { buildIncomeStreamTrend } from "../lib/income-stream-trend";
 import { buildIncomeLedger, type IncomeDepositRow, type IncomeSplitRow } from "../lib/income-ledger";
-import { buildBusinessReport, type BusinessCostRow } from "../lib/business-report";
+import { buildBusinessReport, type BusinessCostEntryRow, type BusinessCostRow } from "../lib/business-report";
 import { createMonthlyReportPdf } from "../lib/monthly-report-pdf";
 import { GROUP_ATTRIBUTION } from "../lib/attribution";
 import { nairobiNow } from "../lib/nairobiTime";
@@ -1527,19 +1527,37 @@ router.get("/dashboard/business", async (req, res): Promise<void> => {
         new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10),
       ];
 
-  const [ledger, costLines, linkedStreamIds, streams] = await Promise.all([
+  const detail = parsed.data.detail === true || String(parsed.data.detail) === "true";
+  // The details are the same period's entries, and the same statement for the
+  // period of the same length just before, to compare against.
+  const previousRange = periodBefore(from, to);
+  const [ledger, costLines, linkedStreamIds, streams, costEntries, previousLedger, previousCostLines] = await Promise.all([
     loadIncomeLedger(groupId, from, to, null),
     incomeStreamCostLines(groupId, from, to),
     linkedCostStreamIds(groupId),
     db.execute(sql`SELECT id, name FROM income_sources WHERE group_id = ${groupId}`),
+    detail ? incomeStreamCostEntries(groupId, from, to) : Promise.resolve(undefined),
+    detail ? loadIncomeLedger(groupId, previousRange.from, previousRange.to, null) : Promise.resolve(undefined),
+    detail ? incomeStreamCostLines(groupId, previousRange.from, previousRange.to) : Promise.resolve(undefined),
   ]);
+  const salesByStreamOf = (incomeLedger: Awaited<ReturnType<typeof loadIncomeLedger>>) =>
+    new Map(incomeLedger.streams.filter((stream) => stream.incomeSourceId != null).map((stream) => [Number(stream.incomeSourceId), stream.received]));
   res.json(buildBusinessReport({
     from,
     to,
-    salesByStream: new Map(ledger.streams.filter((stream) => stream.incomeSourceId != null).map((stream) => [Number(stream.incomeSourceId), stream.received])),
+    salesByStream: salesByStreamOf(ledger),
     costLines,
     linkedStreamIds,
     streamNames: new Map((streams.rows as { id: number; name: string }[]).map((row) => [Number(row.id), row.name])),
+    ...(detail && costEntries && previousLedger && previousCostLines ? {
+      detail: {
+        salesEntries: ledger.entries.flatMap((entry) => entry.portions
+          .filter((portion) => portion.incomeSourceId != null)
+          .map((portion) => ({ incomeSourceId: Number(portion.incomeSourceId), date: entry.date, description: entry.description, amount: portion.amount }))),
+        costEntries,
+        previous: { from: previousRange.from, to: previousRange.to, salesByStream: salesByStreamOf(previousLedger), costLines: previousCostLines },
+      },
+    } : {}),
   }));
 });
 
@@ -1609,6 +1627,82 @@ async function incomeStreamCostLines(groupId: number, from: string, to: string):
     });
   }
   return lines;
+}
+
+/**
+ * The entries behind each linked category's cost, for a business statement's
+ * details: the same three sources and rules as incomeStreamCostLines, one row
+ * per entry, so the details always add up to the totals shown.
+ */
+async function incomeStreamCostEntries(groupId: number, from: string, to: string): Promise<BusinessCostEntryRow[]> {
+  const result = await db.execute(sql`
+    WITH cost_categories AS (
+      SELECT name, reduces_income_source_id
+      FROM budget_categories
+      WHERE group_id = ${groupId} AND reduces_income_source_id IS NOT NULL
+    ),
+    costs AS (
+      SELECT alloc.category, alloc.amount, expense.date::text AS date, expense.description
+      FROM expense_category_allocations alloc
+      INNER JOIN expenses expense ON expense.id = alloc.expense_id AND expense.group_id = ${groupId}
+      WHERE alloc.group_id = ${groupId}
+        AND expense.date >= ${from}
+        AND expense.date <= ${to}
+
+      UNION ALL
+
+      SELECT expense.category, expense.amount, expense.date::text AS date, expense.description
+      FROM expenses expense
+      WHERE expense.group_id = ${groupId}
+        AND expense.date >= ${from}
+        AND expense.date <= ${to}
+        AND NOT EXISTS (
+          SELECT 1 FROM expense_category_allocations alloc
+          WHERE alloc.expense_id = expense.id AND alloc.group_id = ${groupId}
+        )
+
+      UNION ALL
+
+      SELECT tx.expense_category AS category, tx.amount, tx.date::text AS date, tx.description
+      FROM joint_account_transactions tx
+      WHERE tx.group_id = ${groupId}
+        AND tx.type = 'disbursement'
+        AND tx.expense_category IS NOT NULL
+        AND tx.date >= ${from}
+        AND tx.date <= ${to}
+    )
+    SELECT cc.reduces_income_source_id AS "incomeSourceId", cc.name AS category,
+           costs.date, costs.description, costs.amount::float8 AS amount
+    FROM cost_categories cc
+    INNER JOIN costs ON costs.category = cc.name
+    ORDER BY costs.date DESC
+  `);
+  return (result.rows as Array<Record<string, unknown>>).map((row) => ({
+    incomeSourceId: Number(row.incomeSourceId),
+    category: typeof row.category === "string" ? row.category : "",
+    date: String(row.date ?? ""),
+    description: typeof row.description === "string" ? row.description : "",
+    amount: Number(row.amount) || 0,
+  }));
+}
+
+/**
+ * The period of the same length just before `from`-`to`: the previous month
+ * for a whole month, otherwise the same number of days ending the day before.
+ */
+function periodBefore(from: string, to: string): { from: string; to: string } {
+  const start = new Date(`${from}T00:00:00Z`);
+  const end = new Date(`${to}T00:00:00Z`);
+  const lastOfMonth = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth() + 1, 0));
+  if (start.getUTCDate() === 1 && end.getTime() === lastOfMonth.getTime() && start.getUTCMonth() === end.getUTCMonth()) {
+    const prevStart = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() - 1, 1));
+    const prevEnd = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), 0));
+    return { from: prevStart.toISOString().slice(0, 10), to: prevEnd.toISOString().slice(0, 10) };
+  }
+  const days = Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1;
+  const prevEnd = new Date(start.getTime() - 86_400_000);
+  const prevStart = new Date(prevEnd.getTime() - (days - 1) * 86_400_000);
+  return { from: prevStart.toISOString().slice(0, 10), to: prevEnd.toISOString().slice(0, 10) };
 }
 
 /** Every income stream with a category linked to it as a cost, spent on this period or not. */

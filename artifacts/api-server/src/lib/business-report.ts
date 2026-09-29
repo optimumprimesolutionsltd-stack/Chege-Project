@@ -23,7 +23,22 @@ export type BusinessCostRow = {
   amount: number;
 };
 
+/** One entry behind a cost line, for the statement's details. */
+export type BusinessCostEntryRow = { incomeSourceId: number; category: string; date: string; description: string; amount: number };
+type Entry = { date: string; description: string; amount: number };
+
 const cents = (value: number) => Math.round(value * 100) / 100;
+/** Details list at most this many entries per line, newest first, with the count of the rest. */
+const DETAIL_ENTRIES = 25;
+const newestFirst = (a: Entry, b: Entry) => b.date.localeCompare(a.date);
+
+/** The five figures of a statement, from sales and cost lines. */
+function figures(sales: number, lines: BusinessCostRow[]) {
+  const cogs = cents(lines.filter((line) => line.costKind === "cogs").reduce((sum, line) => sum + line.amount, 0));
+  const expenses = cents(lines.filter((line) => line.costKind === "expense").reduce((sum, line) => sum + line.amount, 0));
+  const grossProfit = cents(sales - cogs);
+  return { sales: cents(sales), costOfGoodsSold: cogs, grossProfit, expenses, netProfit: cents(grossProfit - expenses) };
+}
 
 export function buildBusinessReport(input: {
   from: string;
@@ -35,15 +50,36 @@ export function buildBusinessReport(input: {
   linkedStreamIds: number[];
   /** Streams the group owns. A linked id not here is somebody else's, and left out. */
   streamNames: Map<number, string>;
+  /** Asked for on "Show details": the entries behind each figure, and the period before to compare. */
+  detail?: {
+    salesEntries: Array<Entry & { incomeSourceId: number }>;
+    costEntries: BusinessCostEntryRow[];
+    previous: { from: string; to: string; salesByStream: Map<number, number>; costLines: BusinessCostRow[] };
+  };
 }) {
   const ids = [...new Set([...input.linkedStreamIds, ...input.costLines.map((line) => line.incomeSourceId)])]
     .filter((id) => input.streamNames.has(id));
 
   const businesses = ids.map((id) => {
     const lines = input.costLines.filter((line) => line.incomeSourceId === id && Math.abs(line.amount) >= 0.005);
+    const salesTotal = input.salesByStream.get(id) ?? 0;
+    const entriesFor = (category: string) => {
+      const all = (input.detail?.costEntries ?? [])
+        .filter((entry) => entry.incomeSourceId === id && entry.category === category)
+        .map((entry) => ({ date: entry.date, description: entry.description, amount: cents(entry.amount) }))
+        .sort(newestFirst);
+      return { entries: all.slice(0, DETAIL_ENTRIES), more: Math.max(0, all.length - DETAIL_ENTRIES) };
+    };
     const kind = (costKind: BusinessCostRow["costKind"]) => lines
       .filter((line) => line.costKind === costKind)
-      .map((line) => ({ category: line.category, amount: cents(line.amount) }))
+      .map((line) => ({
+        category: line.category,
+        amount: cents(line.amount),
+        ...(input.detail ? {
+          shareOfSales: salesTotal > 0 ? Math.round((line.amount / salesTotal) * 1000) / 10 : null,
+          ...entriesFor(line.category),
+        } : {}),
+      }))
       .sort((a, b) => b.amount - a.amount || a.category.localeCompare(b.category));
     const costOfGoodsSoldLines = kind("cogs");
     const expenseLines = kind("expense");
@@ -61,6 +97,22 @@ export function buildBusinessReport(input: {
       netProfit: cents(grossProfit - expenses),
       costOfGoodsSoldLines,
       expenseLines,
+      ...(input.detail ? (() => {
+        const sales = input.detail.salesEntries
+          .filter((entry) => entry.incomeSourceId === id)
+          .map((entry) => ({ date: entry.date, description: entry.description, amount: cents(entry.amount) }))
+          .sort(newestFirst);
+        const previousLines = input.detail.previous.costLines.filter((line) => line.incomeSourceId === id);
+        return {
+          salesEntries: sales.slice(0, DETAIL_ENTRIES),
+          moreSalesEntries: Math.max(0, sales.length - DETAIL_ENTRIES),
+          previous: {
+            from: input.detail.previous.from,
+            to: input.detail.previous.to,
+            ...figures(input.detail.previous.salesByStream.get(id) ?? 0, previousLines),
+          },
+        };
+      })() : {}),
     };
   }).sort((a, b) => b.sales - a.sales || a.name.localeCompare(b.name));
 

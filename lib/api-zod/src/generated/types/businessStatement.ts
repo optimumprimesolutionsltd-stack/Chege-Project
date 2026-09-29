@@ -6,6 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { BusinessCostLine } from './businessCostLine';
+import type { BusinessEntry } from './businessEntry';
+import type { BusinessStatementPrevious } from './businessStatementPrevious';
 
 export interface BusinessStatement {
   incomeSourceId: number;
@@ -17,4 +19,9 @@ export interface BusinessStatement {
   netProfit: number;
   costOfGoodsSoldLines: BusinessCostLine[];
   expenseLines: BusinessCostLine[];
+  /** With detail, the newest sales behind the sales figure. */
+  salesEntries?: BusinessEntry[];
+  moreSalesEntries?: number;
+  /** With detail, the same figures for the period of the same length just before. */
+  previous?: BusinessStatementPrevious;
 }
