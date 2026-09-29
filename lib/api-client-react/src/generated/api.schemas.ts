@@ -357,6 +357,17 @@ export interface ApplyRecurringResult {
   copied: number;
 }
 
+/**
+ * For a category linked to an income stream, what kind of cost it is on that business's profit and loss: cogs (cost of goods sold, comes off sales to give gross profit) or expense (running cost, comes off gross profit to give net profit).
+ */
+export type BudgetCategoryCostKind = typeof BudgetCategoryCostKind[keyof typeof BudgetCategoryCostKind];
+
+
+export const BudgetCategoryCostKind = {
+  cogs: 'cogs',
+  expense: 'expense',
+} as const;
+
 export interface BudgetCategory {
   id: number;
   name: string;
@@ -387,7 +398,20 @@ export interface BudgetCategory {
      * @nullable
      */
   reducesIncomeSourceId?: number | null;
+  /** For a category linked to an income stream, what kind of cost it is on that business's profit and loss: cogs (cost of goods sold, comes off sales to give gross profit) or expense (running cost, comes off gross profit to give net profit). */
+  costKind?: BudgetCategoryCostKind;
 }
+
+/**
+ * For a category linked to an income stream, what kind of cost it is on that business's profit and loss: cogs (cost of goods sold, comes off sales to give gross profit) or expense (running cost, comes off gross profit to give net profit). Defaults to cogs.
+ */
+export type BudgetCategoryInputCostKind = typeof BudgetCategoryInputCostKind[keyof typeof BudgetCategoryInputCostKind];
+
+
+export const BudgetCategoryInputCostKind = {
+  cogs: 'cogs',
+  expense: 'expense',
+} as const;
 
 export interface BudgetCategoryInput {
   /** Budget category name. "Uncategorized" is reserved internally and cannot be used. */
@@ -414,7 +438,20 @@ export interface BudgetCategoryInput {
      * @nullable
      */
   reducesIncomeSourceId?: number | null;
+  /** For a category linked to an income stream, what kind of cost it is on that business's profit and loss: cogs (cost of goods sold, comes off sales to give gross profit) or expense (running cost, comes off gross profit to give net profit). Defaults to cogs. */
+  costKind?: BudgetCategoryInputCostKind;
 }
+
+/**
+ * For a category linked to an income stream, what kind of cost it is on that business's profit and loss: cogs (cost of goods sold, comes off sales to give gross profit) or expense (running cost, comes off gross profit to give net profit). Omitted keeps what it is.
+ */
+export type BudgetCategoryUpdateInputCostKind = typeof BudgetCategoryUpdateInputCostKind[keyof typeof BudgetCategoryUpdateInputCostKind];
+
+
+export const BudgetCategoryUpdateInputCostKind = {
+  cogs: 'cogs',
+  expense: 'expense',
+} as const;
 
 /**
  * Fields to update. A one-time budget requires both activeMonth and activeYear.
@@ -443,6 +480,8 @@ export interface BudgetCategoryUpdateInput {
      * @nullable
      */
   reducesIncomeSourceId?: number | null;
+  /** For a category linked to an income stream, what kind of cost it is on that business's profit and loss: cogs (cost of goods sold, comes off sales to give gross profit) or expense (running cost, comes off gross profit to give net profit). Omitted keeps what it is. */
+  costKind?: BudgetCategoryUpdateInputCostKind;
 }
 
 export interface BudgetCategoryRecommendation {
@@ -699,6 +738,38 @@ export interface IncomeLedger {
   entries: IncomeLedgerEntry[];
   /** Money that arrived in the period without being income. Not in total, not in entries; here so the two can still be matched to a statement. */
   otherMoneyIn: IncomeLedgerOtherMoneyIn;
+}
+
+export interface BusinessCostLine {
+  category: string;
+  amount: number;
+}
+
+export interface BusinessStatement {
+  incomeSourceId: number;
+  name: string;
+  sales: number;
+  costOfGoodsSold: number;
+  grossProfit: number;
+  expenses: number;
+  netProfit: number;
+  costOfGoodsSoldLines: BusinessCostLine[];
+  expenseLines: BusinessCostLine[];
+}
+
+export type BusinessReportTotals = {
+  sales: number;
+  costOfGoodsSold: number;
+  grossProfit: number;
+  expenses: number;
+  netProfit: number;
+};
+
+export interface BusinessReport {
+  from: string;
+  to: string;
+  businesses: BusinessStatement[];
+  totals: BusinessReportTotals;
 }
 
 export interface SpendingByItemRow {
@@ -2010,6 +2081,23 @@ to?: string;
  * Narrows the list to descriptions containing this text, ignoring case.
  */
 q?: string;
+};
+
+export type GetDashboardBusinessParams = {
+/**
+ * @minimum 1
+ * @maximum 12
+ */
+month?: number;
+year?: number;
+/**
+ * @pattern ^d{4}-d{2}-d{2}$
+ */
+from?: string;
+/**
+ * @pattern ^d{4}-d{2}-d{2}$
+ */
+to?: string;
 };
 
 export type GetDashboardSpendingByItemParams = {

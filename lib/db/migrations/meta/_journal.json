@@ -337,6 +337,13 @@
       "when": 1790619542213,
       "tag": "0047_reversal_links",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1790674671046,
+      "tag": "0048_category_cost_kind",
+      "breakpoints": true
     }
   ]
 }

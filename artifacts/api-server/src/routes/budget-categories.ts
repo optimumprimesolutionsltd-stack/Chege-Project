@@ -414,6 +414,8 @@ router.post("/budget-categories/subcategory-suggestions/apply", async (req, res)
 });
 
 const categoryFields = z.object({
+  // Cost of goods sold or a running expense, for a category linked to an income stream.
+  costKind: z.enum(["cogs", "expense"]).optional(),
   name: z.string().trim().min(1).max(80),
   budgetAmount: z.number().int().min(0),
   priority: z.number().int().min(1).max(10).optional().default(1),

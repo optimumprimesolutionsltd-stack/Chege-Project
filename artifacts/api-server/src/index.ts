@@ -37,6 +37,13 @@ async function startServer() {
     sql`ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "password_hash" varchar`,
   );
   logger.info("Credential authentication schema is ready");
+  // Same reasoning for the cost kind on categories (migration 0048): every
+  // category query selects the column, so it has to exist before the first
+  // request. Additive, with a default, and idempotent.
+  await db.execute(
+    sql`ALTER TABLE "budget_categories" ADD COLUMN IF NOT EXISTS "cost_kind" text NOT NULL DEFAULT 'cogs'`,
+  );
+  logger.info("Category cost kind is ready");
 
   app.listen(port, (err) => {
   if (err) {

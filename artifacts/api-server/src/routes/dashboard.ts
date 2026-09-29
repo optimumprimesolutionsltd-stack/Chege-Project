@@ -25,6 +25,7 @@ import {
   GetDashboardSpendingByItemQueryParams,
   GetDashboardExpenseLedgerQueryParams,
   GetDashboardIncomeLedgerQueryParams,
+  GetDashboardBusinessQueryParams,
   GetDashboardActivityQueryParams,
   GetDashboardIncomeStreamsQueryParams,
   GetDashboardIncomeStreamsResponse,
@@ -39,6 +40,7 @@ import { getActiveGroupId, requireGroupManager } from "../lib/activeGroup";
 import { buildContributionHistory, historyMonths } from "../lib/contribution-history";
 import { buildIncomeStreamTrend } from "../lib/income-stream-trend";
 import { buildIncomeLedger, type IncomeDepositRow, type IncomeSplitRow } from "../lib/income-ledger";
+import { buildBusinessReport, type BusinessCostRow } from "../lib/business-report";
 import { createMonthlyReportPdf } from "../lib/monthly-report-pdf";
 import { GROUP_ATTRIBUTION } from "../lib/attribution";
 import { nairobiNow } from "../lib/nairobiTime";
@@ -1219,6 +1221,15 @@ router.get("/dashboard/income-ledger", async (req, res): Promise<void> => {
 
   const search = q?.trim() ? `%${q.trim().replace(/[!%_]/g, (ch) => `!${ch}`)}%` : null;
 
+  res.json(await loadIncomeLedger(groupId, from, to, search));
+});
+
+/**
+ * All income for a group between two days: what the income ledger shows, and
+ * what the business statements take their sales from, so the two agree.
+ * `search`, when given, narrows the receipts and leaves stream costs out.
+ */
+async function loadIncomeLedger(groupId: number, from: string, to: string, search: string | null) {
   // Transfers between the group's own accounts (bank_transfer_id) are left out
   // entirely: they are neither income nor money arriving from outside. Every
   // other deposit is fetched and sorted into income or otherMoneyIn by kind.
@@ -1271,15 +1282,15 @@ router.get("/dashboard/income-ledger", async (req, res): Promise<void> => {
     search ? Promise.resolve(new Map<number, number>()) : incomeStreamCostsBySource(groupId, from, to),
   ]);
 
-  res.json(buildIncomeLedger({
+  return buildIncomeLedger({
     from,
     to,
     deposits: deposits.rows as IncomeDepositRow[],
     splits: splits.rows as IncomeSplitRow[],
     streamNames: new Map((streams.rows as { id: number; name: string }[]).map((row) => [Number(row.id), row.name])),
     costsByStream,
-  }));
-});
+  });
+}
 
 /**
  * "How much have I spent on this?" — where "this" is a thing, not a category.
@@ -1492,15 +1503,55 @@ router.get("/dashboard/spending-by-item", async (req, res): Promise<void> => {
  * all. Almost every group links nothing, so the common case is one cheap
  * query that returns no rows.
  */
+// A profit and loss statement for each side hustle - see lib/business-report.ts.
+router.get("/dashboard/business", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  const parsed = GetDashboardBusinessQueryParams.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid query" });
+    return;
+  }
+  const { from: askedFrom, to: askedTo } = parsed.data;
+  if ((askedFrom == null) !== (askedTo == null)) {
+    res.status(400).json({ error: "Give both a start and an end date, or neither." });
+    return;
+  }
+  const now = nairobiNow();
+  const month = parsed.data.month ?? now.getUTCMonth() + 1;
+  const year = parsed.data.year ?? now.getUTCFullYear();
+  const [from, to] = askedFrom != null && askedTo != null
+    ? (askedFrom <= askedTo ? [askedFrom, askedTo] : [askedTo, askedFrom])
+    : [
+        `${year}-${String(month).padStart(2, "0")}-01`,
+        new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10),
+      ];
+
+  const [ledger, costLines, linkedStreamIds, streams] = await Promise.all([
+    loadIncomeLedger(groupId, from, to, null),
+    incomeStreamCostLines(groupId, from, to),
+    linkedCostStreamIds(groupId),
+    db.execute(sql`SELECT id, name FROM income_sources WHERE group_id = ${groupId}`),
+  ]);
+  res.json(buildBusinessReport({
+    from,
+    to,
+    salesByStream: new Map(ledger.streams.filter((stream) => stream.incomeSourceId != null).map((stream) => [Number(stream.incomeSourceId), stream.received])),
+    costLines,
+    linkedStreamIds,
+    streamNames: new Map((streams.rows as { id: number; name: string }[]).map((row) => [Number(row.id), row.name])),
+  }));
+});
+
 /**
- * What each income stream cost to run between two days, inclusive: spending in
- * every category linked to it (Reports' Cost categories picker). A stream's
- * profit is what it brought in less this.
+ * What each income stream cost to run between two days, inclusive, category by
+ * category: spending in every category linked to it (Reports' Cost categories
+ * picker), with the kind of cost each is on the business's profit and loss.
  */
-async function incomeStreamCostsBySource(groupId: number, from: string, to: string): Promise<Map<number, number>> {
+async function incomeStreamCostLines(groupId: number, from: string, to: string): Promise<BusinessCostRow[]> {
   const result = await db.execute(sql`
     WITH cost_categories AS (
-      SELECT name, reduces_income_source_id
+      SELECT name, reduces_income_source_id, cost_kind
       FROM budget_categories
       WHERE group_id = ${groupId} AND reduces_income_source_id IS NOT NULL
     ),
@@ -1539,18 +1590,43 @@ async function incomeStreamCostsBySource(groupId: number, from: string, to: stri
         AND tx.date >= ${from}
         AND tx.date <= ${to}
     )
-    SELECT cc.reduces_income_source_id AS "incomeSourceId", COALESCE(SUM(costs.amount), 0) AS cost
+    SELECT cc.reduces_income_source_id AS "incomeSourceId", cc.name AS category, cc.cost_kind AS "costKind",
+           COALESCE(SUM(costs.amount), 0) AS cost
     FROM cost_categories cc
     INNER JOIN costs ON costs.category = cc.name
-    GROUP BY cc.reduces_income_source_id
+    GROUP BY cc.reduces_income_source_id, cc.name, cc.cost_kind
   `);
-  const costsByIncomeSourceId = new Map<number, number>();
-  for (const row of result.rows as Array<{ incomeSourceId?: unknown; cost?: unknown }>) {
-    if (row.cost === undefined || row.cost === null) continue;
+  const lines: BusinessCostRow[] = [];
+  for (const row of result.rows as Array<{ incomeSourceId?: unknown; category?: unknown; costKind?: unknown; cost?: unknown }>) {
     const incomeSourceId = Number(row.incomeSourceId);
-    const cost = Number(row.cost);
-    if (!Number.isFinite(incomeSourceId) || !Number.isFinite(cost)) continue;
-    costsByIncomeSourceId.set(incomeSourceId, cost);
+    const amount = Number(row.cost);
+    if (!Number.isFinite(incomeSourceId) || !Number.isFinite(amount)) continue;
+    lines.push({
+      incomeSourceId,
+      category: typeof row.category === "string" ? row.category : "",
+      costKind: row.costKind === "expense" ? "expense" : "cogs",
+      amount,
+    });
+  }
+  return lines;
+}
+
+/** Every income stream with a category linked to it as a cost, spent on this period or not. */
+async function linkedCostStreamIds(groupId: number): Promise<number[]> {
+  const result = await db.execute(sql`
+    SELECT DISTINCT reduces_income_source_id AS id
+    FROM budget_categories
+    WHERE group_id = ${groupId} AND reduces_income_source_id IS NOT NULL
+  `);
+  return (result.rows as Array<{ id: unknown }>).map((row) => Number(row.id)).filter(Number.isFinite);
+}
+
+/** Each stream's costs added up, whatever their kind: what comes off its profit on Reports and All income. */
+async function incomeStreamCostsBySource(groupId: number, from: string, to: string): Promise<Map<number, number>> {
+  const lines = await incomeStreamCostLines(groupId, from, to);
+  const costsByIncomeSourceId = new Map<number, number>();
+  for (const line of lines) {
+    costsByIncomeSourceId.set(line.incomeSourceId, (costsByIncomeSourceId.get(line.incomeSourceId) ?? 0) + line.amount);
   }
   return costsByIncomeSourceId;
 }

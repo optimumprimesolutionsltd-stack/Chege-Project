@@ -387,7 +387,8 @@ export const GetBudgetCategoriesResponseItem = zod.object({
   "isRecurring": zod.boolean().describe('Whether this budget applies every month'),
   "activeMonth": zod.number().nullish().describe('Month when a one-time budget applies'),
   "activeYear": zod.number().nullish().describe('Year when a one-time budget applies'),
-  "reducesIncomeSourceId": zod.number().nullish().describe('The income source this category is a cost of earning, if any. Its spending is worked out of that stream\'s profit on the income-streams report instead of only counting against the budget as a whole.')
+  "reducesIncomeSourceId": zod.number().nullish().describe('The income source this category is a cost of earning, if any. Its spending is worked out of that stream\'s profit on the income-streams report instead of only counting against the budget as a whole.'),
+  "costKind": zod.enum(['cogs', 'expense']).optional().describe('For a category linked to an income stream, what kind of cost it is on that business\'s profit and loss: cogs (cost of goods sold, comes off sales to give gross profit) or expense (running cost, comes off gross profit to give net profit).')
 })
 export const GetBudgetCategoriesResponse = zod.array(GetBudgetCategoriesResponseItem)
 
@@ -411,7 +412,8 @@ export const CreateBudgetCategoryBody = zod.object({
   "isRecurring": zod.boolean().default(createBudgetCategoryBodyIsRecurringDefault),
   "activeMonth": zod.number().min(1).max(createBudgetCategoryBodyActiveMonthMax).nullish(),
   "activeYear": zod.number().min(createBudgetCategoryBodyActiveYearMin).max(createBudgetCategoryBodyActiveYearMax).nullish(),
-  "reducesIncomeSourceId": zod.number().nullish().describe('The income source this category is a cost of earning, if any.')
+  "reducesIncomeSourceId": zod.number().nullish().describe('The income source this category is a cost of earning, if any.'),
+  "costKind": zod.enum(['cogs', 'expense']).optional().describe('For a category linked to an income stream, what kind of cost it is on that business\'s profit and loss: cogs (cost of goods sold, comes off sales to give gross profit) or expense (running cost, comes off gross profit to give net profit). Defaults to cogs.')
 })
 
 export const CreateBudgetCategoryResponse = zod.object({
@@ -424,7 +426,8 @@ export const CreateBudgetCategoryResponse = zod.object({
   "isRecurring": zod.boolean().describe('Whether this budget applies every month'),
   "activeMonth": zod.number().nullish().describe('Month when a one-time budget applies'),
   "activeYear": zod.number().nullish().describe('Year when a one-time budget applies'),
-  "reducesIncomeSourceId": zod.number().nullish().describe('The income source this category is a cost of earning, if any. Its spending is worked out of that stream\'s profit on the income-streams report instead of only counting against the budget as a whole.')
+  "reducesIncomeSourceId": zod.number().nullish().describe('The income source this category is a cost of earning, if any. Its spending is worked out of that stream\'s profit on the income-streams report instead of only counting against the budget as a whole.'),
+  "costKind": zod.enum(['cogs', 'expense']).optional().describe('For a category linked to an income stream, what kind of cost it is on that business\'s profit and loss: cogs (cost of goods sold, comes off sales to give gross profit) or expense (running cost, comes off gross profit to give net profit).')
 })
 
 
@@ -502,7 +505,8 @@ export const UpdateBudgetCategoryBody = zod.object({
   "isRecurring": zod.boolean().optional(),
   "activeMonth": zod.number().min(1).max(updateBudgetCategoryBodyActiveMonthMax).nullish(),
   "activeYear": zod.number().min(updateBudgetCategoryBodyActiveYearMin).max(updateBudgetCategoryBodyActiveYearMax).nullish(),
-  "reducesIncomeSourceId": zod.number().nullish().describe('The income source this category is a cost of earning, if any. Send null to clear it.')
+  "reducesIncomeSourceId": zod.number().nullish().describe('The income source this category is a cost of earning, if any. Send null to clear it.'),
+  "costKind": zod.enum(['cogs', 'expense']).optional().describe('For a category linked to an income stream, what kind of cost it is on that business\'s profit and loss: cogs (cost of goods sold, comes off sales to give gross profit) or expense (running cost, comes off gross profit to give net profit). Omitted keeps what it is.')
 }).describe('Fields to update. A one-time budget requires both activeMonth and activeYear.')
 
 export const UpdateBudgetCategoryResponse = zod.object({
@@ -515,7 +519,8 @@ export const UpdateBudgetCategoryResponse = zod.object({
   "isRecurring": zod.boolean().describe('Whether this budget applies every month'),
   "activeMonth": zod.number().nullish().describe('Month when a one-time budget applies'),
   "activeYear": zod.number().nullish().describe('Year when a one-time budget applies'),
-  "reducesIncomeSourceId": zod.number().nullish().describe('The income source this category is a cost of earning, if any. Its spending is worked out of that stream\'s profit on the income-streams report instead of only counting against the budget as a whole.')
+  "reducesIncomeSourceId": zod.number().nullish().describe('The income source this category is a cost of earning, if any. Its spending is worked out of that stream\'s profit on the income-streams report instead of only counting against the budget as a whole.'),
+  "costKind": zod.enum(['cogs', 'expense']).optional().describe('For a category linked to an income stream, what kind of cost it is on that business\'s profit and loss: cogs (cost of goods sold, comes off sales to give gross profit) or expense (running cost, comes off gross profit to give net profit).')
 })
 
 
@@ -840,6 +845,53 @@ export const GetDashboardIncomeLedgerResponse = zod.object({
   "repaidToYou": zod.number(),
   "fromSavings": zod.number()
 }).describe('Money that arrived in the period without being income. Not in total, not in entries; here so the two can still be matched to a statement.')
+})
+
+
+/**
+ * One statement per income stream that has at least one category linked to it as a cost: sales (what it brought in, by the same rule as All income), less cost of goods sold, gives gross profit; less expenses, gives net profit. Each cost is listed by category. With no date range the answer covers the selected month.
+ * @summary A profit and loss statement for each side hustle
+ */
+export const getDashboardBusinessQueryMonthMax = 12;
+
+export const getDashboardBusinessQueryFromRegExp = new RegExp('^d{4}-d{2}-d{2}$');
+export const getDashboardBusinessQueryToRegExp = new RegExp('^d{4}-d{2}-d{2}$');
+
+
+export const GetDashboardBusinessQueryParams = zod.object({
+  "month": zod.coerce.number().min(1).max(getDashboardBusinessQueryMonthMax).optional(),
+  "year": zod.coerce.number().optional(),
+  "from": zod.coerce.string().regex(getDashboardBusinessQueryFromRegExp).optional(),
+  "to": zod.coerce.string().regex(getDashboardBusinessQueryToRegExp).optional()
+})
+
+export const GetDashboardBusinessResponse = zod.object({
+  "from": zod.string(),
+  "to": zod.string(),
+  "businesses": zod.array(zod.object({
+  "incomeSourceId": zod.number(),
+  "name": zod.string(),
+  "sales": zod.number(),
+  "costOfGoodsSold": zod.number(),
+  "grossProfit": zod.number(),
+  "expenses": zod.number(),
+  "netProfit": zod.number(),
+  "costOfGoodsSoldLines": zod.array(zod.object({
+  "category": zod.string(),
+  "amount": zod.number()
+})),
+  "expenseLines": zod.array(zod.object({
+  "category": zod.string(),
+  "amount": zod.number()
+}))
+})),
+  "totals": zod.object({
+  "sales": zod.number(),
+  "costOfGoodsSold": zod.number(),
+  "grossProfit": zod.number(),
+  "expenses": zod.number(),
+  "netProfit": zod.number()
+})
 })
 
 

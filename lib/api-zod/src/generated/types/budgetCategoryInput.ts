@@ -5,6 +5,7 @@
  * Jamvi API — personal and group money management
  * OpenAPI spec version: 0.1.0
  */
+import type { BudgetCategoryInputCostKind } from './budgetCategoryInputCostKind';
 
 export interface BudgetCategoryInput {
   /** Budget category name. "Uncategorized" is reserved internally and cannot be used. */
@@ -31,4 +32,6 @@ export interface BudgetCategoryInput {
      * @nullable
      */
   reducesIncomeSourceId?: number | null;
+  /** For a category linked to an income stream, what kind of cost it is on that business's profit and loss: cogs (cost of goods sold, comes off sales to give gross profit) or expense (running cost, comes off gross profit to give net profit). Defaults to cogs. */
+  costKind?: BudgetCategoryInputCostKind;
 }

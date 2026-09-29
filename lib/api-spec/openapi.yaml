@@ -766,6 +766,46 @@ paths:
               schema:
                 $ref: "#/components/schemas/IncomeLedger"
 
+  /dashboard/business:
+    get:
+      operationId: getDashboardBusiness
+      tags: [dashboard]
+      summary: A profit and loss statement for each side hustle
+      description: >-
+        One statement per income stream that has at least one category linked
+        to it as a cost: sales (what it brought in, by the same rule as All
+        income), less cost of goods sold, gives gross profit; less expenses,
+        gives net profit. Each cost is listed by category. With no date range
+        the answer covers the selected month.
+      parameters:
+        - name: month
+          in: query
+          schema:
+            type: number
+            minimum: 1
+            maximum: 12
+        - name: year
+          in: query
+          schema:
+            type: number
+        - name: from
+          in: query
+          schema:
+            type: string
+            pattern: '^d{4}-d{2}-d{2}$'
+        - name: to
+          in: query
+          schema:
+            type: string
+            pattern: '^d{4}-d{2}-d{2}$'
+      responses:
+        "200":
+          description: The statements for the period
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusinessReport"
+
   /dashboard/spending-by-item:
     get:
       operationId: getDashboardSpendingByItem
@@ -2556,6 +2596,14 @@ components:
             spending is worked out of that stream's profit on the
             income-streams report instead of only counting against the
             budget as a whole.
+        costKind:
+          type: string
+          enum: [cogs, expense]
+          description: >-
+            For a category linked to an income stream, what kind of cost it is on
+            that business's profit and loss: cogs (cost of goods sold, comes off
+            sales to give gross profit) or expense (running cost, comes off gross
+            profit to give net profit).
       required:
         - id
         - name
@@ -2591,6 +2639,14 @@ components:
         reducesIncomeSourceId:
           type: ["number", "null"]
           description: The income source this category is a cost of earning, if any.
+        costKind:
+          type: string
+          enum: [cogs, expense]
+          description: >-
+            For a category linked to an income stream, what kind of cost it is on
+            that business's profit and loss: cogs (cost of goods sold, comes off
+            sales to give gross profit) or expense (running cost, comes off gross
+            profit to give net profit). Defaults to cogs.
       required:
         - name
         - budgetAmount
@@ -2621,6 +2677,14 @@ components:
         reducesIncomeSourceId:
           type: ["number", "null"]
           description: The income source this category is a cost of earning, if any. Send null to clear it.
+        costKind:
+          type: string
+          enum: [cogs, expense]
+          description: >-
+            For a category linked to an income stream, what kind of cost it is on
+            that business's profit and loss: cogs (cost of goods sold, comes off
+            sales to give gross profit) or expense (running cost, comes off gross
+            profit to give net profit). Omitted keeps what it is.
 
     BudgetCategoryRecommendation:
       type: object
@@ -3107,6 +3171,69 @@ components:
         - streams
         - entries
         - otherMoneyIn
+
+    BusinessCostLine:
+      type: object
+      properties:
+        category:
+          type: string
+        amount:
+          type: number
+      required: [category, amount]
+
+    BusinessStatement:
+      type: object
+      properties:
+        incomeSourceId:
+          type: number
+        name:
+          type: string
+        sales:
+          type: number
+        costOfGoodsSold:
+          type: number
+        grossProfit:
+          type: number
+        expenses:
+          type: number
+        netProfit:
+          type: number
+        costOfGoodsSoldLines:
+          type: array
+          items:
+            $ref: "#/components/schemas/BusinessCostLine"
+        expenseLines:
+          type: array
+          items:
+            $ref: "#/components/schemas/BusinessCostLine"
+      required: [incomeSourceId, name, sales, costOfGoodsSold, grossProfit, expenses, netProfit, costOfGoodsSoldLines, expenseLines]
+
+    BusinessReport:
+      type: object
+      properties:
+        from:
+          type: string
+        to:
+          type: string
+        businesses:
+          type: array
+          items:
+            $ref: "#/components/schemas/BusinessStatement"
+        totals:
+          type: object
+          properties:
+            sales:
+              type: number
+            costOfGoodsSold:
+              type: number
+            grossProfit:
+              type: number
+            expenses:
+              type: number
+            netProfit:
+              type: number
+          required: [sales, costOfGoodsSold, grossProfit, expenses, netProfit]
+      required: [from, to, businesses, totals]
 
     SpendingByItemRow:
       type: object

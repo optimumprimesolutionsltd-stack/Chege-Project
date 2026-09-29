@@ -35,6 +35,7 @@ import type {
   BudgetCategoryRecommendationApplyInput,
   BudgetCategoryRecommendations,
   BudgetCategoryUpdateInput,
+  BusinessReport,
   CascadeContributeInput,
   CascadeContributeResult,
   CategoryBreakdown,
@@ -53,6 +54,7 @@ import type {
   ExpenseLedger,
   GetContributionsParams,
   GetDashboardActivityParams,
+  GetDashboardBusinessParams,
   GetDashboardCategoryBreakdownParams,
   GetDashboardCategoryLedgerParams,
   GetDashboardExpenseLedgerParams,
@@ -2175,6 +2177,91 @@ export function useGetDashboardIncomeLedger<TData = Awaited<ReturnType<typeof ge
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetDashboardIncomeLedgerQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetDashboardBusinessUrl = (params?: GetDashboardBusinessParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/dashboard/business?${stringifiedParams}` : `/api/dashboard/business`
+}
+
+/**
+ * One statement per income stream that has at least one category linked to it as a cost: sales (what it brought in, by the same rule as All income), less cost of goods sold, gives gross profit; less expenses, gives net profit. Each cost is listed by category. With no date range the answer covers the selected month.
+ * @summary A profit and loss statement for each side hustle
+ */
+export const getDashboardBusiness = async (params?: GetDashboardBusinessParams, options?: Parameters<typeof customFetch>[1]): Promise<BusinessReport> => {
+
+  return customFetch<BusinessReport>(getGetDashboardBusinessUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetDashboardBusinessQueryKey = (params?: GetDashboardBusinessParams,) => {
+    return [
+    `/api/dashboard/business`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetDashboardBusinessQueryOptions = <TData = Awaited<ReturnType<typeof getDashboardBusiness>>, TError = ErrorType<unknown>>(params?: GetDashboardBusinessParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDashboardBusiness>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetDashboardBusinessQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDashboardBusiness>>> = ({ signal }) => getDashboardBusiness(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getDashboardBusiness>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetDashboardBusinessQueryResult = NonNullable<Awaited<ReturnType<typeof getDashboardBusiness>>>
+export type GetDashboardBusinessQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary A profit and loss statement for each side hustle
+ */
+
+export function useGetDashboardBusiness<TData = Awaited<ReturnType<typeof getDashboardBusiness>>, TError = ErrorType<unknown>>(
+ params?: GetDashboardBusinessParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDashboardBusiness>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetDashboardBusinessQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
