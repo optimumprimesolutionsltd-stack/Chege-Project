@@ -2016,7 +2016,7 @@ router.post("/joint-account/reversals/auto-link", async (req, res): Promise<void
     if (notAMoneyBack(deposit)) continue;
     const candidates = await reversalCandidates(deposit, groupId);
     // One payment, or the same payment made twice that day (see soleReversalCandidate).
-    const sole = soleReversalCandidate(candidates);
+    const sole = soleReversalCandidate(candidates, String(deposit.date));
     if (sole) {
       const refused = await linkReversal(deposit, sole.tx, groupId);
       if (!refused) {

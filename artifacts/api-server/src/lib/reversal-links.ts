@@ -68,7 +68,15 @@ export function isMoneyBack(depositId: SQL | unknown, description: SQL | unknown
  */
 export function soleReversalCandidate<T extends { tx: { date: unknown; description: string | null; accountId: number | null; expenseCategory?: string | null } }>(
   candidates: readonly T[],
+  /** The money back's own day. M-Pesa reverses a payment the day it is made, so
+   *  payments of that amount on that day are the ones it can be; the same
+   *  amount paid on other days in the window (a monthly KCB payment, say)
+   *  used to make every reversal of it look ambiguous and none was matched. */
+  moneyBackDay?: string | null,
 ): T | null {
+  const day = moneyBackDay ? String(moneyBackDay).slice(0, 10) : null;
+  const sameDay = day ? candidates.filter((row) => String(row.tx.date).slice(0, 10) === day) : [];
+  if (sameDay.length > 0) candidates = sameDay;
   if (candidates.length === 0) return null;
   const key = (row: T) =>
     [String(row.tx.date), row.tx.accountId ?? "", row.tx.expenseCategory ?? "", (row.tx.description ?? "").toLowerCase().replace(/[^a-z0-9]/g, "")].join("|");
