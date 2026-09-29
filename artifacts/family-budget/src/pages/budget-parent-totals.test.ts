@@ -7,7 +7,7 @@ const page = readFileSync('src/pages/budget.tsx', 'utf8');
 // added up. Summing every row on top of that counted each subcategory twice.
 describe('the web report totals count a subcategory once', () => {
   it('adds up only the rows nothing is nested under', () => {
-    expect(page).toContain('const leafBreakdown = (breakdown ?? []).filter(');
+    expect(page).toContain('const allLeaves = (breakdown ?? []).filter(');
     expect(page).toContain('!(breakdown ?? []).some((other) => other.parentName === item.category)');
   });
 
