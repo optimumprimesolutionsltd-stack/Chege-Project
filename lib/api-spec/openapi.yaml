@@ -798,6 +798,14 @@ paths:
           schema:
             type: string
             pattern: '^d{4}-d{2}-d{2}$'
+        - name: detail
+          in: query
+          description: >-
+            When true, each statement also carries the entries behind its sales
+            and each cost, each cost's share of sales, and the same figures for
+            the period of the same length just before.
+          schema:
+            type: boolean
       responses:
         "200":
           description: The statements for the period
@@ -3220,6 +3228,17 @@ components:
         - entries
         - otherMoneyIn
 
+    BusinessEntry:
+      type: object
+      properties:
+        date:
+          type: string
+        description:
+          type: string
+        amount:
+          type: number
+      required: [date, description, amount]
+
     BusinessCostLine:
       type: object
       properties:
@@ -3227,6 +3246,18 @@ components:
           type: string
         amount:
           type: number
+        shareOfSales:
+          type: number
+          nullable: true
+          description: With detail, this cost as a percentage of sales; null when nothing sold.
+        entries:
+          type: array
+          description: With detail, the newest entries behind this cost.
+          items:
+            $ref: "#/components/schemas/BusinessEntry"
+        more:
+          type: number
+          description: With detail, how many more entries there are beyond those listed.
       required: [category, amount]
 
     BusinessStatement:
@@ -3254,6 +3285,25 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/BusinessCostLine"
+        salesEntries:
+          type: array
+          description: With detail, the newest sales behind the sales figure.
+          items:
+            $ref: "#/components/schemas/BusinessEntry"
+        moreSalesEntries:
+          type: number
+        previous:
+          type: object
+          description: With detail, the same figures for the period of the same length just before.
+          properties:
+            from: { type: string }
+            to: { type: string }
+            sales: { type: number }
+            costOfGoodsSold: { type: number }
+            grossProfit: { type: number }
+            expenses: { type: number }
+            netProfit: { type: number }
+          required: [from, to, sales, costOfGoodsSold, grossProfit, expenses, netProfit]
       required: [incomeSourceId, name, sales, costOfGoodsSold, grossProfit, expenses, netProfit, costOfGoodsSoldLines, expenseLines]
 
     BusinessReport:

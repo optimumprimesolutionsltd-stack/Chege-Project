@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import express from "express";
 import request from "supertest";
@@ -138,5 +139,16 @@ describe("GET /dashboard/income-ledger", () => {
       .find((call) => sqlText(call).includes("reduces_income_source_id IS NOT NULL"))!;
     expect(costs.values).toContain("2026-09-01");
     expect(costs.values).toContain("2026-09-28");
+  });
+});
+
+describe("the period before, for comparing", () => {
+  const dashboard = readFileSync("src/routes/dashboard.ts", "utf8");
+  it("is the previous month for a whole month, else the same number of days before", () => {
+    expect(dashboard).toContain("function periodBefore(from: string, to: string)");
+    expect(dashboard).toContain("const prevStart = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() - 1, 1));");
+  });
+  it("is only loaded when details are asked for", () => {
+    expect(dashboard).toContain("detail ? loadIncomeLedger(groupId, previousRange.from, previousRange.to, null) : Promise.resolve(undefined),");
   });
 });

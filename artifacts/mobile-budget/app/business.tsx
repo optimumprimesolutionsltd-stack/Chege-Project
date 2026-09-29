@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -19,7 +20,9 @@ function margin(part: number, sales: number): string | null {
   return sales > 0 ? `${Math.round((part / sales) * 100)}%` : null;
 }
 
-type Line = { category: string; amount: number };
+type Entry = { date: string; description: string; amount: number };
+type Line = { category: string; amount: number; shareOfSales?: number | null; entries?: Entry[]; more?: number };
+type Figures = { sales: number; costOfGoodsSold: number; grossProfit: number; expenses: number; netProfit: number };
 type Statement = {
   incomeSourceId: number;
   name: string;
@@ -30,7 +33,17 @@ type Statement = {
   netProfit: number;
   costOfGoodsSoldLines: Line[];
   expenseLines: Line[];
+  salesEntries?: Entry[];
+  moreSalesEntries?: number;
+  previous?: Figures & { from: string; to: string };
 };
+
+const DETAILS_KEY = 'jamvi:business-details-open';
+
+function shortDay(iso: string): string {
+  const date = new Date(`${iso.slice(0, 10)}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? iso : date.toLocaleDateString('en-KE', { day: 'numeric', month: 'short' });
+}
 
 /**
  * A profit and loss statement for each side hustle, month by month.
@@ -48,8 +61,25 @@ export default function BusinessScreen() {
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
   const [opened, setOpened] = useState<Set<string>>(new Set());
+  // Which businesses show their details. Off until asked for, and remembered
+  // on this phone - a convenience, so it is fine to lose.
+  const [detailed, setDetailed] = useState<Set<number>>(new Set());
+  useEffect(() => {
+    AsyncStorage.getItem(DETAILS_KEY)
+      .then((raw) => { if (raw) setDetailed(new Set((JSON.parse(raw) as number[]).filter(Number.isFinite))); })
+      .catch(() => {});
+  }, []);
+  const toggleDetails = (id: number) =>
+    setDetailed((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      AsyncStorage.setItem(DETAILS_KEY, JSON.stringify([...next])).catch(() => {});
+      return next;
+    });
 
-  const params = { month, year };
+  // The details cost more to work out, so they are only asked for when shown.
+  const params = { month, year, ...(detailed.size > 0 ? { detail: true } : {}) };
   const { data, isLoading, isError, refetch } = useGetDashboardBusiness(params, {
     query: { queryKey: getGetDashboardBusinessQueryKey(params) },
   });
@@ -86,7 +116,22 @@ export default function BusinessScreen() {
     </View>
   );
 
-  const costRows = (key: string, label: string, total: number, lines: Line[]) => {
+  const entryRows = (key: string, entries: Entry[], more = 0) => (
+    <View testID={`business-entries-${key}`}>
+      {entries.map((entry, index) => (
+        <View key={`${key}/${index}`} style={[styles.row, styles.entryRow]}>
+          <Text style={[styles.entryDate, { color: colors.mutedForeground }]}>{shortDay(entry.date)}</Text>
+          <Text style={[styles.subLabel, { color: colors.mutedForeground }]} numberOfLines={1}>{entry.description || '—'}</Text>
+          <Text style={[styles.subAmount, { color: colors.mutedForeground }]}>{kes(entry.amount)}</Text>
+        </View>
+      ))}
+      {more > 0 ? (
+        <Text style={[styles.subLabel, styles.entryRow, { color: colors.mutedForeground }]}>and {more} more</Text>
+      ) : null}
+    </View>
+  );
+
+  const costRows = (key: string, label: string, total: number, lines: Line[], withDetails = false) => {
     const isOpen = opened.has(key);
     return (
       <View>
@@ -106,33 +151,121 @@ export default function BusinessScreen() {
             {lines.length > 0 ? <Feather name={isOpen ? 'chevron-up' : 'chevron-down'} size={14} color={colors.mutedForeground} /> : null}
           </View>
         </Pressable>
-        {isOpen ? lines.map((line) => (
-          <View key={`${key}/${line.category}`} style={[styles.row, styles.subRow]}>
-            <Text style={[styles.subLabel, { color: colors.mutedForeground }]} numberOfLines={1}>{line.category || 'Uncategorised'}</Text>
-            <Text style={[styles.subAmount, { color: colors.mutedForeground }]}>{kes(line.amount)}</Text>
-          </View>
-        )) : null}
+        {isOpen ? lines.map((line) => {
+          const lineKey = `${key}/${line.category}`;
+          const entriesOpen = opened.has(lineKey);
+          const canOpen = withDetails && (line.entries?.length ?? 0) > 0;
+          return (
+            <View key={lineKey}>
+              <Pressable
+                onPress={canOpen ? () => toggle(lineKey) : undefined}
+                disabled={!canOpen}
+                accessibilityRole={canOpen ? 'button' : 'text'}
+                style={[styles.row, styles.subRow]}
+                testID={`business-line-${lineKey}`}
+              >
+                <Text style={[styles.subLabel, { color: colors.mutedForeground }]} numberOfLines={1}>{line.category || 'Uncategorised'}</Text>
+                <View style={styles.rowRight}>
+                  {withDetails && line.shareOfSales != null ? (
+                    <Text style={[styles.share, { color: colors.mutedForeground }]}>{Math.round(line.shareOfSales)}% of sales</Text>
+                  ) : null}
+                  <Text style={[styles.subAmount, { color: colors.mutedForeground }]}>{kes(line.amount)}</Text>
+                  {canOpen ? <Feather name={entriesOpen ? 'chevron-up' : 'chevron-down'} size={12} color={colors.mutedForeground} /> : null}
+                </View>
+              </Pressable>
+              {entriesOpen && line.entries ? entryRows(lineKey, line.entries, line.more ?? 0) : null}
+            </View>
+          );
+        }) : null}
       </View>
     );
   };
 
-  const statement = (business: Statement) => (
-    <View key={business.incomeSourceId} style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]} testID={`business-statement-${business.incomeSourceId}`}>
-      <View style={styles.cardHead}>
-        <Text style={[styles.cardTitle, { color: colors.foreground }]} numberOfLines={1}>{business.name}</Text>
-        <Text style={[styles.cardNet, { color: amountColor(business.netProfit) }]}>
-          {business.netProfit < 0 ? 'Loss' : 'Profit'} {kes(Math.abs(business.netProfit))}
-        </Text>
+  const comparison = (business: Statement) => {
+    const previous = business.previous;
+    if (!previous) return null;
+    const monthName = new Date(`${previous.from}T00:00:00`).toLocaleDateString('en-KE', { month: 'long' });
+    const changeRow = (label: string, now: number, then: number) => {
+      const change = now - then;
+      return (
+        <View key={label} style={[styles.row, styles.subRow]}>
+          <Text style={[styles.subLabel, { color: colors.mutedForeground }]}>{label}</Text>
+          <View style={styles.rowRight}>
+            <Text style={[styles.subAmount, { color: colors.mutedForeground }]}>{kes(then)}</Text>
+            <Text style={[styles.share, styles.change, { color: change === 0 ? colors.mutedForeground : change > 0 ? '#16a34a' : LOSS }]}>
+              {change === 0 ? 'same' : `${change > 0 ? '▲' : '▼'} ${kes(Math.abs(change))}`}
+            </Text>
+          </View>
+        </View>
+      );
+    };
+    return (
+      <View style={[styles.compare, { borderColor: colors.border }]} testID={`business-compare-${business.incomeSourceId}`}>
+        <Text style={[styles.compareTitle, { color: colors.foreground }]}>Compared with {monthName}</Text>
+        {changeRow('Sales', business.sales, previous.sales)}
+        {changeRow('Cost of goods sold', business.costOfGoodsSold, previous.costOfGoodsSold)}
+        {changeRow('Gross profit', business.grossProfit, previous.grossProfit)}
+        {changeRow('Expenses', business.expenses, previous.expenses)}
+        {changeRow('Net profit', business.netProfit, previous.netProfit)}
       </View>
-      {row('Sales', business.sales)}
-      {costRows(`${business.incomeSourceId}-cogs`, 'Cost of goods sold', business.costOfGoodsSold, business.costOfGoodsSoldLines)}
-      <View style={[styles.rule, { backgroundColor: colors.border }]} />
-      {row('Gross profit', business.grossProfit, { strong: true, share: margin(business.grossProfit, business.sales) })}
-      {costRows(`${business.incomeSourceId}-expense`, 'Expenses', business.expenses, business.expenseLines)}
-      <View style={[styles.rule, { backgroundColor: colors.border }]} />
-      {row('Net profit', business.netProfit, { strong: true, share: margin(business.netProfit, business.sales), testID: `business-net-${business.incomeSourceId}` })}
-    </View>
-  );
+    );
+  };
+
+  const statement = (business: Statement) => {
+    const withDetails = detailed.has(business.incomeSourceId) && business.previous !== undefined;
+    const salesKey = `${business.incomeSourceId}-sales`;
+    const salesOpen = opened.has(salesKey);
+    const salesEntries = business.salesEntries ?? [];
+    return (
+      <View key={business.incomeSourceId} style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]} testID={`business-statement-${business.incomeSourceId}`}>
+        <View style={styles.cardHead}>
+          <Text style={[styles.cardTitle, { color: colors.foreground }]} numberOfLines={1}>{business.name}</Text>
+          <Text style={[styles.cardNet, { color: amountColor(business.netProfit) }]}>
+            {business.netProfit < 0 ? 'Loss' : 'Profit'} {kes(Math.abs(business.netProfit))}
+          </Text>
+        </View>
+        {withDetails && salesEntries.length > 0 ? (
+          <>
+            <Pressable onPress={() => toggle(salesKey)} accessibilityRole="button" accessibilityState={{ expanded: salesOpen }} style={styles.row} testID={`business-${salesKey}`}>
+              <Text style={[styles.label, { color: colors.mutedForeground }]}>Sales ({salesEntries.length + (business.moreSalesEntries ?? 0)})</Text>
+              <View style={styles.rowRight}>
+                <Text style={[styles.amount, { color: amountColor(business.sales) }]}>{kes(business.sales)}</Text>
+                <Feather name={salesOpen ? 'chevron-up' : 'chevron-down'} size={14} color={colors.mutedForeground} />
+              </View>
+            </Pressable>
+            {salesOpen ? entryRows(salesKey, salesEntries, business.moreSalesEntries ?? 0) : null}
+          </>
+        ) : row('Sales', business.sales)}
+        {costRows(`${business.incomeSourceId}-cogs`, 'Cost of goods sold', business.costOfGoodsSold, business.costOfGoodsSoldLines, withDetails)}
+        <View style={[styles.rule, { backgroundColor: colors.border }]} />
+        {row('Gross profit', business.grossProfit, { strong: true, share: margin(business.grossProfit, business.sales) })}
+        {costRows(`${business.incomeSourceId}-expense`, 'Expenses', business.expenses, business.expenseLines, withDetails)}
+        <View style={[styles.rule, { backgroundColor: colors.border }]} />
+        {row('Net profit', business.netProfit, { strong: true, share: margin(business.netProfit, business.sales), testID: `business-net-${business.incomeSourceId}` })}
+        {withDetails ? comparison(business) : null}
+        {withDetails && business.costOfGoodsSold > business.sales ? (
+          <Text style={[styles.note2, { color: colors.mutedForeground }]} testID={`business-stock-note-${business.incomeSourceId}`}>
+            Stock counts in the month it is bought, not the month it sells. A month you stock up can show a loss that later
+            months make back as that stock sells.
+          </Text>
+        ) : null}
+        <View style={styles.cardFoot}>
+          <Pressable onPress={() => toggleDetails(business.incomeSourceId)} accessibilityRole="button" hitSlop={6} testID={`business-details-${business.incomeSourceId}`}>
+            <Text style={[styles.link, { color: colors.primary }]}>{detailed.has(business.incomeSourceId) ? 'Hide details' : 'Show details'}</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => router.push('/(tabs)/reports')}
+            accessibilityRole="button"
+            accessibilityLabel="Change which costs count, in Reports, Income streams, Cost categories"
+            hitSlop={6}
+            testID={`business-change-costs-${business.incomeSourceId}`}
+          >
+            <Text style={[styles.link, { color: colors.primary }]}>Change costs</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  };
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background, paddingTop: insets.top }]}>
@@ -225,4 +358,12 @@ const styles = StyleSheet.create({
   note: { borderWidth: 1, borderRadius: 12, padding: 16, gap: 6, alignItems: 'center' },
   noteText: { fontSize: 13, fontFamily: 'Inter_400Regular', textAlign: 'center' },
   footnote: { fontSize: 11, fontFamily: 'Inter_400Regular', textAlign: 'center', marginTop: 4 },
+  entryRow: { paddingLeft: 28, paddingVertical: 2 },
+  entryDate: { fontSize: 11, fontFamily: 'Inter_400Regular', width: 44 },
+  compare: { borderTopWidth: StyleSheet.hairlineWidth, marginTop: 8, paddingTop: 8 },
+  compareTitle: { fontSize: 13, fontFamily: 'Inter_600SemiBold', marginBottom: 2 },
+  change: { minWidth: 72, textAlign: 'right' },
+  note2: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 8 },
+  cardFoot: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 },
+  link: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
 });

@@ -758,10 +758,35 @@ export interface IncomeLedger {
   otherMoneyIn: IncomeLedgerOtherMoneyIn;
 }
 
+export interface BusinessEntry {
+  date: string;
+  description: string;
+  amount: number;
+}
+
 export interface BusinessCostLine {
   category: string;
   amount: number;
+  /** With detail, this cost as a percentage of sales; null when nothing sold. */
+  shareOfSales?: number | null;
+  /** With detail, the newest entries behind this cost. */
+  entries?: BusinessEntry[];
+  /** With detail, how many more entries there are beyond those listed. */
+  more?: number;
 }
+
+/**
+ * With detail, the same figures for the period of the same length just before.
+ */
+export type BusinessStatementPrevious = {
+  from: string;
+  to: string;
+  sales: number;
+  costOfGoodsSold: number;
+  grossProfit: number;
+  expenses: number;
+  netProfit: number;
+};
 
 export interface BusinessStatement {
   incomeSourceId: number;
@@ -773,6 +798,11 @@ export interface BusinessStatement {
   netProfit: number;
   costOfGoodsSoldLines: BusinessCostLine[];
   expenseLines: BusinessCostLine[];
+  /** With detail, the newest sales behind the sales figure. */
+  salesEntries?: BusinessEntry[];
+  moreSalesEntries?: number;
+  /** With detail, the same figures for the period of the same length just before. */
+  previous?: BusinessStatementPrevious;
 }
 
 export type BusinessReportTotals = {
@@ -2116,6 +2146,10 @@ from?: string;
  * @pattern ^d{4}-d{2}-d{2}$
  */
 to?: string;
+/**
+ * When true, each statement also carries the entries behind its sales and each cost, each cost's share of sales, and the same figures for the period of the same length just before.
+ */
+detail?: boolean;
 };
 
 export type GetDashboardSpendingByItemParams = {

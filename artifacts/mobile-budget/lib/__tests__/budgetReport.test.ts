@@ -111,3 +111,23 @@ describe('All income', () => {
     expect(income).toContain('money back from reversed payments');
   });
 });
+
+describe('a side-hustle cost filed under a household heading', () => {
+  // "Still not true": Stock sat under a heading, and the heading's own figure
+  // - which includes its sub-categories - still carried Stock's spending.
+  const report = budgetReport([
+    { category: 'Shop', budgetAmount: 10000, spentAmount: 175134, parentName: null },
+    { category: 'Stock', budgetAmount: 0, spentAmount: 165134, parentName: 'Shop', isBusinessCost: true },
+    { category: 'Shop supplies', budgetAmount: 10000, spentAmount: 10000, parentName: 'Shop' },
+    { category: 'Rent', budgetAmount: 25000, spentAmount: 25000, parentName: null },
+  ]);
+
+  it('comes out of the heading as well as its own row', () => {
+    expect(report.topLevel.find((row) => row.category === 'Shop')).toMatchObject({ budgetAmount: 10000, spentAmount: 10000 });
+    expect(report.totals).toMatchObject({ budget: 35000, spent: 35000, businessCosts: 165134 });
+  });
+
+  it('leaves the heading off the over-budget list once it is out', () => {
+    expect(report.over).toEqual([]);
+  });
+});

@@ -864,7 +864,8 @@ export const GetDashboardBusinessQueryParams = zod.object({
   "month": zod.coerce.number().min(1).max(getDashboardBusinessQueryMonthMax).optional(),
   "year": zod.coerce.number().optional(),
   "from": zod.coerce.string().regex(getDashboardBusinessQueryFromRegExp).optional(),
-  "to": zod.coerce.string().regex(getDashboardBusinessQueryToRegExp).optional()
+  "to": zod.coerce.string().regex(getDashboardBusinessQueryToRegExp).optional(),
+  "detail": zod.coerce.boolean().optional().describe('When true, each statement also carries the entries behind its sales and each cost, each cost\'s share of sales, and the same figures for the period of the same length just before.')
 })
 
 export const GetDashboardBusinessResponse = zod.object({
@@ -880,12 +881,41 @@ export const GetDashboardBusinessResponse = zod.object({
   "netProfit": zod.number(),
   "costOfGoodsSoldLines": zod.array(zod.object({
   "category": zod.string(),
+  "amount": zod.number(),
+  "shareOfSales": zod.number().nullish().describe('With detail, this cost as a percentage of sales; null when nothing sold.'),
+  "entries": zod.array(zod.object({
+  "date": zod.string(),
+  "description": zod.string(),
   "amount": zod.number()
+})).optional().describe('With detail, the newest entries behind this cost.'),
+  "more": zod.number().optional().describe('With detail, how many more entries there are beyond those listed.')
 })),
   "expenseLines": zod.array(zod.object({
   "category": zod.string(),
+  "amount": zod.number(),
+  "shareOfSales": zod.number().nullish().describe('With detail, this cost as a percentage of sales; null when nothing sold.'),
+  "entries": zod.array(zod.object({
+  "date": zod.string(),
+  "description": zod.string(),
   "amount": zod.number()
-}))
+})).optional().describe('With detail, the newest entries behind this cost.'),
+  "more": zod.number().optional().describe('With detail, how many more entries there are beyond those listed.')
+})),
+  "salesEntries": zod.array(zod.object({
+  "date": zod.string(),
+  "description": zod.string(),
+  "amount": zod.number()
+})).optional().describe('With detail, the newest sales behind the sales figure.'),
+  "moreSalesEntries": zod.number().optional(),
+  "previous": zod.object({
+  "from": zod.string(),
+  "to": zod.string(),
+  "sales": zod.number(),
+  "costOfGoodsSold": zod.number(),
+  "grossProfit": zod.number(),
+  "expenses": zod.number(),
+  "netProfit": zod.number()
+}).optional().describe('With detail, the same figures for the period of the same length just before.')
 })),
   "totals": zod.object({
   "sales": zod.number(),
