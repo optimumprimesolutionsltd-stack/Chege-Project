@@ -79,6 +79,7 @@ import { formatExact } from '@/lib/formatExact';
 import { StatementReader, type ReaderJob } from '@/components/StatementReader';
 import { rememberMpesaCard } from '@/lib/mpesaCard';
 import { keepScreenAwakeWhileSaving, letScreenSleepAgain } from '@/lib/keepAwake';
+import { getImportProgress, setImportProgress } from '@/lib/importProgress';
 import { runPool, savePosting, SAVE_CONCURRENCY, type PostingApi } from '@/lib/savePosting';
 import { parseStoredRules, payeeKey, payeeName, ruleLabel, rulesStorageKey, withRule, withoutRule, type PayeeRules } from '@/lib/payeeLearning';
 import { saveDebtLinks } from '@/lib/debtReversal';
@@ -458,6 +459,11 @@ export default function MpesaImportScreen() {
   // not just sit behind a spinner with no sign of life.
   const [saveProgress, setSaveProgress] = useState<{ done: number; total: number } | null>(null);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
+  // Seen here, the result needs no bar elsewhere: cleared on leaving once it
+  // is done. Left while still saving, it stays for the bar to report.
+  useEffect(() => () => {
+    if (getImportProgress()?.stage === 'done') setImportProgress(null);
+  }, []);
   // Unfinished work survives an update restart, a crash, or a switch of budget.
   const pendingChoicesRef = React.useRef<Record<number, Choice> | null>(null);
   const { restored, dismiss: dismissRestored, discard: discardDraft } = useDraft<{
@@ -1111,6 +1117,10 @@ export default function MpesaImportScreen() {
       return built ? [{ item, choice, built }] : [];
     });
     setSaveProgress({ done: 0, total: toSave.length });
+    // The same count for the bar the rest of the app shows, so the person can
+    // leave this screen while it saves and still see how it went.
+    let doneCount = 0;
+    setImportProgress({ stage: 'saving', done: 0, total: toSave.length });
     try {
       await runPool(toSave, SAVE_CONCURRENCY, async ({ item, choice, built }) => {
         try {
@@ -1125,6 +1135,8 @@ export default function MpesaImportScreen() {
           else result.failed.push({ what: item.description ?? 'A message', why: message });
         } finally {
           setSaveProgress((current) => (current ? { ...current, done: current.done + 1 } : current));
+          doneCount += 1;
+          setImportProgress({ stage: 'saving', done: doneCount, total: toSave.length });
         }
       });
     } finally {
@@ -1138,6 +1150,7 @@ export default function MpesaImportScreen() {
         setStatementReading((current) => (current ? { ...current, lines: marked } : current));
       }
       setOutcome(result);
+      setImportProgress({ stage: 'done', saved: result.saved, repeats: result.repeats, failed: result.failed.length });
       if (result.saved > 0) void rememberMpesaCard('done');
       // A reversal just saved is matched to the payment it undid when only one
       // could be it, so it never counts as income. Quietly: the rest are left

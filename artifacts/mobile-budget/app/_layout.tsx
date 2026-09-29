@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, AppState, BackHandler, Platform } from 'react-native';
 import { UpdatePrompt } from '@/components/UpdatePrompt';
+import { ImportSavingBar } from '@/components/ImportSavingBar';
 import { updateNotesFrom } from '@/lib/updateNote';
 import { FeedbackModal } from '@/components/FeedbackModal';
 import { AppLoading } from '@/components/AppLoading';
@@ -510,6 +511,8 @@ export default function RootLayout() {
               <KeyboardProvider>
                 <AuthProvider>
                   <RootLayoutNav />
+                  {/* An M-Pesa import saving, or just saved, seen from any screen. */}
+                  <ImportSavingBar />
                 </AuthProvider>
               </KeyboardProvider>
             </GestureHandlerRootView>

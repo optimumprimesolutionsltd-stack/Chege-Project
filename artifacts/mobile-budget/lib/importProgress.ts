@@ -1,0 +1,44 @@
+import { useSyncExternalStore } from 'react';
+
+/**
+ * How an M-Pesa import's saving is going, for the bar the rest of the app
+ * shows while it runs.
+ *
+ * Saving carries on when the person leaves the import screen, but nothing
+ * said so: they either sat and watched a long statement save, or left and
+ * never learned what was saved and what failed. The import screen reports
+ * here, and the bar reads it anywhere.
+ */
+export type ImportProgress =
+  | { stage: 'saving'; done: number; total: number }
+  | { stage: 'done'; saved: number; repeats: number; failed: number };
+
+let current: ImportProgress | null = null;
+const listeners = new Set<() => void>();
+
+export function setImportProgress(next: ImportProgress | null): void {
+  current = next;
+  for (const listener of listeners) listener();
+}
+
+export function getImportProgress(): ImportProgress | null {
+  return current;
+}
+
+const subscribe = (listener: () => void) => {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+};
+
+export function useImportProgress(): ImportProgress | null {
+  return useSyncExternalStore(subscribe, getImportProgress, getImportProgress);
+}
+
+/** What the bar says. */
+export function importProgressText(progress: ImportProgress): string {
+  if (progress.stage === 'saving') return `Saving M-Pesa entries · ${progress.done} of ${progress.total}`;
+  const parts = [`${progress.saved} saved`];
+  if (progress.repeats > 0) parts.push(`${progress.repeats} already recorded`);
+  if (progress.failed > 0) parts.push(`${progress.failed} not saved - import again to retry them`);
+  return `M-Pesa import done: ${parts.join(', ')}`;
+}
