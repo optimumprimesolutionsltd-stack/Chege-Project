@@ -76,7 +76,7 @@ describe('the server settles the figures', () => {
   });
 
   it('stops the month total counting a parent against its own children', () => {
-    expect(route).toContain('const totalBudget = sumBudget(budgetRows);');
+    expect(route).toContain('const totalBudget = sumBudget(budgetRows.filter((row) => row.reducesIncomeSourceId == null));');
     expect(route).not.toContain('COALESCE(SUM(${budgetCategoriesTable.budgetAmount}), 0)');
   });
 

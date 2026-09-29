@@ -16,7 +16,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
@@ -231,6 +231,8 @@ export default function ReportsScreen() {
     scrollRef.current?.scrollTo({ y: Math.max(y - 12, 0), animated: true });
   }, []);
   const [watchDetailsOpen, setWatchDetailsOpen] = useState(false);
+  // Business's Change costs arrives with the stream whose costs to change.
+  const { costsFor, costsName } = useLocalSearchParams<{ costsFor?: string; costsName?: string }>();
 
   const handleMonthChange = useCallback((m: number, y: number) => {
     setMonth(m); setYear(y);
@@ -295,6 +297,15 @@ export default function ReportsScreen() {
         .reduce((sum, portion) => sum + portion.amount, 0);
       return amount > 0 ? [{ id: entry.id, date: entry.date, description: entry.description, amount }] : [];
     });
+
+  useEffect(() => {
+    const id = Number(costsFor);
+    // Wait for the group, which says whether this person may change costs.
+    if (!costsFor || !Number.isFinite(id) || !group) return;
+    router.setParams({ costsFor: undefined, costsName: undefined });
+    jumpToSection('income');
+    if (canManageCostCategories) setCostCategoryFor({ incomeSourceId: id, sourceName: costsName ?? 'this stream' });
+  }, [costsFor, costsName, group, canManageCostCategories, jumpToSection]);
 
   const isLoading = loadingExp || loadingCat || loadingSummary;
 

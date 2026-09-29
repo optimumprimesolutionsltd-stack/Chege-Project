@@ -34,7 +34,7 @@ describe("money that is neither earned nor spent is reported", () => {
   it("changes none of the figures it sits beside", () => {
     // The whole point is that these are excluded from income and spending.
     // Adding them to either would undo 0038, 0040 and 0042 at once.
-    expect(dashboard).toContain("const totalSpent = Number(spentRow.total) + Number(categorisedDisbursementsRow.total);");
+    expect(dashboard).toContain("const totalSpent = Math.max(0, Number(spentRow.total) + Number(categorisedDisbursementsRow.total) - businessCosts);");
   });
 });
 
@@ -67,5 +67,14 @@ describe("and the Reports tab says so", () => {
   it("stays away when there is none of it", () => {
     // A household that neither borrows nor lends should never see this.
     expect(reports).toContain('{movedWithoutEarning > 0 ? (');
+  });
+});
+
+// "What did I spend this month? KES 530,892" - stock for a side hustle counted
+// as household spending on Home, when the Budget report already left it out.
+describe("Home's spent and budget", () => {
+  it("leave out a side hustle's costs, as the Budget report does", () => {
+    expect(dashboard).toContain("const businessCosts = await incomeStreamCostLines(groupId, monthFrom, monthTo)");
+    expect(dashboard).toContain("const totalBudget = sumBudget(budgetRows.filter((row) => row.reducesIncomeSourceId == null));");
   });
 });
