@@ -711,9 +711,14 @@ export default function BudgetScreen() {
   // Not every row: a parent's figures are its subcategories added up — budget
   // and spending both — so adding the parent alongside them counted each
   // subcategory twice and inflated the month's headline.
-  const leafBreakdown = breakdown.filter(
+  const allLeaves = breakdown.filter(
     (category) => !breakdown.some((other) => other.parentName === category.category),
   );
+  // A side hustle's costs (stock, its fuel, its transport) are the business's,
+  // already taken off its profit on Business - not the household's spending.
+  // Counted here they made "actual" and "over" look far worse than they were.
+  const leafBreakdown = allLeaves.filter((category) => !category.isBusinessCost);
+  const businessCosts = allLeaves.filter((category) => category.isBusinessCost).reduce((sum, category) => sum + category.spentAmount, 0);
   const reportBudget = leafBreakdown.reduce((sum, category) => sum + category.budgetAmount, 0);
   const reportActual = leafBreakdown.reduce((sum, category) => sum + category.spentAmount, 0);
   const reportVariance = reportBudget - reportActual;
@@ -1426,6 +1431,11 @@ export default function BudgetScreen() {
                   <Text style={[styles.overallSpent, reportVariance < 0 && { color: '#f87171' }]}>KES {formatKES(Math.abs(reportVariance))}</Text>
                 </View>
               </View>
+              {businessCosts > 0 ? (
+                <Text style={[styles.overallContext, { marginTop: 4 }]} testID="budget-business-costs">
+                  Not counted here: KES {formatKES(businessCosts)} of side-hustle costs, which come off its profit in Business.
+                </Text>
+              ) : null}
               <View style={styles.overallContextRow}>
                 <Feather name="arrow-up-right" size={13} color="#d9fbe5" />
                 <Text style={styles.overallContext}>{summaryContext}</Text>

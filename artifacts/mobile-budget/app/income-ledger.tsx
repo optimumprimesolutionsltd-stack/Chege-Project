@@ -83,6 +83,7 @@ export default function IncomeLedgerScreen() {
     other?.borrowed ? `KES ${formatKES(other.borrowed)} borrowed` : null,
     other?.repaidToYou ? `KES ${formatKES(other.repaidToYou)} paid back to you` : null,
     other?.fromSavings ? `KES ${formatKES(other.fromSavings)} from savings` : null,
+    other?.moneyBack ? `KES ${formatKES(other.moneyBack)} money back from reversed payments` : null,
   ].filter((part): part is string => part != null);
 
   // Days are already newest-first from the server; this only groups them so

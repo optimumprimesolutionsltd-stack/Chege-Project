@@ -141,3 +141,23 @@ describe("matching reversals automatically", () => {
     expect(auto).toContain("res.json({ linked: 0, needsYou: [] });");
   });
 });
+
+describe("money back is never income, linked or not", () => {
+  it("is left out by what the import files it as, before the table exists too", () => {
+    setReversalLinksReadyForTests(false);
+    const fragment = JSON.stringify((notAReversal(sql`t.id`) as unknown as { queryChunks: unknown[] }).queryChunks);
+    expect(fragment).toContain("mb.description ILIKE");
+    expect(fragment).toContain("Money back%");
+  });
+
+  it("is left out by its link too, once the table exists", () => {
+    setReversalLinksReadyForTests(true);
+    const fragment = JSON.stringify((notAReversal(sql`t.id`) as unknown as { queryChunks: unknown[] }).queryChunks);
+    expect(fragment).toContain("mb.description ILIKE");
+    expect(fragment).toContain("reversal_links rl WHERE rl.reversal_transaction_id");
+  });
+
+  it("is filed as its own kind on All income, shown beside income rather than dropped", () => {
+    expect(dashboard).toContain("WHEN ${isMoneyBack(sql`t.id`, sql`t.description`)} THEN 'money_back'");
+  });
+});

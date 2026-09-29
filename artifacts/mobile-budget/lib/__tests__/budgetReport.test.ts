@@ -47,7 +47,7 @@ describe('the budget report', () => {
   });
 
   it('is empty, not an error, for a month with nothing in it', () => {
-    expect(budgetReport([]).totals).toEqual({ budget: 0, spentBudgeted: 0, spentUnbudgeted: 0, spent: 0, left: 0 });
+    expect(budgetReport([]).totals).toEqual({ budget: 0, spentBudgeted: 0, spentUnbudgeted: 0, spent: 0, left: 0, businessCosts: 0 });
   });
 });
 
@@ -69,5 +69,45 @@ describe('on Reports', () => {
 
   it('puts the month in the cache key', () => {
     expect(screen).toContain('queryKey: getGetDashboardCategoryBreakdownQueryKey(params)');
+  });
+});
+
+// "If it's counting cost of goods sold as actual then it's not true": a side
+// hustle's costs are the business's, already off its profit on Business.
+describe('side-hustle costs are not household spending', () => {
+  const withBusiness = budgetReport([
+    ...rows,
+    { category: 'Stock', budgetAmount: 0, spentAmount: 165134, parentName: null, isBusinessCost: true },
+    { category: 'Transport for side hustle', budgetAmount: 5000, spentAmount: 4258, parentName: null, isBusinessCost: true },
+  ]);
+
+  it('leaves them out of budget and actual', () => {
+    expect(withBusiness.totals.budget).toBe(53000);
+    expect(withBusiness.totals.spent).toBe(61500);
+    expect(withBusiness.topLevel.map((row) => row.category)).not.toContain('Stock');
+  });
+
+  it('lists them apart, biggest first, with their total', () => {
+    expect(withBusiness.businessCosts.map((row) => row.category)).toEqual(['Stock', 'Transport for side hustle']);
+    expect(withBusiness.totals.businessCosts).toBe(169392);
+  });
+
+  it('never lists one as over budget', () => {
+    expect(withBusiness.over.map((row) => row.category)).not.toContain('Transport for side hustle');
+  });
+});
+
+describe('the Budget tab card', () => {
+  const budget = readFileSync('app/(tabs)/budget.tsx', 'utf8');
+  it('leaves side-hustle costs out of budget against actual, and says so', () => {
+    expect(budget).toContain('const leafBreakdown = allLeaves.filter((category) => !category.isBusinessCost);');
+    expect(budget).toContain('testID="budget-business-costs"');
+  });
+});
+
+describe('All income', () => {
+  const income = readFileSync('app/income-ledger.tsx', 'utf8');
+  it('shows money back from reversed payments beside income, not in it', () => {
+    expect(income).toContain('money back from reversed payments');
   });
 });
