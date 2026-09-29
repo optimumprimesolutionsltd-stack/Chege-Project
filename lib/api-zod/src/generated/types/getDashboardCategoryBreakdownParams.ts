@@ -5,8 +5,13 @@
  * Jamvi API — personal and group money management
  * OpenAPI spec version: 0.1.0
  */
+import type { GetDashboardCategoryBreakdownScope } from './getDashboardCategoryBreakdownScope';
 
 export type GetDashboardCategoryBreakdownParams = {
 month?: number;
 year?: number;
+/**
+ * household leaves out a side hustle's costs (categories linked to an income stream) and takes them out of their headings. Left out, every category, each business cost marked isBusinessCost.
+ */
+scope?: GetDashboardCategoryBreakdownScope;
 };

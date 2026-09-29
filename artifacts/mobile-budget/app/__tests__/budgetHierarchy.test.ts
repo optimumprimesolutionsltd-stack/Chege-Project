@@ -82,7 +82,7 @@ describe('the server settles the figures', () => {
 
   it('applies the same rule to the handed-out PDF', () => {
     expect(route).toContain('const reportBudgets = effectiveBudgets(categories);');
-    expect(route).toContain('const totalBudget = sumBudget(categories);');
+    expect(route).toContain('const totalBudget = sumBudget(householdCategories);');
   });
 });
 

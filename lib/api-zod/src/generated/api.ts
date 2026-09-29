@@ -706,7 +706,8 @@ export const GetDashboardActivityResponse = zod.array(GetDashboardActivityRespon
  */
 export const GetDashboardCategoryBreakdownQueryParams = zod.object({
   "month": zod.coerce.number().optional(),
-  "year": zod.coerce.number().optional()
+  "year": zod.coerce.number().optional(),
+  "scope": zod.enum(['household']).optional().describe('household leaves out a side hustle\'s costs (categories linked to an income stream) and takes them out of their headings. Left out, every category, each business cost marked isBusinessCost.')
 })
 
 export const GetDashboardCategoryBreakdownResponseItem = zod.object({

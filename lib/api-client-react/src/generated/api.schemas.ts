@@ -2056,7 +2056,18 @@ year?: number;
 export type GetDashboardCategoryBreakdownParams = {
 month?: number;
 year?: number;
+/**
+ * household leaves out a side hustle's costs (categories linked to an income stream) and takes them out of their headings. Left out, every category, each business cost marked isBusinessCost.
+ */
+scope?: GetDashboardCategoryBreakdownScope;
 };
+
+export type GetDashboardCategoryBreakdownScope = typeof GetDashboardCategoryBreakdownScope[keyof typeof GetDashboardCategoryBreakdownScope];
+
+
+export const GetDashboardCategoryBreakdownScope = {
+  household: 'household',
+} as const;
 
 export type GetDashboardCategoryLedgerParams = {
 /**

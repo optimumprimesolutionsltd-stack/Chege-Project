@@ -41,6 +41,7 @@ import { buildContributionHistory, historyMonths } from "../lib/contribution-his
 import { buildIncomeStreamTrend } from "../lib/income-stream-trend";
 import { buildIncomeLedger, type IncomeDepositRow, type IncomeSplitRow } from "../lib/income-ledger";
 import { buildBusinessReport, type BusinessCostEntryRow, type BusinessCostRow } from "../lib/business-report";
+import { householdRows } from "../lib/household-breakdown";
 import { createMonthlyReportPdf } from "../lib/monthly-report-pdf";
 import { GROUP_ATTRIBUTION } from "../lib/attribution";
 import { nairobiNow } from "../lib/nairobiTime";
@@ -958,7 +959,8 @@ router.get("/dashboard/category-breakdown", async (req, res): Promise<void> => {
     });
   }
 
-  res.json(breakdown);
+  // Reports, Ask Jamvi and the like want the household's figures only.
+  res.json(req.query.scope === "household" ? householdRows(breakdown) : breakdown);
 });
 
 router.get("/dashboard/category-ledger", async (req, res): Promise<void> => {
@@ -2500,7 +2502,13 @@ router.get("/dashboard/monthly-report.pdf", async (req, res): Promise<void> => {
   const spentMap = new Map(spentByCategory.map((item) => [item.category, item.total]));
   const disbursementMap = new Map(disbursementsByCategory.map((item) => [item.category, Number(item.total)]));
   const reportBudgets = effectiveBudgets(categories);
-  const categoryRows = categories.map((category) => {
+  // The household's figures, as on Home and the Budget report: a side
+  // hustle's costs are the business's (the Business section), not the
+  // household's budget or spending.
+  const householdCategories = categories.filter((category) =>
+    category.reducesIncomeSourceId == null
+    && !(category.parentId != null && categories.some((parent) => parent.id === category.parentId && parent.reducesIncomeSourceId != null)));
+  const categoryRows = householdCategories.map((category) => {
     const spentAmount = category.name === UNCATEGORIZED_CATEGORY
       ? 0
       : (spentMap.get(category.name) ?? 0) + (disbursementMap.get(category.name) ?? 0);
@@ -2514,9 +2522,13 @@ router.get("/dashboard/monthly-report.pdf", async (req, res): Promise<void> => {
       percentUsed: Math.round(budgetAmount > 0 ? (spentAmount / budgetAmount) * 1000 : 0) / 10,
     };
   });
-  const totalActual =
+  const pdfBusinessCosts = await incomeStreamCostLines(groupId, rangeFrom, rangeTo)
+    .then((lines) => lines.reduce((sum, line) => sum + line.amount, 0))
+    .catch(() => 0);
+  const totalActual = Math.max(0,
     Array.from(spentMap.values()).reduce((sum, amount) => sum + amount, 0) +
-    Array.from(disbursementMap.values()).reduce((sum, amount) => sum + amount, 0);
+    Array.from(disbursementMap.values()).reduce((sum, amount) => sum + amount, 0) -
+    pdfBusinessCosts);
   const budgetedActual = categoryRows.reduce((sum, category) => sum + category.spentAmount, 0);
   const unbudgetedSpent = Math.max(0, totalActual - budgetedActual);
   if (unbudgetedSpent > 0) {
@@ -2544,7 +2556,7 @@ router.get("/dashboard/monthly-report.pdf", async (req, res): Promise<void> => {
     : new Intl.DateTimeFormat("en-KE", { month: "long", year: "numeric" }).format(new Date(year, month - 1, 1));
   // Not a sum of categoryRows: that list holds parents and their children
   // side by side, and a parent is already the sum of the children beside it.
-  const totalBudget = sumBudget(categories);
+  const totalBudget = sumBudget(householdCategories);
 
   // The sections chosen beyond the standard ones, each from the same source
   // as its screen: Business, All expenses, All income, Who owes who.
@@ -2641,17 +2653,30 @@ router.get("/dashboard/trends", async (req, res): Promise<void> => {
     const m = d.getMonth() + 1;
     const y = d.getFullYear();
 
+    // Spending recorded through a bank or an M-Pesa import is a categorised
+    // disbursement, not an expense row. Counting expenses alone left the trend
+    // near zero for anybody who records that way. The same rule as Home's
+    // "what did I spend": both kinds, less a side hustle's costs.
+    const monthFrom = `${y}-${String(m).padStart(2, "0")}-01`;
+    const monthTo = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
     const [spentRow] = await db
       .select({ total: sql<number>`COALESCE(SUM(${expensesTable.amount}), 0)`, count: sql<number>`COUNT(*)` })
       .from(expensesTable)
-      .where(sql`${expensesTable.groupId} = ${groupId} AND EXTRACT(MONTH FROM ${expensesTable.date}) = ${m} AND EXTRACT(YEAR FROM ${expensesTable.date}) = ${y}`);
+      .where(sql`${expensesTable.groupId} = ${groupId} AND ${expensesTable.date} >= ${monthFrom} AND ${expensesTable.date} <= ${monthTo}`);
+    const [bankRow] = await db
+      .select({ total: sql<number>`COALESCE(SUM(${jointAccountTxTable.amount}), 0)`, count: sql<number>`COUNT(*)` })
+      .from(jointAccountTxTable)
+      .where(sql`${jointAccountTxTable.groupId} = ${groupId} AND ${jointAccountTxTable.type} = 'disbursement' AND ${jointAccountTxTable.bankTransferId} IS NULL AND ${jointAccountTxTable.expenseCategory} IS NOT NULL AND ${jointAccountTxTable.expenseId} IS NULL AND ${jointAccountTxTable.date} >= ${monthFrom} AND ${jointAccountTxTable.date} <= ${monthTo}`);
+    const businessCosts = await incomeStreamCostLines(groupId, monthFrom, monthTo)
+      .then((lines) => lines.reduce((sum, line) => sum + line.amount, 0))
+      .catch(() => 0);
 
     results.push({
       month: m,
       year: y,
       label: d.toLocaleString("default", { month: "short", year: "numeric" }),
-      totalSpent: Number(spentRow.total),
-      expenseCount: Number(spentRow.count),
+      totalSpent: Math.max(0, Number(spentRow.total) + Number(bankRow?.total ?? 0) - businessCosts),
+      expenseCount: Number(spentRow.count) + Number(bankRow?.count ?? 0),
     });
   }
 

@@ -50,7 +50,7 @@ export const ASK_JAMVI_TOOLS = [
     type: "function",
     function: {
       name: "budget",
-      description: "The budget for one month against what was spent, per category: budget, spent, left or over.",
+      description: "The household budget for one month against what was spent, per category: budget, spent, left or over. A side hustle's costs are not in it; use business for those.",
       parameters: { type: "object", properties: MONTH, required: ["month", "year"] },
     },
   },
@@ -164,7 +164,8 @@ export async function runAskJamviTool(name: string, args: Record<string, unknown
       return { result: await expensesBetween(call, args.from, args.to, typeof args.search === "string" ? args.search : undefined), link: { label: "Open All expenses", route: "/expense-ledger" } };
     }
     case "budget": {
-      const rows = await call(`/api/dashboard/category-breakdown?${query({ month: num(args.month), year: num(args.year) })}`) as Array<{
+      // The household's budget: a side hustle's costs are the business tool's.
+      const rows = await call(`/api/dashboard/category-breakdown?${query({ month: num(args.month), year: num(args.year), scope: "household" })}`) as Array<{
         category: string; budgetAmount: number; spentAmount: number; isBudgeted?: boolean; parentName?: string | null;
       }>;
       // Top level only: a heading already includes its sub-categories.

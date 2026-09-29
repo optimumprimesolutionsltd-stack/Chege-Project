@@ -22,6 +22,7 @@ import * as Sharing from 'expo-sharing';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { isoDay, longDay, monthStartIso, orderedRange } from '@/lib/dayRange';
 import { writePdf } from '@/lib/savePdf';
+import { householdRows } from '@/lib/budgetReport';
 import { PDF_SECTIONS, DEFAULT_PDF_SECTIONS, parsePdfSections, pdfSectionParams, type PdfSectionKey } from '@/lib/reportPdfSections';
 import { useColors } from '@/hooks/useColors';
 import { PageScrollView } from '@/components/PageScrollReset';
@@ -481,8 +482,10 @@ export default function ReportsScreen() {
   const totalMemberContribs = memberContribs.reduce((s, m) => s + m.contributed, 0);
 
   // Category rows sorted: over-budget first, then by % used desc
+  // The household's categories: a side hustle's costs (Stock) are on
+  // Business, and counted there, not here as spending or overspending.
   const sortedCategories = useMemo(() => {
-    return [...(catBreakdown as any[])].map(c => ({
+    return householdRows(catBreakdown as any[]).map(c => ({
       category:     (c.category    ?? '') as string,
       budgetAmount: (c.budgetAmount ?? 0) as number,
       spentAmount:  (c.spentAmount  ?? 0) as number,
