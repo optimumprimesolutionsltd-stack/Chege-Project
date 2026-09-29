@@ -126,6 +126,9 @@ const INVITE_SHORTCUT: Shortcut = {
   route: '/(tabs)/settings?openInvite=1', description: 'Add a member',
 };
 
+import { ArrangeSheet } from '@/components/ArrangeSheet';
+import { arrange, homeAreasKey, useArrangement } from '@/lib/layoutPrefs';
+
 export default function DashboardScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -273,9 +276,12 @@ export default function DashboardScreen() {
   const canManageBudget = !isSharedWorkspace || group?.role === 'owner' || group?.role === 'admin';
   const canManageExpenses = !isSharedWorkspace || group?.role === 'owner' || group?.role === 'admin';
   const canManageAccess = isSharedWorkspace && (group?.role === 'owner' || group?.role === 'admin');
-  const overviewShortcuts = canManageAccess
-    ? [...SHARED_OVERVIEW_SHORTCUTS, INVITE_SHORTCUT]
-    : SHARED_OVERVIEW_SHORTCUTS;
+  // The group areas in the person's own order, per budget, hidden ones left out.
+  const [areasArrangement, setAreasArrangement] = useArrangement(homeAreasKey(group?.id));
+  const [arrangingAreas, setArrangingAreas] = useState(false);
+  const allShortcuts = (canManageAccess ? [...SHARED_OVERVIEW_SHORTCUTS, INVITE_SHORTCUT] : SHARED_OVERVIEW_SHORTCUTS)
+    .map((shortcut) => ({ ...shortcut, id: shortcut.label.toLowerCase() }));
+  const overviewShortcuts = arrange(allShortcuts, areasArrangement);
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   const editableUncategorizedExpenses = (expenses as HomeExpense[])
     .filter(isUncategorizedExpense)
@@ -467,7 +473,12 @@ export default function DashboardScreen() {
 
           {isSharedWorkspace && (
             <View style={[styles.overviewNavCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Text style={[styles.overviewNavEyebrow, { color: colors.primary }]}>GROUP OVERVIEW</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Text style={[styles.overviewNavEyebrow, { color: colors.primary }]}>GROUP OVERVIEW</Text>
+                <Pressable onPress={() => setArrangingAreas(true)} hitSlop={8} accessibilityRole="button" testID="overview-arrange">
+                  <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>Arrange</Text>
+                </Pressable>
+              </View>
               <Text style={[styles.overviewNavTitle, { color: colors.foreground }]}>Your group areas</Text>
               <Text style={[styles.overviewNavSubtitle, { color: colors.mutedForeground }]}>
                 Quickly see what each part of your group helps you manage.
@@ -492,6 +503,16 @@ export default function DashboardScreen() {
                   </Pressable>
                 ))}
               </View>
+              <ArrangeSheet
+                visible={arrangingAreas}
+                title="Arrange your group areas"
+                hint="Put them in the order you use them, and hide any you never open. Kept on this phone, for this group."
+                items={allShortcuts}
+                arrangement={areasArrangement}
+                onChange={setAreasArrangement}
+                onClose={() => setArrangingAreas(false)}
+                testID="overview-arrange-sheet"
+              />
             </View>
           )}
 

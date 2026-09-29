@@ -15,10 +15,9 @@ describe('a way to invite that outlives the setup guide', () => {
   });
 
   it('offers it only to owners and admins, matching Settings\' own GROUP ACCESS gate', () => {
-    const block = home.slice(home.indexOf('const canManageAccess'), home.indexOf('const overviewShortcuts') + 200);
+    const block = home.slice(home.indexOf('const canManageAccess'), home.indexOf('const overviewShortcuts = arrange(') + 200);
     expect(block).toContain("const canManageAccess = isSharedWorkspace && (group?.role === 'owner' || group?.role === 'admin');");
-    expect(block).toContain('? [...SHARED_OVERVIEW_SHORTCUTS, INVITE_SHORTCUT]');
-    expect(block).toContain(': SHARED_OVERVIEW_SHORTCUTS;');
+    expect(block).toContain('(canManageAccess ? [...SHARED_OVERVIEW_SHORTCUTS, INVITE_SHORTCUT] : SHARED_OVERVIEW_SHORTCUTS)');
   });
 
   it('renders from the derived list, not the static one, so the gate actually applies', () => {

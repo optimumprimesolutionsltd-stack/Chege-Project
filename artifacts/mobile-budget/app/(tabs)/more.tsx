@@ -1,3 +1,4 @@
+import { openQuickActionsArranger } from '@/lib/layoutPrefs';
 import React from 'react';
 import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
@@ -140,6 +141,24 @@ export default function MoreScreen() {
             </Pressable>
           ))}
       </View>
+
+      <Pressable
+        onPress={openQuickActionsArranger}
+        accessibilityRole="button"
+        testID="more-arrange-quick-actions"
+        style={[styles.card, styles.switchRow, { backgroundColor: colors.card, borderColor: colors.border }]}
+      >
+        <View style={[styles.iconBox, { backgroundColor: colors.muted }]}>
+          <Feather name="sliders" size={20} color={colors.primary} />
+        </View>
+        <View style={styles.rowText}>
+          <Text style={[styles.rowTitle, { color: colors.foreground }]}>Arrange your quick actions</Text>
+          <Text style={[styles.rowHint, { color: colors.mutedForeground }]}>
+            Choose the four buttons in the bar above the tabs, and their order. You can also hold any of them.
+          </Text>
+        </View>
+        <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+      </Pressable>
 
       <View style={[styles.card, styles.switchRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <View style={styles.rowText}>

@@ -1,15 +1,25 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
+import { ArrangeSheet } from '@/components/ArrangeSheet';
+import { arrange, onOpenQuickActionsArranger, QUICK_ACTION_SLOTS, QUICK_ACTIONS_KEY, useArrangement } from '@/lib/layoutPrefs';
 
-const MAIN_ACTIONS = [
-  { id: 'expense', icon: 'plus-circle' as const, label: 'I spent', route: '/add-expense' },
-  { id: 'banking', icon: 'credit-card' as const, label: 'Bank' },
-  { id: 'save', icon: 'target' as const, label: 'Save', route: '/(tabs)/goals?shortcut=contribute' },
-  { id: 'budget', icon: 'bar-chart-2' as const, label: 'Budget', route: '/(tabs)/budget' },
+type QuickAction = { id: string; icon: keyof typeof Feather.glyphMap; label: string; route?: string };
+
+// The bar holds four. These four are the default; the rest can be swapped in
+// from Arrange (hold any button, or More).
+const MAIN_ACTIONS: QuickAction[] = [
+  { id: 'expense', icon: 'plus-circle', label: 'I spent', route: '/add-expense' },
+  { id: 'banking', icon: 'credit-card', label: 'Bank' },
+  { id: 'save', icon: 'target', label: 'Save', route: '/(tabs)/goals?shortcut=contribute' },
+  { id: 'budget', icon: 'bar-chart-2', label: 'Budget', route: '/(tabs)/budget' },
+  { id: 'mpesa', icon: 'message-square', label: 'M-Pesa', route: '/mpesa-import' },
+  { id: 'reports', icon: 'pie-chart', label: 'Reports', route: '/(tabs)/reports' },
+  { id: 'money-in', icon: 'arrow-down-left', label: 'Money in', route: '/(tabs)/bank?shortcut=deposit' },
+  { id: 'search', icon: 'search', label: 'Search', route: '/(tabs)/search' },
 ];
 
 const BANKING_ACTIONS = [
@@ -22,6 +32,10 @@ const BANKING_ACTIONS = [
 /** Persistent action footer — rendered at the tab-layout level so it appears on every screen. */
 export function GlobalFAB() {
   const [bankingOpen, setBankingOpen] = useState(false);
+  const [arrangement, setArrangement] = useArrangement(QUICK_ACTIONS_KEY);
+  const [arranging, setArranging] = useState(false);
+  useEffect(() => onOpenQuickActionsArranger(() => setArranging(true)), []);
+  const shownActions = arrange(MAIN_ACTIONS, arrangement).slice(0, QUICK_ACTION_SLOTS);
   const router = useRouter();
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -64,7 +78,7 @@ export function GlobalFAB() {
       )}
 
       <View style={[styles.actionFooter, { bottom: footerBottom, backgroundColor: colors.card, borderColor: colors.border }]}>
-        {MAIN_ACTIONS.map((action) => {
+        {shownActions.map((action) => {
           const isBanking = action.id === 'banking';
           return (
             <Pressable
@@ -77,6 +91,7 @@ export function GlobalFAB() {
                 { backgroundColor: isBanking && bankingOpen ? `${colors.primary}18` : 'transparent', opacity: pressed ? 0.7 : 1 },
               ]}
               onPress={() => isBanking ? setBankingOpen((open) => !open) : openRoute(action.route!)}
+              onLongPress={() => { setBankingOpen(false); setArranging(true); }}
             >
               <Feather name={action.icon} size={20} color={isBanking && bankingOpen ? colors.primary : colors.mutedForeground} />
               <Text style={[styles.actionLabel, { color: isBanking && bankingOpen ? colors.primary : colors.foreground }]}>{action.label}</Text>
@@ -84,6 +99,17 @@ export function GlobalFAB() {
           );
         })}
       </View>
+      <ArrangeSheet
+        visible={arranging}
+        title="Arrange your quick actions"
+        hint={`The first ${QUICK_ACTION_SLOTS} shown are in the bar. Move the ones you use most to the top, and hide the rest.`}
+        items={MAIN_ACTIONS}
+        arrangement={arrangement}
+        onChange={setArrangement}
+        onClose={() => setArranging(false)}
+        slots={QUICK_ACTION_SLOTS}
+        testID="quick-actions-arrange-sheet"
+      />
     </>
   );
 }
