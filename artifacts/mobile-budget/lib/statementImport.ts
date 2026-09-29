@@ -29,6 +29,18 @@ export interface StatementReading {
   /** The statement's balance before its first entry and after its last; null when it cannot be worked out. */
   opening: number | null;
   closing: number | null;
+  /**
+   * Fuliza, split. The fees are what was repaid above what was drawn, on the
+   * loans the last repayment cleared; what was drawn after it is still owed at
+   * the end - borrowed, so not income - and is listed as a line of its own so
+   * the account ends where M-Pesa's balance does.
+   */
+  fulizaFee?: number;
+  loanOwedAtEnd?: number;
+  /** A Fuliza balance owed from an earlier statement, repaid in this one. */
+  loanOwedAtStart?: number;
+  /** Draws and repayments no line accounts for; 0 when the split above covers them. */
+  loanLeftOut?: number;
   /** The first and last day the statement has entries for; null when it has none. */
   firstDate?: string | null;
   lastDate?: string | null;
@@ -44,6 +56,8 @@ type Kind = 'person_payment' | 'merchant_payment' | 'paybill_payment' | 'airtime
 const KINDS: Array<[RegExp, Kind, 'out' | 'in']> = [
   [/^Customer Bundle Purchase/i, 'airtime_purchase', 'out'],
   [/^Customer (?:Transfer|Send Money)/i, 'person_payment', 'out'],
+  // Pochi la Biashara: paying a small business on its phone number.
+  [/^Customer Payment to Small Business/i, 'person_payment', 'out'],
   [/^Merchant Payment/i, 'merchant_payment', 'out'],
   [/^Pay Bill/i, 'paybill_payment', 'out'],
   [/^Customer Withdrawal/i, 'cash_withdrawal', 'out'],
@@ -58,7 +72,8 @@ const titleCase = (value: string) =>
 
 /** The name and the account reference in a row's details, with numbers, tills and the API chatter dropped. */
 function partyOf(details: string): { name: string | null; reference: string | null } {
-  let rest = details.split(/\s+(?:via|by)\s/i)[0];
+  // 'Customer Payment to Small Business to - 0743***708 NAME': the payee follows the second 'to'.
+  let rest = details.split(/\s+(?:via|by)\s/i)[0].replace(/^Customer Payment to Small Business\s+/i, '');
   const acc = rest.match(/\sAcc\.\s*(.+)$/i);
   const reference = acc ? acc[1].trim() : null;
   if (acc) rest = rest.slice(0, acc.index);
@@ -153,7 +168,11 @@ function balancesOf(groups: readonly StatementRow[][]): { opening: number | null
 }
 
 /** Oldest first, the order the money moved in. */
-export function statementLines(rows: readonly StatementRow[]): StatementReading {
+export function statementLines(
+  rows: readonly StatementRow[],
+  /** A Fuliza balance recorded as borrowed at the end of an earlier statement (its FB line), which this one's first repayments clear. */
+  owedAtStart: { amount: number; receipt: string } | null = null,
+): StatementReading {
   const chronological = rows.length > 1 && rows[0].time > rows[rows.length - 1].time ? [...rows].reverse() : [...rows];
   const lines: PreviewLine[] = [];
   let loanDraws = 0;
@@ -161,6 +180,10 @@ export function statementLines(rows: readonly StatementRow[]): StatementReading 
   let loanDrawTotal = 0;
   let loanRepaymentTotal = 0;
   let leftOutNet = 0;
+  // Drawn before the last repayment, and since it.
+  let drawnBeforeRepayment = 0;
+  let drawnSinceRepayment = 0;
+  let firstRepaymentDate: string | null = null;
   const groups = groupsOf(chronological);
 
   for (const group of groups) {
@@ -171,9 +194,13 @@ export function statementLines(rows: readonly StatementRow[]): StatementReading 
       if (DRAW.test(details)) {
         loanDraws += 1;
         loanDrawTotal += row.paidIn ?? 0;
+        drawnSinceRepayment += row.paidIn ?? 0;
       } else if (REPAYMENT.test(details)) {
         loanRepayments += 1;
         loanRepaymentTotal += row.withdrawn ?? 0;
+        drawnBeforeRepayment += drawnSinceRepayment;
+        drawnSinceRepayment = 0;
+        firstRepaymentDate ??= dateOf(row.time);
       }
       else if (CHARGE.test(details)) charges.push(row);
       else mains.push(row);
@@ -282,12 +309,40 @@ export function statementLines(rows: readonly StatementRow[]): StatementReading 
       });
     }
   }
-  // Fuliza fees: what was repaid above what was drawn, which nothing else
-  // records (see fulizaCharges). Listed as one line for the statement.
-  const feeDue = Math.round((loanRepaymentTotal - loanDrawTotal) * 100) / 100;
-  if (feeDue >= 0.01 && chronological.length > 0) {
-    const first = dateOf(chronological[0].time);
-    const last = dateOf(chronological[chronological.length - 1].time);
+  // Fuliza, split three ways, none of which the draws and repayments
+  // themselves record:
+  //  - a balance owed from an earlier statement, repaid here (see owedAtStart);
+  //  - the fees: repaid above what was drawn, counting only the loans the last
+  //    repayment cleared. A loan drawn after it is still open, and counting
+  //    it hid the fees whenever more was drawn than repaid;
+  //  - what was drawn after that last repayment: still owed, so borrowed.
+  // When the repayments cleared less than was drawn before the last one, the
+  // fees cannot be told apart from what is still owed, so all of it is owed.
+  const roundCents = (value: number) => Math.round(value * 100) / 100;
+  const first = chronological.length > 0 ? dateOf(chronological[0].time) : null;
+  const last = chronological.length > 0 ? dateOf(chronological[chronological.length - 1].time) : null;
+  const carried = owedAtStart && owedAtStart.amount > 0 ? roundCents(Math.min(owedAtStart.amount, loanRepaymentTotal)) : 0;
+  const cleared = roundCents(loanRepaymentTotal - carried - drawnBeforeRepayment);
+  const feeDue = loanRepayments > 0 && cleared >= 0.01 ? cleared : 0;
+  const owedAtEnd = feeDue > 0 ? roundCents(drawnSinceRepayment) : roundCents(Math.max(0, loanDrawTotal - (loanRepaymentTotal - carried)));
+  if (carried > 0 && owedAtStart && first && last) {
+    lines.push({
+      index: lines.length,
+      status: 'ready',
+      reason: null,
+      receipt: `FR${owedAtStart.receipt.slice(2)}`,
+      direction: 'out',
+      type: 'fuliza_repaid',
+      amount: carried,
+      description: 'Fuliza repaid (owed from the last statement)',
+      named: false,
+      date: firstRepaymentDate ?? first,
+      fee: null,
+      mpesaBalance: null,
+      alreadyRecorded: null,
+    });
+  }
+  if (feeDue > 0 && first && last) {
     lines.push({
       index: lines.length,
       status: 'ready',
@@ -304,6 +359,24 @@ export function statementLines(rows: readonly StatementRow[]): StatementReading 
       alreadyRecorded: null,
     });
   }
+  if (owedAtEnd >= 0.01 && first && last) {
+    lines.push({
+      index: lines.length,
+      status: 'ready',
+      reason: null,
+      receipt: borrowedReceipt(first, last),
+      direction: 'in',
+      type: 'fuliza_borrowed',
+      amount: owedAtEnd,
+      description: 'Borrowed from Fuliza (still owed at the end)',
+      named: false,
+      date: last,
+      fee: null,
+      mpesaBalance: null,
+      alreadyRecorded: null,
+    });
+  }
+  const loanLeftOut = roundCents(loanDrawTotal - loanRepaymentTotal + feeDue + carried - (owedAtEnd >= 0.01 ? owedAtEnd : 0));
   const { opening, closing } = balancesOf(groups);
   const round = (value: number) => Math.round(value * 100) / 100;
   return {
@@ -313,6 +386,10 @@ export function statementLines(rows: readonly StatementRow[]): StatementReading 
     loanDrawTotal: round(loanDrawTotal),
     loanRepaymentTotal: round(loanRepaymentTotal),
     leftOutNet: round(leftOutNet),
+    fulizaFee: feeDue,
+    loanOwedAtEnd: owedAtEnd >= 0.01 ? owedAtEnd : 0,
+    loanOwedAtStart: carried,
+    loanLeftOut,
     opening,
     closing,
     firstDate: chronological.length > 0 ? dateOf(chronological[0].time) : null,
@@ -335,9 +412,38 @@ export function statementLines(rows: readonly StatementRow[]): StatementReading 
  * codes are ten characters; this is fourteen, so they cannot collide.
  */
 export function fulizaCharges(reading: StatementReading): { amount: number; from: string; to: string; receipt: string } | null {
-  const amount = Math.round((reading.loanRepaymentTotal - reading.loanDrawTotal) * 100) / 100;
+  const amount = reading.fulizaFee ?? Math.round((reading.loanRepaymentTotal - reading.loanDrawTotal) * 100) / 100;
   if (amount < 0.01 || !reading.firstDate || !reading.lastDate) return null;
   return { amount, from: reading.firstDate, to: reading.lastDate, receipt: fulizaReceipt(reading.firstDate, reading.lastDate) };
+}
+
+/**
+ * The Fuliza balance an earlier statement left owed (its FB line, recorded as
+ * borrowed), which this statement's first repayments clear - so they are not
+ * mistaken for fees. The latest one that ended before this statement starts,
+ * unless its repayment (FR and the same digits) is recorded already.
+ */
+export function fulizaOwedBefore(
+  firstDate: string | null | undefined,
+  recorded: ReadonlyArray<{ mpesaReceipt?: string | null; amount?: number | string | null }>,
+): { amount: number; receipt: string } | null {
+  if (!firstDate) return null;
+  const receipts = new Set(recorded.map((row) => row.mpesaReceipt).filter(Boolean));
+  let best: { amount: number; receipt: string; to: string } | null = null;
+  for (const row of recorded) {
+    const match = row.mpesaReceipt?.match(/^FB\d{6}(\d{6})$/);
+    if (!match) continue;
+    const to = `20${match[1].slice(0, 2)}-${match[1].slice(2, 4)}-${match[1].slice(4, 6)}`;
+    const amount = Number(row.amount);
+    if (to >= firstDate || !(amount > 0) || receipts.has(`FR${row.mpesaReceipt!.slice(2)}`)) continue;
+    if (!best || to > best.to) best = { amount, receipt: row.mpesaReceipt!, to };
+  }
+  return best ? { amount: best.amount, receipt: best.receipt } : null;
+}
+
+/** FB, then the statement's first and last day: the Fuliza still owed at its end. FR and the same digits is its repayment. */
+function borrowedReceipt(first: string, last: string): string {
+  return `FB${fulizaReceipt(first, last).slice(2)}`;
 }
 
 /** FZ, then the first and last day as yymmdd: fourteen characters, where real codes are ten. */
@@ -379,9 +485,10 @@ export function reconcile(reading: StatementReading, included: (line: PreviewLin
   // the fees - listed as their own line, so already in saved or not ticked -
   // or, when more was drawn than repaid, a loan still open at the end: money
   // borrowed, which moved the balance without being income.
-  const stillOwed = round(reading.loanDrawTotal - reading.loanRepaymentTotal);
+  // A reading made before the split was worked out has no loanLeftOut.
+  const stillOwed = reading.loanLeftOut ?? Math.max(0, round(reading.loanDrawTotal - reading.loanRepaymentTotal));
   const parts = [
-    { label: 'Fuliza still owed at the end (borrowed, so not income)', amount: stillOwed > 0 ? stillOwed : 0 },
+    { label: 'Fuliza not accounted for', amount: stillOwed },
     { label: 'Entries left out with a reason', amount: reading.leftOutNet },
     { label: 'Entries not ticked', amount: notSaved },
   ].filter((part) => Math.abs(part.amount) >= 0.005);

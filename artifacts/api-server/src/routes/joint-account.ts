@@ -29,7 +29,7 @@ import { canonicalExpenseCategoryName } from "../lib/categoryNames";
 import { headingAmong, postingToHeadingError } from "../lib/category-headings";
 import { memberLedgerName } from "../lib/contributor-name";
 import { GROUP_ATTRIBUTION } from "../lib/attribution";
-import { reversalLinksReady } from "../lib/reversal-links";
+import { reversalLinksReady, soleReversalCandidate } from "../lib/reversal-links";
 import { createBankStatementPdf } from "../lib/bank-statement-pdf";
 
 const router = Router();
@@ -1976,7 +1976,7 @@ router.post("/joint-account/:id/reversal", async (req, res): Promise<void> => {
 });
 
 // POST /joint-account/reversals/auto-link — match every money-back entry
-// that has exactly one payment it could have reversed.
+// that has exactly one payment it could have reversed (or one made twice).
 //
 // Linking by hand left every reversal counting as income until somebody
 // opened it. Most have one obvious match - the only payment of exactly that
@@ -2007,8 +2007,10 @@ router.post("/joint-account/reversals/auto-link", async (req, res): Promise<void
   for (const deposit of deposits) {
     if (notAMoneyBack(deposit)) continue;
     const candidates = await reversalCandidates(deposit, groupId);
-    if (candidates.length === 1) {
-      const refused = await linkReversal(deposit, candidates[0].tx, groupId);
+    // One payment, or the same payment made twice that day (see soleReversalCandidate).
+    const sole = soleReversalCandidate(candidates);
+    if (sole) {
+      const refused = await linkReversal(deposit, sole.tx, groupId);
       if (!refused) {
         linked += 1;
         continue;
