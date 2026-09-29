@@ -30,7 +30,26 @@ export function budgetReport(allRows: readonly BudgetRow[]) {
   const businessCosts = allRows
     .filter((row) => row.isBusinessCost && !allRows.some((other) => other.parentName === row.category))
     .sort((a, b) => b.spentAmount - a.spentAmount);
-  const rows = allRows.filter((row) => !row.isBusinessCost);
+  // A heading's figures include its sub-categories, so a side-hustle cost
+  // filed under a household heading (Stock under "Shop", say) has to come out
+  // of that heading too - leaving out only its own row left it counted there.
+  const businessUnder = new Map<string, { budget: number; spent: number }>();
+  for (const row of businessCosts) {
+    if (!row.parentName) continue;
+    const sum = businessUnder.get(row.parentName) ?? { budget: 0, spent: 0 };
+    sum.budget += row.budgetAmount;
+    sum.spent += row.spentAmount;
+    businessUnder.set(row.parentName, sum);
+  }
+  const rows = allRows
+    .filter((row) => !row.isBusinessCost)
+    .map((row) => {
+      const inside = businessUnder.get(row.category);
+      if (!inside) return row;
+      const budgetAmount = row.budgetAmount - inside.budget;
+      const spentAmount = row.spentAmount - inside.spent;
+      return { ...row, budgetAmount, spentAmount, remaining: budgetAmount - spentAmount };
+    });
   const budgeted = rows.filter((row) => row.isBudgeted !== false);
   const topLevel = budgeted.filter((row) => !row.parentName);
   const childrenOf = new Map<string, BudgetRow[]>();

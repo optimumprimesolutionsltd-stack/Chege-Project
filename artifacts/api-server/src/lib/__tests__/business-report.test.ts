@@ -72,3 +72,69 @@ describe("the edges", () => {
     expect(build([[3, 90000]], [], []).businesses).toEqual([]);
   });
 });
+
+// "Make it more detailed if the user wants, with an option of hiding": the
+// entries behind each figure, each cost's share of sales, and last period.
+describe("a statement's details", () => {
+  const costEntries = Array.from({ length: 30 }, (_, i) => ({
+    incomeSourceId: 1, category: "Stock", date: `2026-09-${String((i % 28) + 1).padStart(2, "0")}`, description: `Stock ${i}`, amount: 1000,
+  }));
+  const report = buildBusinessReport({
+    from: "2026-09-01", to: "2026-09-30",
+    salesByStream: new Map([[1, 50000]]),
+    costLines: [
+      { incomeSourceId: 1, category: "Stock", costKind: "cogs", amount: 30000 },
+      { incomeSourceId: 1, category: "Transport", costKind: "expense", amount: 5000 },
+    ],
+    linkedStreamIds: [1],
+    streamNames,
+    detail: {
+      salesEntries: [
+        { incomeSourceId: 1, date: "2026-09-03", description: "Sale A", amount: 20000 },
+        { incomeSourceId: 1, date: "2026-09-20", description: "Sale B", amount: 30000 },
+        { incomeSourceId: 2, date: "2026-09-21", description: "Not this business", amount: 9 },
+      ],
+      costEntries,
+      previous: {
+        from: "2026-08-01", to: "2026-08-31",
+        salesByStream: new Map([[1, 40000]]),
+        costLines: [{ incomeSourceId: 1, category: "Stock", costKind: "cogs", amount: 10000 }],
+      },
+    },
+  });
+  const business = report.businesses[0] as Record<string, unknown> & {
+    costOfGoodsSoldLines: Array<{ shareOfSales?: number | null; entries?: unknown[]; more?: number }>;
+    expenseLines: Array<{ shareOfSales?: number | null }>;
+    salesEntries?: Array<{ description: string }>;
+    previous?: Record<string, unknown>;
+  };
+
+  it("lists this business's sales only, newest first", () => {
+    expect(business.salesEntries!.map((entry) => entry.description)).toEqual(["Sale B", "Sale A"]);
+  });
+
+  it("gives each cost as a share of sales", () => {
+    expect(business.costOfGoodsSoldLines[0].shareOfSales).toBe(60);
+    expect(business.expenseLines[0].shareOfSales).toBe(10);
+  });
+
+  it("lists up to 25 entries behind a cost, and counts the rest", () => {
+    expect(business.costOfGoodsSoldLines[0].entries).toHaveLength(25);
+    expect(business.costOfGoodsSoldLines[0].more).toBe(5);
+  });
+
+  it("works out last period's statement the same way", () => {
+    expect(business.previous).toEqual({
+      from: "2026-08-01", to: "2026-08-31",
+      sales: 40000, costOfGoodsSold: 10000, grossProfit: 30000, expenses: 0, netProfit: 30000,
+    });
+  });
+
+  it("carries none of it unless details are asked for", () => {
+    const plain = buildBusinessReport({
+      from: "2026-09-01", to: "2026-09-30", salesByStream: new Map([[1, 1]]), costLines: [], linkedStreamIds: [1], streamNames,
+    }).businesses[0] as Record<string, unknown>;
+    expect(plain.salesEntries).toBeUndefined();
+    expect(plain.previous).toBeUndefined();
+  });
+});
