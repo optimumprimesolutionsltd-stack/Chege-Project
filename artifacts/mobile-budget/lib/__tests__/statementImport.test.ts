@@ -60,14 +60,17 @@ describe('statementLines', () => {
     expect(lines[1]).toMatchObject({ type: 'cash_withdrawal', description: 'Cash withdrawal — Sample Agent' });
   });
 
-  it('leaves out what it does not recognise, with a reason, rather than guessing', () => {
+  // Everything a full statement moved becomes an entry: set aside, it left the
+  // account short of the statement with nothing on screen to say why.
+  it('lists what it does not recognise, in the words of the statement, for a category to be chosen', () => {
     const { lines } = statementLines([
       at('01 08:00:00', 'Something Never Seen Before', { withdrawn: 5 }),
       at('01 09:00:00', 'Pay Utility Reversal by Lipa na Sample', { withdrawn: 5 }),
     ]);
-    expect(lines.map((line) => line.status)).toEqual(['skipped', 'skipped']);
-    expect(lines[0].reason).toContain('not recognised');
-    expect(lines[1].reason).toContain('took money out');
+    expect(lines.map((line) => [line.status, line.type, line.direction, line.description])).toEqual([
+      ['ready', 'other', 'out', 'Something Never Seen Before'],
+      ['ready', 'other', 'out', 'Pay Utility Reversal by Lipa na Sample'],
+    ]);
   });
 
   it('records a reversal that put money back as money in', () => {
@@ -75,10 +78,33 @@ describe('statementLines', () => {
     expect(lines[0]).toMatchObject({ status: 'ready', direction: 'in', type: 'reversal', amount: 5, description: 'Money back: a reversed payment', named: false });
   });
 
-  it('does not fold a charge when there is no single payment for it', () => {
-    const { lines } = statementLines([at('01 08:00:00', 'Pay Bill Charge', { withdrawn: 5 })]);
-    expect(lines[0]).toMatchObject({ status: 'skipped' });
-    expect(lines[0].reason).toContain('bank charge');
+  it('lists a charge with no single payment for it as a charge of its own', () => {
+    const row = at('01 08:00:00', 'Pay Bill Charge', { withdrawn: 5 });
+    const { lines, leftOutNet } = statementLines([row]);
+    expect(lines[0]).toMatchObject({ status: 'ready', type: 'transaction_charge', direction: 'out', amount: 5, description: 'M-Pesa charge' });
+    expect(leftOutNet).toBe(0);
+  });
+
+  it('gives such a charge its own receipt, so saving the payment beside it cannot hide it', () => {
+    const row = at('01 08:00:00', 'Pay Bill Charge', { withdrawn: 5 });
+    const { lines } = statementLines([row]);
+    expect(lines[0].receipt).toBe(`${row.receipt}C1`);
+    expect(lines[0].receipt).toMatch(/^[A-Z0-9]{8,15}$/);
+  });
+
+  it('lists what Fuliza cost - repaid above drawn - as one line for the statement', () => {
+    const draw = at('01 08:00:00', 'OverDraft of Credit Party', { paidIn: 100 });
+    const repay = at('03 08:00:00', 'OD Loan Repayment to 999999 - M-PESA Overdraw', { withdrawn: 104.5 });
+    const { lines } = statementLines([repay, draw]);
+    const fee = lines.find((line) => line.type === 'fuliza_fee')!;
+    expect(fee).toMatchObject({ status: 'ready', direction: 'out', amount: 4.5 });
+    expect(fee.receipt).toMatch(/^FZ[0-9]{12}$/);
+  });
+
+  it('lists no Fuliza line when no more was repaid than drawn', () => {
+    const draw = at('01 08:00:00', 'OverDraft of Credit Party', { paidIn: 100 });
+    const repay = at('03 08:00:00', 'OD Loan Repayment to 999999 - M-PESA Overdraw', { withdrawn: 100 });
+    expect(statementLines([repay, draw]).lines.some((line) => line.type === 'fuliza_fee')).toBe(false);
   });
 });
 
@@ -108,8 +134,8 @@ describe('reconcile', () => {
     // The reversal is recorded as money back in, so only the Fuliza loans and repayments differ, and they cancel here.
     expect(result.savedChange).toBe(215);
     expect(result.gap).toBe(0);
-    expect(result.parts.map((part) => part.amount)).toEqual([-100, 100]);
-    expect(result.parts.reduce((sum, part) => sum + part.amount, 0)).toBe(result.gap);
+    // Drawn and repaid cancel here, so there is nothing left to explain.
+    expect(result.parts).toEqual([]);
   });
 
   it('counts what is not ticked as part of the difference', () => {
@@ -128,6 +154,16 @@ describe('reconcile', () => {
     expect(result.savedChange).toBe(-285);
     expect(result.gap).toBe(0);
     expect(result.parts.find((part) => part.label.includes('not ticked'))).toBeUndefined();
+  });
+
+  it('explains a Fuliza loan still open at the end as borrowed, not as fees', () => {
+    const received = at('01 08:00:00', 'Funds received from - 2547***000 SAMPLE PERSON', { paidIn: 500, balance: 1500 });
+    const draw = at('02 08:00:00', 'OverDraft of Credit Party', { paidIn: 80, balance: 1580 });
+    const reading = statementLines([draw, received]);
+    const result = reconcile(reading, () => true)!;
+    expect(reading.lines.some((line) => line.type === 'fuliza_fee')).toBe(false);
+    expect(result.parts).toEqual([{ label: 'Fuliza still owed at the end (borrowed, so not income)', amount: 80 }]);
+    expect(result.gap).toBe(80);
   });
 
   it('has nothing to say when the balances cannot be worked out', () => {

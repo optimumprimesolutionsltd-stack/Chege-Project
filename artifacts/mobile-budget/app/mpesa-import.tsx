@@ -12,6 +12,7 @@ import {
   Text,
   TextInput,
   View,
+  Keyboard,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -30,6 +31,8 @@ import {
   useTransferBankToSavings,
   useTransferSavingsToBank,
   useCreateDisbursement,
+  useUpdateJointAccountOpeningBalance,
+  getGetJointAccountQueryKey,
   useGetBudgetCategories,
   useGetGroup,
   useGetJointAccount,
@@ -80,6 +83,7 @@ import { saveDebtLinks } from '@/lib/debtReversal';
 import type { DebtEntryLink } from '@/lib/debtLinks';
 import { canReadStatements, chooseStatement, statementBase64, type ChosenStatement } from '@/lib/statementFile';
 import { shownFileName } from '@/lib/shownFileName';
+import { readPercent } from '@/lib/statementProgress';
 import { fulizaChargeOverlap, fulizaCharges, reconcile, statementLines, type StatementReading } from '@/lib/statementImport';
 import { checkRunningBalance, readStatementRows, resolveDirections } from '@/lib/statementTable';
 import type { ReaderMessage } from '@/lib/statementReaderHtml';
@@ -407,6 +411,26 @@ export default function MpesaImportScreen() {
   // How far a statement has got, so a long one does not look frozen: opening
   // the file, reading page by page, then checking what is already recorded.
   const [readProgress, setReadProgress] = useState<{ stage: 'opening' | 'reading' | 'checking'; page?: number; of?: number } | null>(null);
+  // A read that stops moving is given up on, so the buttons are not left
+  // spinning for ever. Restarted on every page, so a long statement that is
+  // still going is never cut off - only one that has gone quiet.
+  const readStallTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const READ_STALL_MS = 90_000;
+  const clearReadStall = () => {
+    if (readStallTimer.current) clearTimeout(readStallTimer.current);
+    readStallTimer.current = null;
+  };
+  const armReadStall = () => {
+    clearReadStall();
+    readStallTimer.current = setTimeout(() => {
+      readStallTimer.current = null;
+      setReaderJob(null);
+      setReading(false);
+      setReadProgress(null);
+      Alert.alert('The statement stopped loading', 'Nothing happened for a minute and a half, so Jamvi stopped. Try again, or paste your messages instead.');
+    }, READ_STALL_MS);
+  };
+  useEffect(() => clearReadStall, []);
   // A statement PDF: read on this phone, with its password used only here.
   const [statementFile, setStatementFile] = useState<ChosenStatement | null>(null);
   const [statementPassword, setStatementPassword] = useState('');
@@ -751,11 +775,15 @@ export default function MpesaImportScreen() {
 
   const readStatement = async () => {
     if (!statementFile || readerJob) return;
+    // The progress shows under the button, which the keyboard would cover.
+    Keyboard.dismiss();
     setReading(true);
     setReadProgress({ stage: 'opening' });
+    armReadStall();
     try {
       setReaderJob({ base64: await statementBase64(statementFile.uri), password: statementPassword });
     } catch (error: unknown) {
+      clearReadStall();
       setReading(false);
       setReadProgress(null);
       Alert.alert('Could not read the statement', error instanceof Error ? error.message : 'Please try again.');
@@ -767,8 +795,10 @@ export default function MpesaImportScreen() {
     if (result.type === 'ready') return;
     if (result.type === 'progress') {
       setReadProgress({ stage: 'reading', page: result.page, of: result.of });
+      armReadStall();
       return;
     }
+    clearReadStall();
     setReaderJob(null);
     try {
       if (result.type === 'error') {
@@ -801,7 +831,16 @@ export default function MpesaImportScreen() {
       );
       setLines(shown);
       setStatementReading({ ...reading, lines: shown });
-      setChoices(initialChoices(shown, history, categories.map((row) => row.name), chargeCategory, rules, canManageBudget));
+      const built = initialChoices(shown, history, categories.map((row) => row.name), chargeCategory, rules, canManageBudget);
+      // Fuliza charges already recorded for days this statement shares would
+      // be counted twice: its Fuliza line starts unticked, and the card says why.
+      const receipts = ((account?.transactions ?? []) as Array<{ mpesaReceipt?: string | null }>).map((row) => row.mpesaReceipt);
+      for (const line of shown) {
+        if (line.type !== 'fuliza_fee' || !line.receipt || !reading.firstDate || !reading.lastDate) continue;
+        const overlap = fulizaChargeOverlap({ from: reading.firstDate, to: reading.lastDate, receipt: line.receipt }, receipts);
+        if (overlap.overlapsFrom && built[line.index]) built[line.index] = { ...built[line.index], include: false };
+      }
+      setChoices(built);
       setStatementPassword('');
       setShowStatementPassword(false);
     } catch (error: unknown) {
@@ -855,39 +894,33 @@ export default function MpesaImportScreen() {
     const receipts = ((account?.transactions ?? []) as Array<{ mpesaReceipt?: string | null }>).map((row) => row.mpesaReceipt);
     return fulizaChargeOverlap(fuliza, receipts);
   }, [fuliza, account]);
-  const [fulizaSaving, setFulizaSaving] = useState(false);
-  const [fulizaSaved, setFulizaSaved] = useState(false);
-  // A different statement starts unrecorded, whatever the last one was.
-  useEffect(() => { setFulizaSaved(false); }, [fuliza?.receipt]);
-  const recordFulizaCharges = async () => {
-    if (!fuliza || !accountId || fulizaSaving) return;
-    const category = fulizaCategory ?? chargeCategory.trim();
-    if (!category) {
-      setPicking('charge');
-      Alert.alert('Where do charges go?', 'Choose the category your bank and M-Pesa charges are filed under, then tap again.');
-      return;
-    }
-    setFulizaSaving(true);
+  // Setting the account's opening balance to the statement's, when nothing is
+  // recorded in it before the statement starts - the one case where that is
+  // certainly right. Anything recorded earlier and the difference is only shown.
+  const { mutateAsync: updateOpeningBalance } = useUpdateJointAccountOpeningBalance();
+  const [openingSaving, setOpeningSaving] = useState(false);
+  const openingFix = useMemo(() => {
+    const first = statementReading?.firstDate;
+    const opening = statementReading?.opening;
+    if (!first || opening == null || !account || !accountId) return null;
+    const rows = (account.transactions ?? []) as Array<{ date: string }>;
+    if (rows.some((row) => String(row.date).slice(0, 10) < first)) return null;
+    const current = Number((account as { openingBalance?: number | null }).openingBalance ?? 0);
+    if (Math.abs(current - opening) < 0.005) return null;
+    const before = new Date(`${first}T00:00:00Z`);
+    before.setUTCDate(before.getUTCDate() - 1);
+    return { current, to: opening, date: before.toISOString().slice(0, 10) };
+  }, [statementReading, account, accountId]);
+  const fixOpeningBalance = async () => {
+    if (!openingFix || !accountId || openingSaving) return;
+    setOpeningSaving(true);
     try {
-      await createDisbursement({
-        data: {
-          amount: fuliza.amount,
-          description: `Fuliza charges ${fuliza.from} to ${fuliza.to}`,
-          expenseCategory: category,
-          date: fuliza.to,
-          accountId,
-          madeById: isShared ? null : user?.id ?? null,
-          mpesaReceipt: fuliza.receipt,
-        } as never,
-      });
-      setFulizaSaved(true);
+      await updateOpeningBalance({ data: { openingBalance: openingFix.to, openingBalanceDate: openingFix.date, accountId } as never });
+      await queryClient.invalidateQueries({ queryKey: getGetJointAccountQueryKey({ accountId }) });
     } catch (error: unknown) {
-      // The receipt makes a second recording of the same statement a clash.
-      const status = (error as { status?: number } | null)?.status;
-      if (status === 409) setFulizaSaved(true);
-      else Alert.alert('Could not record the Fuliza charges', error instanceof Error ? error.message : 'Please try again.');
+      Alert.alert('Could not set the opening balance', error instanceof Error ? error.message : 'Please try again.');
     } finally {
-      setFulizaSaving(false);
+      setOpeningSaving(false);
     }
   };
 
@@ -1309,14 +1342,9 @@ export default function MpesaImportScreen() {
                         : readProgress.stage === 'reading'
                           ? `Reading page ${readProgress.page} of ${readProgress.of}…`
                           : 'Checking which of these are already recorded…'}
+                      {` ${readPercent(readProgress)}%`}
                     </Text>
-                    <ProgressBar
-                      fraction={readProgress.stage === 'reading' && readProgress.of
-                        ? (readProgress.page ?? 0) / readProgress.of
-                        : readProgress.stage === 'checking' ? 1 : 0}
-                      color={colors.primary}
-                      track={colors.muted}
-                    />
+                    <ProgressBar fraction={readPercent(readProgress) / 100} color={colors.primary} track={colors.muted} />
                   </View>
                 ) : null}
               </View>
@@ -1368,42 +1396,29 @@ export default function MpesaImportScreen() {
                     ))}
                   </>
                 ) : null}
-                {fuliza && canManageBudget ? (
-                  <View style={{ gap: 6, marginTop: 4 }} testID="mpesa-fuliza-charges">
+                {fuliza && fulizaCheck?.overlapsFrom ? (
+                  <Text style={[styles.hint, { color: colors.destructive, marginTop: 4 }]} testID="mpesa-fuliza-overlap">
+                    Fuliza charges are already recorded for {fulizaCheck.overlapsFrom} to {fulizaCheck.overlapsTo}, which overlaps this
+                    statement, so its Fuliza charges line starts unticked: ticking it would count the shared days' fees twice.
+                  </Text>
+                ) : null}
+                {openingFix && canManageBudget ? (
+                  <View style={{ gap: 6, marginTop: 4 }} testID="mpesa-opening-fix">
                     <Text style={[styles.hint, { color: colors.foreground }]}>
-                      You paid Fuliza back KES {formatExact(fuliza.amount)} more than you borrowed. That is almost certainly Fuliza's daily
-                      fees, a real cost nothing else records. It is only all fees if no Fuliza loan was already open when this statement
-                      starts, or still open when it ends.
+                      Your statement starts at KES {formatExact(openingFix.to)}, but this account starts at KES {formatExact(openingFix.current)}.
+                      Nothing is recorded in it before the statement, so its starting balance can simply be set to match.
                     </Text>
-                    {fulizaSaved || fulizaCheck?.sameStatement ? (
-                      <Text style={[styles.hint, { color: colors.mutedForeground }]} testID="mpesa-fuliza-recorded">
-                        Recorded: KES {formatExact(fuliza.amount)} of Fuliza charges for {fuliza.from} to {fuliza.to}.
-                      </Text>
-                    ) : (
-                      <>
-                        {fulizaCheck?.overlapsFrom ? (
-                          <Text style={[styles.hint, { color: colors.destructive }]} testID="mpesa-fuliza-overlap">
-                            Fuliza charges are already recorded for {fulizaCheck.overlapsFrom} to {fulizaCheck.overlapsTo}, which overlaps
-                            this statement. Recording these too would count the shared days' fees twice.
-                          </Text>
-                        ) : null}
-                        <Pressable
-                          onPress={recordFulizaCharges}
-                          disabled={fulizaSaving}
-                          style={[styles.primary, { backgroundColor: fulizaCheck?.overlapsFrom ? colors.muted : colors.primary, opacity: fulizaSaving ? 0.6 : 1 }]}
-                          accessibilityRole="button"
-                          testID="mpesa-fuliza-record"
-                        >
-                          {fulizaSaving
-                            ? <ActivityIndicator color="#fff" />
-                            : (
-                              <Text style={[styles.primaryText, fulizaCheck?.overlapsFrom ? { color: colors.foreground } : null]}>
-                                Record KES {formatExact(fuliza.amount)} as Fuliza charges
-                              </Text>
-                            )}
-                        </Pressable>
-                      </>
-                    )}
+                    <Pressable
+                      onPress={fixOpeningBalance}
+                      disabled={openingSaving}
+                      style={[styles.primary, { backgroundColor: colors.primary, opacity: openingSaving ? 0.6 : 1 }]}
+                      accessibilityRole="button"
+                      testID="mpesa-opening-fix-button"
+                    >
+                      {openingSaving
+                        ? <ActivityIndicator color="#fff" />
+                        : <Text style={styles.primaryText}>Start this account at KES {formatExact(openingFix.to)}</Text>}
+                    </Pressable>
                   </View>
                 ) : null}
                 <Text style={[styles.hint, { color: colors.mutedForeground }]}>
@@ -1950,7 +1965,8 @@ export default function MpesaImportScreen() {
           </>
         )}
       </PageScrollView>
-      <StatementReader job={readerJob} onDone={onStatementRead} />
+      {/* Warmed as soon as a statement is chosen, so reading starts at once. */}
+      <StatementReader job={readerJob} warm={statementFile !== null} onDone={onStatementRead} />
 
       {lines ? (
         <View style={[styles.footer, { paddingBottom: insets.bottom + 12, backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -1965,7 +1981,7 @@ export default function MpesaImportScreen() {
           {saveProgress && saveProgress.total > 0 ? (
             <View style={{ gap: 6 }} testID="mpesa-save-progress-bar" accessibilityLiveRegion="polite">
               <Text style={[styles.hint, { color: colors.foreground }]}>
-                Saved {saveProgress.done} of {saveProgress.total}. Keep Jamvi open until it finishes.
+                Saved {saveProgress.done} of {saveProgress.total} · {Math.round((saveProgress.done / saveProgress.total) * 100)}%. Keep Jamvi open until it finishes.
               </Text>
               <ProgressBar fraction={saveProgress.done / saveProgress.total} color={colors.primary} track={colors.muted} />
             </View>
