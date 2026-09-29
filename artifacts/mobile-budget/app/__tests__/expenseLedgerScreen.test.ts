@@ -46,25 +46,23 @@ describe('opening an entry', () => {
   });
 });
 
-describe('cost of goods sold is not a personal expense', () => {
-  // A category linked to an income stream (Reports' Cost categories picker)
-  // is the cost of earning that stream's sales, already worked out of its
-  // profit there. Counting it again here would make a profitable side hustle
-  // look like it made this screen's "expenses" bigger.
-  it('splits categories linked to an income stream out of the category groups', () => {
+describe("a side hustle's costs have a tab of their own", () => {
+  // "Can the cost of goods appear somewhere else, perhaps in its own tab? I do
+  // not want it visible when downloading the PDF."
+  it('splits Household from Business costs, by the categories linked to an income stream', () => {
     expect(screen).toContain('category.reducesIncomeSourceId != null');
-    expect(screen).toContain('const expenseCategoryGroups = useMemo(');
-    expect(screen).toContain('const cogsCategoryGroups = useMemo(');
+    expect(screen).toContain("['business', 'Business costs'],");
+    expect(screen).toContain("allEntries.filter((entry) => (scope === 'business') === isBusinessEntry(entry))");
   });
 
-  it('subtracts cost-of-goods-sold spending from the headline total', () => {
-    expect(screen).toContain('const expensesTotal = (data?.total ?? 0) - cogsTotal;');
-    expect(screen).toContain('KES ${formatKES(expensesTotal)}');
+  it('totals only the tab shown, and points to the other', () => {
+    expect(screen).toContain('const expensesTotal = entries.reduce((sum, entry) => sum + entry.amount, 0);');
+    expect(screen).toContain('on the Business costs tab');
   });
 
-  it('labels the split section rather than hiding the spending', () => {
-    expect(screen).toContain('Cost of goods sold');
-    expect(screen).toContain('cogsCategoryGroups.map(renderGroup)');
+  it('downloads this tab as a PDF, so the household one never shows stock', () => {
+    expect(screen).toContain('includeExpenses: true,');
+    expect(screen).toContain('...(hasBusiness ? { expensesScope: scope } : {}),');
   });
 });
 

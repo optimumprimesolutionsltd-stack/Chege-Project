@@ -25,3 +25,14 @@ describe("Ask Jamvi without a model", () => {
     expect(generateAskJamviFallback("How much did I spend at Naivas this month?", summary)).toContain("Naivas");
   });
 });
+
+// "Zawadi in Optimum has Gemini, why can't we link Gemini here?"
+describe("the model's address", () => {
+  it("takes Gemini's OpenAI-compatible base as it is meant to be used", async () => {
+    const { chatCompletionsUrl } = await import("../ask-jamvi-llm");
+    expect(chatCompletionsUrl("https://generativelanguage.googleapis.com/v1beta/openai/")).toBe("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions");
+    expect(chatCompletionsUrl("https://api.openai.com/v1")).toBe("https://api.openai.com/v1/chat/completions");
+    expect(chatCompletionsUrl("https://api.example.com")).toBe("https://api.example.com/v1/chat/completions");
+    expect(chatCompletionsUrl("https://x.test/v1/chat/completions")).toBe("https://x.test/v1/chat/completions");
+  });
+});

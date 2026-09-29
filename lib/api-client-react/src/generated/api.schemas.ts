@@ -2285,7 +2285,19 @@ includeIncomeEntries?: boolean;
  * Include Who owes who as it stands now. Defaults to false.
  */
 includeDebts?: boolean;
+/**
+ * With includeExpenses, household lists only household expenses (a side hustle's costs left out) and business only those costs. Left out, every expense.
+ */
+expensesScope?: GetDashboardMonthlyReportPdfExpensesScope;
 };
+
+export type GetDashboardMonthlyReportPdfExpensesScope = typeof GetDashboardMonthlyReportPdfExpensesScope[keyof typeof GetDashboardMonthlyReportPdfExpensesScope];
+
+
+export const GetDashboardMonthlyReportPdfExpensesScope = {
+  household: 'household',
+  business: 'business',
+} as const;
 
 export type GetDashboardTrendsParams = {
 months?: number;

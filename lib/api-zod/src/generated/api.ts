@@ -1090,7 +1090,8 @@ export const GetDashboardMonthlyReportPdfQueryParams = zod.object({
   "includeBusiness": zod.coerce.boolean().optional().describe('Include each side hustle\'s profit and loss. Defaults to false.'),
   "includeExpenses": zod.coerce.boolean().optional().describe('Include every expense in the period, as on All expenses. Defaults to false.'),
   "includeIncomeEntries": zod.coerce.boolean().optional().describe('Include every piece of income in the period, as on All income. Defaults to false.'),
-  "includeDebts": zod.coerce.boolean().optional().describe('Include Who owes who as it stands now. Defaults to false.')
+  "includeDebts": zod.coerce.boolean().optional().describe('Include Who owes who as it stands now. Defaults to false.'),
+  "expensesScope": zod.enum(['household', 'business']).optional().describe('With includeExpenses, household lists only household expenses (a side hustle\'s costs left out) and business only those costs. Left out, every expense.')
 })
 
 export const GetDashboardMonthlyReportPdfResponse = zod.unknown()

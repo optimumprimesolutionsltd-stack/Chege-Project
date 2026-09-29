@@ -2420,6 +2420,8 @@ router.get("/dashboard/monthly-report.pdf", async (req, res): Promise<void> => {
   const includeExpenses = req.query.includeExpenses === "true";
   const includeIncomeEntries = req.query.includeIncomeEntries === "true";
   const includeDebts = req.query.includeDebts === "true";
+  // All expenses' PDF: the household's, without a side hustle's stock, or only those costs.
+  const expensesScope = req.query.expensesScope === "household" || req.query.expensesScope === "business" ? req.query.expensesScope : null;
 
   const [group] = await db
     .select({ name: groupsTable.name })
@@ -2572,6 +2574,13 @@ router.get("/dashboard/monthly-report.pdf", async (req, res): Promise<void> => {
 
   // The sections chosen beyond the standard ones, each from the same source
   // as its screen: Business, All expenses, All income, Who owes who.
+  const costCategoryNames = expensesScope
+    ? new Set((await db
+        .select({ name: budgetCategoriesTable.name })
+        .from(budgetCategoriesTable)
+        .where(sql`${budgetCategoriesTable.groupId} = ${groupId} AND ${budgetCategoriesTable.reducesIncomeSourceId} IS NOT NULL`))
+        .map((row) => row.name.trim().toLowerCase()))
+    : new Set<string>();
   const [incomeLedger, expenseLedger, costLines, linkedStreamIds, streamNames, parties] = await Promise.all([
     includeBusiness || includeIncomeEntries ? loadIncomeLedger(groupId, rangeFrom, rangeTo, null) : Promise.resolve(null),
     includeExpenses ? loadExpenseLedger(groupId, rangeFrom, rangeTo, null) : Promise.resolve(null),
@@ -2626,7 +2635,12 @@ router.get("/dashboard/monthly-report.pdf", async (req, res): Promise<void> => {
     })),
     includeSummary,
     businesses,
-    expenses: expenseLedger?.entries.map((entry) => ({
+    expenses: expenseLedger?.entries.filter((entry) => {
+      if (!expensesScope) return true;
+      // Business when every category it is filed under is a side hustle's cost.
+      const business = entry.categories.length > 0 && entry.categories.every((name) => costCategoryNames.has(name.trim().toLowerCase()));
+      return expensesScope === "business" ? business : !business;
+    }).map((entry) => ({
       date: entry.date,
       description: entry.description ?? "",
       detail: entry.categories.join(" + "),

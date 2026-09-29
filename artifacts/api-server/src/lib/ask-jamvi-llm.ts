@@ -144,9 +144,16 @@ export function generateAskJamviFallback(question: string, summary: AskJamviSumm
   return "I can explain your current or historical spending, budget categories and priorities, income sources, contributions, bank accounts, savings goals, activity, reports, members, and workspace details. I stay read-only and only use this budget’s data.";
 }
 
-function chatCompletionsUrl(baseUrl: string): string {
+/**
+ * The chat-completions address for a provider's base URL. OpenAI and most
+ * others end in /v1; Google's Gemini offers the same API under
+ * .../v1beta/openai, which used to get /v1/chat/completions added and fail.
+ * A full address is taken as it is.
+ */
+export function chatCompletionsUrl(baseUrl: string): string {
   const normalizedBaseUrl = baseUrl.replace(/\/+$/, "");
-  return normalizedBaseUrl.endsWith("/v1")
+  if (normalizedBaseUrl.endsWith("/chat/completions")) return normalizedBaseUrl;
+  return /\/(v1|openai)$/.test(normalizedBaseUrl)
     ? `${normalizedBaseUrl}/chat/completions`
     : `${normalizedBaseUrl}/v1/chat/completions`;
 }
