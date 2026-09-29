@@ -480,6 +480,57 @@ export function dayBefore(day: string): string {
   return date.toISOString().slice(0, 10);
 }
 
+/** An entry in the account, as the import screen reads it back. */
+export type RecordedRow = {
+  id: number;
+  date: string;
+  type: string;
+  amount: number | string;
+  description?: string | null;
+  mpesaReceipt?: string | null;
+  chargeForTransactionId?: number | null;
+};
+
+/**
+ * Entries this account has for the statement's days that the statement does
+ * not: typed in by hand, pasted under another code, or an M-Pesa charge kept
+ * twice - once with its payment and again as a charge of its own. When the
+ * statement's own entries add up, these are what leave the balance off.
+ */
+export function notOnStatement(
+  reading: StatementReading,
+  rows: readonly RecordedRow[],
+): { rows: Array<RecordedRow & { why: string; effect: number }>; net: number } {
+  if (!reading.firstDate || !reading.lastDate) return { rows: [], net: 0 };
+  const first = reading.firstDate;
+  const last = reading.lastDate;
+  const onStatement = new Set(reading.lines.map((line) => line.receipt).filter((code): code is string => Boolean(code)));
+  const receiptOf = new Map(rows.map((row) => [row.id, row.mpesaReceipt ?? null]));
+  const recordedReceipts = new Set(rows.map((row) => row.mpesaReceipt).filter((code): code is string => Boolean(code)));
+  const found: Array<RecordedRow & { why: string; effect: number }> = [];
+  for (const row of rows) {
+    const day = String(row.date).slice(0, 10);
+    if (day < first || day > last) continue;
+    const amount = Number(row.amount) || 0;
+    const effect = row.type === 'deposit' ? amount : -amount;
+    if (row.chargeForTransactionId != null) {
+      // A charge kept with its payment. Wrong only when the statement lists that
+      // charge on its own too, and it was saved that way as well (the payment's
+      // code, then C and a number). A charge saved on its own that the statement
+      // does not list is caught below instead - counting both would double it.
+      const parent = receiptOf.get(row.chargeForTransactionId) ?? null;
+      if (parent && [...recordedReceipts].some((code) => code.startsWith(`${parent}C`) && onStatement.has(code))) {
+        found.push({ ...row, why: 'Charge recorded twice: with its payment and on its own', effect });
+      }
+      continue;
+    }
+    if (row.mpesaReceipt && onStatement.has(row.mpesaReceipt)) continue;
+    found.push({ ...row, why: row.mpesaReceipt ? 'Its M-Pesa code is not on this statement' : 'No M-Pesa code: typed in or pasted', effect });
+  }
+  const net = Math.round(found.reduce((sum, row) => sum + row.effect, 0) * 100) / 100;
+  return { rows: found, net };
+}
+
 export interface Reconciliation {
   opening: number;
   closing: number;
