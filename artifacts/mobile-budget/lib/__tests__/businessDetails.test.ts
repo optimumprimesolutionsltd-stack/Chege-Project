@@ -35,6 +35,34 @@ describe('business details', () => {
   });
 });
 
+// "If I want to see all as detailed, not one by one" - but keeping each business's own.
+describe('one switch for every business', () => {
+  it("opens them all, or closes them all, beside each one's own", () => {
+    expect(screen).toContain("{allDetailed ? 'Hide all details' : 'Show all details'}");
+    expect(screen).toContain('const allDetailed = businesses.length > 0 && businesses.every((business) => detailed.has(business.incomeSourceId));');
+    expect(screen).toContain("{detailed.has(business.incomeSourceId) ? 'Hide details' : 'Show details'}");
+  });
+});
+
+const reports = readFileSync('app/(tabs)/reports.tsx', 'utf8');
+
+describe('income stream details', () => {
+  it('open per stream or all at once, and are remembered on the phone', () => {
+    expect(reports).toContain("const STREAM_DETAILS_KEY = 'jamvi:income-stream-details-open';");
+    expect(reports).toContain("{allStreamsDetailed ? 'Hide all details' : 'Show all details'}");
+    expect(reports).toContain("{detailedStreams.has(streamKey(stream.incomeSourceId)) ? 'Hide details' : 'Show details'}");
+  });
+
+  it('fetch All income only while shown, and give each stream its own share of a split entry', () => {
+    expect(reports).toContain('enabled: showingStreamDetails');
+    expect(reports).toContain('.filter((portion) => (portion.incomeSourceId ?? null) === (incomeSourceId ?? null))');
+  });
+
+  it('list each linked cost as cost of goods sold or an expense', () => {
+    expect(reports).toContain("{category.name} · {category.costKind === 'expense' ? 'Expense' : 'Cost of goods sold'}");
+  });
+});
+
 // "Can't see cost categories": the way in was a link inside Reports' income
 // stream cards. Each statement now links there.
 describe('changing which costs count', () => {
