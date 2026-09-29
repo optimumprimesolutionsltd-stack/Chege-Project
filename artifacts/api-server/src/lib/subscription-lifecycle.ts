@@ -1,4 +1,5 @@
 import { SUBSCRIPTION_STATUS, GRACE_DAYS, type SubscriptionStatus } from "@workspace/jamvi-pricing";
+import { endOfNairobiDay } from "./nairobiTime";
 
 /**
  * What should happen to a subscription today.
@@ -56,8 +57,15 @@ export interface Plan {
 
 const DAY_MS = 86_400_000;
 
+/**
+ * Calendar days in Nairobi from today to the last day of a period, whose end
+ * `to` is the midnight closing that day (see endOfNairobiDay). 1 means it ends
+ * tomorrow night.
+ */
 function daysBetween(from: Date, to: Date): number {
-  return Math.ceil((to.getTime() - from.getTime()) / DAY_MS);
+  const OFFSET = 3 * 60 * 60 * 1000;
+  const day = (at: number) => Math.floor((at + OFFSET) / DAY_MS);
+  return day(to.getTime() - 1) - day(from.getTime());
 }
 
 export function addDays(from: Date, days: number): Date {
@@ -77,27 +85,29 @@ export function planFor(subscription: SubscriptionRow, now: Date = new Date()): 
 
   switch (subscription.status) {
     case SUBSCRIPTION_STATUS.TRIAL: {
-      const endsAt = subscription.trialEndsAt;
+      // To the end of its last day in Nairobi, as access is (subscription-catalog).
+      // Reminders stay keyed to the stored date, so none already sent goes again.
+      const endsAt = subscription.trialEndsAt ? endOfNairobiDay(subscription.trialEndsAt) : null;
       if (!endsAt) return { transition: null, reminders };
 
       if (now >= endsAt) {
         return {
           transition: { status: SUBSCRIPTION_STATUS.EXPIRED },
-          reminders: [{ kind: REMINDER.TRIAL_ENDED, dueFor: endsAt }],
+          reminders: [{ kind: REMINDER.TRIAL_ENDED, dueFor: subscription.trialEndsAt! }],
         };
       }
 
       const daysLeft = daysBetween(now, endsAt);
       if (daysLeft <= 1) {
-        reminders.push({ kind: REMINDER.TRIAL_ENDING_TOMORROW, dueFor: endsAt });
+        reminders.push({ kind: REMINDER.TRIAL_ENDING_TOMORROW, dueFor: subscription.trialEndsAt! });
       } else if (daysLeft <= 7) {
-        reminders.push({ kind: REMINDER.TRIAL_ENDING_WEEK, dueFor: endsAt });
+        reminders.push({ kind: REMINDER.TRIAL_ENDING_WEEK, dueFor: subscription.trialEndsAt! });
       }
       return { transition: null, reminders };
     }
 
     case SUBSCRIPTION_STATUS.ACTIVE: {
-      const endsAt = subscription.currentPeriodEnd;
+      const endsAt = subscription.currentPeriodEnd ? endOfNairobiDay(subscription.currentPeriodEnd) : null;
       if (!endsAt) return { transition: null, reminders };
 
       if (now >= endsAt) {
@@ -108,18 +118,18 @@ export function planFor(subscription: SubscriptionRow, now: Date = new Date()): 
             status: SUBSCRIPTION_STATUS.PAST_DUE,
             graceEndsAt: addDays(now, GRACE_DAYS),
           },
-          reminders: [{ kind: REMINDER.PAYMENT_MISSED, dueFor: endsAt }],
+          reminders: [{ kind: REMINDER.PAYMENT_MISSED, dueFor: subscription.currentPeriodEnd! }],
         };
       }
 
       if (daysBetween(now, endsAt) <= 3) {
-        reminders.push({ kind: REMINDER.RENEWAL_DUE, dueFor: endsAt });
+        reminders.push({ kind: REMINDER.RENEWAL_DUE, dueFor: subscription.currentPeriodEnd! });
       }
       return { transition: null, reminders };
     }
 
     case SUBSCRIPTION_STATUS.PAST_DUE: {
-      const graceEndsAt = subscription.graceEndsAt;
+      const graceEndsAt = subscription.graceEndsAt ? endOfNairobiDay(subscription.graceEndsAt) : null;
       if (!graceEndsAt) {
         // Past due with no grace recorded is a row an older code path left
         // behind. Give it the window rather than expiring somebody early.
@@ -135,11 +145,11 @@ export function planFor(subscription: SubscriptionRow, now: Date = new Date()): 
       if (now >= graceEndsAt) {
         return {
           transition: { status: SUBSCRIPTION_STATUS.EXPIRED },
-          reminders: [{ kind: REMINDER.GRACE_ENDED, dueFor: graceEndsAt }],
+          reminders: [{ kind: REMINDER.GRACE_ENDED, dueFor: subscription.graceEndsAt! }],
         };
       }
       if (daysBetween(now, graceEndsAt) <= 1) {
-        reminders.push({ kind: REMINDER.GRACE_ENDING, dueFor: graceEndsAt });
+        reminders.push({ kind: REMINDER.GRACE_ENDING, dueFor: subscription.graceEndsAt! });
       }
       return { transition: null, reminders };
     }

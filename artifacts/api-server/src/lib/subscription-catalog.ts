@@ -20,6 +20,7 @@ import {
   type SubscriptionStatus,
 } from "@workspace/jamvi-pricing";
 import { and, desc, eq, inArray } from "drizzle-orm";
+import { endOfNairobiDay, endOfNairobiDayOrNull } from "./nairobiTime";
 
 type DbOrTransaction = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -142,14 +143,16 @@ function withinAccessWindow(
   now: Date,
 ): boolean {
   switch (subscription.status) {
+    // Each runs to the end of its last day in Nairobi (see endOfNairobiDay),
+    // including rows stored before that rule, which ended at a time of day.
     case SUBSCRIPTION_STATUS.TRIAL:
-      return subscription.trialEndsAt !== null && now < subscription.trialEndsAt;
+      return subscription.trialEndsAt !== null && now < endOfNairobiDay(subscription.trialEndsAt);
     case SUBSCRIPTION_STATUS.ACTIVE:
-      return subscription.currentPeriodEnd === null || now < subscription.currentPeriodEnd;
+      return subscription.currentPeriodEnd === null || now < endOfNairobiDay(subscription.currentPeriodEnd);
     case SUBSCRIPTION_STATUS.PAST_DUE:
-      return subscription.graceEndsAt !== null && now < subscription.graceEndsAt;
+      return subscription.graceEndsAt !== null && now < endOfNairobiDay(subscription.graceEndsAt);
     case SUBSCRIPTION_STATUS.CANCELLED:
-      return subscription.currentPeriodEnd !== null && now < subscription.currentPeriodEnd;
+      return subscription.currentPeriodEnd !== null && now < endOfNairobiDay(subscription.currentPeriodEnd);
     default:
       return false;
   }
@@ -202,7 +205,7 @@ export async function resolveMemberEntitlements(
 
   const status = subscription.status as SubscriptionStatus;
   if (!withinAccessWindow(subscription, now)) {
-    return lapsed(status, { trialEndsAt: subscription.trialEndsAt });
+    return lapsed(status, { trialEndsAt: endOfNairobiDayOrNull(subscription.trialEndsAt) });
   }
 
   const plan = getJamviPackage(subscription.packageCode as PackageCode);
@@ -213,8 +216,9 @@ export async function resolveMemberEntitlements(
     fullAccess: true,
     status,
     billingInterval: subscription.billingInterval as BillingInterval,
-    trialEndsAt: subscription.trialEndsAt,
-    currentPeriodEnd: subscription.currentPeriodEnd,
+    // The ends the phone counts "days left" to: the midnight access really stops.
+    trialEndsAt: endOfNairobiDayOrNull(subscription.trialEndsAt),
+    currentPeriodEnd: endOfNairobiDayOrNull(subscription.currentPeriodEnd),
   };
 }
 
@@ -260,7 +264,7 @@ export async function ensureTrialSubscription(
     packageCode: PACKAGE_CODE.JAMVI,
     billingInterval: "monthly",
     status: SUBSCRIPTION_STATUS.TRIAL,
-    trialEndsAt: addDays(now, TRIAL_DAYS),
+    trialEndsAt: endOfNairobiDay(addDays(now, TRIAL_DAYS)),
   });
 }
 
