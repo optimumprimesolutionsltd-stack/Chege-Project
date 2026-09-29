@@ -90,7 +90,7 @@ describe('the span it answers about', () => {
   it('puts the span and the search in the cache key', () => {
     // Otherwise changing either shows the previous answer under new controls.
     expect(screen).toContain('queryKey: getGetDashboardSpendingByItemQueryKey(query)');
-    expect(screen).toContain('[rangeFrom, rangeTo, search, category, groupBy]');
+    expect(screen).toContain('[rangeFrom, rangeTo, search, category, groupBy, scoped, hasBusiness, scope]');
   });
 
   it('reads a backwards range as the span between the dates', () => {

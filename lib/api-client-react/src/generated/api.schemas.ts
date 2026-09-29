@@ -2181,6 +2181,10 @@ item?: string;
  * item (the default) totals each distinct description on its own — right for "how much on Netflix". category combines everything charged to the same category into one row — right for "how much in bank charges altogether", when the individual charges are each named differently.
  */
 groupBy?: GetDashboardSpendingByItemGroupBy;
+/**
+ * household leaves out a side hustle's costs (categories linked to an income stream); business lists only them. Left out, everything.
+ */
+scope?: GetDashboardSpendingByItemScope;
 };
 
 export type GetDashboardSpendingByItemGroupBy = typeof GetDashboardSpendingByItemGroupBy[keyof typeof GetDashboardSpendingByItemGroupBy];
@@ -2189,6 +2193,14 @@ export type GetDashboardSpendingByItemGroupBy = typeof GetDashboardSpendingByIte
 export const GetDashboardSpendingByItemGroupBy = {
   item: 'item',
   category: 'category',
+} as const;
+
+export type GetDashboardSpendingByItemScope = typeof GetDashboardSpendingByItemScope[keyof typeof GetDashboardSpendingByItemScope];
+
+
+export const GetDashboardSpendingByItemScope = {
+  household: 'household',
+  business: 'business',
 } as const;
 
 export type GetDashboardIncomeStreamsParams = {

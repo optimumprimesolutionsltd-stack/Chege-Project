@@ -78,6 +78,7 @@ export * from './getDashboardMonthlyReportPdfParams';
 export * from './getDashboardPeriodTotalsParams';
 export * from './getDashboardSpendingByItemGroupBy';
 export * from './getDashboardSpendingByItemParams';
+export * from './getDashboardSpendingByItemScope';
 export * from './getDashboardSummaryParams';
 export * from './getDashboardTrendsParams';
 export * from './getExpensesParams';

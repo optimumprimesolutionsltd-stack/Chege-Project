@@ -943,7 +943,8 @@ export const GetDashboardSpendingByItemQueryParams = zod.object({
   "q": zod.coerce.string().optional().describe('Narrows the list to names containing this text, ignoring case.'),
   "category": zod.coerce.string().min(1).optional().describe('Narrows the list to things charged to this category.'),
   "item": zod.coerce.string().min(1).optional().describe('One thing by name (or one category, when groupBy is category), ignoring case and surrounding spaces. The response then carries the individual expenses behind its total.'),
-  "groupBy": zod.enum(['item', 'category']).optional().describe('item (the default) totals each distinct description on its own — right for \"how much on Netflix\". category combines everything charged to the same category into one row — right for \"how much in bank charges altogether\", when the individual charges are each named differently.')
+  "groupBy": zod.enum(['item', 'category']).optional().describe('item (the default) totals each distinct description on its own — right for \"how much on Netflix\". category combines everything charged to the same category into one row — right for \"how much in bank charges altogether\", when the individual charges are each named differently.'),
+  "scope": zod.enum(['household', 'business']).optional().describe('household leaves out a side hustle\'s costs (categories linked to an income stream); business lists only them. Left out, everything.')
 })
 
 export const GetDashboardSpendingByItemResponse = zod.object({

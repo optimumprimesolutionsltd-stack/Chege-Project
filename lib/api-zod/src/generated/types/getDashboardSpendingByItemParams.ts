@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { GetDashboardSpendingByItemGroupBy } from './getDashboardSpendingByItemGroupBy';
+import type { GetDashboardSpendingByItemScope } from './getDashboardSpendingByItemScope';
 
 export type GetDashboardSpendingByItemParams = {
 /**
@@ -36,4 +37,8 @@ item?: string;
  * item (the default) totals each distinct description on its own — right for "how much on Netflix". category combines everything charged to the same category into one row — right for "how much in bank charges altogether", when the individual charges are each named differently.
  */
 groupBy?: GetDashboardSpendingByItemGroupBy;
+/**
+ * household leaves out a side hustle's costs (categories linked to an income stream); business lists only them. Left out, everything.
+ */
+scope?: GetDashboardSpendingByItemScope;
 };

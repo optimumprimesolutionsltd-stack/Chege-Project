@@ -1344,6 +1344,16 @@ router.get("/dashboard/spending-by-item", async (req, res): Promise<void> => {
     res.status(400).json({ error: "Give both a start and an end date, or neither." });
     return;
   }
+  // A side hustle's costs - spending in a category linked to an income
+  // stream, like stock - are the business's, not the household's. "household"
+  // leaves them out, "business" lists only them, and no scope keeps
+  // everything, as before.
+  const scope = req.query.scope === "household" || req.query.scope === "business" ? req.query.scope : null;
+  const isBusinessCost = sql`EXISTS (
+    SELECT 1 FROM budget_categories bc
+    WHERE bc.group_id = ${groupId} AND bc.reduces_income_source_id IS NOT NULL AND bc.name = spending.category
+  )`;
+  const scopeFilter = scope === "business" ? sql`AND ${isBusinessCost}` : scope === "household" ? sql`AND NOT ${isBusinessCost}` : sql``;
   // item totals each distinct description on its own — right for "how much
   // on Netflix". category combines everything charged to the same category
   // into one row — right for "how much in bank charges altogether", when
@@ -1403,6 +1413,7 @@ router.get("/dashboard/spending-by-item", async (req, res): Promise<void> => {
            array_agg(DISTINCT spending.category) AS "categories"
     FROM spending
     WHERE TRUE
+      ${scopeFilter}
       ${search ? sql`AND spending.description ILIKE ${search} ESCAPE '!'` : sql``}
       ${item ? sql`AND lower(btrim(${groupColumn})) = lower(btrim(${item}))` : sql``}
       ${category ? sql`AND (
@@ -1476,6 +1487,7 @@ router.get("/dashboard/spending-by-item", async (req, res): Promise<void> => {
            u.last_name AS "lastName"
     FROM spending
     LEFT JOIN users u ON u.id = spending.payer_id
+    WHERE TRUE ${scopeFilter}
     ORDER BY spending.date DESC, spending.id DESC
     LIMIT 500
   `).then((result) => (result.rows as {
