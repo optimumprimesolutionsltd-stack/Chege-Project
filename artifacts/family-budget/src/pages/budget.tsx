@@ -1029,9 +1029,14 @@ export default function Budget() {
   // Not a sum of every row: a parent's figures are its subcategories added up,
   // so adding both counted each subcategory twice. Only the rows nothing else
   // is nested under carry a figure of their own.
-  const leafBreakdown = (breakdown ?? []).filter(
+  const allLeaves = (breakdown ?? []).filter(
     (item) => !(breakdown ?? []).some((other) => other.parentName === item.category),
   );
+  // A side hustle's costs (Stock) are the business's, taken off its profit,
+  // not the household's budget against actual - as on the phone's Budget tab.
+  // The categories stay listed, to edit; they only leave the totals.
+  const leafBreakdown = allLeaves.filter((item) => !item.isBusinessCost);
+  const businessCostsSpent = allLeaves.filter((item) => item.isBusinessCost).reduce((sum, item) => sum + item.spentAmount, 0);
   const reportBudget = leafBreakdown.reduce((sum, item) => sum + item.budgetAmount, 0);
   const reportActual = leafBreakdown.reduce((sum, item) => sum + item.spentAmount, 0);
   const reportVariance = reportBudget - reportActual;
@@ -1424,6 +1429,11 @@ export default function Budget() {
                  <p className={`font-display font-bold text-xl mt-1 ${reportVariance < 0 ? "text-destructive" : "text-primary"}`}>{formatKes(Math.abs(reportVariance))}</p>
                </div>
              </div>
+             {businessCostsSpent > 0 ? (
+               <p className="mt-3 text-xs text-muted-foreground" data-testid="budget-business-costs">
+                 Not counted here: {formatKes(businessCostsSpent)} of side-hustle costs, which come off that business's profit instead.
+               </p>
+             ) : null}
            </CardContent>
          </Card>
        )}
