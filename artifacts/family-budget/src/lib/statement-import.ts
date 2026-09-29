@@ -203,16 +203,33 @@ export function statementLines(rows: readonly StatementRow[]): StatementReading 
         });
         continue;
       }
-      if (REVERSAL.test(details)) {
+      const match = REVERSAL.test(details) ? undefined : KINDS.find(([pattern]) => pattern.test(details));
+      const amount = row.paidIn ?? row.withdrawn;
+      if (amount === null) {
         leftOutNet += netOf(row);
-        lines.push(left(index, row, "A reversal that took money out. Record it yourself against the payment it belongs to."));
+        lines.push(left(index, row, "This entry has no amount."));
         continue;
       }
-      const match = KINDS.find(([pattern]) => pattern.test(details));
-      const amount = row.paidIn ?? row.withdrawn;
-      if (!match || amount === null) {
-        leftOutNet += netOf(row);
-        lines.push(left(index, row, "This kind of entry is not recognised yet."));
+      if (!match) {
+        // Not a kind Jamvi knows - a reversal that took money out, or one it has
+        // not met yet. It still moved the balance, so it is listed like any
+        // other entry, under the statement's own words, for a category to be
+        // chosen - not set aside for somebody to notice and record by hand.
+        lines.push({
+          index,
+          status: "ready",
+          reason: null,
+          receipt: row.receipt,
+          direction: row.paidIn !== null ? "in" : "out",
+          type: "other",
+          amount,
+          description: details,
+          named: false,
+          date: dateOf(row.time),
+          fee: null,
+          mpesaBalance: row.balance,
+          alreadyRecorded: null,
+        });
         continue;
       }
       const [, kind, direction] = match;
@@ -235,9 +252,57 @@ export function statementLines(rows: readonly StatementRow[]): StatementReading 
       });
     }
     if (!foldable) {
-      for (const row of charges) leftOutNet += netOf(row);
-      for (const row of charges) lines.push(left(lines.length, row, "A charge with no single payment beside it. Record it yourself as a bank charge."));
+      // A charge with no single payment beside it to fold into is still a
+      // charge: listed as one, for the charges category. It shares its M-Pesa
+      // code with a payment beside it, so it carries its own - the code, "C"
+      // and its place among the charges - or saving the payment would make it
+      // look already recorded.
+      charges.forEach((row, n) => {
+        const amount = row.withdrawn ?? row.paidIn;
+        if (amount === null) {
+          leftOutNet += netOf(row);
+          lines.push(left(lines.length, row, "This charge has no amount."));
+          return;
+        }
+        lines.push({
+          index: lines.length,
+          status: "ready",
+          reason: null,
+          receipt: row.receipt ? `${row.receipt}C${n + 1}` : null,
+          direction: row.withdrawn !== null ? "out" : "in",
+          type: "transaction_charge",
+          amount,
+          description: "M-Pesa charge",
+          named: false,
+          date: dateOf(row.time),
+          fee: null,
+          mpesaBalance: row.balance,
+          alreadyRecorded: null,
+        });
+      });
     }
+  }
+  // Fuliza fees: what was repaid above what was drawn, which nothing else
+  // records (see fulizaCharges). Listed as one line for the statement.
+  const feeDue = Math.round((loanRepaymentTotal - loanDrawTotal) * 100) / 100;
+  if (feeDue >= 0.01 && chronological.length > 0) {
+    const first = dateOf(chronological[0].time);
+    const last = dateOf(chronological[chronological.length - 1].time);
+    lines.push({
+      index: lines.length,
+      status: "ready",
+      reason: null,
+      receipt: fulizaReceipt(first, last),
+      direction: "out",
+      type: "fuliza_fee",
+      amount: feeDue,
+      description: `Fuliza charges ${first} to ${last}`,
+      named: false,
+      date: last,
+      fee: null,
+      mpesaBalance: null,
+      alreadyRecorded: null,
+    });
   }
   const { opening, closing } = balancesOf(groups);
   const round = (value: number) => Math.round(value * 100) / 100;
@@ -272,8 +337,13 @@ export function statementLines(rows: readonly StatementRow[]): StatementReading 
 export function fulizaCharges(reading: StatementReading): { amount: number; from: string; to: string; receipt: string } | null {
   const amount = Math.round((reading.loanRepaymentTotal - reading.loanDrawTotal) * 100) / 100;
   if (amount < 0.01 || !reading.firstDate || !reading.lastDate) return null;
+  return { amount, from: reading.firstDate, to: reading.lastDate, receipt: fulizaReceipt(reading.firstDate, reading.lastDate) };
+}
+
+/** FZ, then the first and last day as yymmdd: fourteen characters, where real codes are ten. */
+function fulizaReceipt(first: string, last: string): string {
   const compact = (day: string) => day.slice(2).replace(/-/g, "");
-  return { amount, from: reading.firstDate, to: reading.lastDate, receipt: `FZ${compact(reading.firstDate)}${compact(reading.lastDate)}` };
+  return `FZ${compact(first)}${compact(last)}`;
 }
 
 export interface Reconciliation {
@@ -305,9 +375,13 @@ export function reconcile(reading: StatementReading, included: (line: PreviewLin
   const saved = round(ready.filter((line) => !line.alreadyRecorded && included(line)).reduce((sum, line) => sum + effect(line), 0));
   const notSaved = round(ready.filter((line) => !line.alreadyRecorded && !included(line)).reduce((sum, line) => sum + effect(line), 0));
   const statementChange = round(reading.closing - reading.opening);
+  // Fuliza draws and repayments are left out, but their difference is either
+  // the fees - listed as their own line, so already in saved or not ticked -
+  // or, when more was drawn than repaid, a loan still open at the end: money
+  // borrowed, which moved the balance without being income.
+  const stillOwed = round(reading.loanDrawTotal - reading.loanRepaymentTotal);
   const parts = [
-    { label: "Fuliza loan repayments (not spending, so not recorded)", amount: -reading.loanRepaymentTotal },
-    { label: "Fuliza loans (not income, so not recorded)", amount: reading.loanDrawTotal },
+    { label: "Fuliza still owed at the end (borrowed, so not income)", amount: stillOwed > 0 ? stillOwed : 0 },
     { label: "Entries left out with a reason", amount: reading.leftOutNet },
     { label: "Entries not ticked", amount: notSaved },
   ].filter((part) => Math.abs(part.amount) >= 0.005);

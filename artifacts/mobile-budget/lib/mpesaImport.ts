@@ -179,6 +179,7 @@ const KIND_DEFAULTS: Record<string, readonly string[]> = {
   airtime_purchase: ['airtime', 'data', 'phone', 'communication', 'bundle'],
   cash_withdrawal: ['cash', 'withdraw'],
   fuliza_fee: ['bank charge', 'charge', 'fee', 'fuliza'],
+  transaction_charge: ['m-pesa charges', 'transaction charges', 'bank charge', 'charge', 'fee'],
 };
 
 // A payee that names a group people pay into, and the words a category for it is likely to use.
@@ -235,6 +236,15 @@ function suggestionFor(
   rules: PayeeRules = {},
 ): string {
   if (line.direction !== 'out') return '';
+  // Built-in categories win: a Fuliza fee goes to Fuliza charges when the
+  // budget has it, and a lone M-Pesa charge to the charges category - before
+  // any guess from a payee, which a charge does not have. A budget without
+  // Fuliza charges yet keeps the old order below.
+  if (line.type === 'fuliza_fee') {
+    const builtIn = categoryNames.find((name) => name.trim().toLowerCase() === 'fuliza charges');
+    if (builtIn) return builtIn;
+  }
+  if (line.type === 'transaction_charge') return chargeCategory || defaultCategoryFor(line, categoryNames);
   const description = line.description ?? '';
   // A rule the person kept, then this exact payee's history, then payees with a similar name,
   // then a word that has nearly always meant one category in their own books.
@@ -242,7 +252,6 @@ function suggestionFor(
   const earlier = description ? suggestCategory(description, history) : '';
   const similar = description && line.named !== false ? fuzzyCategory(description, history, categoryNames) : '';
   const byWord = description && line.named !== false ? wordCategory(description, history, categoryNames) : '';
-  // A Fuliza access fee is a bank charge: it goes where charges already go.
   return (
     (kept && (categoryNames.length === 0 || categoryNames.includes(kept)) ? kept : '') ||
     earlier ||
