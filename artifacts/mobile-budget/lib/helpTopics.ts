@@ -286,6 +286,12 @@ export const HELP_SECTIONS: HelpSection[] = [
         keywords: ['income', 'money in', 'salary', 'received', 'ledger', 'list'],
       },
       {
+        question: 'See whether the month kept to its budget',
+        steps: ['Reports tab, then Budget report.'],
+        route: '/budget-report',
+        keywords: ['budget', 'over budget', 'overspent', 'planned', 'report', 'left'],
+      },
+      {
         question: 'See every expense in one list',
         steps: ['Reports tab, then the expense ledger.'],
         route: '/expense-ledger',

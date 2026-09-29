@@ -650,6 +650,29 @@ export default function ReportsScreen() {
             <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
           </Pressable>
 
+          {/* Whether the month kept to its budget: planned against spent,
+              category by category, overspends first. */}
+          <Pressable
+            onPress={() => router.push('/budget-report')}
+            accessibilityRole="button"
+            accessibilityLabel="See your budget against what you spent"
+            testID="open-budget-report"
+            style={({ pressed }) => [
+              styles.spendOnCard,
+              { backgroundColor: colors.card, borderColor: colors.border },
+              pressed && { opacity: 0.85 },
+            ]}
+          >
+            <Feather name="target" size={18} color={colors.primary} />
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={[styles.spendOnTitle, { color: colors.foreground }]}>Budget report</Text>
+              <Text style={[styles.spendOnSub, { color: colors.mutedForeground }]} numberOfLines={2}>
+                What you planned against what you spent, month by month, overspends first.
+              </Text>
+            </View>
+            <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+          </Pressable>
+
           {/* Categories answer "how much on Food". This answers "how much on
               that thing", which is the question people actually ask. */}
           <Pressable
