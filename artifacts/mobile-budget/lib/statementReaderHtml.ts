@@ -23,12 +23,16 @@ const WORKER = ${JSON.stringify(worker).replace(/<\//g, '<\\/')};
 const post = (message) => window.ReactNativeWebView.postMessage(JSON.stringify(message));
 const blobUrl = (source) => URL.createObjectURL(new Blob([source], { type: 'text/javascript' }));
 let pdfjs = null;
+// The library is large and slow to start, so it starts loading as soon as the
+// page exists - which can be before there is anything to read - and the page
+// says it is ready only once it has.
+const loading = (async () => {
+  pdfjs = await import(blobUrl(LIBRARY));
+  pdfjs.GlobalWorkerOptions.workerSrc = blobUrl(WORKER);
+})();
 window.__read = async (base64, password) => {
   try {
-    if (!pdfjs) {
-      pdfjs = await import(blobUrl(LIBRARY));
-      pdfjs.GlobalWorkerOptions.workerSrc = blobUrl(WORKER);
-    }
+    await loading;
     const binary = atob(base64);
     const data = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i += 1) data[i] = binary.charCodeAt(i);
@@ -54,6 +58,9 @@ window.__read = async (base64, password) => {
     post({ type: 'error', message: String((error && error.message) || error) });
   }
 };
-post({ type: 'ready' });
+loading.then(
+  () => post({ type: 'ready' }),
+  (error) => post({ type: 'error', message: String((error && error.message) || error) }),
+);
 </script></body></html>`;
 }

@@ -12,6 +12,7 @@ import {
   Text,
   TextInput,
   View,
+  Keyboard,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -80,6 +81,7 @@ import { saveDebtLinks } from '@/lib/debtReversal';
 import type { DebtEntryLink } from '@/lib/debtLinks';
 import { canReadStatements, chooseStatement, statementBase64, type ChosenStatement } from '@/lib/statementFile';
 import { shownFileName } from '@/lib/shownFileName';
+import { readPercent } from '@/lib/statementProgress';
 import { fulizaChargeOverlap, fulizaCharges, reconcile, statementLines, type StatementReading } from '@/lib/statementImport';
 import { checkRunningBalance, readStatementRows, resolveDirections } from '@/lib/statementTable';
 import type { ReaderMessage } from '@/lib/statementReaderHtml';
@@ -407,6 +409,26 @@ export default function MpesaImportScreen() {
   // How far a statement has got, so a long one does not look frozen: opening
   // the file, reading page by page, then checking what is already recorded.
   const [readProgress, setReadProgress] = useState<{ stage: 'opening' | 'reading' | 'checking'; page?: number; of?: number } | null>(null);
+  // A read that stops moving is given up on, so the buttons are not left
+  // spinning for ever. Restarted on every page, so a long statement that is
+  // still going is never cut off - only one that has gone quiet.
+  const readStallTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const READ_STALL_MS = 90_000;
+  const clearReadStall = () => {
+    if (readStallTimer.current) clearTimeout(readStallTimer.current);
+    readStallTimer.current = null;
+  };
+  const armReadStall = () => {
+    clearReadStall();
+    readStallTimer.current = setTimeout(() => {
+      readStallTimer.current = null;
+      setReaderJob(null);
+      setReading(false);
+      setReadProgress(null);
+      Alert.alert('The statement stopped loading', 'Nothing happened for a minute and a half, so Jamvi stopped. Try again, or paste your messages instead.');
+    }, READ_STALL_MS);
+  };
+  useEffect(() => clearReadStall, []);
   // A statement PDF: read on this phone, with its password used only here.
   const [statementFile, setStatementFile] = useState<ChosenStatement | null>(null);
   const [statementPassword, setStatementPassword] = useState('');
@@ -751,11 +773,15 @@ export default function MpesaImportScreen() {
 
   const readStatement = async () => {
     if (!statementFile || readerJob) return;
+    // The progress shows under the button, which the keyboard would cover.
+    Keyboard.dismiss();
     setReading(true);
     setReadProgress({ stage: 'opening' });
+    armReadStall();
     try {
       setReaderJob({ base64: await statementBase64(statementFile.uri), password: statementPassword });
     } catch (error: unknown) {
+      clearReadStall();
       setReading(false);
       setReadProgress(null);
       Alert.alert('Could not read the statement', error instanceof Error ? error.message : 'Please try again.');
@@ -767,8 +793,10 @@ export default function MpesaImportScreen() {
     if (result.type === 'ready') return;
     if (result.type === 'progress') {
       setReadProgress({ stage: 'reading', page: result.page, of: result.of });
+      armReadStall();
       return;
     }
+    clearReadStall();
     setReaderJob(null);
     try {
       if (result.type === 'error') {
@@ -1309,14 +1337,9 @@ export default function MpesaImportScreen() {
                         : readProgress.stage === 'reading'
                           ? `Reading page ${readProgress.page} of ${readProgress.of}…`
                           : 'Checking which of these are already recorded…'}
+                      {` ${readPercent(readProgress)}%`}
                     </Text>
-                    <ProgressBar
-                      fraction={readProgress.stage === 'reading' && readProgress.of
-                        ? (readProgress.page ?? 0) / readProgress.of
-                        : readProgress.stage === 'checking' ? 1 : 0}
-                      color={colors.primary}
-                      track={colors.muted}
-                    />
+                    <ProgressBar fraction={readPercent(readProgress) / 100} color={colors.primary} track={colors.muted} />
                   </View>
                 ) : null}
               </View>
@@ -1950,7 +1973,8 @@ export default function MpesaImportScreen() {
           </>
         )}
       </PageScrollView>
-      <StatementReader job={readerJob} onDone={onStatementRead} />
+      {/* Warmed as soon as a statement is chosen, so reading starts at once. */}
+      <StatementReader job={readerJob} warm={statementFile !== null} onDone={onStatementRead} />
 
       {lines ? (
         <View style={[styles.footer, { paddingBottom: insets.bottom + 12, backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -1965,7 +1989,7 @@ export default function MpesaImportScreen() {
           {saveProgress && saveProgress.total > 0 ? (
             <View style={{ gap: 6 }} testID="mpesa-save-progress-bar" accessibilityLiveRegion="polite">
               <Text style={[styles.hint, { color: colors.foreground }]}>
-                Saved {saveProgress.done} of {saveProgress.total}. Keep Jamvi open until it finishes.
+                Saved {saveProgress.done} of {saveProgress.total} · {Math.round((saveProgress.done / saveProgress.total) * 100)}%. Keep Jamvi open until it finishes.
               </Text>
               <ProgressBar fraction={saveProgress.done / saveProgress.total} color={colors.primary} track={colors.muted} />
             </View>
