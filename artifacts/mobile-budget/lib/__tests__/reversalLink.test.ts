@@ -58,3 +58,18 @@ describe('the bank list names both halves', () => {
     expect(bank).toContain("item.reversal?.role === 'reversed_payment' ? `Reversed · ${item.description}`");
   });
 });
+
+describe('matching reversals without opening each one', () => {
+  const mpesa = readFileSync('app/mpesa-import.tsx', 'utf8');
+
+  it('happens by itself after an import that saved a reversal', () => {
+    expect(mpesa).toContain("lines.some((line) => line.type === 'reversal' && savedIndexes.has(line.index))");
+    expect(mpesa).toContain('void autoLinkReversals()');
+  });
+
+  it('is one tap in Bank for money-back entries already there, and says what is left', () => {
+    expect(bank).toContain('testID="bank-match-reversals"');
+    expect(bank).toContain("/^money back/i.test(transaction.description ?? '') && !transaction.reversal");
+    expect(bank).toContain("'no payment of that amount is recorded'");
+  });
+});

@@ -1262,6 +1262,24 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /joint-account/reversals/auto-link:
+    post:
+      operationId: autoLinkReversals
+      tags: [joint-account]
+      summary: Link every money-back entry that has exactly one matching payment
+      description: >-
+        Each unlinked money-back deposit with exactly one payment it could have
+        reversed (same amount, on or up to 60 days before) is linked, oldest
+        first, so two cannot claim the same payment. The rest are listed with
+        how many payments could match, for the person to settle.
+      responses:
+        "200":
+          description: What was linked, and what needs the person
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AutoLinkReversalsResult"
+
   /joint-account/{id}/reversal:
     get:
       operationId: getReversal
@@ -2293,6 +2311,26 @@ components:
         - available
         - linked
         - candidates
+
+    AutoLinkReversalsResult:
+      type: object
+      properties:
+        linked:
+          type: number
+        needsYou:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: number }
+              description: { type: string }
+              amount: { type: number }
+              date: { type: string }
+              candidates:
+                type: number
+                description: How many payments could match - 0 means none is recorded, more than 1 means it has to be picked
+            required: [id, description, amount, date, candidates]
+      required: [linked, needsYou]
 
     LinkReversalInput:
       type: object

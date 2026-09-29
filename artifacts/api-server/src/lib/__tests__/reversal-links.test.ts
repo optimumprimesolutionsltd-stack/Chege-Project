@@ -78,10 +78,11 @@ describe("linking a reversal", () => {
   });
 
   it("links and sets the payment's category aside together, keeping it for unlinking", () => {
-    const post = bank.slice(bank.indexOf('router.post("/joint-account/:id/reversal"'), bank.indexOf('router.delete("/joint-account/:id/reversal"'));
-    expect(post).toContain("await db.transaction(async (trx) => {");
-    expect(post).toContain("originalCategory: original.expenseCategory,");
-    expect(post).toContain(".set({ expenseCategory: null })");
+    const link = bank.slice(bank.indexOf("async function linkReversal"), bank.indexOf("async function loadTx"));
+    expect(link).toContain("await db.transaction(async (trx) => {");
+    expect(link).toContain("originalCategory: original.expenseCategory,");
+    expect(link).toContain(".set({ expenseCategory: null })");
+    const post = bank.slice(bank.indexOf('router.post("/joint-account/:id/reversal"'));
     expect(post).toContain("if (!requireGroupManager(req, res)) return;");
   });
 
@@ -106,5 +107,37 @@ describe("either half is protected while linked", () => {
   it("says which half it is and what to do", () => {
     expect(bank).toContain("This money back is linked to the payment it reversed. Unlink it first.");
     expect(bank).toContain("This payment was reversed and is linked to its money back. Unlink it first.");
+  });
+});
+
+// Linking by hand left every reversal counting as income until somebody
+// opened it. Most have exactly one possible payment, and are matched for them.
+describe("matching reversals automatically", () => {
+  const auto = bank.slice(bank.indexOf('router.post("/joint-account/reversals/auto-link"'));
+
+  it("links only a money-back entry with exactly one possible payment", () => {
+    expect(auto).toContain("if (candidates.length === 1) {");
+    expect(auto).toContain("const refused = await linkReversal(deposit, candidates[0].tx, groupId);");
+  });
+
+  it("goes oldest first, so two money-backs cannot claim the same payment", () => {
+    expect(auto).toContain("ASC, ${jointAccountTxTable.id} ASC`)");
+    expect(bank).toContain("AND NOT EXISTS (SELECT 1 FROM reversal_links rl WHERE rl.original_transaction_id = ${jointAccountTxTable.id})");
+  });
+
+  it("lists the rest with how many payments could match, for the person to settle", () => {
+    expect(auto).toContain("needsYou.push({");
+    expect(auto).toContain("candidates: candidates.length,");
+  });
+
+  it("makes every link through the same checks as linking by hand", () => {
+    const manual = bank.slice(bank.indexOf('router.post("/joint-account/:id/reversal"'), bank.indexOf('router.post("/joint-account/reversals/auto-link"'));
+    expect(manual).toContain("const refused = await linkReversal(deposit, original, groupId);");
+    expect((bank.match(/await trx\.insert\(reversalLinksTable\)/g) ?? []).length).toBe(1);
+  });
+
+  it("is for owners and admins, and does nothing before the table exists", () => {
+    expect(auto).toContain("if (!requireGroupManager(req, res)) return;");
+    expect(auto).toContain("res.json({ linked: 0, needsYou: [] });");
   });
 });

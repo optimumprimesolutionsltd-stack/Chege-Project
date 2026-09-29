@@ -1757,6 +1757,22 @@ export const DeleteJointAccountTransactionResponse = zod.object({
 
 
 /**
+ * Each unlinked money-back deposit with exactly one payment it could have reversed (same amount, on or up to 60 days before) is linked, oldest first, so two cannot claim the same payment. The rest are listed with how many payments could match, for the person to settle.
+ * @summary Link every money-back entry that has exactly one matching payment
+ */
+export const AutoLinkReversalsResponse = zod.object({
+  "linked": zod.number(),
+  "needsYou": zod.array(zod.object({
+  "id": zod.number(),
+  "description": zod.string(),
+  "amount": zod.number(),
+  "date": zod.string(),
+  "candidates": zod.number().describe('How many payments could match - 0 means none is recorded, more than 1 means it has to be picked')
+}))
+})
+
+
+/**
  * For a deposit: the payment it is linked to, if any, and the payments it could reverse - ordinary payments in this budget of exactly the same amount, dated on or up to 60 days before it, not already reversed.
  * @summary What a money-back deposit reverses, and the payments it could
  */

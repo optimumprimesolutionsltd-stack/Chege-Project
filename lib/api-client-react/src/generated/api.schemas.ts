@@ -167,6 +167,20 @@ export interface ReversalOptions {
   candidates: ReversalCandidate[];
 }
 
+export type AutoLinkReversalsResultNeedsYouItem = {
+  id: number;
+  description: string;
+  amount: number;
+  date: string;
+  /** How many payments could match - 0 means none is recorded, more than 1 means it has to be picked */
+  candidates: number;
+};
+
+export interface AutoLinkReversalsResult {
+  linked: number;
+  needsYou: AutoLinkReversalsResultNeedsYouItem[];
+}
+
 export interface LinkReversalInput {
   originalTransactionId: number;
 }
