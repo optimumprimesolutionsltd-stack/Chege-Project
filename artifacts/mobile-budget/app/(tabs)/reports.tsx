@@ -1797,7 +1797,7 @@ export default function ReportsScreen() {
                         <Text style={[styles.variance, { color: colors.mutedForeground }]}>Reduces another stream — tap to move it here</Text>
                       ) : null}
                       {selected ? (
-                        <View style={{ flexDirection: 'row', gap: 6, marginTop: 8 }} testID={`cost-kind-${category.id}`}>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 }} testID={`cost-kind-${category.id}`}>
                           {([
                             ['cogs', 'Cost of goods sold'],
                             ['expense', 'Expense'],
@@ -2003,7 +2003,9 @@ const styles = StyleSheet.create({
   streamDetails: { marginTop: 8, paddingTop: 8, borderTopWidth: StyleSheet.hairlineWidth, gap: 4 },
   streamDetailsHead: { fontSize: 10, fontFamily: 'Inter_600SemiBold', letterSpacing: 0.6, marginTop: 4 },
   streamDetailRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  costCategoryOption: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 8 },
+  // A column: the name, then its kind buttons on a line of their own. In a row
+  // a long name ('Transport for side hustle') pushed Expense off the card.
+  costCategoryOption: { flexDirection: 'column', alignItems: 'stretch', borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 8 },
   incomeTrendHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   incomeTrendBars: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 8 },
 
