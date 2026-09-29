@@ -26,3 +26,20 @@ export function currentNairobiMonthYear(): { month: number; year: number } {
   const now = nairobiNow();
   return { month: now.getUTCMonth() + 1, year: now.getUTCFullYear() };
 }
+
+/**
+ * The midnight in Nairobi that ends the day `at` falls on - or `at` itself
+ * when it already is one. A trial, a paid month or a grace period ends at the
+ * end of its last day, as a person counts days; it used to end at the time of
+ * day they happened to sign up or pay, so "2 days left" ran out mid-afternoon.
+ */
+export function endOfNairobiDay(at: Date): Date {
+  const shifted = new Date(at.getTime() + NAIROBI_OFFSET_MS);
+  if (shifted.getUTCHours() === 0 && shifted.getUTCMinutes() === 0 && shifted.getUTCSeconds() === 0 && shifted.getUTCMilliseconds() === 0) {
+    return at;
+  }
+  return new Date(Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth(), shifted.getUTCDate() + 1) - NAIROBI_OFFSET_MS);
+}
+
+/** endOfNairobiDay for a date that may be missing. */
+export const endOfNairobiDayOrNull = (at: Date | null): Date | null => (at ? endOfNairobiDay(at) : null);
