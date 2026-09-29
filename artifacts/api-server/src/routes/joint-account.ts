@@ -1892,6 +1892,11 @@ async function reversalOptions(deposit: TxRow, groupId: number) {
  * reversed by anything.
  */
 async function reversalCandidates(deposit: TxRow, groupId: number) {
+  // The window's first day, worked out here. Written in SQL as date - $param,
+  // Postgres read the untyped 60 as a date and every match failed with a 500.
+  const windowStart = new Date(`${String(deposit.date).slice(0, 10)}T00:00:00Z`);
+  windowStart.setUTCDate(windowStart.getUTCDate() - REVERSAL_WINDOW_DAYS);
+  const fromDay = windowStart.toISOString().slice(0, 10);
   return db
     .select({ tx: jointAccountTxTable, accountName: bankAccountsTable.name })
     .from(jointAccountTxTable)
@@ -1904,7 +1909,7 @@ async function reversalCandidates(deposit: TxRow, groupId: number) {
       AND ${jointAccountTxTable.transferDirection} IS NULL
       AND ${jointAccountTxTable.expenseId} IS NULL
       AND ${jointAccountTxTable.date} <= ${deposit.date}
-      AND ${jointAccountTxTable.date} >= (${deposit.date}::date - ${REVERSAL_WINDOW_DAYS})
+      AND ${jointAccountTxTable.date} >= ${fromDay}
       AND NOT EXISTS (SELECT 1 FROM reversal_links rl WHERE rl.original_transaction_id = ${jointAccountTxTable.id})`)
     .orderBy(sql`${jointAccountTxTable.date} DESC, ${jointAccountTxTable.id} DESC`)
     .limit(10);

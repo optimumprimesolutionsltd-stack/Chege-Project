@@ -216,3 +216,15 @@ describe("auto-link", () => {
     expect(readFileSync("src/routes/joint-account.ts", "utf8")).toContain("const sole = soleReversalCandidate(candidates, String(deposit.date));");
   });
 });
+
+// "Could not match them: HTTP 500". The window was written as
+// deposit.date::date - $param; Postgres took the untyped 60 for a date, so
+// every match - automatic or by hand - failed on the server.
+describe("the payments a money back could be", () => {
+  it("are looked for from a window start worked out before the query", () => {
+    const bankRoute = readFileSync("src/routes/joint-account.ts", "utf8");
+    const candidates = bankRoute.slice(bankRoute.indexOf("async function reversalCandidates"), bankRoute.indexOf("async function linkReversal"));
+    expect(candidates).not.toContain("::date - ${");
+    expect(candidates).toContain("AND ${jointAccountTxTable.date} >= ${fromDay}");
+  });
+});
