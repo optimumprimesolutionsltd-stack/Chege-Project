@@ -29,6 +29,7 @@ import {
   useGetExpenses,
   useGetDashboardCategoryBreakdown,
   getGetDashboardIncomeStreamsQueryKey,
+  getGetDashboardBusinessQueryKey,
   useGetDashboardIncomeStreams,
   getGetDashboardIncomeStreamsTrendQueryKey,
   useGetDashboardIncomeStreamsTrend,
@@ -42,6 +43,7 @@ import {
 } from '@workspace/api-client-react';
 import { getCategoryIcon } from '@/lib/categoryIcons';
 import { WorkspaceIdentityRow } from '@/components/WorkspaceIdentityRow';
+import { useHasBusiness } from '@/hooks/useHasBusiness';
 import { ScreenHint } from '@/components/ScreenHint';
 
 const MONTHS = [
@@ -261,6 +263,7 @@ export default function ReportsScreen() {
    * and then for the category list to come back, so on a slow connection a tap
    * seemed to do nothing and people tapped again.
    */
+  const hasBusiness = useHasBusiness();
   const [pendingCost, setPendingCost] = useState<Record<number, number | null>>({});
   const applyCostCategoryChange = useCallback(async (categoryId: number, reducesIncomeSourceId: number | null) => {
     setPendingCost((current) => ({ ...current, [categoryId]: reducesIncomeSourceId }));
@@ -268,6 +271,8 @@ export default function ReportsScreen() {
       await updateCostCategory.mutateAsync({ id: categoryId, data: { reducesIncomeSourceId } });
       await queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
       void queryClient.invalidateQueries({ queryKey: getGetDashboardIncomeStreamsQueryKey(queryParams) });
+      // Every month's statement, not one: the key's params are a prefix match.
+      void queryClient.invalidateQueries({ queryKey: getGetDashboardBusinessQueryKey() });
     } catch {
       Alert.alert('Could not update the cost category', 'Please try again.');
     } finally {
@@ -280,6 +285,29 @@ export default function ReportsScreen() {
   }, [updateCostCategory, queryClient, queryParams]);
   const costLinkOf = (category: { id: number; reducesIncomeSourceId?: number | null }) =>
     category.id in pendingCost ? pendingCost[category.id] : category.reducesIncomeSourceId ?? null;
+
+  // What kind of cost a linked category is on the business's profit and loss:
+  // cost of goods sold (stock, fuel) or a running expense (repairs, rent).
+  // Shown at once, like the tick, and saved as it is tapped.
+  const [pendingKind, setPendingKind] = useState<Record<number, 'cogs' | 'expense'>>({});
+  const costKindOf = (category: { id: number; costKind?: string | null }) =>
+    pendingKind[category.id] ?? (category.costKind === 'expense' ? 'expense' : 'cogs');
+  const applyCostKind = useCallback(async (categoryId: number, costKind: 'cogs' | 'expense') => {
+    setPendingKind((current) => ({ ...current, [categoryId]: costKind }));
+    try {
+      await updateCostCategory.mutateAsync({ id: categoryId, data: { costKind } });
+      await queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
+      void queryClient.invalidateQueries({ queryKey: getGetDashboardBusinessQueryKey() });
+    } catch {
+      Alert.alert('Could not change the kind of cost', 'Please try again.');
+    } finally {
+      setPendingKind((current) => {
+        const next = { ...current };
+        delete next[categoryId];
+        return next;
+      });
+    }
+  }, [updateCostCategory, queryClient]);
 
   // Any number of categories can reduce the same stream's profit at once —
   // toggling one on or off never disturbs any other category already linked
@@ -604,6 +632,30 @@ export default function ReportsScreen() {
           refreshControl={<RefreshControl refreshing={false} onRefresh={onRefresh} tintColor={colors.primary} />}
           showsVerticalScrollIndicator={false}
         >
+          {/* A side hustle's profit and loss, first when there is one. */}
+          {hasBusiness ? (
+            <Pressable
+              onPress={() => router.push('/business')}
+              accessibilityRole="button"
+              accessibilityLabel="See profit and loss for each side hustle"
+              testID="open-business"
+              style={({ pressed }) => [
+                styles.spendOnCard,
+                { backgroundColor: colors.card, borderColor: colors.primary },
+                pressed && { opacity: 0.85 },
+              ]}
+            >
+              <Feather name="briefcase" size={18} color={colors.primary} />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={[styles.spendOnTitle, { color: colors.foreground }]}>Business</Text>
+                <Text style={[styles.spendOnSub, { color: colors.mutedForeground }]} numberOfLines={2}>
+                  Sales, cost of goods sold, expenses and profit for each side hustle.
+                </Text>
+              </View>
+              <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+            </Pressable>
+          ) : null}
+
           {/* Income first: a list of expenses cannot be judged without what
               came in to pay for them, so this is what they are checked against. */}
           <Pressable
@@ -1520,7 +1572,7 @@ export default function ReportsScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.detailsTitle, { color: colors.foreground }]}>Cost categories</Text>
                   <Text style={[styles.detailsSubtitle, { color: colors.mutedForeground }]}>
-                    Spending tagged to any category checked below is worked out of {costCategoryFor?.sourceName ?? 'this stream'}&rsquo;s profit every month. Check as many as apply.
+                    Spending tagged to any category checked below is worked out of {costCategoryFor?.sourceName ?? 'this stream'}&rsquo;s profit every month. Check as many as apply, and say whether each is a cost of goods sold (stock, fuel) or a running expense (repairs, rent).
                   </Text>
                 </View>
               </View>
@@ -1566,6 +1618,33 @@ export default function ReportsScreen() {
                       </Text>
                       {linkedElsewhere ? (
                         <Text style={[styles.variance, { color: colors.mutedForeground }]}>Reduces another stream — tap to move it here</Text>
+                      ) : null}
+                      {selected ? (
+                        <View style={{ flexDirection: 'row', gap: 6, marginTop: 8 }} testID={`cost-kind-${category.id}`}>
+                          {([
+                            ['cogs', 'Cost of goods sold'],
+                            ['expense', 'Expense'],
+                          ] as const).map(([kind, label]) => {
+                            const on = costKindOf(category) === kind;
+                            return (
+                              <Pressable
+                                key={kind}
+                                onPress={() => { if (!on) void applyCostKind(category.id, kind); }}
+                                accessibilityRole="button"
+                                accessibilityState={{ selected: on }}
+                                accessibilityLabel={`${category.name} is ${label}`}
+                                testID={`cost-kind-${category.id}-${kind}`}
+                                style={{
+                                  paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, borderWidth: 1,
+                                  borderColor: on ? colors.primary : colors.border,
+                                  backgroundColor: on ? colors.primary : 'transparent',
+                                }}
+                              >
+                                <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: on ? colors.primaryForeground : colors.foreground }}>{label}</Text>
+                              </Pressable>
+                            );
+                          })}
+                        </View>
                       ) : null}
                     </Pressable>
                   );

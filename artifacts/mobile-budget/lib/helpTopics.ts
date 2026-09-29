@@ -286,6 +286,12 @@ export const HELP_SECTIONS: HelpSection[] = [
         keywords: ['income', 'money in', 'salary', 'received', 'ledger', 'list'],
       },
       {
+        question: 'See the profit of a side hustle',
+        steps: ['Reports tab, then Business. Link its costs first with Cost categories.'],
+        route: '/business',
+        keywords: ['business', 'profit', 'loss', 'sales', 'cost of goods', 'cogs', 'gross', 'net', 'hustle'],
+      },
+      {
         question: 'See whether the month kept to its budget',
         steps: ['Reports tab, then Budget report.'],
         route: '/budget-report',

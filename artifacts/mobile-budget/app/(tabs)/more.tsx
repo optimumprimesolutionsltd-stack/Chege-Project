@@ -7,6 +7,7 @@ import { PageScrollView } from '@/components/PageScrollReset';
 import { useColors } from '@/hooks/useColors';
 import { useSimpleView } from '@/hooks/useSimpleView';
 import { useTabFlags } from '@/hooks/useTabFlags';
+import { useHasBusiness } from '@/hooks/useHasBusiness';
 
 type Item = {
   key: string;
@@ -26,6 +27,7 @@ export default function MoreScreen() {
   const colors = useColors();
   const [simple, setSimple] = useSimpleView();
   const { isShared, showReports, showDebt } = useTabFlags();
+  const hasBusiness = useHasBusiness();
 
   const items: Item[] = [
     {
@@ -51,6 +53,14 @@ export default function MoreScreen() {
       hint: 'See where your money went',
       href: '/(tabs)/reports',
       show: showReports,
+    },
+    {
+      key: 'business',
+      icon: 'briefcase',
+      title: 'Business',
+      hint: 'Sales, cost of goods sold, expenses and profit for each side hustle',
+      href: '/business',
+      show: hasBusiness,
     },
     {
       key: 'contributions',
