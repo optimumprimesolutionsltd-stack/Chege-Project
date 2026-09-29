@@ -18,7 +18,15 @@ import {
 import { db } from "@workspace/db";
 import { getActiveGroupId } from "../lib/activeGroup";
 import { parseBudgetSummaryPeriod } from "../lib/ai-budget-summary";
-import { generateAskJamviResponse, type AskJamviSummary } from "../lib/ask-jamvi-llm";
+import {
+  askJamviWithTools,
+  generateAskJamviResponse,
+  isAskJamviActionRequest,
+  type AskJamviSummary,
+  type AskJamviTurn,
+} from "../lib/ask-jamvi-llm";
+import { ASK_JAMVI_TOOLS, runAskJamviTool } from "../lib/ask-jamvi-tools";
+import { nairobiNow } from "../lib/nairobiTime";
 
 const router = Router();
 
@@ -463,6 +471,31 @@ router.get("/search", async (req, res): Promise<void> => {
   });
 });
 
+// Questions per person per day. Held in memory: one server, and a restart
+// forgiving the day's count is no loss. Keeps a runaway client from running
+// up the model bill.
+const ASK_DAILY_LIMIT = 60;
+const askCounts = new Map<string, { day: string; count: number }>();
+function underDailyLimit(userId: string, today: string): boolean {
+  const current = askCounts.get(userId);
+  if (!current || current.day !== today) {
+    askCounts.set(userId, { day: today, count: 1 });
+    return true;
+  }
+  current.count += 1;
+  return current.count <= ASK_DAILY_LIMIT;
+}
+
+function parseHistory(raw: unknown): AskJamviTurn[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((turn): turn is AskJamviTurn =>
+      turn !== null && typeof turn === "object"
+      && ((turn as AskJamviTurn).role === "user" || (turn as AskJamviTurn).role === "assistant")
+      && typeof (turn as AskJamviTurn).content === "string")
+    .slice(-8);
+}
+
 router.post("/ai/ask", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
@@ -472,25 +505,55 @@ router.post("/ai/ask", async (req, res): Promise<void> => {
     return;
   }
   const { month, year } = parseBudgetSummaryPeriod(req.body ?? {});
-  try {
-    const forwardedProtocol = req.get("x-forwarded-proto")?.split(",")[0]?.trim() || "https";
-    const summaryUrl = `${forwardedProtocol}://${req.get("host")}/api/ai/budget-summary?month=${month}&year=${year}`;
-    const authorization = req.get("authorization");
-    const workspaceId = req.get("x-jamvi-workspace");
-    const summaryResponse = await fetch(summaryUrl, {
-      headers: {
-        cookie: req.headers.cookie ?? "",
-        ...(authorization ? { authorization } : {}),
-        ...(workspaceId ? { "x-jamvi-workspace": workspaceId } : {}),
-      },
+  const today = nairobiNow().toISOString().slice(0, 10);
+  const userId = (req as { user?: { id?: string } }).user?.id ?? "anonymous";
+  if (!underDailyLimit(userId, today)) {
+    res.status(429).json({ error: `That is ${ASK_DAILY_LIMIT} questions today. Ask Jamvi will answer again tomorrow.` });
+    return;
+  }
+  if (isAskJamviActionRequest(question)) {
+    res.json({
+      answer: "I can explain your budget, spending, income and goals, but I cannot move money or change records.",
+      links: [], readOnly: true, workspaceScoped: true, month, year,
     });
-    if (!summaryResponse.ok) {
-      res.status(summaryResponse.status).json({ error: "Could not load the selected budget summary." });
+    return;
+  }
+
+  // Every tool, and the old summary, is fetched from this server as the
+  // person asking, so it sees exactly what their screens do and nothing else.
+  const forwardedProtocol = req.get("x-forwarded-proto")?.split(",")[0]?.trim() || "https";
+  const origin = `${forwardedProtocol}://${req.get("host")}`;
+  const authorization = req.get("authorization");
+  const workspaceId = req.get("x-jamvi-workspace");
+  const headers = {
+    cookie: req.headers.cookie ?? "",
+    ...(authorization ? { authorization } : {}),
+    ...(workspaceId ? { "x-jamvi-workspace": workspaceId } : {}),
+  };
+  const call = async (path: string): Promise<unknown> => {
+    const response = await fetch(`${origin}${path}`, { headers });
+    if (!response.ok) throw new Error(`Could not load ${path.split("?")[0]} (${response.status}).`);
+    return response.json();
+  };
+
+  try {
+    const summary = await call(`/api/ai/budget-summary?month=${month}&year=${year}`) as AskJamviSummary;
+    const withTools = await askJamviWithTools({
+      question,
+      history: parseHistory(req.body?.history),
+      today,
+      workspaceName: summary.workspace?.name ?? "this budget",
+      isPrivate: summary.workspace?.isPrivate ?? true,
+      tools: ASK_JAMVI_TOOLS,
+      runTool: (name, args) => runAskJamviTool(name, args, call),
+    });
+    if (withTools) {
+      res.json({ answer: withTools.answer, links: withTools.links, readOnly: true, workspaceScoped: true, month, year });
       return;
     }
-    const summary = await summaryResponse.json() as AskJamviSummary;
+    // No model, or it failed: the one-shot answer from the month's summary.
     const answer = await generateAskJamviResponse(question, summary);
-    res.json({ answer, readOnly: true, workspaceScoped: true, month, year });
+    res.json({ answer, links: [], readOnly: true, workspaceScoped: true, month, year });
   } catch (error) {
     res.status(503).json({ error: error instanceof Error ? error.message : "Ask Jamvi is temporarily unavailable." });
   }

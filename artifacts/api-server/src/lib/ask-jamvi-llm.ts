@@ -239,3 +239,134 @@ export async function generateAskJamviResponse(question: string, summary: AskJam
   const answer = extractModelText(payload);
   return answer || generateAskJamviFallback(question, summary);
 }
+
+// ── Answering with tools ─────────────────────────────────────────────────────
+
+export type AskJamviTurn = { role: "user" | "assistant"; content: string };
+
+type ProviderConfig = { endpoint: string; apiKey: string; model: string };
+
+/** Where the model is, from the same settings the one-shot answer uses; null when none is set up. */
+export function askJamviProvider(): ProviderConfig | null {
+  const customBaseUrl = process.env.ASK_JAMVI_API_URL;
+  const managedBaseUrl = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL;
+  const baseUrl = customBaseUrl ?? managedBaseUrl ?? process.env.BUILT_IN_FORGE_API_URL;
+  const apiKey = process.env.ASK_JAMVI_API_KEY
+    ?? (managedBaseUrl ? process.env.AI_INTEGRATIONS_OPENAI_API_KEY : undefined)
+    ?? process.env.BUILT_IN_FORGE_API_KEY;
+  if (!baseUrl || !apiKey) return null;
+  const endpoint = !customBaseUrl && managedBaseUrl
+    ? `${managedBaseUrl.replace(/\/+$/, "")}/chat/completions`
+    : chatCompletionsUrl(baseUrl);
+  return { endpoint, apiKey, model: process.env.ASK_JAMVI_MODEL ?? "gpt-5-mini" };
+}
+
+const MAX_TOOL_ROUNDS = 6;
+const MAX_TOOL_RESULT_CHARS = 12_000;
+const MAX_HISTORY_TURNS = 8;
+
+function toolSystemPrompt(today: string, workspaceName: string, isPrivate: boolean): string {
+  return [
+    `You are Ask Jamvi, the money assistant inside Jamvi, a Kenyan budgeting app. Today is ${today} (Nairobi).`,
+    `You are answering about "${workspaceName}", a ${isPrivate ? "Personal budget" : "Shared group"}. You can only see this budget.`,
+    "Get every figure from the tools - never guess or invent a number. The tools use the same figures as the app's own screens, so quote them rather than recalculating what a tool already gives.",
+    "Pick the period the question means (\"this month\", \"last month\", \"in August\", \"this year\") and say which dates you used. Call several tools, or the same tool for different periods, when a question needs it; use compare for changes between periods.",
+    "Money is KES. A side hustle's income is its profit, not its sales. Savings goals are not spending.",
+    "Be brief and plain: lead with the answer, then the few figures behind it. No tables, no markdown headings.",
+    "You are read-only. Never say you recorded, moved, changed or deleted anything, and do not tell people to move money. Give budgeting help only; no investment advice.",
+    "If the tools do not have what is needed, say so plainly.",
+  ].join("\n");
+}
+
+type ChatMessage =
+  | { role: "system" | "user"; content: string }
+  | { role: "assistant"; content: string | null; tool_calls?: ToolCall[] }
+  | { role: "tool"; tool_call_id: string; content: string };
+type ToolCall = { id: string; type: "function"; function: { name: string; arguments: string } };
+
+/**
+ * Answer a question by letting the model call Ask Jamvi's tools, several
+ * rounds if it needs them. Returns the answer and a link to each screen whose
+ * figures it used, or null when there is no model or it fails - the caller
+ * then answers the old way, so nobody is left without an answer.
+ */
+export async function askJamviWithTools(input: {
+  question: string;
+  history?: AskJamviTurn[];
+  today: string;
+  workspaceName: string;
+  isPrivate: boolean;
+  runTool: (name: string, args: Record<string, unknown>) => Promise<{ result: unknown; link?: { label: string; route: string } }>;
+  tools: readonly unknown[];
+  provider?: ProviderConfig | null;
+  fetchImpl?: typeof fetch;
+}): Promise<{ answer: string; links: Array<{ label: string; route: string }> } | null> {
+  const provider = input.provider === undefined ? askJamviProvider() : input.provider;
+  if (!provider) return null;
+  const doFetch = input.fetchImpl ?? fetch;
+
+  const history = (input.history ?? [])
+    .filter((turn) => (turn.role === "user" || turn.role === "assistant") && typeof turn.content === "string" && turn.content.trim())
+    .slice(-MAX_HISTORY_TURNS)
+    .map((turn) => ({ role: turn.role, content: turn.content.slice(0, 2000) }));
+  const messages: ChatMessage[] = [
+    { role: "system", content: toolSystemPrompt(input.today, input.workspaceName, input.isPrivate) },
+    ...history,
+    { role: "user", content: input.question },
+  ];
+  const links = new Map<string, { label: string; route: string }>();
+
+  for (let round = 0; round <= MAX_TOOL_ROUNDS; round += 1) {
+    let payload: unknown;
+    try {
+      const response = await doFetch(provider.endpoint, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${provider.apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: provider.model,
+          messages,
+          // The last round has no tools, so the model has to answer with what it has.
+          ...(round < MAX_TOOL_ROUNDS ? { tools: input.tools, tool_choice: "auto" } : {}),
+          max_completion_tokens: 4096,
+        }),
+      });
+      if (!response.ok) {
+        console.error("Ask Jamvi tool round failed", { status: response.status, round });
+        return null;
+      }
+      payload = await response.json();
+    } catch (error) {
+      console.error("Ask Jamvi provider could not be reached", { message: error instanceof Error ? error.message : "Unknown error", round });
+      return null;
+    }
+
+    const message = (payload as { choices?: Array<{ message?: { content?: string | null; tool_calls?: ToolCall[] } }> })?.choices?.[0]?.message;
+    const calls = message?.tool_calls ?? [];
+    if (calls.length === 0) {
+      const answer = (message?.content ?? extractModelText(payload) ?? "").trim();
+      return answer ? { answer, links: [...links.values()].slice(0, 3) } : null;
+    }
+
+    messages.push({ role: "assistant", content: message?.content ?? null, tool_calls: calls });
+    for (const call of calls) {
+      let args: Record<string, unknown> = {};
+      try {
+        args = JSON.parse(call.function.arguments || "{}") as Record<string, unknown>;
+      } catch {
+        args = {};
+      }
+      let content: string;
+      try {
+        const { result, link } = await input.runTool(call.function.name, args);
+        if (link) links.set(link.route, link);
+        content = JSON.stringify(result);
+      } catch (error) {
+        // A tool that fails is told to the model, which can say so, rather
+        // than ending the answer.
+        content = JSON.stringify({ error: error instanceof Error ? error.message : "That could not be loaded." });
+      }
+      messages.push({ role: "tool", tool_call_id: call.id, content: content.slice(0, MAX_TOOL_RESULT_CHARS) });
+    }
+  }
+  return null;
+}
