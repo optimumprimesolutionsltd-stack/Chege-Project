@@ -1122,6 +1122,15 @@ router.get("/dashboard/expense-ledger", async (req, res): Promise<void> => {
 
   const search = q?.trim() ? `%${q.trim().replace(/[!%_]/g, (ch) => `!${ch}`)}%` : null;
 
+  res.json(await loadExpenseLedger(groupId, from, to, search));
+});
+
+/**
+ * Every expense for a group between two days, newest first: what All expenses
+ * lists, and what the report PDF's expense list prints, so the two agree.
+ * `search` is an ILIKE pattern, already escaped, or null.
+ */
+async function loadExpenseLedger(groupId: number, from: string, to: string, search: string | null) {
   const [expenses, disbursements, allocations] = await Promise.all([
     db
       .select({
@@ -1200,13 +1209,13 @@ router.get("/dashboard/expense-ledger", async (req, res): Promise<void> => {
     })),
   ].sort((a, b) => (a.date === b.date ? b.id.localeCompare(a.id) : b.date.localeCompare(a.date)));
 
-  res.json({
+  return {
     from,
     to,
     total: entries.reduce((sum, entry) => sum + entry.amount, 0),
     entries,
-  });
-});
+  };
+}
 
 // Every piece of income in one list — the other half of the expense ledger.
 // What counts as income, and why, is in lib/income-ledger.ts.
@@ -2379,6 +2388,12 @@ router.get("/dashboard/monthly-report.pdf", async (req, res): Promise<void> => {
   // coerce to true — read the raw query value instead of trusting `parsed`.
   const includeBudget = req.query.includeBudget !== "false";
   const includeIncome = req.query.includeIncome !== "false";
+  // The rest are asked for by name, so a PDF made the old way is unchanged.
+  const includeSummary = req.query.includeSummary !== "false";
+  const includeBusiness = req.query.includeBusiness === "true";
+  const includeExpenses = req.query.includeExpenses === "true";
+  const includeIncomeEntries = req.query.includeIncomeEntries === "true";
+  const includeDebts = req.query.includeDebts === "true";
 
   const [group] = await db
     .select({ name: groupsTable.name })
@@ -2518,6 +2533,42 @@ router.get("/dashboard/monthly-report.pdf", async (req, res): Promise<void> => {
   // Not a sum of categoryRows: that list holds parents and their children
   // side by side, and a parent is already the sum of the children beside it.
   const totalBudget = sumBudget(categories);
+
+  // The sections chosen beyond the standard ones, each from the same source
+  // as its screen: Business, All expenses, All income, Who owes who.
+  const [incomeLedger, expenseLedger, costLines, linkedStreamIds, streamNames, parties] = await Promise.all([
+    includeBusiness || includeIncomeEntries ? loadIncomeLedger(groupId, rangeFrom, rangeTo, null) : Promise.resolve(null),
+    includeExpenses ? loadExpenseLedger(groupId, rangeFrom, rangeTo, null) : Promise.resolve(null),
+    includeBusiness ? incomeStreamCostLines(groupId, rangeFrom, rangeTo) : Promise.resolve(null),
+    includeBusiness ? linkedCostStreamIds(groupId) : Promise.resolve(null),
+    includeBusiness
+      ? db.execute(sql`SELECT id, name FROM income_sources WHERE group_id = ${groupId}`)
+        .then((result) => new Map((result.rows as { id: number; name: string }[]).map((row) => [Number(row.id), row.name])))
+      : Promise.resolve(null),
+    includeDebts
+      ? db.select({ name: groupContributorsTable.name, owedToUs: groupContributorsTable.owedToUs, owedByUs: groupContributorsTable.owedByUs })
+        .from(groupContributorsTable)
+        .where(and(eq(groupContributorsTable.groupId, groupId), isNull(groupContributorsTable.archivedAt)))
+      : Promise.resolve(null),
+  ]);
+  const businesses = incomeLedger && costLines && linkedStreamIds && streamNames
+    ? buildBusinessReport({
+        from: rangeFrom,
+        to: rangeTo,
+        salesByStream: new Map(incomeLedger.streams.filter((stream) => stream.incomeSourceId != null).map((stream) => [Number(stream.incomeSourceId), stream.received])),
+        costLines,
+        linkedStreamIds,
+        streamNames,
+      }).businesses.map((business) => ({
+        name: business.name,
+        sales: business.sales,
+        costOfGoodsSold: business.costOfGoodsSold,
+        grossProfit: business.grossProfit,
+        expenses: business.expenses,
+        netProfit: business.netProfit,
+      }))
+    : undefined;
+
   const pdf = await createMonthlyReportPdf({
     groupName: group?.name ?? "Shared group",
     monthLabel,
@@ -2537,6 +2588,25 @@ router.get("/dashboard/monthly-report.pdf", async (req, res): Promise<void> => {
       sharePercent: totalFunding > 0 ? Math.round((Number(row.total) / totalFunding) * 1000) / 10 : 0,
       transactionCount: Number(row.transactionCount),
     })),
+    includeSummary,
+    businesses,
+    expenses: expenseLedger?.entries.map((entry) => ({
+      date: entry.date,
+      description: entry.description ?? "",
+      detail: entry.categories.join(" + "),
+      amount: Number(entry.amount),
+    })),
+    incomeEntries: includeIncomeEntries && incomeLedger
+      ? incomeLedger.entries.map((entry) => ({
+          date: entry.date,
+          description: entry.description,
+          detail: entry.streams.join(" + "),
+          amount: entry.amount,
+        }))
+      : undefined,
+    debts: parties
+      ?.map((party) => ({ name: party.name, owedToUs: Number(party.owedToUs ?? 0), owedByUs: Number(party.owedByUs ?? 0) }))
+      .filter((party) => party.owedToUs > 0 || party.owedByUs > 0),
   });
 
   const filename = `jamvi-monthly-report-${year}-${String(month).padStart(2, "0")}.pdf`;

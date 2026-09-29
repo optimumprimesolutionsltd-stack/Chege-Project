@@ -735,6 +735,13 @@ router.get("/joint-account/statement.pdf", async (req, res): Promise<void> => {
     .where(eq(groupsTable.id, groupId))
     .limit(1);
 
+  // Everything, or only money in or only money out. The balance column is
+  // the account's own after each entry, so it stays true either way.
+  const showing = req.query.show === "in" || req.query.show === "out" ? req.query.show : "all";
+  const rows = showing === "all"
+    ? statement.entries
+    : statement.entries.filter((entry) => (showing === "in" ? entry.moneyIn > 0 : entry.moneyOut > 0));
+
   const pdf = await createBankStatementPdf({
     groupName: group?.name ?? "Jamvi",
     accountName: statement.accountName,
@@ -746,7 +753,8 @@ router.get("/joint-account/statement.pdf", async (req, res): Promise<void> => {
     borrowed: statement.borrowed,
     repaidToUs: statement.repaidToUs,
     lent: statement.lent,
-    rows: statement.entries,
+    rows,
+    showing,
   });
   const slug = statement.accountName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "account";
   res.setHeader("Content-Type", "application/pdf");

@@ -6,7 +6,7 @@ const read = (p: string) => readFileSync(new URL(p, import.meta.url), "utf8").re
 describe("members never see a PDF button (web)", () => {
   it("gates the monthly PDF, the bank statement PDF and the contribution ledger links", () => {
     expect(read("./income-streams-report.tsx")).toContain("{canDownloadPdf ? <Button");
-    expect(read("./statement.tsx")).toContain("{canDownloadPdf ? (\n            <Button type=\"button\" onClick={openPdf}");
+    expect(read("./statement.tsx")).toContain("{canDownloadPdf ? (\n            <div className=\"flex flex-wrap items-center gap-3\">");
     const contributions = read("./contributions.tsx");
     expect(contributions).toContain("{canManageContributions ? (\n              <button\n                type=\"button\"\n                onClick={openGroupLedger}");
     expect(contributions).toContain("{canDownloadPdf ? (\n            <button\n              type=\"button\"\n              onClick={onOpenLedger}");

@@ -35,4 +35,24 @@ includeBudget?: boolean;
  * Include the Income-stream funding section. Defaults to true.
  */
 includeIncome?: boolean;
+/**
+ * Include the four summary figures at the top. Defaults to true.
+ */
+includeSummary?: boolean;
+/**
+ * Include each side hustle's profit and loss. Defaults to false.
+ */
+includeBusiness?: boolean;
+/**
+ * Include every expense in the period, as on All expenses. Defaults to false.
+ */
+includeExpenses?: boolean;
+/**
+ * Include every piece of income in the period, as on All income. Defaults to false.
+ */
+includeIncomeEntries?: boolean;
+/**
+ * Include Who owes who as it stands now. Defaults to false.
+ */
+includeDebts?: boolean;
 };

@@ -997,6 +997,31 @@ paths:
           description: Include the Income-stream funding section. Defaults to true.
           schema:
             type: boolean
+        - name: includeSummary
+          in: query
+          description: Include the four summary figures at the top. Defaults to true.
+          schema:
+            type: boolean
+        - name: includeBusiness
+          in: query
+          description: Include each side hustle's profit and loss. Defaults to false.
+          schema:
+            type: boolean
+        - name: includeExpenses
+          in: query
+          description: Include every expense in the period, as on All expenses. Defaults to false.
+          schema:
+            type: boolean
+        - name: includeIncomeEntries
+          in: query
+          description: Include every piece of income in the period, as on All income. Defaults to false.
+          schema:
+            type: boolean
+        - name: includeDebts
+          in: query
+          description: Include Who owes who as it stands now. Defaults to false.
+          schema:
+            type: boolean
       responses:
         "200":
           description: Downloadable monthly report PDF

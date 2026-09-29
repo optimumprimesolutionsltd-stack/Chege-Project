@@ -7,8 +7,9 @@ describe('members never see a PDF button (mobile)', () => {
   it('hides the Reports PDF button and its section checkboxes', () => {
     const reports = read('app/(tabs)/reports.tsx');
     expect(reports).toContain("const canDownloadPdf = group?.isPrivate !== false || group?.role === 'owner' || group?.role === 'admin';");
-    expect(reports).toContain('{canDownloadPdf ? (\n            <Pressable\n              onPress={exportPdf}');
-    expect(reports).toContain('{canDownloadPdf ? (\n          <View style={styles.pdfSectionsRow}>');
+    expect(reports).toContain('{canDownloadPdf ? (\n            <Pressable\n              onPress={() => setPdfChooserOpen(true)}');
+    // The sections are chosen on a sheet only that button opens.
+    expect(reports).toContain('<Modal visible={pdfChooserOpen}');
   });
   it('hides Share as PDF on the bank statement', () => {
     const statement = read('app/bank-statement.tsx');

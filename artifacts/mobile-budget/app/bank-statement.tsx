@@ -76,6 +76,8 @@ export default function BankStatementScreen() {
   const [picking, setPicking] = useState<'from' | 'to' | null>(null);
   const [accountId, setAccountId] = useState<number | null>(null);
   const [sharing, setSharing] = useState(false);
+  // What goes in the PDF: every entry, or only money in, or only money out.
+  const [pdfShowing, setPdfShowing] = useState<'all' | 'in' | 'out'>('all');
 
   const activeAccountId = accountId ?? accounts[0]?.id ?? null;
 
@@ -95,7 +97,7 @@ export default function BankStatementScreen() {
     if (activeAccountId === null) return;
     setSharing(true);
     try {
-      await shareStatementPdf({ accountId: activeAccountId, from, to, accountName: statement?.accountName ?? 'account' });
+      await shareStatementPdf({ accountId: activeAccountId, from, to, accountName: statement?.accountName ?? 'account', showing: pdfShowing });
     } catch (error: unknown) {
       Alert.alert('Could not share the statement', error instanceof Error ? error.message : 'Please try again.');
     } finally {
@@ -215,6 +217,25 @@ export default function BankStatementScreen() {
           ) : null}
 
           {canDownloadPdf ? (
+          <View style={styles.pdfShowRow} testID="statement-pdf-showing">
+            {([['all', 'Everything'], ['in', 'Money in'], ['out', 'Money out']] as const).map(([value, label]) => {
+              const on = pdfShowing === value;
+              return (
+                <Pressable
+                  key={value}
+                  onPress={() => setPdfShowing(value)}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: on }}
+                  testID={`statement-pdf-${value}`}
+                  style={[styles.pdfShowOption, { borderColor: on ? colors.primary : colors.border, backgroundColor: on ? colors.primary + '18' : 'transparent' }]}
+                >
+                  <Text style={{ color: on ? colors.primary : colors.foreground, fontFamily: on ? 'Inter_600SemiBold' : 'Inter_400Regular', fontSize: 13 }}>{label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          ) : null}
+          {canDownloadPdf ? (
           <TouchableOpacity
             onPress={() => void share()}
             disabled={sharing}
@@ -272,6 +293,8 @@ const styles = StyleSheet.create({
   balanceCard: { borderWidth: 1, borderRadius: 14, padding: 14, marginTop: 20, gap: 6 },
   balanceRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   noteCard: { borderWidth: 1, borderRadius: 12, padding: 12, marginTop: 12 },
-  share: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 12, height: 48, marginTop: 16 },
+  share: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 12, height: 48, marginTop: 10 },
+  pdfShowRow: { flexDirection: 'row', gap: 8, marginTop: 16 },
+  pdfShowOption: { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 999, borderWidth: 1 },
   entry: { flexDirection: 'row', alignItems: 'center', gap: 10, borderBottomWidth: StyleSheet.hairlineWidth, paddingVertical: 12 },
 });

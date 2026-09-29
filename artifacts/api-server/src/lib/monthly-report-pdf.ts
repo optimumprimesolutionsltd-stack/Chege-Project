@@ -9,6 +9,15 @@ type CategoryRow = {
   percentUsed: number;
 };
 
+/** One line of a list section: an expense, a receipt. */
+export type ReportEntryRow = { date: string; description: string; detail: string; amount: number };
+
+/** One side hustle's profit and loss. */
+export type ReportBusinessRow = { name: string; sales: number; costOfGoodsSold: number; grossProfit: number; expenses: number; netProfit: number };
+
+/** Somebody in Who owes who with something between you. */
+export type ReportDebtRow = { name: string; owedToUs: number; owedByUs: number };
+
 type IncomeStreamRow = {
   sourceName: string;
   ownerName: string;
@@ -39,6 +48,16 @@ export type MonthlyReportPdfData = {
   includeIncome?: boolean;
   totalFunding: number;
   incomeStreams: IncomeStreamRow[];
+  /** Whether to include the four summary figures at the top. Defaults to true. */
+  includeSummary?: boolean;
+  /** Each side hustle's profit and loss; left out when absent. */
+  businesses?: ReportBusinessRow[];
+  /** Every expense in the period, newest first; left out when absent. */
+  expenses?: ReportEntryRow[];
+  /** Every piece of income in the period, newest first; left out when absent. */
+  incomeEntries?: ReportEntryRow[];
+  /** Who owes whom, as it stands now; left out when absent. */
+  debts?: ReportDebtRow[];
   /** Bank fees for the month. Kept out of totalSpent - a fee is not spending
    *  on the group's purposes - but shown as its own line. */
 };
@@ -148,6 +167,7 @@ export function createMonthlyReportPdf(data: MonthlyReportPdfData): Promise<Buff
     );
     y += 33;
 
+    if (data.includeSummary !== false) {
     const summaryCards = [
       { label: "Total budget", value: formatKes(data.totalBudget), color: "#0A7A54" },
       { label: "Total spent", value: formatKes(data.totalSpent), color: "#C44B3E" },
@@ -162,6 +182,7 @@ export function createMonthlyReportPdf(data: MonthlyReportPdfData): Promise<Buff
       document.font("Helvetica-Bold").fontSize(10).fillColor(card.color).text(card.value, x + 9, y + 29, { width: cardWidth - 18 });
     });
     y += 78;
+    }
 
     if (data.includeBudget !== false) {
       sectionTitle("Budget performance", "Budgeted categories and their actual spending for the selected month.");
@@ -218,6 +239,91 @@ export function createMonthlyReportPdf(data: MonthlyReportPdfData): Promise<Buff
           ]);
         });
       }
+    }
+
+    // A list: date, what, where it went or came from, amount - with its total.
+    const entryList = (title: string, description: string, detailLabel: string, rows: ReportEntryRow[], empty: string) => {
+      y += 16;
+      sectionTitle(title, description);
+      const columns = [
+        { label: "Date", x: SIDE_MARGIN, width: 56 },
+        { label: "Description", x: SIDE_MARGIN + 60, width: 200 },
+        { label: detailLabel, x: SIDE_MARGIN + 264, width: 150 },
+        { label: "Amount", x: SIDE_MARGIN + 418, width: 93, align: "right" as const },
+      ];
+      tableHeader(columns);
+      if (rows.length === 0) {
+        tableRow([{ text: empty, x: SIDE_MARGIN, width: CONTENT_WIDTH, color: "#60736C" }], 28);
+        return;
+      }
+      rows.forEach((row) => {
+        tableRow([
+          { text: row.date.slice(8, 10) + "/" + row.date.slice(5, 7) + "/" + row.date.slice(2, 4), x: SIDE_MARGIN, width: 56 },
+          { text: row.description, x: SIDE_MARGIN + 60, width: 200 },
+          { text: row.detail, x: SIDE_MARGIN + 264, width: 150, color: "#60736C" },
+          { text: formatKes(row.amount), x: SIDE_MARGIN + 418, width: 93, align: "right" },
+        ], 20);
+      });
+      tableRow([
+        { text: rows.length + (rows.length === 1 ? " entry" : " entries"), x: SIDE_MARGIN, width: 260, color: "#60736C" },
+        { text: formatKes(rows.reduce((sum, row) => sum + row.amount, 0)), x: SIDE_MARGIN + 418, width: 93, align: "right" },
+      ], 22);
+    };
+
+    if (data.businesses) {
+      y += 16;
+      sectionTitle("Business", "Profit and loss for each side hustle: sales, the cost of the goods sold, then its running expenses.");
+      const columns = [
+        { label: "Business", x: SIDE_MARGIN, width: 116 },
+        { label: "Sales", x: SIDE_MARGIN + 118, width: 76, align: "right" as const },
+        { label: "Cost of goods", x: SIDE_MARGIN + 196, width: 76, align: "right" as const },
+        { label: "Gross profit", x: SIDE_MARGIN + 274, width: 76, align: "right" as const },
+        { label: "Expenses", x: SIDE_MARGIN + 352, width: 76, align: "right" as const },
+        { label: "Net profit", x: SIDE_MARGIN + 430, width: 81, align: "right" as const },
+      ];
+      tableHeader(columns);
+      if (data.businesses.length === 0) {
+        tableRow([{ text: "No side hustle has its costs linked yet.", x: SIDE_MARGIN, width: CONTENT_WIDTH, color: "#60736C" }], 28);
+      }
+      data.businesses.forEach((business) => {
+        tableRow([
+          { text: business.name, x: SIDE_MARGIN, width: 116 },
+          { text: formatKes(business.sales), x: SIDE_MARGIN + 118, width: 76, align: "right" },
+          { text: formatKes(business.costOfGoodsSold), x: SIDE_MARGIN + 196, width: 76, align: "right" },
+          { text: formatKes(business.grossProfit), x: SIDE_MARGIN + 274, width: 76, align: "right" },
+          { text: formatKes(business.expenses), x: SIDE_MARGIN + 352, width: 76, align: "right" },
+          { text: formatKes(business.netProfit), x: SIDE_MARGIN + 430, width: 81, align: "right", color: business.netProfit < 0 ? "#C44B3E" : "#0A7A54" },
+        ]);
+      });
+    }
+
+    if (data.expenses) {
+      entryList("Expenses", "Every expense in the period, newest first, with the category it was filed under.", "Category", data.expenses, "No expenses were recorded in this period.");
+    }
+
+    if (data.incomeEntries) {
+      entryList("Income", "Every piece of income in the period, newest first, with its income stream. Money borrowed, repaid or moved between your own accounts is not income and is not listed.", "Income stream", data.incomeEntries, "No income was recorded in this period.");
+    }
+
+    if (data.debts) {
+      y += 16;
+      sectionTitle("Who owes who", "As it stands on the day this report was made.");
+      const columns = [
+        { label: "Person or business", x: SIDE_MARGIN, width: 250 },
+        { label: "Owes you", x: SIDE_MARGIN + 254, width: 125, align: "right" as const },
+        { label: "You owe", x: SIDE_MARGIN + 383, width: 128, align: "right" as const },
+      ];
+      tableHeader(columns);
+      if (data.debts.length === 0) {
+        tableRow([{ text: "Nobody owes anything either way.", x: SIDE_MARGIN, width: CONTENT_WIDTH, color: "#60736C" }], 28);
+      }
+      data.debts.forEach((debt) => {
+        tableRow([
+          { text: debt.name, x: SIDE_MARGIN, width: 250 },
+          { text: debt.owedToUs > 0 ? formatKes(debt.owedToUs) : "-", x: SIDE_MARGIN + 254, width: 125, align: "right", color: "#0A7A54" },
+          { text: debt.owedByUs > 0 ? formatKes(debt.owedByUs) : "-", x: SIDE_MARGIN + 383, width: 128, align: "right", color: "#C44B3E" },
+        ]);
+      });
     }
 
     y += 24;
