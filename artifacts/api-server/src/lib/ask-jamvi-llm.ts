@@ -37,10 +37,15 @@ export function isAskJamviActionRequest(question: string): boolean {
   return ACTION_REQUEST.test(question.trim());
 }
 
-type AskJamviIntent = "overview" | "spending" | "remaining" | "goals" | "income" | "ledger" | "bank" | "activity" | "workspace" | "report" | "unknown";
+type AskJamviIntent = "total" | "overview" | "spending" | "remaining" | "goals" | "income" | "ledger" | "bank" | "activity" | "workspace" | "report" | "unknown";
 
 function classifyQuestion(question: string): AskJamviIntent {
   const value = question.trim().toLocaleLowerCase("en-US");
+  // "How much did I use / spend this month?" is a total, not a search: it used
+  // to search the ledger for the word "use" and answer with two stray entries.
+  // A question naming a payee ("how much did I spend at Naivas") is still a search.
+  if (/\bhow much\b.*\b(use|used|spend|spent|paid out|go|went)\b/.test(value) && !/\b(on|at|to|for)\s+\w{3,}/.test(value.replace(/\b(this|last|the)\s+(month|week|year)\b/g, ""))) return "total";
+  if (/\b(total|all) (spending|spent|expenses?)\b/.test(value)) return "total";
   if (/(report|trend|compare|comparison|month over month|year over year|average|history|historical|this year|last year|all time|over time)/.test(value)) return "report";
   if (/(ledger|transaction|payment|entry|record|find|search|when did|how much did)/.test(value)) return "ledger";
   if (/(bank|account|withdraw|cash|deposit)/.test(value)) return "bank";
@@ -71,6 +76,7 @@ export function generateAskJamviFallback(question: string, summary: AskJamviSumm
       "been", "was", "were", "from", "with", "into", "over", "last", "month", "year", "all", "time", "spent", "spending",
       "expense", "expenses", "bank", "account", "accounts", "money", "income", "received", "contribution", "contributions",
       "how", "for", "the", "and", "pay", "paid", "deposit", "deposited", "withdraw", "withdrew", "withdrawn",
+      "use", "used", "using", "spend", "total", "you", "our", "week", "today",
     ].includes(term));
   const ledgerMatches = allLedgerEntries.filter((entry) => {
     const haystack = `${entry.description} ${entry.category ?? ""} ${entry.date} ${entry.amount}`.toLocaleLowerCase("en-US");
@@ -90,6 +96,10 @@ export function generateAskJamviFallback(question: string, summary: AskJamviSumm
     return ledgerMatches.length > 0
       ? `I found ${ledgerMatches.length} matching ledger ${ledgerMatches.length === 1 ? "entry" : "entries"} totaling ${formatKes(ledgerMatches.reduce((sum, entry) => sum + entry.amount, 0))}: ${ledgerMatches.map((entry) => `${entry.description} — ${formatKes(entry.amount)} on ${entry.date} (${entry.kind === "bank" ? "bank" : entry.category ?? "expense"})`).join("; ")}.`
       : `I could not find a matching expense or bank ledger entry in the available history. Try the Search tab for older records beyond Ask Jamvi's bounded context.`;
+  }
+  if (intent === "total") {
+    const over = totals.budgeted > 0 && totals.spent > totals.budgeted;
+    return `In ${periodLabel} you have spent ${formatKes(totals.spent)}${totals.budgeted > 0 ? ` of your ${formatKes(totals.budgeted)} budget, ${over ? `${formatKes(totals.spent - totals.budgeted)} over` : `${formatKes(totals.budgeted - totals.spent)} left`}` : ""}. Income recorded: ${formatKes(totals.incomeReceived)}.`;
   }
   if (intent === "bank") {
     const accounts = summary.bankAccounts ?? [];
