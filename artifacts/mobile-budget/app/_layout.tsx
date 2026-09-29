@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, AppState, BackHandler, Platform } from 'react-native';
 import { UpdatePrompt } from '@/components/UpdatePrompt';
+import { updateNotesFrom } from '@/lib/updateNote';
 import { FeedbackModal } from '@/components/FeedbackModal';
 import { AppLoading } from '@/components/AppLoading';
 import {
@@ -58,12 +59,12 @@ const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
 // Skipped in development (Expo Go / dev-client) where Updates is not active.
 // Returns state consumed by RootLayout to render the <UpdatePrompt> overlay.
 function useUpdatePrompt() {
-  const [updateMessage, setUpdateMessage] = useState<string | null>(null);
+  const [updateNotes, setUpdateNotes] = useState<string[] | null>(null);
   const lastCheckedAt = useRef(0);
   // Read inside the listener without making it a dependency, so subscribing
   // does not tear down and re-subscribe every time the message changes.
   const showing = useRef(false);
-  showing.current = updateMessage !== null;
+  showing.current = updateNotes !== null;
 
   const check = useCallback(async () => {
     if (__DEV__ || !Updates.isEnabled) return;
@@ -74,16 +75,8 @@ function useUpdatePrompt() {
     try {
       const result = await Updates.checkForUpdateAsync();
       if (!result.isAvailable) return;
-      // Pull the message from the EAS Update manifest (set via --message flag).
-      // The field is present at runtime even though it is not typed on the manifest type.
-      const manifest = result.manifest as Record<string, unknown> | undefined;
-      const metadata = manifest?.metadata as Record<string, unknown> | undefined;
-      const raw = metadata?.message;
-      const message =
-        typeof raw === 'string' && raw.trim()
-          ? raw.trim()
-          : 'A new version of Jamvi is ready with the latest improvements and fixes.';
-      setUpdateMessage(message);
+      // What is new, from the note published with it (see app.config.js).
+      setUpdateNotes(updateNotesFrom(result.manifest));
     } catch {
       // Network unavailable or server error — silently ignore.
     }
@@ -103,7 +96,7 @@ function useUpdatePrompt() {
     return () => subscription.remove();
   }, [check]);
 
-  return { updateMessage, dismiss: () => setUpdateMessage(null) };
+  return { updateNotes, dismiss: () => setUpdateNotes(null) };
 }
 
 // Configure API client at module level — must be before any component renders.
@@ -477,7 +470,7 @@ function RootLayoutNav() {
 }
 
 export default function RootLayout() {
-  const { updateMessage, dismiss } = useUpdatePrompt();
+  const { updateNotes, dismiss } = useUpdatePrompt();
   const [fontsLoaded, fontError] = useFonts({
     Inter_400Regular,
     Inter_500Medium,
@@ -525,8 +518,8 @@ export default function RootLayout() {
         {/* Update prompt — rendered outside QueryClientProvider so it works even
             before the user is authenticated, and outside ErrorBoundary so a
             render error in the main tree doesn't swallow the prompt. */}
-        {updateMessage && (
-          <UpdatePrompt message={updateMessage} onDismiss={dismiss} />
+        {updateNotes && (
+          <UpdatePrompt notes={updateNotes} onDismiss={dismiss} />
         )}
       </AppearanceProvider>
     </SafeAreaProvider>

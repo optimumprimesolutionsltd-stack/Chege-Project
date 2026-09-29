@@ -1,8 +1,9 @@
 /**
  * UpdatePrompt — shown when a new OTA update is ready.
  *
- * Slides up from the bottom of the screen. Shows the update message from
- * `eas update --message "..."` (or a generic fallback), and gives the user
+ * Slides up from the bottom of the screen. Lists what is new, from the note
+ * published with the update (JAMVI_UPDATE_NOTE, see app.config.js), so it can
+ * be tried out - or a general line when there is none - and gives the user
  * two choices: update now (downloads + reloads) or dismiss until next launch.
  */
 import React, { useEffect, useRef, useState } from 'react';
@@ -25,11 +26,12 @@ import { saveResumePoint } from '@/lib/resumeAfterUpdate';
 import { hasUnsavedWork } from '@/lib/unsavedWork';
 
 interface Props {
-  message: string;
+  /** What is new, one item each; empty for the general line. */
+  notes: string[];
   onDismiss: () => void;
 }
 
-export function UpdatePrompt({ message, onDismiss }: Props) {
+export function UpdatePrompt({ notes, onDismiss }: Props) {
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
   const [installing, setInstalling] = useState(false);
@@ -110,7 +112,19 @@ export function UpdatePrompt({ message, onDismiss }: Props) {
 
         {/* Heading */}
         <Text style={styles.title}>Update ready</Text>
-        <Text style={styles.message}>{message}</Text>
+        {notes.length > 0 ? (
+          <View style={styles.notes} testID="update-notes">
+            <Text style={styles.notesHead}>What's new</Text>
+            {notes.map((note) => (
+              <View key={note} style={styles.noteRow}>
+                <Text style={styles.noteDot}>•</Text>
+                <Text style={styles.noteText}>{note}</Text>
+              </View>
+            ))}
+          </View>
+        ) : (
+          <Text style={styles.message}>A new version of Jamvi is ready with the latest improvements and fixes.</Text>
+        )}
         {hasUnsavedWork() ? (
           <Text style={styles.message} testID="update-keeps-work">
             Your unfinished work is kept. It will be here when Jamvi restarts.
@@ -201,6 +215,31 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: 28,
+  },
+  notes: {
+    alignSelf: 'stretch',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 14,
+    padding: 14,
+    gap: 6,
+    marginBottom: 24,
+  },
+  notesHead: {
+    fontSize: 12,
+    fontFamily: 'Inter_600SemiBold',
+    color: '#FDBB0A',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    marginBottom: 2,
+  },
+  noteRow: { flexDirection: 'row', gap: 8 },
+  noteDot: { fontSize: 15, lineHeight: 21, color: 'rgba(245,240,232,0.72)' },
+  noteText: {
+    flex: 1,
+    fontSize: 15,
+    fontFamily: 'Inter_400Regular',
+    color: 'rgba(245,240,232,0.85)',
+    lineHeight: 21,
   },
   errorText: {
     fontSize: 13,

@@ -41,7 +41,7 @@ describe('without asking Expo on every app switch', () => {
   it('reads the prompt state through a ref, not a dependency', () => {
     // As a dependency it would tear down and re-subscribe the listener every
     // time the message changed.
-    expect(layout).toContain('showing.current = updateMessage !== null;');
+    expect(layout).toContain('showing.current = updateNotes !== null;');
     expect(layout).toContain('}, [check]);');
   });
 
