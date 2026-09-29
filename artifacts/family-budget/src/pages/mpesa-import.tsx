@@ -68,6 +68,7 @@ import {
   type DebtKind,
   type PartyLite,
 } from "@/lib/mpesa-debts";
+import { findFulizaParty, FULIZA_PARTY_NAME, needsFulizaParty, withFulizaDebt } from "@/lib/mpesa-debts";
 import {
   applyNicknames,
   canNickname,
@@ -570,10 +571,33 @@ export default function MpesaImportPage() {
     const savedIndexes = new Set<number>();
     // Who each debt entry was for, kept so deleting it can offer to put that person's balance back.
     const debtLinks: DebtEntryLink[] = [];
+    // Fuliza still owed, or repaid, is a debt to Fuliza in Who owes who: found
+    // there, or added once, and both lines linked to it.
+    let saveChoices = choices;
+    let saveParties = parties;
+    if (needsFulizaParty(lines, choices)) {
+      try {
+        const found = findFulizaParty(parties);
+        const fuliza: PartyLite = found ?? await fetch("/api/contributors", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: FULIZA_PARTY_NAME, kind: "institution" }),
+          }).then(async (response) => {
+            if (!response.ok) throw new Error("Could not add Fuliza to Who owes who.");
+            return (await response.json()) as PartyLite;
+          });
+        if (!found) saveParties = [...parties, fuliza];
+        saveChoices = withFulizaDebt(lines, choices, fuliza.id);
+        setChoices(saveChoices);
+      } catch {
+        // Saved unlinked: the borrowing still is not income; a repayment says why it failed.
+      }
+    }
     // Worked out once, so a handful of these can travel to the server together instead of
     // waiting for each round trip before starting the next.
     const toSave = lines.flatMap((item) => {
-      const choice = choices[item.index];
+      const choice = saveChoices[item.index];
       if (!choice?.include || !isRecordable(item)) return [];
       const built = buildPostings(item, choice, {
         accountId,
@@ -627,7 +651,7 @@ export default function MpesaImportPage() {
       if (kept !== rules) keepRules(kept);
     }
     void saveDebtLinks(debtLinks);
-    void offerBalanceChanges(lines.filter((item) => savedIndexes.has(item.index)));
+    void offerBalanceChanges(lines.filter((item) => savedIndexes.has(item.index)), saveChoices, saveParties);
   };
 
   /**
@@ -635,8 +659,8 @@ export default function MpesaImportPage() {
    * itself: the entries can be edited or deleted afterwards, and a balance moved
    * behind somebody's back would be left quietly wrong.
    */
-  const offerBalanceChanges = async (saved: PreviewLine[]) => {
-    const changes = balanceChanges(saved, choices, parties, debtCategories);
+  const offerBalanceChanges = async (saved: PreviewLine[], savedChoices = choices, knownParties = parties) => {
+    const changes = balanceChanges(saved, savedChoices, knownParties, debtCategories);
     if (changes.length === 0) return;
     const question =
       `${changes.length === 1 ? "Update this balance too?" : `Update ${changes.length} balances too?`}\n\n` +
