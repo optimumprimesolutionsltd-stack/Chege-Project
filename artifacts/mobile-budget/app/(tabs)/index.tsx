@@ -71,6 +71,8 @@ type HomeExpense = {
 
 type AskResponse = {
   answer: string;
+  /** The screens whose figures the answer used, to open from it. */
+  links?: Array<{ label: string; route: string }>;
   readOnly: boolean;
   workspaceScoped: boolean;
   month: number;
@@ -179,9 +181,12 @@ export default function DashboardScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [askOpen, setAskOpen] = useState(false);
   const [askQuery, setAskQuery] = useState('');
-  const [askAnswer, setAskAnswer] = useState<AskResponse | null>(null);
+  const [askAnswer, setAskAnswer] = useState<(AskResponse & { question?: string }) | null>(null);
   const [askError, setAskError] = useState<string | null>(null);
   const [asking, setAsking] = useState(false);
+  // The conversation so far, for follow-ups ("and in August?"). Kept only
+  // while the app is open: nothing is saved anywhere.
+  const [askThread, setAskThread] = useState<Array<{ question: string; answer: string }>>([]);
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await Promise.all([refetchSummary(), refetchActivity(), refetchExpenses(), refetchBank()]);
@@ -192,22 +197,35 @@ export default function DashboardScreen() {
     const question = (value ?? askQuery).trim();
     if (!question || asking) return;
     setAskQuery(question);
-    setAskAnswer(null);
     setAskError(null);
     setAsking(true);
+    // The earlier questions and answers go along, so a follow-up is understood.
+    const previous = askAnswer ? [...askThread, { question: askAnswer.question ?? '', answer: askAnswer.answer }] : askThread;
+    const history = previous.slice(-4).flatMap((turn) => [
+      { role: 'user' as const, content: turn.question },
+      { role: 'assistant' as const, content: turn.answer },
+    ]).filter((turn) => turn.content);
     try {
       const response = await customFetch<AskResponse>('/api/ai/ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question, month, year }),
+        body: JSON.stringify({ question, month, year, history }),
       });
-      setAskAnswer(response);
+      setAskThread(previous);
+      setAskAnswer({ ...response, question });
+      setAskQuery('');
     } catch (error) {
       setAskError(error instanceof Error ? error.message : 'Ask Jamvi could not answer right now.');
     } finally {
       setAsking(false);
     }
-  }, [askQuery, asking, month, year]);
+  }, [askQuery, asking, month, year, askAnswer, askThread]);
+  const newAskConversation = useCallback(() => {
+    setAskThread([]);
+    setAskAnswer(null);
+    setAskQuery('');
+    setAskError(null);
+  }, []);
 
   const openAskJamvi = useCallback(() => {
     setAskError(null);
@@ -858,10 +876,40 @@ export default function DashboardScreen() {
             {askError ? (
               <Text style={[styles.askError, { color: colors.destructive }]}>{askError}</Text>
             ) : null}
+            {askThread.length > 0 ? (
+              <View style={{ gap: 6 }} testID="ask-jamvi-thread">
+                {askThread.slice(-3).map((turn, index) => (
+                  <View key={`${index}-${turn.question}`} style={{ gap: 2 }}>
+                    <Text style={[styles.askAnswerMeta, { color: colors.mutedForeground }]} numberOfLines={2}>You: {turn.question}</Text>
+                    <Text style={[styles.askAnswerMeta, { color: colors.foreground }]} numberOfLines={3}>{turn.answer}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
             {askAnswer ? (
               <View style={[styles.askAnswer, { borderColor: `${colors.primary}40`, backgroundColor: `${colors.primary}0D` }]}>
                 <Text style={[styles.askAnswerLabel, { color: colors.primary }]}>JAMVI SAYS</Text>
+                {askAnswer.question ? (
+                  <Text style={[styles.askAnswerMeta, { color: colors.mutedForeground }]} numberOfLines={2}>You asked: {askAnswer.question}</Text>
+                ) : null}
                 <Text style={[styles.askAnswerText, { color: colors.foreground }]}>{askAnswer.answer}</Text>
+                {(askAnswer.links ?? []).length > 0 ? (
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 }} testID="ask-jamvi-links">
+                    {(askAnswer.links ?? []).map((link) => (
+                      <Pressable
+                        key={link.route}
+                        onPress={() => { setAskOpen(false); router.push(link.route as never); }}
+                        accessibilityRole="button"
+                        style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, borderWidth: 1, borderColor: colors.primary }}
+                      >
+                        <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 12 }}>{link.label}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                ) : null}
+                <Pressable onPress={newAskConversation} accessibilityRole="button" testID="ask-jamvi-new" hitSlop={6} style={{ marginTop: 6 }}>
+                  <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 12 }}>New question</Text>
+                </Pressable>
                 <Text style={[styles.askAnswerMeta, { color: colors.mutedForeground }]}>
                   Read-only · {askAnswer.workspaceScoped ? 'Current budget only' : 'Unscoped'}
                 </Text>
