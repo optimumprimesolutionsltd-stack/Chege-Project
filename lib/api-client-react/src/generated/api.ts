@@ -25,6 +25,7 @@ import type {
   ApplyRecurringInput,
   ApplyRecurringResult,
   AuthUserEnvelope,
+  AutoLinkReversalsResult,
   BankAccount,
   BankAccountInput,
   BankAccountUpdate,
@@ -3578,6 +3579,78 @@ export const useDeleteJointAccountTransaction = <TError = ErrorType<ErrorRespons
         TContext
       > => {
       return useMutation(getDeleteJointAccountTransactionMutationOptions(options));
+    }
+
+export const getAutoLinkReversalsUrl = () => {
+
+
+
+
+  return `/api/joint-account/reversals/auto-link`
+}
+
+/**
+ * Each unlinked money-back deposit with exactly one payment it could have reversed (same amount, on or up to 60 days before) is linked, oldest first, so two cannot claim the same payment. The rest are listed with how many payments could match, for the person to settle.
+ * @summary Link every money-back entry that has exactly one matching payment
+ */
+export const autoLinkReversals = async ( options?: Parameters<typeof customFetch>[1]): Promise<AutoLinkReversalsResult> => {
+
+  return customFetch<AutoLinkReversalsResult>(getAutoLinkReversalsUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getAutoLinkReversalsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof autoLinkReversals>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof autoLinkReversals>>, TError,void, TContext> => {
+
+const mutationKey = ['autoLinkReversals'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof autoLinkReversals>>, void> = () => {
+
+
+          return  autoLinkReversals(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AutoLinkReversalsMutationResult = NonNullable<Awaited<ReturnType<typeof autoLinkReversals>>>
+
+    export type AutoLinkReversalsMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Link every money-back entry that has exactly one matching payment
+ */
+export const useAutoLinkReversals = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof autoLinkReversals>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof autoLinkReversals>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getAutoLinkReversalsMutationOptions(options));
     }
 
 export const getGetReversalUrl = (id: number,) => {

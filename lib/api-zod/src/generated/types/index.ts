@@ -14,6 +14,8 @@ export * from './applyRecurringInput';
 export * from './applyRecurringResult';
 export * from './authUser';
 export * from './authUserEnvelope';
+export * from './autoLinkReversalsResult';
+export * from './autoLinkReversalsResultNeedsYouItem';
 export * from './bankAccount';
 export * from './bankAccountInput';
 export * from './bankAccountUpdate';

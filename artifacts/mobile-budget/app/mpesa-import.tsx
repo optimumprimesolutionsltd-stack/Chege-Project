@@ -32,6 +32,7 @@ import {
   useTransferSavingsToBank,
   useCreateDisbursement,
   useUpdateJointAccountOpeningBalance,
+  autoLinkReversals,
   getGetJointAccountQueryKey,
   useGetBudgetCategories,
   useGetGroup,
@@ -1097,6 +1098,14 @@ export default function MpesaImportScreen() {
       }
       setOutcome(result);
       if (result.saved > 0) void rememberMpesaCard('done');
+      // A reversal just saved is matched to the payment it undid when only one
+      // could be it, so it never counts as income. Quietly: the rest are left
+      // for Bank's "Match them", and a failure here costs nothing.
+      if (result.saved > 0 && canManageBudget && lines.some((line) => line.type === 'reversal' && savedIndexes.has(line.index))) {
+        void autoLinkReversals()
+          .then(() => queryClient.invalidateQueries({ queryKey: getGetJointAccountQueryKey() }))
+          .catch(() => {});
+      }
     }
     {
       let kept = rules;

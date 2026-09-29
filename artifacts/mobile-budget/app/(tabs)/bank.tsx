@@ -27,6 +27,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useColors } from '@/hooks/useColors';
 import { ReversalLink } from '@/components/ReversalLink';
+import { autoLinkReversals } from '@workspace/api-client-react';
 import { useListEditor } from '@/hooks/useListEditor';
 import { movableOnDay, summariseDays } from '@/lib/moveDay';
 import { formatExact } from '@/lib/formatExact';
@@ -2219,6 +2220,32 @@ export default function BankScreen() {
   // the bank takes out. A charge already saved against a deposit is left alone.
   const chargeCanApply = isWithdrawal || isMovingMoney;
   const chargeToPost = chargeCanApply && parsedCharge !== null && parsedCharge > 0 ? parsedCharge : 0;
+  // Money-back entries not yet matched to the payment they reversed: each
+  // still counts as income. Matching the ones with a single possible payment
+  // takes one tap; the rest are named, to be opened and picked.
+  const unmatchedMoneyBack = transactions.filter(
+    (transaction) => transaction.type === 'deposit' && /^money back/i.test(transaction.description ?? '') && !transaction.reversal,
+  );
+  const [matchingReversals, setMatchingReversals] = useState(false);
+  const matchReversals = async () => {
+    if (matchingReversals) return;
+    setMatchingReversals(true);
+    try {
+      const result = await autoLinkReversals();
+      invalidateBalance();
+      const waiting = result.needsYou.length;
+      Alert.alert(
+        result.linked > 0 ? `Matched ${result.linked}` : 'Nothing could be matched on its own',
+        waiting === 0
+          ? 'Every money-back entry is now linked to the payment it reversed, so none counts as income.'
+          : `${waiting} still ${waiting === 1 ? 'needs' : 'need'} you: ${result.needsYou.map((item) => `KES ${formatKES(item.amount)} on ${item.date} (${item.candidates === 0 ? 'no payment of that amount is recorded' : `${item.candidates} possible payments`})`).join('; ')}. Open each one to choose.`,
+      );
+    } catch (error: unknown) {
+      Alert.alert('Could not match them', error instanceof Error ? error.message : 'Please try again.');
+    } finally {
+      setMatchingReversals(false);
+    }
+  };
   const editingTransaction = editingTransactionId === null
     ? null
     : transactions.find((transaction) => transaction.id === editingTransactionId) ?? null;
@@ -2488,6 +2515,23 @@ export default function BankScreen() {
                       <Feather name="edit-2" size={14} color="#d1fae5" />
                       <Text style={styles.editOpeningBalanceText}>Edit starting balance</Text>
                     </TouchableOpacity>
+                    {canManageAccount && unmatchedMoneyBack.length > 0 && (
+                      <TouchableOpacity
+                        style={styles.editOpeningBalanceBtn}
+                        onPress={() => void matchReversals()}
+                        disabled={matchingReversals}
+                        activeOpacity={0.8}
+                        testID="bank-match-reversals"
+                        accessibilityLabel={`Match ${unmatchedMoneyBack.length} money-back entries to the payments they reversed`}
+                      >
+                        {matchingReversals
+                          ? <ActivityIndicator size="small" color="#d1fae5" />
+                          : <Feather name="link" size={14} color="#d1fae5" />}
+                        <Text style={styles.editOpeningBalanceText}>
+                          Match {unmatchedMoneyBack.length} money back
+                        </Text>
+                      </TouchableOpacity>
+                    )}
                     {hasBankAccounts && (
                       <TouchableOpacity
                         style={styles.editOpeningBalanceBtn}

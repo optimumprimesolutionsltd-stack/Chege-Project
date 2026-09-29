@@ -1870,10 +1870,21 @@ async function reversalOptions(deposit: TxRow, groupId: number) {
     };
   }
   if (link || notAMoneyBack(deposit)) return { available: true, linked: null, candidates: [] };
+  const rows = await reversalCandidates(deposit, groupId);
+  return {
+    available: true,
+    linked: null,
+    candidates: rows.map((row) => toCandidate({ ...row.tx, accountName: row.accountName })),
+  };
+}
 
-  // Same budget, same amount, on or up to 60 days before, an ordinary payment,
-  // and not already reversed by anything.
-  const rows = await db
+/**
+ * The payments a money-back deposit could have reversed: same budget, same
+ * amount, on or up to 60 days before it, an ordinary payment, and not already
+ * reversed by anything.
+ */
+async function reversalCandidates(deposit: TxRow, groupId: number) {
+  return db
     .select({ tx: jointAccountTxTable, accountName: bankAccountsTable.name })
     .from(jointAccountTxTable)
     .leftJoin(bankAccountsTable, eq(bankAccountsTable.id, jointAccountTxTable.accountId))
@@ -1889,11 +1900,36 @@ async function reversalOptions(deposit: TxRow, groupId: number) {
       AND NOT EXISTS (SELECT 1 FROM reversal_links rl WHERE rl.original_transaction_id = ${jointAccountTxTable.id})`)
     .orderBy(sql`${jointAccountTxTable.date} DESC, ${jointAccountTxTable.id} DESC`)
     .limit(10);
-  return {
-    available: true,
-    linked: null,
-    candidates: rows.map((row) => toCandidate({ ...row.tx, accountName: row.accountName })),
-  };
+}
+
+/**
+ * Link a money-back deposit to the payment it reversed, or say why not. The
+ * one place a link is made, by hand or by matching: the same checks, and the
+ * link and the payment's category set aside together - a link without that
+ * would leave the payment counted as spending while the money back had
+ * stopped counting as income.
+ */
+async function linkReversal(deposit: TxRow, original: TxRow, groupId: number): Promise<{ status: 400 | 409; error: string } | null> {
+  const problem = notAMoneyBack(deposit) ?? notReversible(original)
+    ?? (!sameAmount(deposit.amount, original.amount) ? "A reversal gives back exactly what was paid. These amounts differ." : null)
+    ?? (String(original.date) > String(deposit.date) ? "Money cannot come back before it was paid." : null);
+  if (problem) return { status: 400, error: problem };
+  if (await reversalLinkFor(deposit.id, groupId) || await reversalLinkFor(original.id, groupId)) {
+    return { status: 409, error: "One of these is already part of a reversal." };
+  }
+  await db.transaction(async (trx) => {
+    await trx.insert(reversalLinksTable).values({
+      reversalTransactionId: deposit.id,
+      originalTransactionId: original.id,
+      groupId,
+      originalCategory: original.expenseCategory,
+    });
+    await trx
+      .update(jointAccountTxTable)
+      .set({ expenseCategory: null })
+      .where(and(eq(jointAccountTxTable.id, original.id), eq(jointAccountTxTable.groupId, groupId)));
+  });
+  return null;
 }
 
 async function loadTx(id: number, groupId: number): Promise<TxRow | null> {
@@ -1934,30 +1970,59 @@ router.post("/joint-account/:id/reversal", async (req, res): Promise<void> => {
     loadTx(body.data.originalTransactionId, groupId),
   ]);
   if (!deposit || !original) { res.status(404).json({ error: "Not found" }); return; }
-  const problem = notAMoneyBack(deposit) ?? notReversible(original)
-    ?? (!sameAmount(deposit.amount, original.amount) ? "A reversal gives back exactly what was paid. These amounts differ." : null)
-    ?? (String(original.date) > String(deposit.date) ? "Money cannot come back before it was paid." : null);
-  if (problem) { res.status(400).json({ error: problem }); return; }
-  if (await reversalLinkFor(deposit.id, groupId) || await reversalLinkFor(original.id, groupId)) {
-    res.status(409).json({ error: "One of these is already part of a reversal." });
+  const refused = await linkReversal(deposit, original, groupId);
+  if (refused) { res.status(refused.status).json({ error: refused.error }); return; }
+  res.json(await reversalOptions(deposit, groupId));
+});
+
+// POST /joint-account/reversals/auto-link — match every money-back entry
+// that has exactly one payment it could have reversed.
+//
+// Linking by hand left every reversal counting as income until somebody
+// opened it. Most have one obvious match - the only payment of exactly that
+// amount in the 60 days before - and those are linked here, oldest first, so
+// two money-backs can never claim the same payment. The rest, with several
+// possible payments or none, are listed for the person to settle.
+router.post("/joint-account/reversals/auto-link", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  if (!requireGroupManager(req, res)) return;
+  if (!reversalLinksReady()) {
+    res.json({ linked: 0, needsYou: [] });
     return;
   }
+  // Money-back entries are the deposits an import files as a reversal.
+  const deposits = await db
+    .select()
+    .from(jointAccountTxTable)
+    .where(sql`${jointAccountTxTable.groupId} = ${groupId}
+      AND ${jointAccountTxTable.type} = 'deposit'
+      AND ${jointAccountTxTable.description} ILIKE 'Money back%'
+      AND NOT EXISTS (SELECT 1 FROM reversal_links rl WHERE rl.reversal_transaction_id = ${jointAccountTxTable.id})`)
+    .orderBy(sql`${jointAccountTxTable.date} ASC, ${jointAccountTxTable.id} ASC`)
+    .limit(200);
 
-  // Together: a link without its category set aside would leave the payment
-  // counted as spending while the money back had stopped counting as income.
-  await db.transaction(async (trx) => {
-    await trx.insert(reversalLinksTable).values({
-      reversalTransactionId: deposit.id,
-      originalTransactionId: original.id,
-      groupId,
-      originalCategory: original.expenseCategory,
+  let linked = 0;
+  const needsYou: Array<{ id: number; description: string; amount: number; date: string; candidates: number }> = [];
+  for (const deposit of deposits) {
+    if (notAMoneyBack(deposit)) continue;
+    const candidates = await reversalCandidates(deposit, groupId);
+    if (candidates.length === 1) {
+      const refused = await linkReversal(deposit, candidates[0].tx, groupId);
+      if (!refused) {
+        linked += 1;
+        continue;
+      }
+    }
+    needsYou.push({
+      id: deposit.id,
+      description: deposit.description ?? "",
+      amount: Number(deposit.amount),
+      date: String(deposit.date),
+      candidates: candidates.length,
     });
-    await trx
-      .update(jointAccountTxTable)
-      .set({ expenseCategory: null })
-      .where(and(eq(jointAccountTxTable.id, original.id), eq(jointAccountTxTable.groupId, groupId)));
-  });
-  res.json(await reversalOptions(deposit, groupId));
+  }
+  res.json({ linked, needsYou });
 });
 
 // DELETE /joint-account/:id/reversal — put both entries back as they were.
