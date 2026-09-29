@@ -27,9 +27,31 @@ describe('income streams are read-only until Edit is pressed', () => {
     expect(budget).toContain('testID="income-edit-cancel"');
   });
 
-  it('keeps the rename and remove buttons out of the way until editing', () => {
-    const rowActions = budget.slice(budget.indexOf('editingIncome && (canManageSharedIncome || source.userId === user?.id) ? ('), budget.indexOf('Remove ${source.name}'));
-    expect(rowActions).toContain('handleStartEditIncomeSource(source)');
+  it('keeps the remove button out of the way until editing', () => {
+    const rowActions = budget.slice(budget.indexOf('<View style={styles.incomeEditActions}>'), budget.indexOf('Remove ${source.name}'));
+    expect(rowActions).toContain('handleDeleteIncomeSource(source)');
+  });
+
+  // From a real phone: "the figures are able to edit but not the words". A name
+  // needed a pencil and a tick of its own, so one typed and then left for Save
+  // changes was dropped. Names now edit and save like the figures.
+  it('edits names in place, like the figures', () => {
+    expect(budget).toContain('value={incomeNameDrafts[source.id] ?? source.name}');
+    expect(budget).toContain('testID={`income-name-${source.id}`}');
+  });
+
+  it('saves names and figures together with one Save', () => {
+    expect(budget).toContain("|| (incomeNameDrafts[source.id] !== undefined && draftName(source) !== source.name),");
+    expect(budget).toContain('name: draftName(source),');
+  });
+
+  it('refuses to save a stream with its name cleared', () => {
+    expect(budget).toContain("Alert.alert('Name required'");
+  });
+
+  it('has no separate pencil and tick for a name any more', () => {
+    expect(budget).not.toContain('handleStartEditIncomeSource');
+    expect(budget).not.toContain('handleSaveIncomeSource');
   });
 });
 

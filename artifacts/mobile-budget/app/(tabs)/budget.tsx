@@ -181,9 +181,6 @@ export default function BudgetScreen() {
   const [newIncomeSource, setNewIncomeSource] = useState('');
   const [newIncomeExpected, setNewIncomeExpected] = useState('');
   const [addingIncomeSource, setAddingIncomeSource] = useState(false);
-  const [editingIncomeSourceId, setEditingIncomeSourceId] = useState<number | null>(null);
-  const [editingIncomeSourceName, setEditingIncomeSourceName] = useState('');
-  const [savingIncomeSourceId, setSavingIncomeSourceId] = useState<number | null>(null);
   const [recurringSetupActive, setRecurringSetupActive] = useState(false);
   const [recurringSetupHandled, setRecurringSetupHandled] = useState(false);
   // Set when the Budget tab was opened from a half-finished expense, so the
@@ -524,19 +521,31 @@ export default function BudgetScreen() {
   const canEditAnyIncome = incomeSources.some((source) => canManageSharedIncome || source.userId === user?.id);
   const [editingIncome, setEditingIncome] = useState(false);
   const [incomeDrafts, setIncomeDrafts] = useState<Record<number, string>>({});
+  // Names are edited in the same place and saved by the same button as the
+  // figures. They used to need a pencil and a tick of their own, so a name
+  // typed and then left for "Save changes" was quietly dropped.
+  const [incomeNameDrafts, setIncomeNameDrafts] = useState<Record<number, string>>({});
   const [savingIncomeAmounts, setSavingIncomeAmounts] = useState(false);
   const incomeAmount = (raw: string) => Math.max(0, Math.round(Number(raw) || 0));
+  const draftName = (source: IncomeSource) => (incomeNameDrafts[source.id] ?? source.name).trim();
   const changedIncome = incomeSources.filter(
-    (source) => incomeDrafts[source.id] !== undefined && incomeAmount(incomeDrafts[source.id]) !== (source.expectedMonthlyAmount ?? 0),
+    (source) =>
+      (incomeDrafts[source.id] !== undefined && incomeAmount(incomeDrafts[source.id]) !== (source.expectedMonthlyAmount ?? 0))
+      || (incomeNameDrafts[source.id] !== undefined && draftName(source) !== source.name),
   );
   const cancelIncomeEdit = () => {
     setEditingIncome(false);
     setIncomeDrafts({});
-    handleCancelEditIncomeSource();
+    setIncomeNameDrafts({});
   };
   const saveIncomeAmounts = async () => {
     if (changedIncome.length === 0) {
       cancelIncomeEdit();
+      return;
+    }
+    const unnamed = changedIncome.find((source) => !draftName(source));
+    if (unnamed) {
+      Alert.alert('Name required', `Give "${unnamed.name}" a name, or put the old one back, before saving.`);
       return;
     }
     setSavingIncomeAmounts(true);
@@ -546,7 +555,13 @@ export default function BudgetScreen() {
         await customFetch(`/api/income-sources/${source.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: source.name, isMain: source.isMain, expectedMonthlyAmount: incomeAmount(incomeDrafts[source.id]) }),
+          body: JSON.stringify({
+            name: draftName(source),
+            isMain: source.isMain,
+            expectedMonthlyAmount: incomeDrafts[source.id] !== undefined
+              ? incomeAmount(incomeDrafts[source.id])
+              : source.expectedMonthlyAmount ?? 0,
+          }),
         });
       } catch {
         failed.push(source.name);
@@ -561,6 +576,7 @@ export default function BudgetScreen() {
     }
     setEditingIncome(false);
     setIncomeDrafts({});
+    setIncomeNameDrafts({});
   };
 
   const handleSaveExpectedIncome = async (source: IncomeSource, rawAmount: string) => {
@@ -598,41 +614,6 @@ export default function BudgetScreen() {
       ],
     );
   };
-  const handleStartEditIncomeSource = (source: IncomeSource) => {
-    setEditingIncomeSourceId(source.id);
-    setEditingIncomeSourceName(source.name);
-  };
-  const handleCancelEditIncomeSource = () => {
-    setEditingIncomeSourceId(null);
-    setEditingIncomeSourceName('');
-  };
-  const handleSaveIncomeSource = async (source: IncomeSource) => {
-    const name = editingIncomeSourceName.trim();
-    if (!name) {
-      Alert.alert('Source name required', 'Enter a name before saving the income source.');
-      return;
-    }
-    setSavingIncomeSourceId(source.id);
-    try {
-      await customFetch(`/api/income-sources/${source.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name,
-          isMain: source.isMain,
-          expectedMonthlyAmount: source.expectedMonthlyAmount,
-        }),
-      });
-      handleCancelEditIncomeSource();
-      await refreshIncomeSources();
-      Alert.alert('Income source updated');
-    } catch (error) {
-      Alert.alert('Could not update income source', error instanceof Error ? error.message : 'Please try again.');
-    } finally {
-      setSavingIncomeSourceId(null);
-    }
-  };
-
   const handleSave = async () => {
     const rawAmount = formAmount.trim();
     // A blank amount means nothing budgeted yet, on a new category as much as
@@ -1676,14 +1657,17 @@ export default function BudgetScreen() {
                   {sources.map(source => (
                     <View key={source.id} style={[styles.incomeManagedRow, { borderColor: colors.border }]}>
                       <View style={styles.incomeManagedName}>
-                        {editingIncomeSourceId === source.id ? (
+                        {editingIncome && (canManageSharedIncome || source.userId === user?.id) ? (
                           <TextInput
-                            autoFocus
-                            value={editingIncomeSourceName}
-                            onChangeText={setEditingIncomeSourceName}
-                            editable={savingIncomeSourceId !== source.id}
-                            style={[styles.incomeEditInput, { borderColor: colors.border, color: colors.foreground }]}
-                            accessibilityLabel={`Edit ${source.name}`}
+                            value={incomeNameDrafts[source.id] ?? source.name}
+                            onChangeText={(text) => setIncomeNameDrafts((current) => ({ ...current, [source.id]: text }))}
+                            editable={!savingIncomeAmounts}
+                            maxLength={120}
+                            placeholder="Name"
+                            placeholderTextColor={colors.mutedForeground}
+                            style={[styles.incomeEditInput, { borderColor: colors.primary, color: colors.foreground }]}
+                            accessibilityLabel={`Name of ${source.name}`}
+                            testID={`income-name-${source.id}`}
                           />
                         ) : (
                           <View style={styles.incomeNameLine}>
@@ -1691,7 +1675,7 @@ export default function BudgetScreen() {
                             {source.isMain ? <Text style={[styles.incomeMain, { color: colors.primary }]}>MAIN</Text> : null}
                           </View>
                         )}
-                        {canManageSharedIncome && editingIncomeSourceId !== source.id ? (
+                        {canManageSharedIncome ? (
                           <Text style={[styles.incomeOwner, { color: colors.mutedForeground }]}>
                             For {memberNames.get(source.userId) ?? 'Group member'}
                           </Text>
@@ -1715,47 +1699,17 @@ export default function BudgetScreen() {
                           </Text>
                         )}
                         {editingIncome && (canManageSharedIncome || source.userId === user?.id) ? (
-                          editingIncomeSourceId === source.id ? (
-                            <View style={styles.incomeEditActions}>
-                              <Pressable
-                                onPress={() => void handleSaveIncomeSource(source)}
-                                disabled={savingIncomeSourceId === source.id || !editingIncomeSourceName.trim()}
-                                accessibilityRole="button"
-                                accessibilityLabel={`Save ${source.name}`}
-                              >
-                                {savingIncomeSourceId === source.id
-                                  ? <ActivityIndicator size="small" color={colors.primary} />
-                                  : <Feather name="check" size={17} color={colors.primary} />}
-                              </Pressable>
-                              <Pressable
-                                onPress={handleCancelEditIncomeSource}
-                                disabled={savingIncomeSourceId === source.id}
-                                accessibilityRole="button"
-                                accessibilityLabel={`Cancel editing ${source.name}`}
-                              >
-                                <Feather name="x" size={17} color={colors.mutedForeground} />
-                              </Pressable>
-                            </View>
-                          ) : (
-                            <View style={styles.incomeEditActions}>
-                              <Pressable
-                                onPress={() => handleStartEditIncomeSource(source)}
-                                accessibilityRole="button"
-                                accessibilityLabel={`Edit ${source.name}`}
-                                hitSlop={8}
-                              >
-                                <Feather name="edit-2" size={16} color={colors.mutedForeground} />
-                              </Pressable>
-                              <Pressable
-                                onPress={() => handleDeleteIncomeSource(source)}
-                                accessibilityRole="button"
-                                accessibilityLabel={`Remove ${source.name}`}
-                                hitSlop={8}
-                              >
-                                <Feather name="trash-2" size={16} color={colors.destructive} />
-                              </Pressable>
-                            </View>
-                          )
+                          <View style={styles.incomeEditActions}>
+                            <Pressable
+                              onPress={() => handleDeleteIncomeSource(source)}
+                              disabled={savingIncomeAmounts}
+                              accessibilityRole="button"
+                              accessibilityLabel={`Remove ${source.name}`}
+                              hitSlop={8}
+                            >
+                              <Feather name="trash-2" size={16} color={colors.destructive} />
+                            </Pressable>
+                          </View>
                         ) : null}
                       </View>
                     </View>
