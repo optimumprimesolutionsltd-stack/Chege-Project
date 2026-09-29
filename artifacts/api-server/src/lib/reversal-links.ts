@@ -56,6 +56,26 @@ export function isMoneyBack(depositId: SQL | unknown, description: SQL | unknown
   return sql`(${description} ILIKE ${MONEY_BACK_PATTERN}${linked})`;
 }
 
+/**
+ * The one payment a money-back entry can be linked to without asking, or null.
+ *
+ * Usually that is the only payment of the same amount before it. But one bill
+ * paid twice the same day - two identical KCB paybill payments, one of which
+ * came back - gives two, and asking which is pointless: they are the same
+ * payment to the same payee on the same day, account and category, and linking either
+ * leaves the same figures. Payee names are compared without spaces or
+ * punctuation, since M-Pesa writes one paybill as "806 38 76" and "8063876".
+ */
+export function soleReversalCandidate<T extends { tx: { date: unknown; description: string | null; accountId: number | null; expenseCategory?: string | null } }>(
+  candidates: readonly T[],
+): T | null {
+  if (candidates.length === 0) return null;
+  const key = (row: T) =>
+    [String(row.tx.date), row.tx.accountId ?? "", row.tx.expenseCategory ?? "", (row.tx.description ?? "").toLowerCase().replace(/[^a-z0-9]/g, "")].join("|");
+  const first = key(candidates[0]);
+  return candidates.every((row) => key(row) === first) ? candidates[0] : null;
+}
+
 // Built when used, not at load, so importing this touches nothing.
 const createStatement = () => sql`
   CREATE TABLE IF NOT EXISTS "reversal_links" (

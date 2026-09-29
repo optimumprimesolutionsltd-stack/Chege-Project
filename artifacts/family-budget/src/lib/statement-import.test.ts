@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { reconcile, statementLines } from "./statement-import";
+import { fulizaOwedBefore, reconcile, statementLines } from "./statement-import";
 import type { StatementRow } from "./statement-table";
 
 let n = 0;
@@ -49,6 +49,13 @@ describe("statementLines", () => {
     expect(reading.loanRepayments).toBe(1);
     expect(reading.lines).toHaveLength(1);
     expect(reading.lines[0]).toMatchObject({ type: "paybill_payment", amount: 200, description: "Sample Utility (42)" });
+  });
+
+  it("reads a payment to a small business (Pochi la Biashara) as a payment to them", () => {
+    const { lines } = statementLines([
+      at("27 08:00:00", "Customer Payment to Small Business to - 0743***708 SAMPLE SHOP", { withdrawn: 100 }),
+    ]);
+    expect(lines[0]).toMatchObject({ direction: "out", type: "person_payment", amount: 100, description: "Sample Shop" });
   });
 
   it("does not name the person for airtime, and names cash withdrawals", () => {
@@ -162,12 +169,53 @@ describe("reconcile", () => {
     const reading = statementLines([draw, received]);
     const result = reconcile(reading, () => true)!;
     expect(reading.lines.some((line) => line.type === "fuliza_fee")).toBe(false);
-    expect(result.parts).toEqual([{ label: "Fuliza still owed at the end (borrowed, so not income)", amount: 80 }]);
-    expect(result.gap).toBe(80);
+    // Listed as borrowed, so saving it leaves the account where M-Pesa's balance is.
+    expect(reading.lines.find((line) => line.type === "fuliza_borrowed")).toMatchObject({ direction: "in", amount: 80 });
+    expect(result.parts).toEqual([]);
+    expect(result.gap).toBe(0);
+  });
+
+  // September"s statement: loans repaid with their fees until the 26th, then more
+  // drawn and still owed. Counting that last loan hid the fees, and the balance was off by both.
+  it("splits Fuliza into the fees on repaid loans and what is still owed", () => {
+    const received = at("01 08:00:00", "Funds received from - 2547***000 SAMPLE PERSON", { paidIn: 1000, balance: 1000 });
+    const draw = at("02 08:00:00", "OverDraft of Credit Party", { paidIn: 500, balance: 1500 });
+    const repay = at("10 08:00:00", "OD Loan Repayment to 999999 - M-PESA Overdraw", { withdrawn: 506, balance: 994 });
+    const later = at("27 08:00:00", "OverDraft of Credit Party", { paidIn: 800, balance: 1794 });
+    const reading = statementLines([later, repay, draw, received]);
+    expect(reading.lines.find((line) => line.type === "fuliza_fee")).toMatchObject({ direction: "out", amount: 6 });
+    const owed = reading.lines.find((line) => line.type === "fuliza_borrowed")!;
+    expect(owed).toMatchObject({ direction: "in", amount: 800, date: "2026-09-27" });
+    expect(owed.receipt).toMatch(/^FB[0-9]{12}$/);
+    expect(reading.loanLeftOut).toBe(0);
+  });
+
+  it("counts a balance an earlier statement left owed as repaid, not as fees", () => {
+    const received = at("01 08:00:00", "Funds received from - 2547***000 SAMPLE PERSON", { paidIn: 1000, balance: 1000 });
+    const repay = at("01 08:00:01", "OD Loan Repayment to 999999 - M-PESA Overdraw", { withdrawn: 300, balance: 700 });
+    const reading = statementLines([repay, received], { amount: 300, receipt: "FB260801260831" });
+    expect(reading.lines.some((line) => line.type === "fuliza_fee")).toBe(false);
+    expect(reading.lines.find((line) => line.type === "fuliza_repaid")).toMatchObject({ direction: "out", amount: 300, receipt: "FR260801260831" });
+    expect(reconcile(reading, () => true)!.gap).toBe(0);
   });
 
   it("has nothing to say when the balances cannot be worked out", () => {
     expect(reconcile({ ...statementLines([]), opening: null }, () => true)).toBeNull();
+  });
+});
+
+describe("Fuliza owed from an earlier statement", () => {
+  const recorded = [
+    { mpesaReceipt: "FB260701260731", amount: 200 },
+    { mpesaReceipt: "FB260801260831", amount: "3178.08" },
+    { mpesaReceipt: "UIRF981AVM", amount: 100 },
+  ];
+  it("is the latest borrowed line that ended before this statement", () => {
+    expect(fulizaOwedBefore("2026-09-01", recorded)).toEqual({ amount: 3178.08, receipt: "FB260801260831" });
+  });
+  it("is nothing once its repayment is recorded, or for the same statement read again", () => {
+    expect(fulizaOwedBefore("2026-09-01", [...recorded, { mpesaReceipt: "FR260801260831", amount: 3178.08 }])).toEqual({ amount: 200, receipt: "FB260701260731" });
+    expect(fulizaOwedBefore("2026-08-01", recorded.slice(1))).toBeNull();
   });
 });
 

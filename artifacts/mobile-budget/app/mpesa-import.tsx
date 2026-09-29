@@ -85,7 +85,7 @@ import type { DebtEntryLink } from '@/lib/debtLinks';
 import { canReadStatements, chooseStatement, statementBase64, type ChosenStatement } from '@/lib/statementFile';
 import { shownFileName } from '@/lib/shownFileName';
 import { readPercent } from '@/lib/statementProgress';
-import { fulizaChargeOverlap, fulizaCharges, reconcile, statementLines, type StatementReading } from '@/lib/statementImport';
+import { fulizaChargeOverlap, fulizaCharges, fulizaOwedBefore, reconcile, statementLines, type StatementReading } from '@/lib/statementImport';
 import { checkRunningBalance, readStatementRows, resolveDirections } from '@/lib/statementTable';
 import type { ReaderMessage } from '@/lib/statementReaderHtml';
 import { fetchOtherBudgetOptions, type OtherBudgetOptions } from '@/lib/otherBudgetOptions';
@@ -817,7 +817,9 @@ export default function MpesaImportScreen() {
       if (!checkRunningBalance(rows).ok) {
         throw new Error('This statement does not add up, so Jamvi will not risk recording wrong amounts. Paste your messages instead.');
       }
-      const reading = statementLines(rows);
+      // Fuliza an earlier statement left owed is repaid first in this one, not charged as fees.
+      const recordedRows = (account?.transactions ?? []) as Array<{ mpesaReceipt?: string | null; amount?: number | string | null }>;
+      const reading = statementLines(rows, fulizaOwedBefore(statementLines(rows).firstDate, recordedRows));
       setReadProgress({ stage: 'checking' });
       const checked = await markRecorded(reading.lines);
       const known = parseStoredNicknames(await AsyncStorage.getItem(nicknamesKey).catch(() => null));
@@ -828,7 +830,7 @@ export default function MpesaImportScreen() {
         reading.loanRepayments > 0 ? `${reading.loanRepayments} loan repayments` : null,
       ].filter(Boolean);
       setStatementNote(
-        `Read ${shown.length} entries from your statement. It adds up.${left.length > 0 ? ` Left out because they are not spending or income: ${left.join(' and ')}. What a Fuliza loan paid for is recorded as a normal payment.` : ''}`,
+        `Read ${shown.length} entries from your statement. It adds up.${left.length > 0 ? ` Left out because they are not spending or income: ${left.join(' and ')}. What a Fuliza loan paid for is recorded as a normal payment${reading.loanOwedAtEnd ? ', and Fuliza still owed at the end is listed as borrowed' : ''}.` : ''}`,
       );
       setLines(shown);
       setStatementReading({ ...reading, lines: shown });

@@ -179,6 +179,7 @@ const KIND_DEFAULTS: Record<string, readonly string[]> = {
   airtime_purchase: ['airtime', 'data', 'phone', 'communication', 'bundle'],
   cash_withdrawal: ['cash', 'withdraw'],
   fuliza_fee: ['bank charge', 'charge', 'fee', 'fuliza'],
+  fuliza_repaid: ['fuliza', 'loan', 'debt'],
   transaction_charge: ['m-pesa charges', 'transaction charges', 'bank charge', 'charge', 'fee'],
 };
 
@@ -221,7 +222,8 @@ export function initialChoices(
     const suggested = suggestionFor(line, history, categoryNames, chargeCategory, rules);
     choices[line.index] = { include: isRecordable(line) && (canRecordOut || line.direction !== 'out'), category: suggested, auto: suggested !== '' };
     if (line.direction === 'in') {
-      const source = line.description ? suggestIncomeSource(line.description, history) : null;
+      // Fuliza still owed is borrowed, never income, so it is offered no source.
+      const source = line.description && line.type !== 'fuliza_borrowed' ? suggestIncomeSource(line.description, history) : null;
       choices[line.index] = { ...choices[line.index], incomeSourceId: source, sourceAuto: source !== null };
     }
   }
@@ -576,7 +578,7 @@ export function buildPostings(line: PreviewLine, choice: Choice, ctx: PostingCon
 
   if (line.direction === 'in') {
     // A source is only for income: a repayment or a loan is not, so it takes none.
-    const source = choice.incomeSourceId && !choice.debt ? ctx.incomeSources?.find((entry) => entry.id === choice.incomeSourceId) : undefined;
+    const source = choice.incomeSourceId && !choice.debt && line.type !== 'fuliza_borrowed' ? ctx.incomeSources?.find((entry) => entry.id === choice.incomeSourceId) : undefined;
     // A source belongs to one member, and the server only accepts the deposit
     // when it names exactly that member as who made it - not merely any
     // current member. A source whose owner is not currently a member
@@ -598,7 +600,7 @@ export function buildPostings(line: PreviewLine, choice: Choice, ctx: PostingCon
         // They paid back what they owed you, or you borrowed from them: neither
         // is income, and the server keeps both out of the income figures.
         ...(choice.debt?.kind === 'repaid' ? { settlesContributorId: choice.debt.partyId } : {}),
-        ...(choice.debt?.kind === 'borrowed' ? { isBorrowing: true } : {}),
+        ...(choice.debt?.kind === 'borrowed' || (!choice.debt && line.type === 'fuliza_borrowed') ? { isBorrowing: true } : {}),
         ...(receipt ? { mpesaReceipt: receipt } : {}),
         ...(choice.notes?.trim() ? { notes: choice.notes.trim() } : {}),
       },
@@ -748,7 +750,7 @@ export function chooseOtherBudget(choices: Record<number, Choice>, index: number
 
 /** Savings transfers take whole shillings only, and only a payment that could be recorded at all. */
 export const canUseSavings = (line: PreviewLine): boolean =>
-  isRecordable(line) && line.amount !== null && Number.isInteger(line.amount) && line.type !== 'fuliza_fee';
+  isRecordable(line) && line.amount !== null && Number.isInteger(line.amount) && !line.type?.startsWith('fuliza_');
 
 /** Words in a payee that say it is a bank: a payment to one is likely a move between the person's own accounts. */
 export const BANK_WORDS = /\b(bank|equity|kcb|co-?op(erative)?|absa|ncba|stanbic|dtb|i&m|family|sidian|gulf|hf|nba|diamond|standard chartered|citi|hfc|ecobank|uba|prime bank|credit bank|victoria|guaranty|gtb|m-?oriental|paramount|spire)\b/i;

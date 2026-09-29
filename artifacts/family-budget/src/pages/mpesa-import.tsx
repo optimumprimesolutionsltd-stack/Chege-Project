@@ -91,7 +91,7 @@ import { runPool, savePosting, SAVE_CONCURRENCY, type PostingApi } from "@/lib/s
 import { parseStoredRules, payeeKey, payeeName, ruleLabel, rulesStorageKey, withRule, withoutRule, type PayeeRules } from "@/lib/payee-learning";
 import { saveDebtLinks } from "@/lib/debt-reversal";
 import type { DebtEntryLink } from "@/lib/debt-links";
-import { reconcile, statementLines, type StatementReading } from "@/lib/statement-import";
+import { fulizaOwedBefore, reconcile, statementLines, type StatementReading } from "@/lib/statement-import";
 import { checkRunningBalance, readStatementRows, resolveDirections } from "@/lib/statement-table";
 import { fetchOtherBudgetOptions, type OtherBudgetOptions } from "@/lib/other-budget-options";
 
@@ -313,7 +313,9 @@ export default function MpesaImportPage() {
       if (!balance.ok) {
         throw new Error("This statement does not add up, so Jamvi will not risk recording wrong amounts. Paste your messages instead.");
       }
-      const reading = statementLines(rows);
+      // Fuliza an earlier statement left owed is repaid first in this one, not charged as fees.
+      const recordedRows = (account?.transactions ?? []) as Array<{ mpesaReceipt?: string | null; amount?: number | string | null }>;
+      const reading = statementLines(rows, fulizaOwedBefore(statementLines(rows).firstDate, recordedRows));
       const checked = await markRecorded(reading.lines);
       const shown = applyNicknames(checked, readStoredNicknames());
       const left = [
@@ -321,7 +323,7 @@ export default function MpesaImportPage() {
         reading.loanRepayments > 0 ? `${reading.loanRepayments} loan repayments` : null,
       ].filter(Boolean);
       setStatementNote(
-        `Read ${shown.length} entries from your statement. It adds up.${left.length > 0 ? ` Left out because they are not spending or income: ${left.join(" and ")}. What a Fuliza loan paid for is recorded as a normal payment.` : ""}`,
+        `Read ${shown.length} entries from your statement. It adds up.${left.length > 0 ? ` Left out because they are not spending or income: ${left.join(" and ")}. What a Fuliza loan paid for is recorded as a normal payment${reading.loanOwedAtEnd ? ", and Fuliza still owed at the end is listed as borrowed" : ""}.` : ""}`,
       );
       setLines(shown);
       setStatementReading({ ...reading, lines: shown });

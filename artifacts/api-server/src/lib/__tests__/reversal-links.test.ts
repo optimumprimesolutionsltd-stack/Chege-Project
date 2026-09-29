@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it } from "vitest";
 import { sql } from "drizzle-orm";
-import { notAReversal, reversalLinksReady, setReversalLinksReadyForTests } from "../reversal-links";
+import { notAReversal, reversalLinksReady, setReversalLinksReadyForTests, soleReversalCandidate } from "../reversal-links";
 
 const bank = readFileSync("src/routes/joint-account.ts", "utf8");
 const dashboard = readFileSync("src/routes/dashboard.ts", "utf8");
@@ -115,9 +115,9 @@ describe("either half is protected while linked", () => {
 describe("matching reversals automatically", () => {
   const auto = bank.slice(bank.indexOf('router.post("/joint-account/reversals/auto-link"'));
 
-  it("links only a money-back entry with exactly one possible payment", () => {
-    expect(auto).toContain("if (candidates.length === 1) {");
-    expect(auto).toContain("const refused = await linkReversal(deposit, candidates[0].tx, groupId);");
+  it("links only a money-back entry with one possible payment, or one made twice", () => {
+    expect(auto).toContain("const sole = soleReversalCandidate(candidates);");
+    expect(auto).toContain("const refused = await linkReversal(deposit, sole.tx, groupId);");
   });
 
   it("goes oldest first, so two money-backs cannot claim the same payment", () => {
@@ -159,5 +159,29 @@ describe("money back is never income, linked or not", () => {
 
   it("is filed as its own kind on All income, shown beside income rather than dropped", () => {
     expect(dashboard).toContain("WHEN ${isMoneyBack(sql`t.id`, sql`t.description`)} THEN 'money_back'");
+  });
+});
+
+// Two identical KCB payments the same day, one of which came back: the payee
+// written "806 38 76" once and "8063876" the other time.
+describe("the payment a money-back is linked to without asking", () => {
+  const payment = (id: number, over: Record<string, unknown> = {}) => ({
+    tx: { id, date: "2026-09-10", accountId: 1, expenseCategory: "Stock", description: "Lipa Na Kcb (806 38 76)", ...over },
+  });
+
+  it("is the only one, or none", () => {
+    expect(soleReversalCandidate([payment(1)])?.tx.id).toBe(1);
+    expect(soleReversalCandidate([])).toBeNull();
+  });
+
+  it("is either of the same payment made twice that day", () => {
+    expect(soleReversalCandidate([payment(2), payment(1, { description: "Lipa Na Kcb (8063876)" })])?.tx.id).toBe(2);
+  });
+
+  it("is asked about when the payments differ in payee, day, account or category", () => {
+    expect(soleReversalCandidate([payment(2), payment(1, { description: "Naivas" })])).toBeNull();
+    expect(soleReversalCandidate([payment(2), payment(1, { date: "2026-09-09" })])).toBeNull();
+    expect(soleReversalCandidate([payment(2), payment(1, { accountId: 2 })])).toBeNull();
+    expect(soleReversalCandidate([payment(2), payment(1, { expenseCategory: "Rent" })])).toBeNull();
   });
 });
