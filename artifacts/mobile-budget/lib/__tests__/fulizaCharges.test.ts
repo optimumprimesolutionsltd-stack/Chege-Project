@@ -75,44 +75,53 @@ describe('not counting the same days twice', () => {
   });
 });
 
+// The fees were a separate button to notice and tap; now they are a line in
+// the import like any other, ticked, for Fuliza charges.
 describe('on the import screen', () => {
   const screen = readFileSync('app/mpesa-import.tsx', 'utf8');
+  const lib = readFileSync('lib/mpesaImport.ts', 'utf8');
 
-  it('offers to record them, for those who can record payments', () => {
-    expect(screen).toContain('{fuliza && canManageBudget ? (');
-    expect(screen).toContain('testID="mpesa-fuliza-record"');
+  it('has no separate button: the fees are a line of the import', () => {
+    expect(screen).not.toContain('testID="mpesa-fuliza-record"');
+    expect(screen).not.toContain('recordFulizaCharges');
   });
 
-  it('files them under Fuliza charges, dated at the end of the statement, with the receipt', () => {
-    expect(screen).toContain('const category = fulizaCategory ?? chargeCategory.trim();');
-    expect(screen).toContain('expenseCategory: category,');
-    expect(screen).toContain('date: fuliza.to,');
-    expect(screen).toContain('mpesaReceipt: fuliza.receipt,');
+  it('files the Fuliza line under Fuliza charges when the budget has it, as before when not', () => {
+    expect(lib).toContain("const builtIn = categoryNames.find((name) => name.trim().toLowerCase() === 'fuliza charges');");
+    expect(lib).toContain("(line.type === 'fuliza_fee' ? chargeCategory : '') ||");
   });
 
-  it('asks for the charges category first when none is chosen', () => {
-    expect(screen).toContain("Alert.alert('Where do charges go?'");
+  it('files a lone M-Pesa charge under the charges category', () => {
+    expect(lib).toContain("if (line.type === 'transaction_charge') return chargeCategory || defaultCategoryFor(line, categoryNames);");
   });
 
-  it('treats a second recording of the same statement as already done', () => {
-    expect(screen).toContain('if (status === 409) setFulizaSaved(true);');
-  });
-
-  it('warns before counting overlapping days twice', () => {
+  it('starts the Fuliza line unticked when charges for overlapping days are already recorded, and says why', () => {
+    expect(screen).toContain('if (overlap.overlapsFrom && built[line.index]) built[line.index] = { ...built[line.index], include: false };');
     expect(screen).toContain('testID="mpesa-fuliza-overlap"');
-  });
-
-  it('says when it is only partly fees', () => {
-    expect(screen).toContain('It is only all fees if no Fuliza loan was already open when this statement');
   });
 
   it('files M-Pesa charges under the built-in category without asking, when the budget has it', () => {
     expect(screen).toContain("row.name.trim().toLowerCase() === 'm-pesa charges'");
     expect(screen).toContain('if (builtInCharge) setChargeCategory(builtInCharge);');
-    expect(screen).toContain('testID="mpesa-charge-built-in"');
+  });
+});
+
+// The account has to start where the statement starts. When nothing is
+// recorded in it before the statement, setting it to match is certainly right.
+describe('the starting balance', () => {
+  const screen = readFileSync('app/mpesa-import.tsx', 'utf8');
+
+  it('offers to set it only when nothing is recorded before the statement', () => {
+    expect(screen).toContain('if (rows.some((row) => String(row.date).slice(0, 10) < first)) return null;');
+    expect(screen).toContain('testID="mpesa-opening-fix-button"');
   });
 
-  it('keeps the picker for a budget without the built-in categories yet, so an import never stalls', () => {
-    expect(screen).toContain(') : summary && summary.fees > 0 ? (');
+  it('sets it to the statement opening, dated the day before', () => {
+    expect(screen).toContain('before.setUTCDate(before.getUTCDate() - 1);');
+    expect(screen).toContain('openingBalance: openingFix.to, openingBalanceDate: openingFix.date, accountId');
+  });
+
+  it('is for those who can manage the budget', () => {
+    expect(screen).toContain('{openingFix && canManageBudget ? (');
   });
 });
