@@ -60,8 +60,9 @@ describe("every figure that counts money in leaves it out", () => {
     expect(borrowingFilters).toBe(settlementFilters);
     // The per-stream income trend duplicates the same two deposit branches
     // (split, legacy) as the single-month funding query, so both counts grew
-    // by 2 together when it was added.
-    expect(borrowingFilters).toBe(12);
+    // by 2 together when it was added. A member's breakdown on Contributions
+    // added one of each, to match that member's card.
+    expect(borrowingFilters).toBe(13);
   });
 });
 

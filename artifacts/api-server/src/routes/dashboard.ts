@@ -300,6 +300,11 @@ router.get("/dashboard/member-breakdown", async (req, res): Promise<void> => {
     .where(sql`${jointAccountTxTable.groupId} = ${groupId}
            AND ${jointAccountTxTable.type} = 'deposit'
            AND ${jointAccountTxTable.bankTransferId} IS NULL
+           -- What the member card on the same screen counts as put in: not
+           -- money borrowed, paid back to them, or back from a reversal.
+           AND ${jointAccountTxTable.settlesContributorId} IS NULL
+           AND NOT ${jointAccountTxTable.isBorrowing}
+           ${notAReversal(jointAccountTxTable.id)}
            AND ${jointAccountTxTable.madeById} = ${userId}
            AND EXTRACT(MONTH FROM ${jointAccountTxTable.date}) = ${month}
            AND EXTRACT(YEAR  FROM ${jointAccountTxTable.date}) = ${year}`)
