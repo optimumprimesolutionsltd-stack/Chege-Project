@@ -87,7 +87,7 @@ import type { DebtEntryLink } from '@/lib/debtLinks';
 import { canReadStatements, chooseStatement, statementBase64, type ChosenStatement } from '@/lib/statementFile';
 import { shownFileName } from '@/lib/shownFileName';
 import { readPercent } from '@/lib/statementProgress';
-import { balanceAtEndOf, dayBefore, fulizaChargeOverlap, fulizaCharges, fulizaOwedBefore, reconcile, statementLines, type StatementReading } from '@/lib/statementImport';
+import { balanceAtEndOf, dayBefore, notOnStatement, type RecordedRow, fulizaChargeOverlap, fulizaCharges, fulizaOwedBefore, reconcile, statementLines, type StatementReading } from '@/lib/statementImport';
 import { checkRunningBalance, readStatementRows, resolveDirections } from '@/lib/statementTable';
 import type { ReaderMessage } from '@/lib/statementReaderHtml';
 import { fetchOtherBudgetOptions, type OtherBudgetOptions } from '@/lib/otherBudgetOptions';
@@ -940,6 +940,11 @@ export default function MpesaImportScreen() {
       mpesaEnd: statementReading.closing,
     };
   }, [statementReading, account]);
+  // What this account has for the statement's days that the statement does not.
+  const extras = useMemo(
+    () => (statementReading && account ? notOnStatement(statementReading, (account.transactions ?? []) as unknown as RecordedRow[]) : null),
+    [statementReading, account],
+  );
   const fixOpeningBalance = async () => {
     if (!openingFix || !accountId || openingSaving) return;
     setOpeningSaving(true);
@@ -1496,6 +1501,24 @@ export default function MpesaImportScreen() {
                       <Text style={[styles.hint, { color: colors.destructive }]} testID="mpesa-balance-before">
                         KES {formatExact(Math.round((balanceSides.mpesaStart - balanceSides.jamviStart) * 100) / 100)} of the difference is from before {balanceSides.startDay}: this account's starting balance, or entries before then, do not match M-Pesa. Import the statement for the month before to find them.
                       </Text>
+                    ) : null}
+                  </View>
+                ) : null}
+                {extras && extras.rows.length > 0 ? (
+                  <View style={{ gap: 3, marginTop: 6 }} testID="mpesa-not-on-statement">
+                    <Text style={[styles.hint, { color: colors.foreground, fontFamily: 'Inter_600SemiBold' }]}>
+                      In Jamvi but not on this statement: {extras.rows.length} {extras.rows.length === 1 ? 'entry' : 'entries'}, KES {formatExact(extras.net)}
+                    </Text>
+                    <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0 }]}>
+                      These move the balance but M-Pesa has no record of them. Open Bank and delete any that did not happen, or were recorded twice.
+                    </Text>
+                    {extras.rows.slice(0, 20).map((row) => (
+                      <Text key={row.id} style={[styles.hint, { color: colors.foreground, marginTop: 0 }]} numberOfLines={2}>
+                        • {String(row.date).slice(0, 10)} · {row.description ?? ''} · {row.effect < 0 ? '−' : '+'}KES {formatExact(Math.abs(row.effect))} ({row.why})
+                      </Text>
+                    ))}
+                    {extras.rows.length > 20 ? (
+                      <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0 }]}>and {extras.rows.length - 20} more</Text>
                     ) : null}
                   </View>
                 ) : null}

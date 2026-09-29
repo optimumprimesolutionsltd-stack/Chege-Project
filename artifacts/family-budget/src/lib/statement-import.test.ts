@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { balanceAtEndOf, dayBefore, fulizaOwedBefore, reconcile, statementLines } from "./statement-import";
+import { balanceAtEndOf, dayBefore, fulizaOwedBefore, notOnStatement, reconcile, statementLines } from "./statement-import";
 import type { StatementRow } from "./statement-table";
 
 let n = 0;
@@ -249,5 +249,31 @@ describe("Jamvi's balance on a day", () => {
   it("is asked for the day before the statement starts", () => {
     expect(dayBefore("2026-09-01")).toBe("2026-08-31");
     expect(dayBefore("2026-03-01")).toBe("2026-02-28");
+  });
+});
+
+// "I still can't match the closing balance": what the account has that the
+// statement does not is what leaves it off.
+describe("entries in Jamvi but not on the statement", () => {
+  const reading = { ...statementLines([at("02 08:00:00", "Pay Bill Online to 123456 - SAMPLE UTILITY", { withdrawn: 300, receipt: "ABC1234567" })]), firstDate: "2026-09-01", lastDate: "2026-09-29" };
+  const rows = [
+    { id: 1, date: "2026-09-02", type: "disbursement", amount: 300, description: "Sample Utility", mpesaReceipt: "ABC1234567" },
+    { id: 2, date: "2026-09-05", type: "disbursement", amount: 500, description: "Typed in", mpesaReceipt: null },
+    { id: 3, date: "2026-09-02", type: "disbursement", amount: 7, description: "Bank charge", chargeForTransactionId: 1 },
+    { id: 4, date: "2026-09-02", type: "disbursement", amount: 7, description: "M-Pesa charge", mpesaReceipt: "ABC1234567C1" },
+    { id: 5, date: "2026-08-31", type: "disbursement", amount: 900, description: "Before the statement" },
+    { id: 6, date: "2026-09-10", type: "deposit", amount: 200, description: "Pasted", mpesaReceipt: "ZZZ9999999" },
+  ];
+  it("lists them with why, and adds up what they do to the balance", () => {
+    const { rows: found, net } = notOnStatement(reading, rows);
+    expect(found.map((row) => row.id)).toEqual([2, 4, 6]);
+    expect(net).toBe(-500 - 7 + 200);
+  });
+
+  it("names the kept-with-payment charge as the twice-counted one when the statement lists the charge on its own", () => {
+    const lone = { ...reading, lines: [...reading.lines, { ...reading.lines[0], index: 9, receipt: "ABC1234567C1", type: "transaction_charge", amount: 7 }] };
+    const { rows: found } = notOnStatement(lone, rows);
+    expect(found.map((row) => row.id)).toEqual([2, 3, 6]);
+    expect(found.find((row) => row.id === 3)?.why).toMatch(/twice/);
   });
 });
