@@ -1,4 +1,5 @@
-import React, { useState, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   View,
   Text,
@@ -32,6 +33,8 @@ import {
   getGetDashboardBusinessQueryKey,
   useGetDashboardIncomeStreams,
   getGetDashboardIncomeStreamsTrendQueryKey,
+  getGetDashboardIncomeLedgerQueryKey,
+  useGetDashboardIncomeLedger,
   useGetDashboardIncomeStreamsTrend,
   useGetDashboardSummary,
   useGetMembers,
@@ -175,6 +178,11 @@ function BudgetRow({
 
 // ── Screen ───────────────────────────────────────────────────────────────────
 
+/** Which income streams show their details, on this phone. */
+const STREAM_DETAILS_KEY = 'jamvi:income-stream-details-open';
+/** Entries shown per stream before the rest are left to All income. */
+const STREAM_DETAIL_ROWS = 10;
+
 export default function ReportsScreen() {
   const colors = useColors();
   const { data: group } = useGetGroup();
@@ -251,6 +259,42 @@ export default function ReportsScreen() {
     { query: { queryKey: getGetDashboardIncomeStreamsTrendQueryKey({ months: 6 }), retry: false } },
   );
   const { data: members = [] } = useGetMembers();
+
+  // Each income stream's details - its entries this month and each cost linked
+  // to it - open one at a time or all at once, as on Business. Off until asked
+  // for, and remembered on this phone. The unattributed card is 0: no real id is.
+  const [detailedStreams, setDetailedStreams] = useState<Set<number>>(new Set());
+  useEffect(() => {
+    AsyncStorage.getItem(STREAM_DETAILS_KEY)
+      .then((raw) => { if (raw) setDetailedStreams(new Set((JSON.parse(raw) as number[]).filter(Number.isFinite))); })
+      .catch(() => {});
+  }, []);
+  const keepStreamDetails = (next: Set<number>) => {
+    setDetailedStreams(next);
+    AsyncStorage.setItem(STREAM_DETAILS_KEY, JSON.stringify([...next])).catch(() => {});
+  };
+  const streamKey = (incomeSourceId: number | null | undefined) => incomeSourceId ?? 0;
+  const toggleStreamDetails = (key: number) => {
+    const next = new Set(detailedStreams);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    keepStreamDetails(next);
+  };
+  const streamKeys = (incomeStreamReport?.streams ?? []).map((stream) => streamKey(stream.incomeSourceId));
+  const allStreamsDetailed = streamKeys.length > 0 && streamKeys.every((key) => detailedStreams.has(key));
+  const toggleAllStreamDetails = () => keepStreamDetails(allStreamsDetailed ? new Set() : new Set(streamKeys));
+  // The entries come from All income's own list, and are only asked for while shown.
+  const showingStreamDetails = streamKeys.some((key) => detailedStreams.has(key));
+  const { data: incomeLedger, isLoading: loadingIncomeLedger } = useGetDashboardIncomeLedger(queryParams, {
+    query: { queryKey: getGetDashboardIncomeLedgerQueryKey(queryParams), enabled: showingStreamDetails, retry: false },
+  });
+  const streamEntries = (incomeSourceId: number | null | undefined) =>
+    (incomeLedger?.entries ?? []).flatMap((entry) => {
+      const amount = entry.portions
+        .filter((portion) => (portion.incomeSourceId ?? null) === (incomeSourceId ?? null))
+        .reduce((sum, portion) => sum + portion.amount, 0);
+      return amount > 0 ? [{ id: entry.id, date: entry.date, description: entry.description, amount }] : [];
+    });
 
   const isLoading = loadingExp || loadingCat || loadingSummary;
 
@@ -1053,7 +1097,13 @@ export default function ReportsScreen() {
                   </Text>
                 ) : null}
               </View>
-              <Feather name="pie-chart" size={19} color={colors.primary} />
+              {(incomeStreamReport?.streams.length ?? 0) > 0 ? (
+                <Pressable onPress={toggleAllStreamDetails} accessibilityRole="button" hitSlop={8} testID="income-stream-details-all">
+                  <Text style={[styles.streamDetailsLink, { color: colors.primary }]}>{allStreamsDetailed ? 'Hide all details' : 'Show all details'}</Text>
+                </Pressable>
+              ) : (
+                <Feather name="pie-chart" size={19} color={colors.primary} />
+              )}
             </View>
 
             {loadingIncomeStreams ? (
@@ -1144,6 +1194,64 @@ export default function ReportsScreen() {
                           </Text>
                         </Pressable>
                       ) : null}
+                      {detailedStreams.has(streamKey(stream.incomeSourceId)) ? (
+                        <View style={[styles.streamDetails, { borderColor: colors.border }]} testID={`income-stream-detail-list-${streamKey(stream.incomeSourceId)}`}>
+                          {linkedCostCategories.length > 0 ? (
+                            <>
+                              <Text style={[styles.streamDetailsHead, { color: colors.mutedForeground }]}>COSTS THIS MONTH</Text>
+                              {linkedCostCategories.map((category) => {
+                                const spent = catBreakdown.find((row) => row.category === category.name)?.spentAmount ?? 0;
+                                return (
+                                  <View key={category.id} style={styles.streamDetailRow}>
+                                    <Text style={[styles.variance, { color: colors.foreground, flex: 1 }]} numberOfLines={1}>
+                                      {category.name} · {category.costKind === 'expense' ? 'Expense' : 'Cost of goods sold'}
+                                    </Text>
+                                    <Text style={[styles.variance, { color: colors.foreground }]}>− {formatKES(spent)}</Text>
+                                  </View>
+                                );
+                              })}
+                            </>
+                          ) : null}
+                          <Text style={[styles.streamDetailsHead, { color: colors.mutedForeground }]}>RECEIVED THIS MONTH</Text>
+                          {loadingIncomeLedger ? (
+                            <ActivityIndicator color={colors.primary} style={{ marginVertical: 6 }} />
+                          ) : (() => {
+                            const entries = streamEntries(stream.incomeSourceId);
+                            if (entries.length === 0) {
+                              return <Text style={[styles.variance, { color: colors.mutedForeground }]}>Nothing received yet.</Text>;
+                            }
+                            return (
+                              <>
+                                {entries.slice(0, STREAM_DETAIL_ROWS).map((entry) => (
+                                  <View key={entry.id} style={styles.streamDetailRow}>
+                                    <Text style={[styles.variance, { color: colors.mutedForeground, width: 44 }]}>{entry.date.slice(8, 10)}/{entry.date.slice(5, 7)}</Text>
+                                    <Text style={[styles.variance, { color: colors.foreground, flex: 1 }]} numberOfLines={1}>{entry.description}</Text>
+                                    <Text style={[styles.variance, { color: colors.foreground }]}>{formatKES(entry.amount)}</Text>
+                                  </View>
+                                ))}
+                                {entries.length > STREAM_DETAIL_ROWS ? (
+                                  <Pressable onPress={() => router.push('/income-ledger')} accessibilityRole="button" hitSlop={6}>
+                                    <Text style={[styles.variance, { color: colors.primary }]}>
+                                      {entries.length - STREAM_DETAIL_ROWS} more · open All income
+                                    </Text>
+                                  </Pressable>
+                                ) : null}
+                              </>
+                            );
+                          })()}
+                        </View>
+                      ) : null}
+                      <Pressable
+                        onPress={() => toggleStreamDetails(streamKey(stream.incomeSourceId))}
+                        accessibilityRole="button"
+                        hitSlop={6}
+                        style={{ marginTop: 6, alignSelf: 'flex-start' }}
+                        testID={`income-stream-details-${streamKey(stream.incomeSourceId)}`}
+                      >
+                        <Text style={[styles.streamDetailsLink, { color: colors.primary }]}>
+                          {detailedStreams.has(streamKey(stream.incomeSourceId)) ? 'Hide details' : 'Show details'}
+                        </Text>
+                      </Pressable>
                     </View>
                   );
                 })}
@@ -1821,6 +1929,10 @@ const styles = StyleSheet.create({
   incomeStreamAmount: { fontSize: 13, fontFamily: 'Inter_700Bold' },
   incomeStreamMeta: { flexDirection: 'row', justifyContent: 'space-between', gap: 10 },
   costCategoryRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 },
+  streamDetailsLink: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
+  streamDetails: { marginTop: 8, paddingTop: 8, borderTopWidth: StyleSheet.hairlineWidth, gap: 4 },
+  streamDetailsHead: { fontSize: 10, fontFamily: 'Inter_600SemiBold', letterSpacing: 0.6, marginTop: 4 },
+  streamDetailRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   costCategoryOption: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 8 },
   incomeTrendHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   incomeTrendBars: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 8 },

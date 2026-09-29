@@ -85,6 +85,14 @@ export default function BusinessScreen() {
   });
   const businesses = (data?.businesses ?? []) as Statement[];
   const totals = data?.totals;
+  // One switch for the whole screen, beside each business's own: every
+  // business open, or every one closed.
+  const allDetailed = businesses.length > 0 && businesses.every((business) => detailed.has(business.incomeSourceId));
+  const toggleAllDetails = () => {
+    const next = allDetailed ? new Set<number>() : new Set(businesses.map((business) => business.incomeSourceId));
+    setDetailed(next);
+    AsyncStorage.setItem(DETAILS_KEY, JSON.stringify([...next])).catch(() => {});
+  };
 
   const isCurrentMonth = month === now.getMonth() + 1 && year === now.getFullYear();
   const step = (delta: number) => {
@@ -277,6 +285,11 @@ export default function BusinessScreen() {
           <Text style={[styles.title, { color: colors.foreground }]} numberOfLines={1}>Business</Text>
           <Text style={[styles.subtitle, { color: colors.mutedForeground }]} numberOfLines={1}>Profit and loss for each side hustle</Text>
         </View>
+        {businesses.length > 0 ? (
+          <Pressable onPress={toggleAllDetails} accessibilityRole="button" hitSlop={8} testID="business-details-all">
+            <Text style={[styles.link, { color: colors.primary }]}>{allDetailed ? 'Hide all details' : 'Show all details'}</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       <ScrollView contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 32 }]} showsVerticalScrollIndicator={false}>
