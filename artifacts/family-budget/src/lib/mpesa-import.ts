@@ -179,7 +179,6 @@ const KIND_DEFAULTS: Record<string, readonly string[]> = {
   airtime_purchase: ["airtime", "data", "phone", "communication", "bundle"],
   cash_withdrawal: ["cash", "withdraw"],
   fuliza_fee: ["bank charge", "charge", "fee", "fuliza"],
-  fuliza_repaid: ["fuliza", "loan", "debt"],
   transaction_charge: ["m-pesa charges", "transaction charges", "bank charge", "charge", "fee"],
 };
 
@@ -363,6 +362,14 @@ export function snippetFor(pasted: string, receipt: string | null, length = 90):
   return pasted.slice(at, at + length * 2).replace(/\s+/g, " ").trim().slice(0, length);
 }
 
+/**
+ * Fuliza owed from the last statement, paid back to the Fuliza debt with no
+ * category of its own. Filed under a category it would count twice: once as
+ * what the loan bought, once as paying it back.
+ */
+export const paysOffFuliza = (line: PreviewLine, choice: Choice): boolean =>
+  line.type === "fuliza_repaid" && choice.debt?.kind === "pay-back" && !choice.category.trim();
+
 /** Why a ticked line cannot be saved yet, or null when it can. */
 export function problemWith(line: PreviewLine, choice: Choice | undefined): string | null {
   if (!choice?.include || !isRecordable(line)) return null;
@@ -374,7 +381,9 @@ export function problemWith(line: PreviewLine, choice: Choice | undefined): stri
   // Money moved between the person"s own places is not spending, so it needs no category.
   if (isMove(choice)) return null;
   // Money lent is not spending, so it needs no category; paying a debt back does.
-  if (line.direction === "out" && choice.debt?.kind !== "lend" && !choice.category.trim()) return "Choose what it was for.";
+  // Repaying Fuliza needs no category: saving links it to Fuliza in Who owes who.
+  const fulizaRepayment = line.type === "fuliza_repaid" && (paysOffFuliza(line, choice) || !choice.debt);
+  if (line.direction === "out" && choice.debt?.kind !== "lend" && !fulizaRepayment && !choice.category.trim()) return "Choose what it was for.";
   return null;
 }
 
@@ -612,6 +621,9 @@ export function buildPostings(line: PreviewLine, choice: Choice, ctx: PostingCon
   const madeById = ctx.isShared ? null : ctx.userId;
   // Lending is not a cost: no category, and linked to who it went to.
   const lending = choice.debt?.kind === "lend";
+  // Nor is paying Fuliza back: what the loan bought was recorded as spending
+  // when it was bought, so the repayment only clears the debt.
+  const clearing = paysOffFuliza(line, choice);
   return {
     kind: "disbursement" as const,
     main: {
@@ -621,7 +633,9 @@ export function buildPostings(line: PreviewLine, choice: Choice, ctx: PostingCon
       madeById,
       ...(lending
         ? { isLending: true, settlesContributorId: choice.debt!.partyId }
-        : { expenseCategory: choice.category.trim(), destinationKind: "category" as const }),
+        : clearing
+          ? { settlesContributorId: choice.debt!.partyId }
+          : { expenseCategory: choice.category.trim(), destinationKind: "category" as const }),
       accountId: ctx.accountId,
       ...(receipt ? { mpesaReceipt: receipt } : {}),
       ...(choice.notes?.trim() ? { notes: choice.notes.trim() } : {}),
