@@ -22,7 +22,7 @@ import * as Sharing from 'expo-sharing';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { isoDay, longDay, monthStartIso, orderedRange } from '@/lib/dayRange';
 import { writePdf } from '@/lib/savePdf';
-import { householdRows } from '@/lib/budgetReport';
+import { budgetReport, householdRows } from '@/lib/budgetReport';
 import { PDF_SECTIONS, DEFAULT_PDF_SECTIONS, parsePdfSections, pdfSectionParams, type PdfSectionKey } from '@/lib/reportPdfSections';
 import { useColors } from '@/hooks/useColors';
 import { PageScrollView } from '@/components/PageScrollReset';
@@ -391,7 +391,17 @@ export default function ReportsScreen() {
     const { incomeSourceId, sourceName } = costCategoryFor;
     const linkedTo = costLinkOf(category);
     if (linkedTo === incomeSourceId) {
-      void applyCostCategoryChange(category.id, null);
+      // Asked first: one tap on a ticked row used to unlink it at once, and
+      // with it the side hustle's costs left Business and came back into the
+      // household's spending - easy to do while reaching for its kind.
+      Alert.alert(
+        `Stop counting ${category.name} as ${sourceName}'s cost?`,
+        `Its spending would count as household spending again, and come off ${sourceName}'s profit no more.`,
+        [
+          { text: 'Keep it', style: 'cancel' },
+          { text: 'Stop counting it', style: 'destructive', onPress: () => void applyCostCategoryChange(category.id, null) },
+        ],
+      );
       return;
     }
     if (linkedTo != null) {
@@ -498,7 +508,11 @@ export default function ReportsScreen() {
     });
   }, [catBreakdown]);
 
-  const overBudgetCount  = sortedCategories.filter(c => c.spentAmount > c.budgetAmount).length;
+  // Over, the way the Budget report counts it: a heading only when none of
+  // its sub-categories already says so, and never spending with no budget
+  // behind it - which counted "17 categories over" out of a handful.
+  const overRows = useMemo(() => budgetReport(catBreakdown as any[]).over, [catBreakdown]);
+  const overBudgetCount  = overRows.length;
   const totalVariance    = totalBudget - totalSpent;
   const budgetPct        = totalBudget > 0 ? Math.min(totalSpent / totalBudget * 100, 100) : 0;
   const isOverBudget     = totalSpent > totalBudget;
@@ -525,10 +539,7 @@ export default function ReportsScreen() {
     : progressError
       ? 'Summary unavailable'
       : progressStatus;
-  const overBudgetCategoryNames = sortedCategories
-    .filter(c => c.spentAmount > c.budgetAmount)
-    .map(c => c.category)
-    .filter(Boolean);
+  const overBudgetCategoryNames = overRows.map(c => c.category).filter(Boolean);
   const categoriesToWatch = useMemo(
     () => sortedCategories.filter(c => c.spentAmount > c.budgetAmount),
     [sortedCategories],
@@ -974,18 +985,18 @@ export default function ReportsScreen() {
             borderColor: isOverBudget ? 'rgba(239,68,68,0.3)' : colors.border,
           }]}>
             <View style={styles.utilisationTop}>
-              <View>
-                <Text style={[styles.utilisationLabel, { color: colors.mutedForeground }]}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={[styles.utilisationLabel, { color: colors.mutedForeground }]} numberOfLines={1}>
                   BUDGET UTILISATION — {MONTHS_SHORT[month - 1]} {year}
                 </Text>
-                <Text style={[styles.utilisationPct, { color: isOverBudget ? '#ef4444' : colors.foreground }]}>
+                <Text style={[styles.utilisationPct, { color: isOverBudget ? '#ef4444' : colors.foreground }]} numberOfLines={1} adjustsFontSizeToFit>
                   {budgetPct.toFixed(0)}% used
-                  {overBudgetCount > 0 && (
-                    <Text style={{ color: '#ef4444', fontSize: 13 }}>
-                      {'  '}·{'  '}{overBudgetCount} {overBudgetCount === 1 ? 'category' : 'categories'} over
-                    </Text>
-                  )}
                 </Text>
+                {overBudgetCount > 0 && (
+                  <Text style={{ color: '#ef4444', fontSize: 13, fontFamily: 'Inter_500Medium' }} testID="utilisation-over-count">
+                    {overBudgetCount} {overBudgetCount === 1 ? 'category' : 'categories'} over
+                  </Text>
+                )}
               </View>
               <View style={styles.utilisationVariance}>
                 <Feather
@@ -993,7 +1004,7 @@ export default function ReportsScreen() {
                   size={16}
                   color={isOverBudget ? '#ef4444' : '#22c55e'}
                 />
-                <Text style={[styles.utilisationVarText, { color: isOverBudget ? '#ef4444' : '#22c55e' }]}>
+                <Text style={[styles.utilisationVarText, { color: isOverBudget ? '#ef4444' : '#22c55e' }]} numberOfLines={1} adjustsFontSizeToFit>
                   {isOverBudget ? '▲ ' : ''}{formatKES(Math.abs(totalVariance))}
                 </Text>
                 <Text style={[styles.utilisationVarSub, { color: colors.mutedForeground }]}>
@@ -1904,10 +1915,10 @@ const styles = StyleSheet.create({
 
   // Overall utilisation card
   utilisationCard: { borderRadius: 14, borderWidth: 1, padding: 16, gap: 10 },
-  utilisationTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  utilisationTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 },
   utilisationLabel: { fontSize: 10, fontFamily: 'Inter_500Medium', letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: 4 },
   utilisationPct: { fontSize: 22, fontFamily: 'Inter_700Bold' },
-  utilisationVariance: { alignItems: 'flex-end', gap: 2 },
+  utilisationVariance: { alignItems: 'flex-end', gap: 2, flexShrink: 0, maxWidth: '45%' },
   utilisationVarText: { fontSize: 16, fontFamily: 'Inter_700Bold' },
   utilisationVarSub: { fontSize: 11, fontFamily: 'Inter_400Regular' },
   bigBarBg: { height: 8, borderRadius: 4, overflow: 'hidden' },

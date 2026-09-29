@@ -29,7 +29,7 @@ describe('linking categories as an income stream\'s cost', () => {
   it('toggles a category on or off a stream without touching any other category already linked to it', () => {
     expect(reports).toContain('const toggleCostCategory = useCallback((category:');
     expect(reports).toContain('if (linkedTo === incomeSourceId) {');
-    expect(reports).toContain('void applyCostCategoryChange(category.id, null);');
+    expect(reports).toContain('onPress: () => void applyCostCategoryChange(category.id, null)');
     expect(reports).toContain('void applyCostCategoryChange(category.id, incomeSourceId);');
   });
 
