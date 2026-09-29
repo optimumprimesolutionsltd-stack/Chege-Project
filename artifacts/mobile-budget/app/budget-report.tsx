@@ -53,7 +53,7 @@ export default function BudgetReportScreen() {
     setMonth((index % 12) + 1);
   };
 
-  const { topLevel, childrenOf, unbudgeted, over, totals } = useMemo(() => budgetReport(rows), [rows]);
+  const { topLevel, childrenOf, unbudgeted, over, totals, businessCosts } = useMemo(() => budgetReport(rows), [rows]);
 
   const left = totals.left;
   const toggle = (name: string) =>
@@ -193,6 +193,23 @@ export default function BudgetReportScreen() {
             <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
               {topLevel.map((row) => renderRow(row))}
             </View>
+
+            {businessCosts.length > 0 ? (
+              <>
+                <Text style={[styles.section, { color: colors.mutedForeground }]}>Side-hustle costs, not counted above</Text>
+                <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]} testID="budget-report-business-costs">
+                  {businessCosts.map((row) => (
+                    <View key={`biz/${row.category}`} style={styles.overRow}>
+                      <Text style={[styles.rowName, { color: colors.foreground, flex: 1 }]} numberOfLines={1}>{row.category}</Text>
+                      <Text style={[styles.status, { color: colors.foreground }]}>KES {formatKES(row.spentAmount)}</Text>
+                    </View>
+                  ))}
+                  <Text style={[styles.rowMeta, { color: colors.mutedForeground, paddingBottom: 8 }]}>
+                    These come off the side hustle's profit in Business, so they are not household spending.
+                  </Text>
+                </View>
+              </>
+            ) : null}
 
             {unbudgeted.length > 0 ? (
               <>

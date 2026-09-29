@@ -29,13 +29,31 @@ export function setReversalLinksReadyForTests(value: boolean): void {
 }
 
 /**
- * `AND NOT EXISTS (...)` leaving out a deposit that reverses a payment, or
- * nothing at all while the table is missing. `depositId` is the deposit's id
- * column as the calling query names it, for example sql`t.id`.
+ * What marks money in as money back from a reversed payment: the way an
+ * M-Pesa import files a reversal ("Money back: a reversed payment", "Money
+ * back: reversal of ..."). Such money is never income, whether or not the
+ * payment it undid is recorded or linked - it only ever returns what left.
+ */
+export const MONEY_BACK_PATTERN = "Money back%";
+
+/**
+ * The condition every income figure adds, leaving out money back from a
+ * reversed payment: any deposit filed as money back, and - once the table
+ * exists - any deposit linked in reversal_links. `depositId` is the deposit's
+ * id column as the calling query names it, for example sql`t.id`.
  */
 export function notAReversal(depositId: SQL | unknown): SQL {
-  if (!ready) return sql``;
-  return sql`AND NOT EXISTS (SELECT 1 FROM reversal_links rl WHERE rl.reversal_transaction_id = ${depositId})`;
+  const filedAsMoneyBack = sql`AND NOT EXISTS (SELECT 1 FROM joint_account_transactions mb WHERE mb.id = ${depositId} AND mb.description ILIKE ${MONEY_BACK_PATTERN})`;
+  if (!ready) return filedAsMoneyBack;
+  return sql`${filedAsMoneyBack} AND NOT EXISTS (SELECT 1 FROM reversal_links rl WHERE rl.reversal_transaction_id = ${depositId})`;
+}
+
+/** True, in SQL, for a deposit that is money back from a reversed payment. */
+export function isMoneyBack(depositId: SQL | unknown, description: SQL | unknown): SQL {
+  const linked = ready
+    ? sql` OR EXISTS (SELECT 1 FROM reversal_links rl WHERE rl.reversal_transaction_id = ${depositId})`
+    : sql``;
+  return sql`(${description} ILIKE ${MONEY_BACK_PATTERN}${linked})`;
 }
 
 // Built when used, not at load, so importing this touches nothing.

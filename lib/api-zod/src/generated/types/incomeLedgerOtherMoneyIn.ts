@@ -13,4 +13,6 @@ export type IncomeLedgerOtherMoneyIn = {
   borrowed: number;
   repaidToYou: number;
   fromSavings: number;
+  /** Money back from reversed M-Pesa payments - it only returns what left, so it is never income. */
+  moneyBack: number;
 };

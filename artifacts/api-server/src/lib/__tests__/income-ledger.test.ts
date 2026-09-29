@@ -58,7 +58,7 @@ describe("the income ledger", () => {
 
     expect(ledger.entries.map((entry) => entry.transactionId)).toEqual([1]);
     expect(ledger.total).toBe(40000);
-    expect(ledger.otherMoneyIn).toEqual({ borrowed: 20000, repaidToYou: 5000, fromSavings: 7000 });
+    expect(ledger.otherMoneyIn).toEqual({ borrowed: 20000, repaidToYou: 5000, fromSavings: 7000, moneyBack: 0 });
   });
 
   it("names every stream and person on a split deposit, once each, in the order entered", () => {
@@ -109,7 +109,7 @@ describe("the income ledger", () => {
       costs: 0,
       streams: [],
       entries: [],
-      otherMoneyIn: { borrowed: 0, repaidToYou: 0, fromSavings: 0 },
+      otherMoneyIn: { borrowed: 0, repaidToYou: 0, fromSavings: 0, moneyBack: 0 },
     });
   });
 });
@@ -174,5 +174,21 @@ describe("a side hustle counts its profit", () => {
   it("keeps money with no stream as received in full, since nothing is linked to it", () => {
     const ledger = build([deposit({ id: 1, amount: 3000, incomeSourceId: null })], [], [[1, 500]]);
     expect(ledger.streams.find((stream) => stream.incomeSourceId === null)).toMatchObject({ received: 3000, costs: 0, net: 3000 });
+  });
+});
+
+// "Remember the unattributed is due to M-Pesa reversals": money back from a
+// reversed payment only returns what left, so it is never income.
+describe("money back from a reversed payment", () => {
+  it("is kept out of income and out of every stream, but totalled beside it", () => {
+    const ledger = build([
+      deposit({ id: 1, amount: 50000, incomeSourceId: 1 }),
+      deposit({ id: 2, amount: 16727, kind: "money_back", description: "Money back: a reversed payment" }),
+      deposit({ id: 3, amount: 18483, kind: "money_back", description: "Money back: a reversed payment" }),
+    ]);
+    expect(ledger.entries.map((entry) => entry.transactionId)).toEqual([1]);
+    expect(ledger.total).toBe(50000);
+    expect(ledger.streams.some((stream) => stream.incomeSourceId === null)).toBe(false);
+    expect(ledger.otherMoneyIn.moneyBack).toBe(35210);
   });
 });

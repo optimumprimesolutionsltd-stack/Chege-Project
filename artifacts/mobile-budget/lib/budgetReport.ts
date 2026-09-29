@@ -14,6 +14,8 @@ export type BudgetRow = {
   remaining?: number;
   isBudgeted?: boolean;
   parentName?: string | null;
+  /** A side hustle's cost: the business's, left out of the household's figures and listed apart. */
+  isBusinessCost?: boolean;
 };
 
 /** How far over budget, or 0. A budget of 0 is "tracked, not judged", so never over. */
@@ -22,7 +24,13 @@ export const overBy = (row: BudgetRow): number =>
 
 const biggestFirst = (a: BudgetRow, b: BudgetRow) => overBy(b) - overBy(a) || b.spentAmount - a.spentAmount;
 
-export function budgetReport(rows: readonly BudgetRow[]) {
+export function budgetReport(allRows: readonly BudgetRow[]) {
+  // Business costs are the side hustles', already taken off their profit on
+  // Business; the household's budget against actual leaves them out.
+  const businessCosts = allRows
+    .filter((row) => row.isBusinessCost && !allRows.some((other) => other.parentName === row.category))
+    .sort((a, b) => b.spentAmount - a.spentAmount);
+  const rows = allRows.filter((row) => !row.isBusinessCost);
   const budgeted = rows.filter((row) => row.isBudgeted !== false);
   const topLevel = budgeted.filter((row) => !row.parentName);
   const childrenOf = new Map<string, BudgetRow[]>();
@@ -52,6 +60,10 @@ export function budgetReport(rows: readonly BudgetRow[]) {
     childrenOf,
     unbudgeted,
     over,
-    totals: { budget, spentBudgeted, spentUnbudgeted, spent, left: budget - spent },
+    businessCosts,
+    totals: {
+      budget, spentBudgeted, spentUnbudgeted, spent, left: budget - spent,
+      businessCosts: businessCosts.reduce((sum, row) => sum + row.spentAmount, 0),
+    },
   };
 }

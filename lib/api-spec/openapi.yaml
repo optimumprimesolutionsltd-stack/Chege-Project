@@ -2972,6 +2972,12 @@ components:
             top-level. Named rather than referenced by id because the whole
             breakdown is keyed by name.
           type: ["string", "null"]
+        isBusinessCost:
+          type: boolean
+          description: >-
+            True for a category linked to an income stream: a side hustle's cost,
+            already taken off its profit, so left out of the household's budget
+            against actual and shown apart.
       required:
         - category
         - budgetAmount
@@ -3204,10 +3210,14 @@ components:
               type: number
             fromSavings:
               type: number
+            moneyBack:
+              type: number
+              description: Money back from reversed M-Pesa payments - it only returns what left, so it is never income.
           required:
             - borrowed
             - repaidToYou
             - fromSavings
+            - moneyBack
       required:
         - from
         - to
