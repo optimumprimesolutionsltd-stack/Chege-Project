@@ -1039,6 +1039,15 @@ paths:
           description: Include Who owes who as it stands now. Defaults to false.
           schema:
             type: boolean
+        - name: expensesScope
+          in: query
+          description: >-
+            With includeExpenses, household lists only household expenses (a
+            side hustle's costs left out) and business only those costs. Left
+            out, every expense.
+          schema:
+            type: string
+            enum: [household, business]
       responses:
         "200":
           description: Downloadable monthly report PDF

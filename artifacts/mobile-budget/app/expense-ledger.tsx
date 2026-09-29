@@ -8,6 +8,7 @@ import {
   Pressable,
   Platform,
   TextInput,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -22,6 +23,10 @@ import { isoDay, longDay, monthStartIso, orderedRange } from '@/lib/dayRange';
 import { useColors } from '@/hooks/useColors';
 import { getExpenseEditHref } from '@/lib/expenseEditLink';
 import { groupByCategory, groupByItem } from '@/lib/groupExpenses';
+import { Paths } from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
+import { getDashboardMonthlyReportPdf } from '@workspace/api-client-react';
+import { writePdf } from '@/lib/savePdf';
 
 function formatKES(n?: number | null): string {
   if (n === undefined || n === null) return '—';
@@ -78,9 +83,11 @@ export default function ExpenseLedgerScreen() {
     query: { queryKey: getGetDashboardExpenseLedgerQueryKey(query) },
   });
 
-  const entries = data?.entries ?? [];
-  const categoryGroups = useMemo(() => groupByCategory(entries), [entries]);
-  const itemGroups = useMemo(() => groupByItem(entries), [entries]);
+  const allEntries = data?.entries ?? [];
+  // Household or Business costs: a side hustle's stock and running costs are
+  // the business's, on a tab of their own rather than a section at the foot,
+  // and left out of the household's PDF.
+  const [scope, setScope] = useState<'household' | 'business'>('household');
 
   // A category linked to an income stream (see the Cost categories picker on
   // Reports) is the cost of earning that stream's sales, already worked out
@@ -95,26 +102,52 @@ export default function ExpenseLedgerScreen() {
     ),
     [budgetCategories],
   );
-  const isCostOfGoodsSold = (group: { key: string }) =>
-    group.key.startsWith('c:') && costCategoryNames.has(group.key.slice(2));
-  const expenseCategoryGroups = useMemo(
-    () => categoryGroups.filter((group) => !isCostOfGoodsSold(group)),
-    [categoryGroups, costCategoryNames],
+  // A business entry: every category it is filed under is a side hustle's cost.
+  const isBusinessEntry = (entry: (typeof allEntries)[number]) =>
+    entry.categories.length > 0 && entry.categories.every((name) => costCategoryNames.has(name.trim().toLocaleLowerCase('en-KE')));
+  const hasBusiness = costCategoryNames.size > 0;
+  const entries = useMemo(
+    () => (hasBusiness ? allEntries.filter((entry) => (scope === 'business') === isBusinessEntry(entry)) : allEntries),
+    [allEntries, scope, hasBusiness, costCategoryNames],
   );
-  const cogsCategoryGroups = useMemo(
-    () => categoryGroups.filter((group) => isCostOfGoodsSold(group)),
-    [categoryGroups, costCategoryNames],
+  const scopedCategoryGroups = useMemo(() => groupByCategory(entries), [entries]);
+  const businessTotal = useMemo(
+    () => allEntries.filter(isBusinessEntry).reduce((sum, entry) => sum + entry.amount, 0),
+    [allEntries, costCategoryNames],
   );
-  const cogsTotal = useMemo(
-    () => entries.reduce((sum, entry) => {
-      const [only, ...rest] = entry.categories;
-      const isSingleCostCategory = only != null && rest.length === 0 &&
-        costCategoryNames.has(only.trim().toLocaleLowerCase('en-KE'));
-      return isSingleCostCategory ? sum + entry.amount : sum;
-    }, 0),
-    [entries, costCategoryNames],
-  );
-  const expensesTotal = (data?.total ?? 0) - cogsTotal;
+  const cogsTotal = scope === 'household' ? businessTotal : 0;
+  const expensesTotal = entries.reduce((sum, entry) => sum + entry.amount, 0);
+
+  // The list as a PDF: this tab's expenses between these dates, and nothing
+  // else - a household PDF never shows a side hustle's stock.
+  const [exporting, setExporting] = useState(false);
+  const downloadPdf = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const blob = await getDashboardMonthlyReportPdf(
+        {
+          from: rangeFrom,
+          to: rangeTo,
+          includeSummary: false,
+          includeBudget: false,
+          includeIncome: false,
+          includeExpenses: true,
+          ...(hasBusiness ? { expensesScope: scope } : {}),
+        },
+        { responseType: 'blob', cache: 'no-store' },
+      );
+      const file = await writePdf(Paths.cache, `jamvi-${scope === 'business' ? 'business-costs' : 'expenses'}-${rangeFrom}-to-${rangeTo}.pdf`, blob as Blob);
+      if (!(await Sharing.isAvailableAsync())) throw new Error('Sharing is not available on this device.');
+      await Sharing.shareAsync(file.uri, { mimeType: 'application/pdf', dialogTitle: 'Save or share expenses', UTI: 'com.adobe.pdf' });
+    } catch (error: unknown) {
+      Alert.alert('Could not make the PDF', error instanceof Error ? error.message : 'Please try again.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const itemGroups = useMemo(() => groupByItem(entries), [entries]);
 
   // Days are already newest-first from the server; this only groups them so
   // each date is announced once rather than repeated down the column.
@@ -158,7 +191,7 @@ export default function ExpenseLedgerScreen() {
     );
   };
 
-  const renderGroup = (group: (typeof categoryGroups)[number]) => {
+  const renderGroup = (group: (typeof scopedCategoryGroups)[number]) => {
     const isOpen = opened.has(group.key);
     return (
       <View key={group.key} style={[styles.groupCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -206,6 +239,18 @@ export default function ExpenseLedgerScreen() {
             Everything that happened, newest first
           </Text>
         </View>
+        <Pressable
+          onPress={() => void downloadPdf()}
+          disabled={exporting || isLoading}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={scope === 'business' ? 'Download business costs as PDF' : 'Download expenses as PDF'}
+          testID="expense-ledger-pdf"
+          style={[styles.pdfButton, { borderColor: colors.border, opacity: exporting ? 0.6 : 1 }]}
+        >
+          {exporting ? <ActivityIndicator size="small" color={colors.primary} /> : <Feather name="download" size={15} color={colors.primary} />}
+          <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>PDF</Text>
+        </Pressable>
       </View>
 
       <ScrollView
@@ -213,6 +258,28 @@ export default function ExpenseLedgerScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
+        {hasBusiness ? (
+          <View style={[styles.segment, { borderColor: colors.border, backgroundColor: colors.muted }]} testID="expense-ledger-scope">
+            {([
+              ['household', 'Household'],
+              ['business', 'Business costs'],
+            ] as const).map(([value, label]) => {
+              const active = scope === value;
+              return (
+                <Pressable
+                  key={value}
+                  onPress={() => { setScope(value); setOpened(new Set()); }}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: active }}
+                  testID={`expense-ledger-scope-${value}`}
+                  style={[styles.segmentButton, active && { backgroundColor: colors.primary }]}
+                >
+                  <Text style={[styles.segmentText, { color: active ? colors.primaryForeground : colors.foreground }]}>{label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : null}
         <View style={[styles.searchBox, { borderColor: colors.border, backgroundColor: colors.card }]}>
           <Feather name="search" size={16} color={colors.mutedForeground} />
           <TextInput
@@ -281,7 +348,7 @@ export default function ExpenseLedgerScreen() {
           </Text>
           {!isLoading && cogsTotal > 0 ? (
             <Text style={[styles.totalCaption, { color: colors.mutedForeground, marginTop: 4 }]}>
-              + KES {formatKES(cogsTotal)} cost of goods sold, already worked out of its stream&rsquo;s profit
+              + KES {formatKES(cogsTotal)} of side-hustle costs, on the Business costs tab
             </Text>
           ) : null}
         </View>
@@ -330,20 +397,7 @@ export default function ExpenseLedgerScreen() {
             </Text>
           </View>
         ) : view === 'category' ? (
-          <>
-            {expenseCategoryGroups.map(renderGroup)}
-            {cogsCategoryGroups.length > 0 ? (
-              <>
-                <Text style={[styles.sectionHeading, { color: colors.mutedForeground }]}>
-                  Cost of goods sold
-                </Text>
-                <Text style={[styles.noteText, { color: colors.mutedForeground, textAlign: 'left', marginTop: -6 }]}>
-                  Linked to an income stream on Reports — already worked out of its profit there, not counted as a personal expense.
-                </Text>
-                {cogsCategoryGroups.map(renderGroup)}
-              </>
-            ) : null}
-          </>
+          <>{scopedCategoryGroups.map(renderGroup)}</>
         ) : view === 'item' ? (
           itemGroups.map(renderGroup)
         ) : (
@@ -384,6 +438,7 @@ const styles = StyleSheet.create({
   dayHeading: { fontSize: 11, fontFamily: 'Inter_600SemiBold', textTransform: 'uppercase', letterSpacing: 0.4 },
   dayCard: { borderWidth: 1, borderRadius: 14, paddingHorizontal: 14 },
   segment: { flexDirection: 'row', borderWidth: 1, borderRadius: 12, padding: 3, gap: 3 },
+  pdfButton: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
   segmentButton: { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 9 },
   segmentText: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
   sectionHeading: { fontSize: 11, fontFamily: 'Inter_600SemiBold', textTransform: 'uppercase', letterSpacing: 0.4, marginTop: 4 },

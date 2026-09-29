@@ -75,6 +75,7 @@ export * from './getDashboardExpenseLedgerParams';
 export * from './getDashboardIncomeLedgerParams';
 export * from './getDashboardIncomeStreamsParams';
 export * from './getDashboardIncomeStreamsTrendParams';
+export * from './getDashboardMonthlyReportPdfExpensesScope';
 export * from './getDashboardMonthlyReportPdfParams';
 export * from './getDashboardPeriodTotalsParams';
 export * from './getDashboardSpendingByItemGroupBy';
