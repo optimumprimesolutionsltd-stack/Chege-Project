@@ -2227,6 +2227,17 @@ export default function BankScreen() {
     (transaction) => transaction.type === 'deposit' && /^money back/i.test(transaction.description ?? '') && !transaction.reversal,
   );
   const [matchingReversals, setMatchingReversals] = useState(false);
+  // Matched quietly, once, when unmatched money back is on screen: until it
+  // is, the reversed payment still counts as spending (or as a side hustle's
+  // stock) and the money back as income. "Match them" stays for the rest.
+  const autoMatched = useRef(false);
+  useEffect(() => {
+    if (autoMatched.current || !canManageAccount || unmatchedMoneyBack.length === 0) return;
+    autoMatched.current = true;
+    autoLinkReversals()
+      .then((result) => { if (result.linked > 0) void queryClient.invalidateQueries(); })
+      .catch(() => {});
+  }, [canManageAccount, unmatchedMoneyBack.length, queryClient]);
   const matchReversals = async () => {
     if (matchingReversals) return;
     setMatchingReversals(true);

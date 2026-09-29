@@ -4,7 +4,8 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { getGetDashboardBusinessQueryKey, useGetDashboardBusiness } from '@workspace/api-client-react';
+import { autoLinkReversals, getGetDashboardBusinessQueryKey, useGetDashboardBusiness } from '@workspace/api-client-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -64,6 +65,16 @@ export default function BusinessScreen() {
   // Which businesses show their details. Off until asked for, and remembered
   // on this phone - a convenience, so it is fine to lose.
   const [detailed, setDetailed] = useState<Set<number>>(new Set());
+  // A reversed stock payment counted as cost until its money back was matched
+  // to it, and matching only ran straight after an import - so a pair of KCB
+  // payments, one reversed, both showed as stock and made a loss. Matched
+  // quietly on opening; what cannot be matched on its own stays on Bank.
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    autoLinkReversals()
+      .then((result) => { if (result.linked > 0) void queryClient.invalidateQueries(); })
+      .catch(() => {});
+  }, [queryClient]);
   useEffect(() => {
     AsyncStorage.getItem(DETAILS_KEY)
       .then((raw) => { if (raw) setDetailed(new Set((JSON.parse(raw) as number[]).filter(Number.isFinite))); })
