@@ -86,7 +86,7 @@ import type { DebtEntryLink } from '@/lib/debtLinks';
 import { canReadStatements, chooseStatement, statementBase64, type ChosenStatement } from '@/lib/statementFile';
 import { shownFileName } from '@/lib/shownFileName';
 import { readPercent } from '@/lib/statementProgress';
-import { fulizaChargeOverlap, fulizaCharges, fulizaOwedBefore, reconcile, statementLines, type StatementReading } from '@/lib/statementImport';
+import { balanceAtEndOf, dayBefore, fulizaChargeOverlap, fulizaCharges, fulizaOwedBefore, reconcile, statementLines, type StatementReading } from '@/lib/statementImport';
 import { checkRunningBalance, readStatementRows, resolveDirections } from '@/lib/statementTable';
 import type { ReaderMessage } from '@/lib/statementReaderHtml';
 import { fetchOtherBudgetOptions, type OtherBudgetOptions } from '@/lib/otherBudgetOptions';
@@ -915,6 +915,25 @@ export default function MpesaImportScreen() {
     before.setUTCDate(before.getUTCDate() - 1);
     return { current, to: opening, date: before.toISOString().slice(0, 10) };
   }, [statementReading, account, accountId]);
+  // Jamvi's own balance for this account the day before the statement starts
+  // and on its last day, beside M-Pesa's. A difference at the start is from
+  // before the statement, and nothing in it will close it.
+  const balanceSides = useMemo(() => {
+    const first = statementReading?.firstDate;
+    const last = statementReading?.lastDate;
+    if (!first || !last || statementReading?.opening == null || statementReading?.closing == null || !account) return null;
+    const rows = (account.transactions ?? []) as Array<{ date: string; type: string; amount: number }>;
+    const opening = Number((account as { openingBalance?: number | null }).openingBalance ?? 0);
+    const startDay = dayBefore(first);
+    return {
+      startDay,
+      jamviStart: balanceAtEndOf(startDay, opening, rows),
+      mpesaStart: statementReading.opening,
+      endDay: last,
+      jamviEnd: balanceAtEndOf(last, opening, rows),
+      mpesaEnd: statementReading.closing,
+    };
+  }, [statementReading, account]);
   const fixOpeningBalance = async () => {
     if (!openingFix || !accountId || openingSaving) return;
     setOpeningSaving(true);
@@ -1450,6 +1469,21 @@ export default function MpesaImportScreen() {
                         ? <ActivityIndicator color="#fff" />
                         : <Text style={styles.primaryText}>Start this account at KES {formatExact(openingFix.to)}</Text>}
                     </Pressable>
+                  </View>
+                ) : null}
+                {balanceSides && !openingFix ? (
+                  <View style={{ gap: 2, marginTop: 4 }} testID="mpesa-balance-sides">
+                    <Text style={[styles.hint, { color: colors.foreground }]}>
+                      On {balanceSides.startDay}: Jamvi KES {formatExact(balanceSides.jamviStart)} · M-Pesa KES {formatExact(balanceSides.mpesaStart)}
+                    </Text>
+                    <Text style={[styles.hint, { color: colors.foreground, marginTop: 0 }]}>
+                      On {balanceSides.endDay}: Jamvi KES {formatExact(balanceSides.jamviEnd)} · M-Pesa KES {formatExact(balanceSides.mpesaEnd)}
+                    </Text>
+                    {Math.abs(balanceSides.jamviStart - balanceSides.mpesaStart) >= 0.005 ? (
+                      <Text style={[styles.hint, { color: colors.destructive }]} testID="mpesa-balance-before">
+                        KES {formatExact(Math.round((balanceSides.mpesaStart - balanceSides.jamviStart) * 100) / 100)} of the difference is from before {balanceSides.startDay}: this account's starting balance, or entries before then, do not match M-Pesa. Import the statement for the month before to find them.
+                      </Text>
+                    ) : null}
                   </View>
                 ) : null}
                 <Text style={[styles.hint, { color: colors.mutedForeground }]}>

@@ -452,6 +452,34 @@ function fulizaReceipt(first: string, last: string): string {
   return `FZ${compact(first)}${compact(last)}`;
 }
 
+/**
+ * What Jamvi says an account held at the end of a day: its starting balance
+ * plus everything recorded up to and including that day. Set beside the
+ * statement's own opening and closing balances, it says whether a difference
+ * comes from before the statement (a starting balance, or earlier entries) or
+ * from inside it.
+ */
+export function balanceAtEndOf(
+  day: string,
+  openingBalance: number,
+  transactions: ReadonlyArray<{ date: string; type: string; amount: number | string }>,
+): number {
+  let balance = openingBalance;
+  for (const row of transactions) {
+    if (String(row.date).slice(0, 10) > day) continue;
+    const amount = Number(row.amount) || 0;
+    balance += row.type === "deposit" ? amount : -amount;
+  }
+  return Math.round(balance * 100) / 100;
+}
+
+/** The day before, as YYYY-MM-DD. */
+export function dayBefore(day: string): string {
+  const date = new Date(`${day}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() - 1);
+  return date.toISOString().slice(0, 10);
+}
+
 export interface Reconciliation {
   opening: number;
   closing: number;

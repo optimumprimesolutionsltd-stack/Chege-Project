@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fulizaOwedBefore, reconcile, statementLines } from "./statement-import";
+import { balanceAtEndOf, dayBefore, fulizaOwedBefore, reconcile, statementLines } from "./statement-import";
 import type { StatementRow } from "./statement-table";
 
 let n = 0;
@@ -175,7 +175,7 @@ describe("reconcile", () => {
     expect(result.gap).toBe(0);
   });
 
-  // September"s statement: loans repaid with their fees until the 26th, then more
+  // September's statement: loans repaid with their fees until the 26th, then more
   // drawn and still owed. Counting that last loan hid the fees, and the balance was off by both.
   it("splits Fuliza into the fees on repaid loans and what is still owed", () => {
     const received = at("01 08:00:00", "Funds received from - 2547***000 SAMPLE PERSON", { paidIn: 1000, balance: 1000 });
@@ -231,3 +231,23 @@ describe("till and paybill numbers", () => {
   });
 });
 
+
+// "Why is the M-Pesa statement not aligning?" - Jamvi's balance the day
+// before the statement, beside M-Pesa's opening, says whether the difference
+// is from before it.
+describe("Jamvi's balance on a day", () => {
+  const rows = [
+    { date: "2026-08-30", type: "deposit", amount: 1000 },
+    { date: "2026-08-31T00:00:00.000Z", type: "disbursement", amount: "336.75" },
+    { date: "2026-09-02", type: "disbursement", amount: 500 },
+  ];
+  it("is the starting balance plus everything up to the end of that day", () => {
+    expect(balanceAtEndOf("2026-08-31", 11000, rows)).toBe(11663.25);
+    expect(balanceAtEndOf("2026-09-29", 11000, rows)).toBe(11163.25);
+    expect(balanceAtEndOf("2026-08-01", 11000, rows)).toBe(11000);
+  });
+  it("is asked for the day before the statement starts", () => {
+    expect(dayBefore("2026-09-01")).toBe("2026-08-31");
+    expect(dayBefore("2026-03-01")).toBe("2026-02-28");
+  });
+});
