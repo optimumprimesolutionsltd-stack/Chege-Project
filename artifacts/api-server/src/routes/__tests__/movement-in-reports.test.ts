@@ -92,3 +92,12 @@ describe("What you spend on, household or business", () => {
     expect(dashboard.match(/\$\{scopeFilter\}/g)).toHaveLength(2);
   });
 });
+
+// The website's Reports "Spending" for a date range counted stock.
+describe("period totals", () => {
+  it("take a side hustle's costs out of spending and out of money in together", () => {
+    expect(dashboard).toContain("const businessCosts = await incomeStreamCostLines(groupId, start.raw, end.raw)");
+    expect(dashboard).toContain('const spendingTotal = Math.max(0, numberValue("spendingTotal") - businessCosts);');
+    expect(dashboard).toContain('const contributionTotal = numberValue("contributionTotal") - (numberValue("spendingTotal") - spendingTotal);');
+  });
+});

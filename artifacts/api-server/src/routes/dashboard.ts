@@ -2317,8 +2317,15 @@ router.get("/dashboard/period-totals", async (req, res): Promise<void> => {
 
   const row = (result.rows[0] ?? {}) as Record<string, string | number | null>;
   const numberValue = (key: string) => Number(row[key] ?? 0);
-  const spendingTotal = numberValue("spendingTotal");
-  const contributionTotal = numberValue("contributionTotal");
+  // A side hustle's costs (stock) are the business's: out of the household's
+  // spending, and out of what came in, which counts a side hustle's profit
+  // rather than its sales - as on Home, Reports and All income. The two come
+  // out together, so the net movement is what it always was.
+  const businessCosts = await incomeStreamCostLines(groupId, start.raw, end.raw)
+    .then((lines) => lines.reduce((sum, line) => sum + line.amount, 0))
+    .catch(() => 0);
+  const spendingTotal = Math.max(0, numberValue("spendingTotal") - businessCosts);
+  const contributionTotal = numberValue("contributionTotal") - (numberValue("spendingTotal") - spendingTotal);
   const response = {
     startDate: start.raw,
     endDate: end.raw,
