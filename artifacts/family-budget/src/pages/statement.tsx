@@ -87,6 +87,8 @@ export default function StatementPage() {
     enabled: activeAccountId !== null && !rangeIsBackwards,
   });
 
+  // Every entry, or only money in, or only money out.
+  const [pdfShowing, setPdfShowing] = useState<"all" | "in" | "out">("all");
   const openPdf = () => {
     if (activeAccountId === null) {
       toast({ variant: "destructive", title: "Which account?", description: "Choose the account first." });
@@ -95,7 +97,7 @@ export default function StatementPage() {
     // A new tab rather than a download: the browser's own viewer is where
     // somebody will read it, and printing from there is one key away.
     window.open(
-      `/api/joint-account/statement.pdf?accountId=${activeAccountId}&from=${from}&to=${to}`,
+      `/api/joint-account/statement.pdf?accountId=${activeAccountId}&from=${from}&to=${to}&show=${pdfShowing}`,
       "_blank",
       "noopener,noreferrer",
     );
@@ -185,9 +187,22 @@ export default function StatementPage() {
           ) : null}
 
           {canDownloadPdf ? (
-            <Button type="button" onClick={openPdf} data-testid="button-statement-pdf">
-              <FileDown className="mr-2 h-4 w-4" /> Open as PDF
-            </Button>
+            <div className="flex flex-wrap items-center gap-3">
+              <select
+                value={pdfShowing}
+                onChange={(event) => setPdfShowing(event.target.value as "all" | "in" | "out")}
+                className="h-9 rounded-md border bg-background px-2 text-sm"
+                aria-label="What goes in the PDF"
+                data-testid="select-statement-pdf-showing"
+              >
+                <option value="all">Everything</option>
+                <option value="in">Money in only</option>
+                <option value="out">Money out only</option>
+              </select>
+              <Button type="button" onClick={openPdf} data-testid="button-statement-pdf">
+                <FileDown className="mr-2 h-4 w-4" /> Open as PDF
+              </Button>
+            </div>
           ) : null}
 
           {statement.entries.length === 0 ? (

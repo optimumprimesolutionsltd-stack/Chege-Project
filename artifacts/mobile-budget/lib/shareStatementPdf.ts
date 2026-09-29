@@ -16,14 +16,17 @@ export async function shareStatementPdf({
   from,
   to,
   accountName,
+  showing = 'all',
 }: {
   accountId: number;
   from: string;
   to: string;
   accountName: string;
+  /** Every entry, or only money in, or only money out. */
+  showing?: 'all' | 'in' | 'out';
 }): Promise<void> {
   const blob = await customFetch<Blob>(
-    `/api/joint-account/statement.pdf?accountId=${accountId}&from=${from}&to=${to}`,
+    `/api/joint-account/statement.pdf?accountId=${accountId}&from=${from}&to=${to}&show=${showing}`,
     { responseType: 'blob', cache: 'no-store' },
   );
   const slug = accountName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'account';

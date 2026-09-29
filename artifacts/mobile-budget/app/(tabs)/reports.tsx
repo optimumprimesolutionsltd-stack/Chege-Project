@@ -22,6 +22,7 @@ import * as Sharing from 'expo-sharing';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { isoDay, longDay, monthStartIso, orderedRange } from '@/lib/dayRange';
 import { writePdf } from '@/lib/savePdf';
+import { PDF_SECTIONS, DEFAULT_PDF_SECTIONS, parsePdfSections, pdfSectionParams, type PdfSectionKey } from '@/lib/reportPdfSections';
 import { useColors } from '@/hooks/useColors';
 import { PageScrollView } from '@/components/PageScrollReset';
 import { useQueryClient } from '@tanstack/react-query';
@@ -183,6 +184,9 @@ const STREAM_DETAILS_KEY = 'jamvi:income-stream-details-open';
 /** Entries shown per stream before the rest are left to All income. */
 const STREAM_DETAIL_ROWS = 10;
 
+/** What goes in the report PDF, on this phone. */
+const PDF_SECTIONS_KEY = 'jamvi:report-pdf-sections';
+
 export default function ReportsScreen() {
   const colors = useColors();
   const { data: group } = useGetGroup();
@@ -210,8 +214,21 @@ export default function ReportsScreen() {
   const [dayTo, setDayTo] = useState<string>(() => isoDay(new Date()));
   const [picker, setPicker] = useState<null | 'from' | 'to'>(null);
   // What the PDF includes beyond the always-present summary cards.
-  const [includeBudget, setIncludeBudget] = useState(true);
-  const [includeIncome, setIncludeIncome] = useState(true);
+  // What goes in the PDF, chosen on a sheet the PDF button opens, and
+  // remembered on this phone for next time.
+  const [pdfSections, setPdfSections] = useState<Record<PdfSectionKey, boolean>>(DEFAULT_PDF_SECTIONS);
+  const [pdfChooserOpen, setPdfChooserOpen] = useState(false);
+  useEffect(() => {
+    AsyncStorage.getItem(PDF_SECTIONS_KEY)
+      .then((raw) => setPdfSections(parsePdfSections(raw)))
+      .catch(() => {});
+  }, []);
+  const togglePdfSection = (key: PdfSectionKey) =>
+    setPdfSections((current) => {
+      const next = { ...current, [key]: !current[key] };
+      AsyncStorage.setItem(PDF_SECTIONS_KEY, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
 
   // The summary cards describe sections that are already further down this
   // page, but only one of the three was pressable, so the other two read as
@@ -398,8 +415,7 @@ export default function ReportsScreen() {
       const pdf = await getDashboardMonthlyReportPdf(
         {
           ...(customDates ? { month, year, from: rangeFrom, to: rangeTo } : { month, year }),
-          includeBudget,
-          includeIncome,
+          ...pdfSectionParams(pdfSections, hasBusiness),
         },
         { responseType: 'blob', cache: 'no-store' },
       );
@@ -440,7 +456,7 @@ export default function ReportsScreen() {
     } finally {
       setIsExporting(false);
     }
-  }, [month, year, customDates, dayFrom, dayTo, includeBudget, includeIncome]);
+  }, [month, year, customDates, dayFrom, dayTo, pdfSections, hasBusiness]);
 
   // ── Derived values ─────────────────────────────────────────────────────────
 
@@ -586,7 +602,8 @@ export default function ReportsScreen() {
             <MonthPicker month={month} year={year} onChange={handleMonthChange} colors={colors} />
             {canDownloadPdf ? (
             <Pressable
-              onPress={exportPdf}
+              onPress={() => setPdfChooserOpen(true)}
+              testID="report-pdf"
               disabled={isLoading || isExporting}
               style={[styles.pdfButton, (isLoading || isExporting) && styles.pdfButtonDisabled]}
               accessibilityRole="button"
@@ -610,32 +627,6 @@ export default function ReportsScreen() {
             <Feather name={customDates ? 'check-square' : 'square'} size={14} color="#FFFFFF" />
             <Text style={styles.customDatesToggleText}>Exact dates</Text>
           </Pressable>
-          {canDownloadPdf ? (
-          <View style={styles.pdfSectionsRow}>
-            <Pressable
-              onPress={() => setIncludeBudget((on) => !on)}
-              accessibilityRole="button"
-              accessibilityState={{ selected: includeBudget }}
-              accessibilityLabel={includeBudget ? 'Remove Budget performance from the PDF' : 'Include Budget performance in the PDF'}
-              testID="report-include-budget"
-              style={styles.customDatesToggle}
-            >
-              <Feather name={includeBudget ? 'check-square' : 'square'} size={14} color="#FFFFFF" />
-              <Text style={styles.customDatesToggleText}>Budget performance</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => setIncludeIncome((on) => !on)}
-              accessibilityRole="button"
-              accessibilityState={{ selected: includeIncome }}
-              accessibilityLabel={includeIncome ? 'Remove Income-stream funding from the PDF' : 'Include Income-stream funding in the PDF'}
-              testID="report-include-income"
-              style={styles.customDatesToggle}
-            >
-              <Feather name={includeIncome ? 'check-square' : 'square'} size={14} color="#FFFFFF" />
-              <Text style={styles.customDatesToggleText}>Income-stream funding</Text>
-            </Pressable>
-          </View>
-          ) : null}
           {customDates && (
             <View style={styles.dayRow}>
               {(['from', 'to'] as const).map((which) => (
@@ -1675,6 +1666,59 @@ export default function ReportsScreen() {
         </View>
       </Modal>
 
+      <Modal visible={pdfChooserOpen} transparent animationType="slide" onRequestClose={() => setPdfChooserOpen(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.detailsSheet, { backgroundColor: colors.card, paddingBottom: Math.max(insets.bottom, 16) + 4 }]} testID="report-pdf-sections">
+            <Text style={[styles.detailsTitle, { color: colors.foreground }]}>What goes in the PDF</Text>
+            <Text style={[styles.detailsSubtitle, { color: colors.mutedForeground, marginBottom: 10 }]}>
+              {customDates
+                ? `${longDay(orderedRange(dayFrom, dayTo)[0])} to ${longDay(orderedRange(dayFrom, dayTo)[1])}`
+                : `${MONTHS[month - 1]} ${year}`}. Tick what you want; Jamvi remembers it for next time.
+            </Text>
+            <ScrollView style={{ flexGrow: 0 }}>
+              {PDF_SECTIONS.filter((section) => section.key !== 'business' || hasBusiness).map((section) => {
+                const on = pdfSections[section.key];
+                return (
+                  <Pressable
+                    key={section.key}
+                    onPress={() => togglePdfSection(section.key)}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: on }}
+                    testID={`report-include-${section.key}`}
+                    style={[styles.pdfSectionOption, { borderColor: colors.border }]}
+                  >
+                    <Feather name={on ? 'check-square' : 'square'} size={18} color={on ? colors.primary : colors.mutedForeground} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.pdfSectionLabel, { color: colors.foreground }]}>{section.label}</Text>
+                      <Text style={[styles.variance, { color: colors.mutedForeground }]}>{section.hint}</Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+            {(() => {
+              const chosen = PDF_SECTIONS.some((section) => pdfSections[section.key] && (section.key !== 'business' || hasBusiness));
+              return (
+                <Pressable
+                  onPress={() => { setPdfChooserOpen(false); void exportPdf(); }}
+                  disabled={!chosen || isExporting}
+                  accessibilityRole="button"
+                  testID="report-pdf-download"
+                  style={{ marginTop: 14, borderRadius: 12, paddingVertical: 14, alignItems: 'center', backgroundColor: colors.primary, opacity: chosen ? 1 : 0.5 }}
+                >
+                  <Text style={{ color: colors.primaryForeground, fontFamily: 'Inter_600SemiBold', fontSize: 15 }}>
+                    {chosen ? 'Download PDF' : 'Tick at least one'}
+                  </Text>
+                </Pressable>
+              );
+            })()}
+            <Pressable onPress={() => setPdfChooserOpen(false)} accessibilityRole="button" style={{ paddingVertical: 12, alignItems: 'center' }}>
+              <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_500Medium' }}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
       <Modal
         visible={costCategoryFor !== null}
         transparent
@@ -1802,7 +1846,8 @@ const styles = StyleSheet.create({
   // white on translucent white rather than the usual card tokens.
   customDatesToggle: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, minHeight: 32, alignSelf: 'flex-start' },
   customDatesToggleText: { color: '#FFFFFF', fontSize: 12, fontFamily: 'Inter_600SemiBold' },
-  pdfSectionsRow: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 16 },
+  pdfSectionOption: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11, borderBottomWidth: StyleSheet.hairlineWidth },
+  pdfSectionLabel: { fontSize: 15, fontFamily: 'Inter_600SemiBold' },
   dayRow: { flexDirection: 'row', gap: 8, marginTop: 6 },
   dayField: {
     flex: 1,

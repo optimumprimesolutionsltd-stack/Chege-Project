@@ -50,6 +50,19 @@ function displayPeriodRange(startDate: string, endDate: string): string {
   return `${displayPeriodDate(startDate)} – ${displayPeriodDate(endDate)}`;
 }
 
+type PdfSectionKey = "summary" | "budget" | "income" | "business" | "expenses" | "incomeEntries" | "debts";
+
+/** The parts of the report PDF, as on the phone's Reports. The long lists start off. */
+const PDF_SECTIONS: ReadonlyArray<{ key: PdfSectionKey; label: string; hint: string }> = [
+  { key: "summary", label: "Summary", hint: "Budget, spent, what is left, number of expenses" },
+  { key: "budget", label: "Budget performance", hint: "Each category: budget, spent, left or over" },
+  { key: "income", label: "Income streams", hint: "What each income stream brought in" },
+  { key: "business", label: "Business", hint: "Profit and loss for each side hustle" },
+  { key: "expenses", label: "Every expense", hint: "The full list, as on All expenses" },
+  { key: "incomeEntries", label: "Every piece of income", hint: "The full list, as on All income" },
+  { key: "debts", label: "Who owes who", hint: "As it stands today" },
+];
+
 export default function IncomeStreamsReport() {
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
@@ -110,9 +123,10 @@ export default function IncomeStreamsReport() {
     }
     await applyCostCategoryChange(category.id, incomeSourceId);
   };
-  // What the monthly PDF includes beyond its summary cards.
-  const [includeBudget, setIncludeBudget] = useState(true);
-  const [includeIncome, setIncludeIncome] = useState(true);
+  // What goes in the PDF: the same choices as the phone's Reports.
+  const [pdfSections, setPdfSections] = useState<Record<PdfSectionKey, boolean>>({
+    summary: true, budget: true, income: true, business: false, expenses: false, incomeEntries: false, debts: false,
+  });
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadMessage, setDownloadMessage] = useState<string | null>(null);
   const { data: report, isLoading, isError, refetch } = useGetDashboardIncomeStreams(
@@ -252,7 +266,17 @@ export default function IncomeStreamsReport() {
     setIsDownloading(true);
     setDownloadMessage(null);
     try {
-      const reportPdf = await getDashboardMonthlyReportPdf({ month, year, includeBudget, includeIncome }, { responseType: "blob", cache: "no-store" });
+      const reportPdf = await getDashboardMonthlyReportPdf({
+        month,
+        year,
+        includeSummary: pdfSections.summary,
+        includeBudget: pdfSections.budget,
+        includeIncome: pdfSections.income,
+        includeBusiness: pdfSections.business,
+        includeExpenses: pdfSections.expenses,
+        includeIncomeEntries: pdfSections.incomeEntries,
+        includeDebts: pdfSections.debts,
+      }, { responseType: "blob", cache: "no-store" });
       const href = URL.createObjectURL(reportPdf);
       const anchor = document.createElement("a");
       anchor.href = href;
@@ -301,14 +325,18 @@ export default function IncomeStreamsReport() {
           </div>
           {canDownloadPdf ? (
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-            <label className="flex items-center gap-1.5">
-              <input type="checkbox" checked={includeBudget} onChange={(event) => setIncludeBudget(event.target.checked)} data-testid="checkbox-pdf-budget" />
-              Budget performance
-            </label>
-            <label className="flex items-center gap-1.5">
-              <input type="checkbox" checked={includeIncome} onChange={(event) => setIncludeIncome(event.target.checked)} data-testid="checkbox-pdf-income" />
-              Income-stream funding
-            </label>
+            <span className="font-medium text-foreground">In the PDF:</span>
+            {PDF_SECTIONS.map((section) => (
+              <label key={section.key} className="flex items-center gap-1.5" title={section.hint}>
+                <input
+                  type="checkbox"
+                  checked={pdfSections[section.key]}
+                  onChange={(event) => setPdfSections((current) => ({ ...current, [section.key]: event.target.checked }))}
+                  data-testid={`checkbox-pdf-${section.key}`}
+                />
+                {section.label}
+              </label>
+            ))}
           </div>
           ) : null}
           {canDownloadPdf ? <Button

@@ -29,8 +29,11 @@ describe("web matches mobile: Move a day", () => {
 describe("web matches mobile: PDF section checkboxes and the Invite link", () => {
   it("offers the monthly report sections and sends them", () => {
     const report = read("../pages/income-streams-report.tsx");
-    expect(report).toContain('data-testid="checkbox-pdf-budget"');
-    expect(report).toContain("getDashboardMonthlyReportPdf({ month, year, includeBudget, includeIncome }");
+    expect(report).toContain("data-testid={`checkbox-pdf-${section.key}`}");
+    for (const key of ["summary", "budget", "income", "business", "expenses", "incomeEntries", "debts"]) {
+      expect(report).toContain(`{ key: "${key}", label:`);
+    }
+    expect(report).toContain("includeExpenses: pdfSections.expenses,");
   });
 
   it("offers the ledger sections and only sends what is switched off", () => {

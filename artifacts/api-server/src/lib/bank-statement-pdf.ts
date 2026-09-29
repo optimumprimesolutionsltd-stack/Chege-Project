@@ -25,6 +25,8 @@ export type BankStatementPdfData = {
   totalOut: number;
   /** Oldest first, the way a bank prints it. */
   rows: BankStatementPdfRow[];
+  /** Every entry, or only money in, or only money out. Defaults to every entry. */
+  showing?: "all" | "in" | "out";
   /**
    * Money that moved without being earned or spent. Shown apart from the
    * totals because it is already inside them — it did move the balance — but
@@ -177,7 +179,11 @@ export function createBankStatementPdf(data: BankStatementPdfData): Promise<Buff
     );
     y += 30;
     document.font("Helvetica").fontSize(10).fillColor("#60736C").text(
-      `Every posting recorded against this account, ${data.periodLabel}.`,
+      data.showing === "in"
+        ? `Money in only, ${data.periodLabel}. The balance is the account's own after each entry.`
+        : data.showing === "out"
+          ? `Money out only, ${data.periodLabel}. The balance is the account's own after each entry.`
+          : `Every posting recorded against this account, ${data.periodLabel}.`,
       SIDE_MARGIN,
       y,
       { width: CONTENT_WIDTH },
@@ -218,8 +224,8 @@ export function createBankStatementPdf(data: BankStatementPdfData): Promise<Buff
     document.rect(SIDE_MARGIN, y, CONTENT_WIDTH, 24).fill("#EAF3EE");
     document.font("Helvetica-Bold").fontSize(9).fillColor("#103A2D");
     document.text("Closing balance", columns[1].x, y + 8, { width: columns[1].width, lineBreak: false });
-    document.text(formatKes(data.totalIn), columns[2].x, y + 8, { width: columns[2].width, align: "right", lineBreak: false });
-    document.text(formatKes(data.totalOut), columns[3].x, y + 8, { width: columns[3].width, align: "right", lineBreak: false });
+    if (data.showing !== "out") document.text(formatKes(data.totalIn), columns[2].x, y + 8, { width: columns[2].width, align: "right", lineBreak: false });
+    if (data.showing !== "in") document.text(formatKes(data.totalOut), columns[3].x, y + 8, { width: columns[3].width, align: "right", lineBreak: false });
     document.text(formatKes(data.closingBalance), columns[4].x, y + 8, { width: columns[4].width, align: "right", lineBreak: false });
     y += 34;
 

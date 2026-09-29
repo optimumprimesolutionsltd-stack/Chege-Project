@@ -1083,7 +1083,12 @@ export const GetDashboardMonthlyReportPdfQueryParams = zod.object({
   "from": zod.coerce.string().regex(getDashboardMonthlyReportPdfQueryFromRegExp).optional().describe('Start of an exact day range (YYYY-MM-DD). Given with `to`, the report covers those days instead of the whole month. Ignored unless both are present and well formed.'),
   "to": zod.coerce.string().regex(getDashboardMonthlyReportPdfQueryToRegExp).optional().describe('End of the day range (YYYY-MM-DD), inclusive.'),
   "includeBudget": zod.coerce.boolean().optional().describe('Include the Budget performance section. Defaults to true.'),
-  "includeIncome": zod.coerce.boolean().optional().describe('Include the Income-stream funding section. Defaults to true.')
+  "includeIncome": zod.coerce.boolean().optional().describe('Include the Income-stream funding section. Defaults to true.'),
+  "includeSummary": zod.coerce.boolean().optional().describe('Include the four summary figures at the top. Defaults to true.'),
+  "includeBusiness": zod.coerce.boolean().optional().describe('Include each side hustle\'s profit and loss. Defaults to false.'),
+  "includeExpenses": zod.coerce.boolean().optional().describe('Include every expense in the period, as on All expenses. Defaults to false.'),
+  "includeIncomeEntries": zod.coerce.boolean().optional().describe('Include every piece of income in the period, as on All income. Defaults to false.'),
+  "includeDebts": zod.coerce.boolean().optional().describe('Include Who owes who as it stands now. Defaults to false.')
 })
 
 export const GetDashboardMonthlyReportPdfResponse = zod.unknown()
