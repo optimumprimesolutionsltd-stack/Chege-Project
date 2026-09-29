@@ -174,6 +174,11 @@ export default function BudgetScreen() {
   // and then quietly replace it with the children's total the moment a
   // subcategory arrived — a number invited and then discarded.
   const [formIsGroup, setFormIsGroup] = useState(false);
+  // A side hustle's cost: which income stream it comes off, and whether it is
+  // stock (cost of goods sold) or a running expense. Set here, where the
+  // category is named, rather than only from Reports' Cost categories.
+  const [formCostSourceId, setFormCostSourceId] = useState<number | null>(null);
+  const [formCostKind, setFormCostKind] = useState<'cogs' | 'expense'>('cogs');
   const [formIsRecurring, setFormIsRecurring] = useState(true);
   const [formActiveMonth, setFormActiveMonth] = useState(month);
   const [formActiveYear, setFormActiveYear] = useState(year);
@@ -223,6 +228,7 @@ export default function BudgetScreen() {
     setFormName(''); setFormAmount(''); setFormPriority(priority.toString());
     setFormParentId(null);
     setFormIsGroup(false);
+    setFormCostSourceId(null); setFormCostKind('cogs');
     setFormIsRecurring(true); setFormActiveMonth(month); setFormActiveYear(year);
     setAddOpen(true);
   };
@@ -234,6 +240,11 @@ export default function BudgetScreen() {
     setFormPriority(cat.priority.toString());
     setFormParentId(cat.parentId ?? null);
     setFormIsGroup(allCategories.some((row) => row.parentId === cat.id));
+    {
+      const linked = cat as BudgetCategory & { reducesIncomeSourceId?: number | null; costKind?: string | null };
+      setFormCostSourceId(linked.reducesIncomeSourceId ?? null);
+      setFormCostKind(linked.costKind === 'expense' ? 'expense' : 'cogs');
+    }
     setFormIsRecurring(cat.isRecurring);
     setFormActiveMonth(cat.activeMonth ?? month);
     setFormActiveYear(cat.activeYear ?? year);
@@ -285,6 +296,7 @@ export default function BudgetScreen() {
     setFormAmount('');
     setFormPriority('3');
     setFormIsGroup(false);
+    setFormCostSourceId(null); setFormCostKind('cogs');
     setFormIsRecurring(true);
     setFormActiveMonth(month);
     setFormActiveYear(year);
@@ -645,6 +657,10 @@ export default function BudgetScreen() {
           // the top level rather than silently leaving it where it was. A
           // group is top-level by definition — nesting goes one level deep.
           parentId: formIsGroup ? null : formParentId,
+          // Sent every time, so choosing "A regular category" takes a side
+          // hustle's link off, as the sheet says it will.
+          reducesIncomeSourceId: formIsGroup ? null : formCostSourceId,
+          ...(formCostSourceId != null && !formIsGroup ? { costKind: formCostKind } : {}),
           isRecurring: formIsRecurring,
           activeMonth: formIsRecurring ? null : formActiveMonth,
           activeYear: formIsRecurring ? null : formActiveYear,
@@ -878,33 +894,98 @@ export default function BudgetScreen() {
                 {!editingParent && !recurringSetupActive ? (
                   <>
                     <Text style={[styles.label, { color: colors.mutedForeground }]}>WHAT IS THIS?</Text>
-                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 6 }}>
                       {([
-                        { key: false, label: 'A regular category', testID: 'category-kind-ledger' },
-                        { key: true, label: 'A group of categories', testID: 'category-kind-group' },
-                      ] as const).map((option) => (
-                        <Pressable
-                          key={String(option.key)}
-                          onPress={() => setFormIsGroup(option.key)}
-                          accessibilityRole="radio"
-                          accessibilityState={{ selected: formIsGroup === option.key }}
-                          testID={option.testID}
-                          style={[styles.priorityChip, {
-                            backgroundColor: formIsGroup === option.key ? colors.primary + '22' : colors.muted,
-                            borderColor: formIsGroup === option.key ? colors.primary : colors.border,
-                          }]}
-                        >
-                          <Text style={[styles.priorityChipText, { color: formIsGroup === option.key ? colors.primary : colors.mutedForeground }]}>
-                            {option.label}
-                          </Text>
-                        </Pressable>
-                      ))}
+                        { key: 'ledger', label: 'A regular category', testID: 'category-kind-ledger' },
+                        { key: 'group', label: 'A group of categories', testID: 'category-kind-group' },
+                        // Only once there is an income stream for it to come off.
+                        ...(incomeSources.length > 0 ? [{ key: 'business', label: 'For a side hustle', testID: 'category-kind-business' }] : []),
+                      ] as const).map((option) => {
+                        const current = formIsGroup ? 'group' : formCostSourceId != null ? 'business' : 'ledger';
+                        const on = current === option.key;
+                        return (
+                          <Pressable
+                            key={option.key}
+                            onPress={() => {
+                              setFormIsGroup(option.key === 'group');
+                              setFormCostSourceId(option.key === 'business' ? (formCostSourceId ?? incomeSources[0]?.id ?? null) : null);
+                            }}
+                            accessibilityRole="radio"
+                            accessibilityState={{ selected: on }}
+                            testID={option.testID}
+                            style={[styles.priorityChip, {
+                              backgroundColor: on ? colors.primary + '22' : colors.muted,
+                              borderColor: on ? colors.primary : colors.border,
+                            }]}
+                          >
+                            <Text style={[styles.priorityChipText, { color: on ? colors.primary : colors.mutedForeground }]}>
+                              {option.label}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
                     </View>
                     <Text style={[styles.priorityHint, { color: colors.mutedForeground }]}>
                       {formIsGroup
                         ? 'A group holds no money of its own. Add subcategories to it and its budget becomes their total.'
-                        : 'Spending and a budget live here. You can put it inside a group below.'}
+                        : formCostSourceId != null
+                          ? "What a side hustle spends - stock, its transport, its rent. It comes off that side hustle's profit on Business, not out of the household's budget."
+                          : 'Spending and a budget live here. You can put it inside a group below.'}
                     </Text>
+                    {!formIsGroup && formCostSourceId != null ? (
+                      <View testID="category-side-hustle">
+                        <Text style={[styles.label, { color: colors.mutedForeground }]}>WHICH SIDE HUSTLE?</Text>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 6 }}>
+                          {incomeSources.map((source) => {
+                            const on = formCostSourceId === source.id;
+                            return (
+                              <Pressable
+                                key={source.id}
+                                onPress={() => setFormCostSourceId(source.id)}
+                                accessibilityRole="radio"
+                                accessibilityState={{ selected: on }}
+                                testID={`category-side-hustle-${source.id}`}
+                                style={[styles.priorityChip, {
+                                  backgroundColor: on ? colors.primary + '22' : colors.muted,
+                                  borderColor: on ? colors.primary : colors.border,
+                                }]}
+                              >
+                                <Text style={[styles.priorityChipText, { color: on ? colors.primary : colors.mutedForeground }]}>{source.name}</Text>
+                              </Pressable>
+                            );
+                          })}
+                        </View>
+                        <Text style={[styles.label, { color: colors.mutedForeground }]}>WHAT KIND OF COST?</Text>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 6 }}>
+                          {([
+                            { key: 'cogs', label: 'Stock / goods to sell' },
+                            { key: 'expense', label: 'Running expense' },
+                          ] as const).map((option) => {
+                            const on = formCostKind === option.key;
+                            return (
+                              <Pressable
+                                key={option.key}
+                                onPress={() => setFormCostKind(option.key)}
+                                accessibilityRole="radio"
+                                accessibilityState={{ selected: on }}
+                                testID={`category-cost-kind-${option.key}`}
+                                style={[styles.priorityChip, {
+                                  backgroundColor: on ? colors.primary + '22' : colors.muted,
+                                  borderColor: on ? colors.primary : colors.border,
+                                }]}
+                              >
+                                <Text style={[styles.priorityChipText, { color: on ? colors.primary : colors.mutedForeground }]}>{option.label}</Text>
+                              </Pressable>
+                            );
+                          })}
+                        </View>
+                        <Text style={[styles.priorityHint, { color: colors.mutedForeground }]}>
+                          {formCostKind === 'cogs'
+                            ? 'Counted as cost of goods sold: what you buy to sell. Taken off sales to give gross profit.'
+                            : 'Counted as a running expense: transport, rent, repairs. Taken off gross profit to give net profit.'}
+                        </Text>
+                      </View>
+                    ) : null}
                   </>
                 ) : null}
                 {editingParent || formIsGroup ? (
