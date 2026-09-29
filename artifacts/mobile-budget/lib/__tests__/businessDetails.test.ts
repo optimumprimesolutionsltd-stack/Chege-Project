@@ -67,7 +67,8 @@ describe('income stream details', () => {
 // stream cards. Each statement now links there.
 describe('changing which costs count', () => {
   it('is a link on every statement', () => {
-    expect(screen).toContain("router.push('/(tabs)/reports')");
+    expect(screen).toContain("router.navigate({ pathname: '/(tabs)/reports', params: { costsFor: String(incomeSourceId), costsName: name } });");
+    expect(screen).toContain('if (router.canDismiss()) router.dismissAll();');
     expect(screen).toContain('testID={`business-change-costs-${business.incomeSourceId}`}');
   });
 });

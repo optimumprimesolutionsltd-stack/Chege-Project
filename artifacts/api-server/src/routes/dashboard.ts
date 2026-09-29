@@ -90,10 +90,15 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
       id: budgetCategoriesTable.id,
       parentId: budgetCategoriesTable.parentId,
       budgetAmount: budgetCategoriesTable.budgetAmount,
+      reducesIncomeSourceId: budgetCategoriesTable.reducesIncomeSourceId,
     })
     .from(budgetCategoriesTable)
     .where(sql`${budgetCategoriesTable.groupId} = ${groupId} AND (${budgetCategoriesTable.isRecurring} = true OR (${budgetCategoriesTable.activeMonth} = ${month} AND ${budgetCategoriesTable.activeYear} = ${year}))`);
-  const totalBudget = sumBudget(budgetRows);
+  // A side hustle's costs (a category linked to an income stream) come out of
+  // that stream's profit, not the household's budget - as on the Budget
+  // report. Home's "what did I spend" and "am I on track" counted stock
+  // bought for resale as household spending.
+  const totalBudget = sumBudget(budgetRows.filter((row) => row.reducesIncomeSourceId == null));
 
   const [spentRow] = await db
     .select({ total: sql<number>`COALESCE(SUM(${expensesTable.amount}), 0)` })
@@ -227,7 +232,13 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
     };
   });
 
-  const totalSpent = Number(spentRow.total) + Number(categorisedDisbursementsRow.total);
+  // Asked for last, so the queries above keep their order.
+  const monthFrom = `${year}-${String(month).padStart(2, "0")}-01`;
+  const monthTo = new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
+  const businessCosts = await incomeStreamCostLines(groupId, monthFrom, monthTo)
+    .then((lines) => lines.reduce((sum, line) => sum + line.amount, 0))
+    .catch(() => 0);
+  const totalSpent = Math.max(0, Number(spentRow.total) + Number(categorisedDisbursementsRow.total) - businessCosts);
   res.json({
     month, year,
     totalBudget,

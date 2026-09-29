@@ -84,6 +84,14 @@ export default function BusinessScreen() {
     query: { queryKey: getGetDashboardBusinessQueryKey(params) },
   });
   const businesses = (data?.businesses ?? []) as Statement[];
+  // Business sits above the tabs, so pushing the Reports tab changed the tab
+  // underneath and left this screen on top: the button seemed to do nothing.
+  // Close back down to the tabs, then open Reports with this stream's Cost
+  // categories sheet already up.
+  const changeCosts = (incomeSourceId: number, name: string) => {
+    if (router.canDismiss()) router.dismissAll();
+    router.navigate({ pathname: '/(tabs)/reports', params: { costsFor: String(incomeSourceId), costsName: name } });
+  };
   const totals = data?.totals;
   // One switch for the whole screen, beside each business's own: every
   // business open, or every one closed.
@@ -262,7 +270,7 @@ export default function BusinessScreen() {
             <Text style={[styles.link, { color: colors.primary }]}>{detailed.has(business.incomeSourceId) ? 'Hide details' : 'Show details'}</Text>
           </Pressable>
           <Pressable
-            onPress={() => router.push('/(tabs)/reports')}
+            onPress={() => changeCosts(business.incomeSourceId, business.name)}
             accessibilityRole="button"
             accessibilityLabel="Change which costs count, in Reports, Income streams, Cost categories"
             hitSlop={6}
