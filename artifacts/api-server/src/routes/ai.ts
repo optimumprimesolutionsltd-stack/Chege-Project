@@ -27,6 +27,7 @@ import {
 } from "../lib/ask-jamvi-llm";
 import { ASK_JAMVI_TOOLS, runAskJamviTool } from "../lib/ask-jamvi-tools";
 import { nairobiNow } from "../lib/nairobiTime";
+import { notAReversal } from "../lib/reversal-links";
 
 const router = Router();
 
@@ -36,8 +37,16 @@ router.get("/ai/budget-summary", async (req, res): Promise<void> => {
   const { month, year } = parseBudgetSummaryPeriod(req.query);
   const monthFilter = sql`EXTRACT(MONTH FROM ${expensesTable.date}) = ${month} AND EXTRACT(YEAR FROM ${expensesTable.date}) = ${year}`;
   const transactionMonthFilter = sql`EXTRACT(MONTH FROM ${jointAccountTxTable.date}) = ${month} AND EXTRACT(YEAR FROM ${jointAccountTxTable.date}) = ${year}`;
+  // Income is what All income counts: not money borrowed, paid back to you,
+  // moved in from savings, or back from a reversed payment.
+  const isIncome = sql`${jointAccountTxTable.settlesContributorId} IS NULL AND NOT ${jointAccountTxTable.isBorrowing} AND ${jointAccountTxTable.transferDirection} IS DISTINCT FROM 'from_savings' ${notAReversal(jointAccountTxTable.id)}`;
+  // Spending recorded through a bank or an M-Pesa import is a categorised
+  // disbursement, as on Home.
+  const isBankSpending = sql`${jointAccountTxTable.type} = 'disbursement' AND ${jointAccountTxTable.bankTransferId} IS NULL AND ${jointAccountTxTable.expenseCategory} IS NOT NULL AND ${jointAccountTxTable.expenseId} IS NULL`;
+  // As at today, as the Bank screen shows it: a posting dated ahead has not happened yet.
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Nairobi", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 
-  const [group, budgetRows, expenseTotal, categoryRows, incomeRow, goals, expenseLedger, bankLedger, bankAccounts, incomeSources, contributions, members, allExpenseLedger, allBankLedger, allTimeExpenseTotal, allTimeIncomeTotal, allTimeCategoryRows, allContributions] = await Promise.all([
+  const [group, budgetRows, expenseTotal, categoryRows, incomeRow, bankSpentRow, goals, expenseLedger, bankLedger, bankAccounts, incomeSources, contributions, members, allExpenseLedger, allBankLedger, allTimeExpenseTotal, allTimeIncomeTotal, allTimeBankSpent, allTimeCategoryRows, allContributions] = await Promise.all([
     db.select({ name: groupsTable.name, kind: groupsTable.kind, isPrivate: sql<boolean>`${groupsTable.privateOwnerUserId} IS NOT NULL` })
       .from(groupsTable).where(eq(groupsTable.id, groupId)).limit(1),
     db.select({ name: budgetCategoriesTable.name, budgetAmount: budgetCategoriesTable.budgetAmount, priority: budgetCategoriesTable.priority })
@@ -71,7 +80,10 @@ router.get("/ai/budget-summary", async (req, res): Promise<void> => {
     `),
     db.select({ total: sql<number>`COALESCE(SUM(${jointAccountTxTable.amount}), 0)` })
       .from(jointAccountTxTable)
-      .where(sql`${jointAccountTxTable.groupId} = ${groupId} AND ${jointAccountTxTable.type} = 'deposit' AND ${jointAccountTxTable.bankTransferId} IS NULL AND ${transactionMonthFilter}`),
+      .where(sql`${jointAccountTxTable.groupId} = ${groupId} AND ${jointAccountTxTable.type} = 'deposit' AND ${jointAccountTxTable.bankTransferId} IS NULL AND ${isIncome} AND ${transactionMonthFilter}`),
+    db.select({ total: sql<number>`COALESCE(SUM(${jointAccountTxTable.amount}), 0)` })
+      .from(jointAccountTxTable)
+      .where(sql`${jointAccountTxTable.groupId} = ${groupId} AND ${isBankSpending} AND ${transactionMonthFilter}`),
     db.select({ name: savingsGoalsTable.name, targetAmount: savingsGoalsTable.targetAmount, currentAmount: savingsGoalsTable.currentAmount, deadline: savingsGoalsTable.deadline })
       .from(savingsGoalsTable).where(eq(savingsGoalsTable.groupId, groupId)).orderBy(savingsGoalsTable.deadline),
     db.select({
@@ -110,6 +122,7 @@ router.get("/ai/budget-summary", async (req, res): Promise<void> => {
         FROM joint_account_transactions tx
         WHERE tx.group_id = ${groupId}
           AND tx.account_id = ${bankAccountsTable.id}
+          AND tx.date <= ${today}
       ), 0)`,
     }).from(bankAccountsTable).where(eq(bankAccountsTable.groupId, groupId)).orderBy(bankAccountsTable.name),
     db.select({
@@ -161,7 +174,10 @@ router.get("/ai/budget-summary", async (req, res): Promise<void> => {
       .where(eq(expensesTable.groupId, groupId)),
     db.select({ total: sql<number>`COALESCE(SUM(${jointAccountTxTable.amount}), 0)` })
       .from(jointAccountTxTable)
-      .where(sql`${jointAccountTxTable.groupId} = ${groupId} AND ${jointAccountTxTable.type} = 'deposit' AND ${jointAccountTxTable.bankTransferId} IS NULL`),
+      .where(sql`${jointAccountTxTable.groupId} = ${groupId} AND ${jointAccountTxTable.type} = 'deposit' AND ${jointAccountTxTable.bankTransferId} IS NULL AND ${isIncome}`),
+    db.select({ total: sql<number>`COALESCE(SUM(${jointAccountTxTable.amount}), 0)` })
+      .from(jointAccountTxTable)
+      .where(sql`${jointAccountTxTable.groupId} = ${groupId} AND ${isBankSpending}`),
     db.execute(sql`
       SELECT category, COALESCE(SUM(amount), 0) AS spent
       FROM (
@@ -204,7 +220,7 @@ router.get("/ai/budget-summary", async (req, res): Promise<void> => {
     remaining: Number(row.budgetAmount) - (spentByCategory.get(row.name) ?? 0),
   }));
   const budgeted = categories.reduce((sum, row) => sum + row.budgeted, 0);
-  const spent = Number(expenseTotal[0]?.total ?? 0);
+  const spent = Number(expenseTotal[0]?.total ?? 0) + Number(bankSpentRow[0]?.total ?? 0);
   const income = Number(incomeRow[0]?.total ?? 0);
   const allTimeCategories = (allTimeCategoryRows.rows as Array<{ category: string; spent: string | number }>).map((row) => ({
     name: row.category,
@@ -238,7 +254,7 @@ router.get("/ai/budget-summary", async (req, res): Promise<void> => {
     categories,
     allLedgerEntries,
     allTimeTotals: {
-      spent: Number(allTimeExpenseTotal[0]?.total ?? 0),
+      spent: Number(allTimeExpenseTotal[0]?.total ?? 0) + Number(allTimeBankSpent[0]?.total ?? 0),
       incomeReceived: Number(allTimeIncomeTotal[0]?.total ?? 0),
     },
     allTimeCategories,
