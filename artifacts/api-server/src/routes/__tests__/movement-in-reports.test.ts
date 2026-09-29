@@ -78,3 +78,17 @@ describe("Home's spent and budget", () => {
     expect(dashboard).toContain("const totalBudget = sumBudget(budgetRows.filter((row) => row.reducesIncomeSourceId == null));");
   });
 });
+
+// "Can stock or any cost of goods sold be removed from here and put on its own tab?"
+describe("What you spend on, household or business", () => {
+  it("leaves a side hustle's costs out for household, lists only them for business, and keeps everything with no scope", () => {
+    expect(dashboard).toContain('const scope = req.query.scope === "household" || req.query.scope === "business" ? req.query.scope : null;');
+    expect(dashboard).toContain("bc.reduces_income_source_id IS NOT NULL AND bc.name = spending.category");
+    expect(dashboard).toContain('scope === "business" ? sql`AND ${isBusinessCost}` : scope === "household" ? sql`AND NOT ${isBusinessCost}` : sql``');
+  });
+
+  it("filters the drill-down the same way as the totals", () => {
+    expect(dashboard).toContain("WHERE TRUE ${scopeFilter}");
+    expect(dashboard.match(/\$\{scopeFilter\}/g)).toHaveLength(2);
+  });
+});

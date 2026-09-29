@@ -870,6 +870,14 @@ paths:
           schema:
             type: string
             enum: [item, category]
+        - name: scope
+          in: query
+          description: >-
+            household leaves out a side hustle's costs (categories linked to an
+            income stream); business lists only them. Left out, everything.
+          schema:
+            type: string
+            enum: [household, business]
       responses:
         "200":
           description: Totals per named thing (or per category), largest first

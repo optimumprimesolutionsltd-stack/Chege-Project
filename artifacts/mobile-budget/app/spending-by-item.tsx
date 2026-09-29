@@ -19,6 +19,7 @@ import {
 } from '@workspace/api-client-react';
 import { isoDay, longDay, orderedRange } from '@/lib/dayRange';
 import { useColors } from '@/hooks/useColors';
+import { useHasBusiness } from '@/hooks/useHasBusiness';
 import { getExpenseEditHref } from '@/lib/expenseEditLink';
 import { GROUP_ATTRIBUTION } from "@/lib/attribution";
 
@@ -63,6 +64,12 @@ export default function SpendingByItemScreen() {
   // rows nobody asked to see separately. By category combines everything
   // sharing a category into one row instead.
   const [groupBy, setGroupBy] = useState<'item' | 'category'>('item');
+  // Stock and other side-hustle costs are the business's, not the
+  // household's, so they have a tab of their own rather than sitting among
+  // the groceries. Opened on one category, that category decides instead.
+  const hasBusiness = useHasBusiness();
+  const [scope, setScope] = useState<'household' | 'business'>('household');
+  const scoped = !category;
 
   const [rangeFrom, rangeTo] = orderedRange(
     customDates ? from : monthsAgoIso(preset - 1),
@@ -76,8 +83,9 @@ export default function SpendingByItemScreen() {
       ...(search.trim() ? { q: search.trim() } : {}),
       ...(category ? { category } : {}),
       ...(groupBy === 'category' ? { groupBy } : {}),
+      ...(scoped ? { scope: hasBusiness ? scope : ('household' as const) } : {}),
     }),
-    [rangeFrom, rangeTo, search, category, groupBy],
+    [rangeFrom, rangeTo, search, category, groupBy, scoped, hasBusiness, scope],
   );
 
   const { data, isLoading, isError, refetch } = useGetDashboardSpendingByItem(query, {
@@ -117,6 +125,8 @@ export default function SpendingByItemScreen() {
           <Text style={[styles.subtitle, { color: colors.mutedForeground }]} numberOfLines={1}>
             {category
               ? `Within ${category}`
+              : hasBusiness && scope === 'business'
+              ? 'Stock and other side-hustle costs'
               : groupBy === 'category'
               ? 'Every expense, grouped by category'
               : 'Every expense, grouped by what it was for'}
@@ -129,6 +139,28 @@ export default function SpendingByItemScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
+        {scoped && hasBusiness ? (
+          <View style={[styles.scopeTabs, { borderColor: colors.border }]} testID="spending-scope">
+            {([
+              { value: 'household' as const, label: 'Household' },
+              { value: 'business' as const, label: 'Business costs' },
+            ]).map((option) => {
+              const active = scope === option.value;
+              return (
+                <Pressable
+                  key={option.value}
+                  onPress={() => { setOpenItem(null); setScope(option.value); }}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: active }}
+                  testID={`spending-scope-${option.value}`}
+                  style={[styles.scopeTab, active && { backgroundColor: colors.primary }]}
+                >
+                  <Text style={[styles.scopeLabel, { color: active ? colors.primaryForeground : colors.foreground }]}>{option.label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : null}
         <View style={[styles.searchBox, { borderColor: colors.border, backgroundColor: colors.card }]}>
           <Feather name="search" size={16} color={colors.mutedForeground} />
           <TextInput
@@ -356,6 +388,9 @@ export default function SpendingByItemScreen() {
 }
 
 const styles = StyleSheet.create({
+  scopeTabs: { flexDirection: 'row', borderWidth: 1, borderRadius: 12, padding: 3, gap: 3 },
+  scopeTab: { flex: 1, alignItems: 'center', paddingVertical: 9, borderRadius: 9 },
+  scopeLabel: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
   screen: { flex: 1 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth },
   // Without this the title is starved by the back chevron on a narrow phone.
