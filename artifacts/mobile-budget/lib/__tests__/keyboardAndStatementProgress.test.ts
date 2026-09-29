@@ -55,3 +55,47 @@ describe('reading and saving a statement shows how far along it is', () => {
     expect(mpesa).toContain('Keep Jamvi open until it finishes.');
   });
 });
+
+// "Want to see a percentage", and "the statement is taking long": a read was
+// one spinner, and the reader's 1.8 MB library only started loading on Read.
+describe('reading a statement is quicker and says how far along it is', () => {
+  const component = readFileSync('components/StatementReader.tsx', 'utf8');
+
+  it('shows a percentage across all three stages, pages taking most of the bar', async () => {
+    const { readPercent } = await import('../statementProgress');
+    expect(readPercent({ stage: 'opening' })).toBe(5);
+    expect(readPercent({ stage: 'reading', page: 0, of: 12 })).toBe(10);
+    expect(readPercent({ stage: 'reading', page: 6, of: 12 })).toBe(50);
+    expect(readPercent({ stage: 'reading', page: 12, of: 12 })).toBe(90);
+    expect(readPercent({ stage: 'checking' })).toBe(95);
+  });
+
+  it('shows a percentage while saving too', () => {
+    expect(mpesa).toContain('Math.round((saveProgress.done / saveProgress.total) * 100)}%');
+  });
+
+  it('starts loading the reader as soon as a statement is chosen', () => {
+    expect(mpesa).toContain('warm={statementFile !== null}');
+    expect(component).toContain('const wanted = job !== null || warm;');
+    expect(reader).toContain('const loading = (async () => {');
+    expect(reader).toContain('await loading;');
+  });
+
+  it('still sends the file and password in only when Read is tapped, once each', () => {
+    expect(component).toContain('if (!current || !pageReady.current || sentJob.current === current) return;');
+  });
+
+  it('ignores what a warming page says while nobody is waiting', () => {
+    expect(component).toContain('if (!jobRef.current) return;');
+  });
+
+  it('closes the keyboard so the progress under the button can be seen', () => {
+    expect(mpesa).toContain('Keyboard.dismiss();');
+  });
+
+  it('gives up on a read that goes quiet, but never on one still moving', () => {
+    expect(mpesa).toContain('const READ_STALL_MS = 90_000;');
+    const progress = mpesa.slice(mpesa.indexOf("if (result.type === 'progress') {"));
+    expect(progress.slice(0, 200)).toContain('armReadStall();');
+  });
+});

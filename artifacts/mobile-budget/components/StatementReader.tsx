@@ -1,4 +1,4 @@
-import React, { useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { View } from 'react-native';
 import { readerHtml, type ReaderMessage } from '@/lib/statementReaderHtml';
 
@@ -24,24 +24,47 @@ export interface ReaderJob {
  *
  * The page cannot reach anything: no network, no other pages, and the only
  * things that cross are the file and its password going in and the position of
- * each piece of text coming out. Nothing is uploaded or stored. It exists only
- * while there is a job.
+ * each piece of text coming out. Nothing is uploaded or stored.
+ *
+ * `warm` creates the page early - once a statement has been chosen, while the
+ * password is still being typed - so its large library has loaded by the time
+ * Read is tapped. Warm or not, the file and password go in only with a job.
  */
-export function StatementReader({ job, onDone }: { job: ReaderJob | null; onDone: (result: ReaderMessage) => void }) {
+export function StatementReader({ job, warm = false, onDone }: { job: ReaderJob | null; warm?: boolean; onDone: (result: ReaderMessage) => void }) {
   const ref = useRef<WebViewHandle | null>(null);
   const jobRef = useRef(job);
   jobRef.current = job;
-  // The library is large, so it is only loaded when a statement is actually read.
+  const pageReady = useRef(false);
+  const sentJob = useRef<ReaderJob | null>(null);
+  const wanted = job !== null || warm;
+
+  // Hands the job to the page once both are there: the page ready and a job
+  // asked for, in whichever order they arrive. Each job goes in once.
+  const send = () => {
+    const current = jobRef.current;
+    if (!current || !pageReady.current || sentJob.current === current) return;
+    sentJob.current = current;
+    ref.current?.injectJavaScript(`window.__read(${JSON.stringify(current.base64)}, ${JSON.stringify(current.password)}); true;`);
+  };
+  useEffect(() => {
+    if (job) send();
+    else sentJob.current = null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [job]);
+  useEffect(() => {
+    if (!wanted) pageReady.current = false;
+  }, [wanted]);
+
+  // The library is large, so the page only exists when a statement is chosen or being read.
   const html = useMemo(() => {
-    if (!job) return null;
+    if (!wanted) return null;
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const bundle = require('@/lib/pdfjsBundle') as { PDFJS_MAIN: string; PDFJS_WORKER: string };
     return readerHtml(bundle.PDFJS_MAIN, bundle.PDFJS_WORKER);
-    // A new job gets a new page.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [job !== null]);
+  }, [wanted]);
 
-  if (!job || !WebView || !html) return null;
+  if (!wanted || !WebView || !html) return null;
   const Page = WebView;
   return (
     <View style={{ height: 0, width: 0, overflow: 'hidden' }} pointerEvents="none" testID="statement-reader">
@@ -64,11 +87,12 @@ export function StatementReader({ job, onDone }: { job: ReaderJob | null; onDone
             return;
           }
           if (message.type === 'ready') {
-            const current = jobRef.current;
-            if (!current) return;
-            ref.current?.injectJavaScript(`window.__read(${JSON.stringify(current.base64)}, ${JSON.stringify(current.password)}); true;`);
+            pageReady.current = true;
+            send();
             return;
           }
+          // Warming up with nothing asked for: nobody is waiting on an answer.
+          if (!jobRef.current) return;
           onDone(message);
         }}
         onError={() => onDone({ type: 'error', message: 'The statement reader could not start.' })}
