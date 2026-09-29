@@ -27,3 +27,11 @@ describe('unlinking a cost category', () => {
     expect(screen).toContain("{ text: 'Stop counting it', style: 'destructive', onPress: () => void applyCostCategoryChange(category.id, null) },");
   });
 });
+
+// "Transport is not picking expense": the Expense button sat off the card.
+describe('a cost category row', () => {
+  it('puts its kind buttons on their own line, wrapping', () => {
+    expect(screen).toContain("costCategoryOption: { flexDirection: 'column', alignItems: 'stretch',");
+    expect(screen).toContain("<View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 }} testID={`cost-kind-${category.id}`}>");
+  });
+});
