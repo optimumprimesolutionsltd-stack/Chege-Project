@@ -116,7 +116,7 @@ describe("matching reversals automatically", () => {
   const auto = bank.slice(bank.indexOf('router.post("/joint-account/reversals/auto-link"'));
 
   it("links only a money-back entry with one possible payment, or one made twice", () => {
-    expect(auto).toContain("const sole = soleReversalCandidate(candidates);");
+    expect(auto).toContain("const sole = soleReversalCandidate(candidates, String(deposit.date));");
     expect(auto).toContain("const refused = await linkReversal(deposit, sole.tx, groupId);");
   });
 
@@ -183,5 +183,36 @@ describe("the payment a money-back is linked to without asking", () => {
     expect(soleReversalCandidate([payment(2), payment(1, { date: "2026-09-09" })])).toBeNull();
     expect(soleReversalCandidate([payment(2), payment(1, { accountId: 2 })])).toBeNull();
     expect(soleReversalCandidate([payment(2), payment(1, { expenseCategory: "Rent" })])).toBeNull();
+  });
+});
+
+// "It doesn't": his KCB payments of the same amount recur, so the 60-day window
+// held payments on other days and every reversal looked ambiguous.
+describe("a reversal of a payment made the same amount on other days too", () => {
+  const payment = (id: number, date: string, description = "Lipa Na Kcb (806 38 76)") => ({
+    tx: { id, date, accountId: 1, expenseCategory: "Stock", description },
+  });
+  const candidates = [
+    payment(3, "2026-09-10"),
+    payment(2, "2026-09-10", "Lipa Na Kcb (8063876)"),
+    payment(1, "2026-08-10"),
+  ];
+
+  it("is matched among the payments on its own day", () => {
+    expect(soleReversalCandidate(candidates, "2026-09-10")?.tx.id).toBe(3);
+  });
+
+  it("is still asked about when nothing that day matches and the rest differ", () => {
+    expect(soleReversalCandidate(candidates, "2026-09-12")).toBeNull();
+  });
+
+  it("is asked about when the payments that day differ", () => {
+    expect(soleReversalCandidate([payment(3, "2026-09-10"), payment(2, "2026-09-10", "Naivas")], "2026-09-10")).toBeNull();
+  });
+});
+
+describe("auto-link", () => {
+  it("passes the money back's own day", () => {
+    expect(readFileSync("src/routes/joint-account.ts", "utf8")).toContain("const sole = soleReversalCandidate(candidates, String(deposit.date));");
   });
 });
