@@ -44,7 +44,7 @@ import { buildBusinessReport, type BusinessCostRow } from "../lib/business-repor
 import { createMonthlyReportPdf } from "../lib/monthly-report-pdf";
 import { GROUP_ATTRIBUTION } from "../lib/attribution";
 import { nairobiNow } from "../lib/nairobiTime";
-import { notAReversal } from "../lib/reversal-links";
+import { isMoneyBack, notAReversal } from "../lib/reversal-links";
 
 const router = Router();
 const UNCATEGORIZED_CATEGORY = "Uncategorized";
@@ -913,6 +913,10 @@ router.get("/dashboard/category-breakdown", async (req, res): Promise<void> => {
       // tell a subcategory from a category and listed Groceries as a sibling
       // of Food.
       parentName: cat.parentId != null ? (categoryNameById.get(cat.parentId) ?? null) : null,
+      // A cost of running a side hustle (linked to an income stream): the
+      // business's, already taken off its profit, so budget-vs-actual for the
+      // household leaves it out and shows it apart.
+      isBusinessCost: cat.reducesIncomeSourceId != null,
     };
   });
 
@@ -939,6 +943,7 @@ router.get("/dashboard/category-breakdown", async (req, res): Promise<void> => {
       isBudgeted: false,
       // Spending with no budget behind it belongs to no parent.
       parentName: null,
+      isBusinessCost: false,
     });
   }
 
@@ -1243,6 +1248,7 @@ async function loadIncomeLedger(groupId: number, from: string, to: string, searc
              COALESCE(maker.preferred_name, maker.first_name) AS "makerName",
              account.name AS "accountName",
              CASE
+               WHEN ${isMoneyBack(sql`t.id`, sql`t.description`)} THEN 'money_back'
                WHEN t.is_borrowing THEN 'borrowed'
                WHEN t.settles_contributor_id IS NOT NULL THEN 'repaid'
                WHEN t.transfer_direction = 'from_savings' THEN 'from_savings'
@@ -1254,7 +1260,6 @@ async function loadIncomeLedger(groupId: number, from: string, to: string, searc
       WHERE t.group_id = ${groupId}
         AND t.type = 'deposit'
         AND t.bank_transfer_id IS NULL
-        ${notAReversal(sql`t.id`)}
         AND t.date >= ${from}
         AND t.date <= ${to}
         ${search ? sql`AND t.description ILIKE ${search} ESCAPE '!'` : sql``}

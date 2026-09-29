@@ -26,4 +26,6 @@ export interface CategoryBreakdown {
      * @nullable
      */
   parentName?: string | null;
+  /** True for a category linked to an income stream: a side hustle's cost, already taken off its profit, so left out of the household's budget against actual and shown apart. */
+  isBusinessCost?: boolean;
 }

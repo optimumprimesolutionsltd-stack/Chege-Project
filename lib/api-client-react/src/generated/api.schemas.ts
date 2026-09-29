@@ -640,6 +640,8 @@ export interface CategoryBreakdown {
      * @nullable
      */
   parentName?: string | null;
+  /** True for a category linked to an income stream: a side hustle's cost, already taken off its profit, so left out of the household's budget against actual and shown apart. */
+  isBusinessCost?: boolean;
 }
 
 export type CategoryLedgerEntrySource = typeof CategoryLedgerEntrySource[keyof typeof CategoryLedgerEntrySource];
@@ -736,6 +738,8 @@ export type IncomeLedgerOtherMoneyIn = {
   borrowed: number;
   repaidToYou: number;
   fromSavings: number;
+  /** Money back from reversed M-Pesa payments - it only returns what left, so it is never income. */
+  moneyBack: number;
 };
 
 export interface IncomeLedger {

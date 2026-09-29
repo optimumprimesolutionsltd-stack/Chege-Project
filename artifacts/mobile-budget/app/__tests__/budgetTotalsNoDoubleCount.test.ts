@@ -10,7 +10,8 @@ const budget = readFileSync('app/(tabs)/budget.tsx', 'utf8');
 // the moment anybody nested one.
 describe('the month headline counts a subcategory once', () => {
   it('adds up only the rows nothing is nested under', () => {
-    expect(budget).toContain('const leafBreakdown = breakdown.filter(');
+    expect(budget).toContain('const allLeaves = breakdown.filter(');
+    expect(budget).toContain('const leafBreakdown = allLeaves.filter((category) => !category.isBusinessCost);');
     expect(budget).toContain('!breakdown.some((other) => other.parentName === category.category)');
   });
 

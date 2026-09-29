@@ -721,7 +721,8 @@ export const GetDashboardCategoryBreakdownResponseItem = zod.object({
   "activeMonth": zod.number().nullish(),
   "activeYear": zod.number().nullish(),
   "isBudgeted": zod.boolean().describe('False for actual spending that has no active budget in the selected month'),
-  "parentName": zod.string().nullish().describe('The category this one sits under, by name, or null when it is top-level. Named rather than referenced by id because the whole breakdown is keyed by name.')
+  "parentName": zod.string().nullish().describe('The category this one sits under, by name, or null when it is top-level. Named rather than referenced by id because the whole breakdown is keyed by name.'),
+  "isBusinessCost": zod.boolean().optional().describe('True for a category linked to an income stream: a side hustle\'s cost, already taken off its profit, so left out of the household\'s budget against actual and shown apart.')
 })
 export const GetDashboardCategoryBreakdownResponse = zod.array(GetDashboardCategoryBreakdownResponseItem)
 
@@ -843,7 +844,8 @@ export const GetDashboardIncomeLedgerResponse = zod.object({
   "otherMoneyIn": zod.object({
   "borrowed": zod.number(),
   "repaidToYou": zod.number(),
-  "fromSavings": zod.number()
+  "fromSavings": zod.number(),
+  "moneyBack": zod.number().describe('Money back from reversed M-Pesa payments - it only returns what left, so it is never income.')
 }).describe('Money that arrived in the period without being income. Not in total, not in entries; here so the two can still be matched to a statement.')
 })
 
