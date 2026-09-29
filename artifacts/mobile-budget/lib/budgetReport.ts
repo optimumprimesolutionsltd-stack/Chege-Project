@@ -24,32 +24,45 @@ export const overBy = (row: BudgetRow): number =>
 
 const biggestFirst = (a: BudgetRow, b: BudgetRow) => overBy(b) - overBy(a) || b.spentAmount - a.spentAmount;
 
-export function budgetReport(allRows: readonly BudgetRow[]) {
-  // Business costs are the side hustles', already taken off their profit on
-  // Business; the household's budget against actual leaves them out.
-  const businessCosts = allRows
-    .filter((row) => row.isBusinessCost && !allRows.some((other) => other.parentName === row.category))
-    .sort((a, b) => b.spentAmount - a.spentAmount);
-  // A heading's figures include its sub-categories, so a side-hustle cost
-  // filed under a household heading (Stock under "Shop", say) has to come out
-  // of that heading too - leaving out only its own row left it counted there.
+/**
+ * The household's rows: a side hustle's costs out, and out of the headings
+ * they sit under too - a heading's figures include its sub-categories, so
+ * leaving out only a cost's own row left it counted there (Stock under
+ * "Shop", say). Reports' category list uses the same rule as this report.
+ */
+export function householdRows<T extends BudgetRow & { percentUsed?: number }>(allRows: readonly T[]): T[] {
   const businessUnder = new Map<string, { budget: number; spent: number }>();
-  for (const row of businessCosts) {
-    if (!row.parentName) continue;
+  for (const row of allRows) {
+    if (!row.isBusinessCost || !row.parentName || allRows.some((other) => other.parentName === row.category)) continue;
     const sum = businessUnder.get(row.parentName) ?? { budget: 0, spent: 0 };
     sum.budget += row.budgetAmount;
     sum.spent += row.spentAmount;
     businessUnder.set(row.parentName, sum);
   }
-  const rows = allRows
+  return allRows
     .filter((row) => !row.isBusinessCost)
     .map((row) => {
       const inside = businessUnder.get(row.category);
       if (!inside) return row;
       const budgetAmount = row.budgetAmount - inside.budget;
       const spentAmount = row.spentAmount - inside.spent;
-      return { ...row, budgetAmount, spentAmount, remaining: budgetAmount - spentAmount };
+      return {
+        ...row,
+        budgetAmount,
+        spentAmount,
+        remaining: budgetAmount - spentAmount,
+        ...(row.percentUsed !== undefined ? { percentUsed: budgetAmount > 0 ? Math.round((spentAmount / budgetAmount) * 1000) / 10 : 0 } : {}),
+      };
     });
+}
+
+export function budgetReport(allRows: readonly BudgetRow[]) {
+  // Business costs are the side hustles', already taken off their profit on
+  // Business; the household's budget against actual leaves them out.
+  const businessCosts = allRows
+    .filter((row) => row.isBusinessCost && !allRows.some((other) => other.parentName === row.category))
+    .sort((a, b) => b.spentAmount - a.spentAmount);
+  const rows = householdRows(allRows);
   const budgeted = rows.filter((row) => row.isBudgeted !== false);
   const topLevel = budgeted.filter((row) => !row.parentName);
   const childrenOf = new Map<string, BudgetRow[]>();

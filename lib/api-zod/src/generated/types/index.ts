@@ -69,6 +69,7 @@ export * from './getContributionsParams';
 export * from './getDashboardActivityParams';
 export * from './getDashboardBusinessParams';
 export * from './getDashboardCategoryBreakdownParams';
+export * from './getDashboardCategoryBreakdownScope';
 export * from './getDashboardCategoryLedgerParams';
 export * from './getDashboardExpenseLedgerParams';
 export * from './getDashboardIncomeLedgerParams';

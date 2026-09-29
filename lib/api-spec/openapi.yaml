@@ -606,6 +606,15 @@ paths:
           in: query
           schema:
             type: number
+        - name: scope
+          in: query
+          description: >-
+            household leaves out a side hustle's costs (categories linked to an
+            income stream) and takes them out of their headings. Left out, every
+            category, each business cost marked isBusinessCost.
+          schema:
+            type: string
+            enum: [household]
       responses:
         "200":
           description: Category breakdown
