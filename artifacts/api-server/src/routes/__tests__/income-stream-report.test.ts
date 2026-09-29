@@ -315,7 +315,11 @@ describe("GET /dashboard/period-totals", () => {
       lentTotal: 0,
     });
 
-    const statement = sqlMock.mock.results.at(-1)?.value as { strings: TemplateStringsArray; values: unknown[] };
+    // The period's own query, not whatever ran last: the side-hustle costs
+    // are asked for after it.
+    const statement = sqlMock.mock.results
+      .map((result) => result.value as { strings: TemplateStringsArray; values: unknown[] } | undefined)
+      .find((value) => value?.strings.join("").includes("expense_totals AS"))!;
     const statementText = statement.strings.join("");
     expect(statement.values).toContain(41);
     expect(statement.values).toContain("2026-05-10");
