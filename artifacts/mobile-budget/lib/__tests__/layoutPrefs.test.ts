@@ -50,3 +50,21 @@ describe('where it is used', () => {
     expect(more).toContain('onPress={openQuickActionsArranger}');
   });
 });
+
+// "On arranging, also the logic of moving tabs the way you press and drag
+// upwards or downwards" - alongside the arrows, not instead of them.
+describe('dragging a shortcut', () => {
+  it('drops it where it is let go, and never past either end', async () => {
+    const { moveItemTo } = await import('../layoutPrefs');
+    expect(ids(arrange(items, moveItemTo(items, EMPTY_ARRANGEMENT, 'reports', 0)))).toEqual(['reports', 'budget', 'bank', 'goals']);
+    expect(ids(arrange(items, moveItemTo(items, EMPTY_ARRANGEMENT, 'budget', 2)))).toEqual(['bank', 'goals', 'budget', 'reports']);
+    expect(ids(arrange(items, moveItemTo(items, EMPTY_ARRANGEMENT, 'bank', 99)))).toEqual(['budget', 'goals', 'reports', 'bank']);
+  });
+
+  it('is offered by a grip on each row, with the arrows kept', () => {
+    const sheet = readFileSync('components/ArrangeSheet.tsx', 'utf8');
+    expect(sheet).toContain('{...responders.get(item.id)?.panHandlers}');
+    expect(sheet).toContain('testID={`arrange-up-${item.id}`}');
+    expect(sheet).toContain('scrollEnabled={dragging === null}');
+  });
+});

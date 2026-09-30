@@ -34,6 +34,17 @@ export function moveItem<T extends { id: string }>(items: readonly T[], arrangem
   return { ...arrangement, order };
 }
 
+/** Moved to a position in the arranged order, as a drag drops it. */
+export function moveItemTo<T extends { id: string }>(items: readonly T[], arrangement: Arrangement, id: string, toIndex: number): Arrangement {
+  const order = arrange(items, arrangement, true).map((item) => item.id);
+  const from = order.indexOf(id);
+  if (from < 0) return { ...arrangement, order };
+  const to = Math.max(0, Math.min(order.length - 1, toIndex));
+  order.splice(from, 1);
+  order.splice(to, 0, id);
+  return { ...arrangement, order };
+}
+
 export function toggleHidden(arrangement: Arrangement, id: string): Arrangement {
   const hidden = arrangement.hidden.includes(id)
     ? arrangement.hidden.filter((other) => other !== id)
