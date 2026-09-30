@@ -368,6 +368,44 @@ describe("what the statement has that Jamvi is missing", () => {
   });
 
   it("says when a payment was saved for a different amount", () => {
-    expect(missingInJamvi(reading, rows).amounts).toEqual([{ id: 15, date: "2026-09-29", description: "Sample", recorded: 450, statement: 500 }]);
+    expect(missingInJamvi(reading, rows).amounts).toEqual([{ id: 15, date: "2026-09-29", description: "Sample", recorded: 450, statement: 500, fixable: false }]);
+  });
+});
+
+// "Why does this keep happening?" A statement stops at the hour it was made.
+describe("the last day of a statement", () => {
+  const fee = (index: number, amount: number, receipt: string) => ({
+    index, status: "ready" as const, reason: null, receipt, direction: "out" as const, type: "fuliza_fee", amount, description: "Fuliza charges", named: false, date: "2026-09-30", fee: null, mpesaBalance: null, alreadyRecorded: null,
+  });
+  const reading = { ...statementLines([]), opening: 12024.59, closing: 0, firstDate: "2026-09-01", lastDate: "2026-09-30", lines: [fee(0, 720.24, "FZ260901260930")] };
+
+  it("never offers to remove a fee from that day, which may be after the statement was made", () => {
+    const recorded = [
+      { id: 1, date: "2026-09-30", type: "disbursement", amount: 720.24, description: "Fuliza charges", mpesaReceipt: "FZ260901260930" },
+      { id: 2, date: "2026-09-30", type: "disbursement", amount: 20.33, description: "Fuliza access fee", mpesaReceipt: "TJU1234ABCFEE" },
+    ];
+    const found = notOnStatement(reading, recorded).rows.find((row) => row.id === 2)!;
+    expect(found.fixable).toBe(false);
+    expect(found.why).toMatch(/after it was made/);
+  });
+
+  it("takes pasted Fuliza fees from earlier days off the Fuliza charges line, so they are never counted twice", () => {
+    const recorded = [
+      { id: 3, date: "2026-09-12", type: "disbursement", amount: 32.66, description: "Fuliza access fee", mpesaReceipt: "TIC1234ABCFEE" },
+      { id: 4, date: "2026-09-30", type: "disbursement", amount: 20.33, description: "Fuliza access fee", mpesaReceipt: "TJU1234ABCFEE" },
+    ];
+    const adjusted = withoutRecordedFuliza(reading, recorded);
+    expect(adjusted.lines[0]).toMatchObject({ amount: 687.58, status: "ready" });
+    expect(notOnStatement(adjusted, recorded).rows.find((row) => row.id === 3)).toBeUndefined();
+  });
+});
+
+// A later download of the same days: its Fuliza figures have grown.
+describe("Fuliza lines from an earlier download of the same statement", () => {
+  it("are offered to be brought up to this statement", () => {
+    const line = { index: 0, status: "ready" as const, reason: null, receipt: "FZ260901260930", direction: "out" as const, type: "fuliza_fee", amount: 741.5, description: "Fuliza charges", named: false, date: "2026-09-30", fee: null, mpesaBalance: null, alreadyRecorded: null };
+    const reading = { ...statementLines([]), opening: 1, closing: 0, firstDate: "2026-09-01", lastDate: "2026-09-30", lines: [line] };
+    const rows = [{ id: 1, date: "2026-09-30", type: "disbursement", amount: 720.24, description: "Fuliza charges", mpesaReceipt: "FZ260901260930" }];
+    expect(missingInJamvi(reading, rows).amounts).toEqual([{ id: 1, date: "2026-09-30", description: "Fuliza charges", recorded: 720.24, statement: 741.5, fixable: true }]);
   });
 });

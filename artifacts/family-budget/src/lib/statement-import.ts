@@ -542,8 +542,16 @@ export function notOnStatement(
     }
     if (row.mpesaReceipt && onStatement.has(row.mpesaReceipt)) continue;
     const fulizaPrefix = row.mpesaReceipt?.match(/^(FZ|FB)\d{12}$/)?.[1];
+    // A statement stops at the hour it was made: its last day"s later entries
+    // are real and not on it, so nothing from that day is a proven duplicate.
+    if (day === last) {
+      found.push({ ...row, why: "On the last day of the statement - may be after it was made", effect, fixable: false });
+      continue;
+    }
     if (row.mpesaReceipt && /^[A-Z0-9]{8,15}FEE$/.test(row.mpesaReceipt) && coversFulizaFees) {
-      found.push({ ...row, why: "Fuliza fee already inside this statement's Fuliza charges", effect, fixable: true });
+      // Saved whole, this statement's Fuliza charges already hold the fee; saved
+      // less what was already recorded, the fee is part of that total and stays.
+      if (savedWhole("FZ")) found.push({ ...row, why: "Fuliza fee already inside this statement's Fuliza charges", effect, fixable: true });
       continue;
     }
     if (fulizaPrefix && savedWhole(fulizaPrefix)) {
@@ -580,7 +588,13 @@ export function withoutRecordedFuliza(reading: StatementReading, recorded: reado
   const lines = reading.lines.map((line) => {
     const prefix = line.type === "fuliza_fee" ? "FZ" : line.type === "fuliza_borrowed" ? "FB" : null;
     if (!prefix || line.amount === null || line.status !== "ready") return line;
-    const rows = earlier(prefix, line.receipt);
+    // Fuliza fees pasted from messages on days this statement covers are part
+    // of its Fuliza charges too - but only before its last day: a statement
+    // stops at the hour it was made, and a fee later that day is not in it.
+    const pastedFees = prefix === "FZ"
+      ? recorded.filter((row) => /^[A-Z0-9]{8,15}FEE$/.test(row.mpesaReceipt ?? "") && String(row.date).slice(0, 10) >= first && String(row.date).slice(0, 10) < last)
+      : [];
+    const rows = [...earlier(prefix, line.receipt), ...pastedFees];
     if (rows.length === 0) return line;
     const already = round(rows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0));
     alreadyIn += prefix === "FZ" ? -already : already;
@@ -614,21 +628,22 @@ export function missingInJamvi(
   rows: readonly RecordedRow[],
 ): {
   charges: Array<{ parentId: number; date: string; amount: number; description: string }>;
-  amounts: Array<{ id: number; date: string; description: string; recorded: number; statement: number }>;
+  /** Saved for a different amount. `fixable` when it is this statement's own Fuliza line: a later download of the same days, whose figures have grown - updated to the statement's. */
+  amounts: Array<{ id: number; date: string; description: string; recorded: number; statement: number; fixable: boolean }>;
   net: number;
 } {
   const byReceipt = new Map(rows.filter((row) => row.mpesaReceipt).map((row) => [row.mpesaReceipt as string, row]));
   const chargedIds = new Set(rows.map((row) => row.chargeForTransactionId).filter((id): id is number => id != null));
   const recordedCodes = [...byReceipt.keys()];
   const charges: Array<{ parentId: number; date: string; amount: number; description: string }> = [];
-  const amounts: Array<{ id: number; date: string; description: string; recorded: number; statement: number }> = [];
+  const amounts: Array<{ id: number; date: string; description: string; recorded: number; statement: number; fixable: boolean }> = [];
   for (const line of reading.lines) {
     if (line.status !== "ready" || !line.receipt || line.amount === null) continue;
     const saved = byReceipt.get(line.receipt);
     if (!saved) continue;
     const recorded = Number(saved.amount) || 0;
     if (Math.abs(recorded - line.amount) >= 0.01) {
-      amounts.push({ id: saved.id, date: String(saved.date).slice(0, 10), description: saved.description ?? line.description ?? "", recorded, statement: line.amount });
+      amounts.push({ id: saved.id, date: String(saved.date).slice(0, 10), description: saved.description ?? line.description ?? "", recorded, statement: line.amount, fixable: /^F[ZB]\d{12}$/.test(line.receipt) });
     }
     if (line.direction === "out" && line.fee && line.fee > 0) {
       // Kept with its payment, saved on its own, or - from an older version that
