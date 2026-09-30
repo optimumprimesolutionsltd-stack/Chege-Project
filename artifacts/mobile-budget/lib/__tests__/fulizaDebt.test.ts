@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildPostings, problemWith, type Choice, type PreviewLine } from '../mpesaImport';
-import { findFulizaParty, needsFulizaParty, withFulizaDebt } from '../mpesaDebts';
+import { findFulizaParty, FULIZA_PARTY_NAME, needsFulizaParty, withFulizaDebt } from '../mpesaDebts';
 
 const line = (index: number, type: string, direction: 'in' | 'out', amount: number): PreviewLine => ({
   index, status: 'ready', reason: null, receipt: `F${index}`, direction, type, amount, description: type, date: '2026-10-05', fee: null, mpesaBalance: null, alreadyRecorded: null,
@@ -39,5 +39,15 @@ describe('Fuliza in Who owes who', () => {
   it('saves the borrowing as borrowing', () => {
     const built = buildPostings(lines[0], choice({ debt: { kind: 'borrowed', partyId: 7 } }), ctx) as { main: Record<string, unknown> };
     expect(built.main).toMatchObject({ isBorrowing: true });
+  });
+});
+
+// "Safaricom should be in the app as a creditor" - "should be Safaricom PLC".
+describe('the Fuliza creditor', () => {
+  it('is added as Safaricom PLC, and an existing Safaricom or Fuliza entry is used', () => {
+    expect(FULIZA_PARTY_NAME).toBe('Safaricom PLC');
+    expect(findFulizaParty([{ id: 3, name: 'Safaricom PLC' }])?.id).toBe(3);
+    expect(findFulizaParty([{ id: 4, name: 'Safaricom' }])?.id).toBe(4);
+    expect(findFulizaParty([{ id: 5, name: 'Hermda trders' }])).toBeNull();
   });
 });

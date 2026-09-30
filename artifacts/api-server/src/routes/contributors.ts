@@ -384,7 +384,8 @@ async function workedOutBalances(groupId: number) {
   // (FR...) is a debt to Fuliza even when it was saved before imports linked
   // it - so it is counted against Fuliza, which is added to Who owes who
   // (and so to the Debt tab) when it is not there yet: -1 until it is.
-  const fuliza = parties.find((party) => party.name.trim().toLowerCase() === "fuliza");
+  // Safaricom lends Fuliza: a creditor already named for either is the one.
+  const fuliza = parties.find((party) => /fuliza/i.test(party.name) || party.name.trim().toLowerCase().startsWith("safaricom"));
   const fulizaId = fuliza?.id ?? FULIZA_TO_ADD;
   const withFuliza = rows.map((row) => {
     if (row.linkPartyId != null || row.settlesContributorId != null || !row.receipt) return row;
@@ -393,7 +394,7 @@ async function workedOutBalances(groupId: number) {
     return row;
   });
   const worked = workOutBalances(withFuliza);
-  const known = fuliza ? parties : [...parties, { id: FULIZA_TO_ADD, name: "Fuliza", owedToUs: null, owedByUs: null }];
+  const known = fuliza ? parties : [...parties, { id: FULIZA_TO_ADD, name: "Safaricom PLC", owedToUs: null, owedByUs: null }];
   return known
     .filter((party) => worked.has(party.id))
     .map((party) => {
@@ -425,7 +426,7 @@ router.post("/contributors/worked-out", async (req, res): Promise<void> => {
       if (change.id === FULIZA_TO_ADD) {
         await trx.insert(groupContributorsTable).values({
           groupId,
-          name: "Fuliza",
+          name: "Safaricom PLC",
           kind: "institution",
           owedToUs: change.workedOut.owedToUs,
           owedByUs: change.workedOut.owedByUs,

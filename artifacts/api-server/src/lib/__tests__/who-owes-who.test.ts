@@ -50,7 +50,7 @@ describe("Fuliza from statements", () => {
   });
 
   it("adds Fuliza to Who owes who when it is not there, on confirming", () => {
-    expect(route).toContain('name: "Fuliza",');
+    expect(route).toContain('name: "Safaricom PLC",');
     expect(route).toContain("if (change.id === FULIZA_TO_ADD) {");
   });
 });
