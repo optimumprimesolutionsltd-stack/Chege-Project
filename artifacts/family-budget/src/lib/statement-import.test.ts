@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { balanceAtEndOf, dayBefore, fulizaOwedBefore, notOnStatement, reconcile, statementLines } from "./statement-import";
+import { balanceAtEndOf, dayBefore, fulizaOwedBefore, notOnStatement, reconcile, statementLines, withoutRecordedFuliza } from "./statement-import";
 import type { StatementRow } from "./statement-table";
 
 let n = 0;
@@ -277,3 +277,37 @@ describe("entries in Jamvi but not on the statement", () => {
     expect(found.find((row) => row.id === 3)?.why).toMatch(/twice/);
   });
 });
+
+// A 1-30 September statement after a 1-29 one: Fuliza charges 720.24 and still
+// owed 3,305.07, of which 688.25 and 3,178.08 were already recorded.
+describe("Fuliza from overlapping statements", () => {
+  const base = { ...statementLines([]), opening: 100, closing: 100, firstDate: "2026-09-01", lastDate: "2026-09-30" };
+  const fuliza = (index: number, type: string, direction: "in" | "out", amount: number, receipt: string) => ({
+    index, status: "ready" as const, reason: null, receipt, direction, type, amount, description: type, named: false, date: "2026-09-30", fee: null, mpesaBalance: null, alreadyRecorded: null,
+  });
+  const reading = { ...base, lines: [fuliza(0, "fuliza_fee", "out", 720.24, "FZ260901260930"), fuliza(1, "fuliza_borrowed", "in", 3305.07, "FB260901260930")] };
+  const recorded = [
+    { id: 1, date: "2026-09-29", type: "disbursement", amount: 688.25, mpesaReceipt: "FZ260901260929" },
+    { id: 2, date: "2026-09-29", type: "deposit", amount: 3178.08, mpesaReceipt: "FB260901260929" },
+    { id: 3, date: "2026-08-31", type: "deposit", amount: 500, mpesaReceipt: "FB260801260831" },
+  ];
+
+  it("adds only what the earlier statement did not already record", () => {
+    const adjusted = withoutRecordedFuliza(reading, recorded);
+    expect(adjusted.lines[0]).toMatchObject({ amount: 31.99, status: "ready" });
+    expect(adjusted.lines[1]).toMatchObject({ amount: 126.99, status: "ready" });
+    expect(adjusted.fulizaAlreadyRecorded).toBe(3178.08 - 688.25);
+  });
+
+  it("leaves a line out when the earlier statement already covers all of it", () => {
+    const same = withoutRecordedFuliza({ ...reading, lines: [fuliza(0, "fuliza_fee", "out", 688.25, "FZ260901260930")] }, recorded);
+    expect(same.lines[0]).toMatchObject({ status: "skipped", direction: null });
+  });
+
+  it("keeps the balance check whole", () => {
+    const adjusted = withoutRecordedFuliza(reading, recorded);
+    const check = reconcile(adjusted, () => true)!;
+    expect(check.alreadyRecordedChange).toBe(round2(3178.08 - 688.25));
+  });
+});
+const round2 = (value: number) => Math.round(value * 100) / 100;

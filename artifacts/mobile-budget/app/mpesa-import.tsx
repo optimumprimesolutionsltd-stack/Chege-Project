@@ -87,7 +87,7 @@ import type { DebtEntryLink } from '@/lib/debtLinks';
 import { canReadStatements, chooseStatement, statementBase64, type ChosenStatement } from '@/lib/statementFile';
 import { shownFileName } from '@/lib/shownFileName';
 import { readPercent } from '@/lib/statementProgress';
-import { balanceAtEndOf, dayBefore, notOnStatement, type RecordedRow, fulizaChargeOverlap, fulizaCharges, fulizaOwedBefore, reconcile, statementLines, type StatementReading } from '@/lib/statementImport';
+import { balanceAtEndOf, dayBefore, notOnStatement, withoutRecordedFuliza, type RecordedRow, fulizaChargeOverlap, fulizaCharges, fulizaOwedBefore, reconcile, statementLines, type StatementReading } from '@/lib/statementImport';
 import { checkRunningBalance, readStatementRows, resolveDirections } from '@/lib/statementTable';
 import type { ReaderMessage } from '@/lib/statementReaderHtml';
 import { fetchOtherBudgetOptions, type OtherBudgetOptions } from '@/lib/otherBudgetOptions';
@@ -831,7 +831,11 @@ export default function MpesaImportScreen() {
       }
       // Fuliza an earlier statement left owed is repaid first in this one, not charged as fees.
       const recordedRows = (account?.transactions ?? []) as Array<{ mpesaReceipt?: string | null; amount?: number | string | null }>;
-      const reading = statementLines(rows, fulizaOwedBefore(statementLines(rows).firstDate, recordedRows));
+      // Less what an overlapping statement already recorded of its Fuliza lines.
+      const reading = withoutRecordedFuliza(
+        statementLines(rows, fulizaOwedBefore(statementLines(rows).firstDate, recordedRows)),
+        recordedRows as unknown as RecordedRow[],
+      );
       setReadProgress({ stage: 'checking' });
       const checked = await markRecorded(reading.lines);
       const known = parseStoredNicknames(await AsyncStorage.getItem(nicknamesKey).catch(() => null));
@@ -847,14 +851,6 @@ export default function MpesaImportScreen() {
       setLines(shown);
       setStatementReading({ ...reading, lines: shown });
       const built = initialChoices(shown, history, categories.map((row) => row.name), effectiveChargeCategory, rules, canManageBudget);
-      // Fuliza charges already recorded for days this statement shares would
-      // be counted twice: its Fuliza line starts unticked, and the card says why.
-      const receipts = ((account?.transactions ?? []) as Array<{ mpesaReceipt?: string | null }>).map((row) => row.mpesaReceipt);
-      for (const line of shown) {
-        if (line.type !== 'fuliza_fee' || !line.receipt || !reading.firstDate || !reading.lastDate) continue;
-        const overlap = fulizaChargeOverlap({ from: reading.firstDate, to: reading.lastDate, receipt: line.receipt }, receipts);
-        if (overlap.overlapsFrom && built[line.index]) built[line.index] = { ...built[line.index], include: false };
-      }
       setChoices(built);
       setStatementPassword('');
       setShowStatementPassword(false);
@@ -1469,7 +1465,7 @@ export default function MpesaImportScreen() {
                     ))}
                   </>
                 ) : null}
-                {fuliza && fulizaCheck?.overlapsFrom ? (
+                {fuliza && fulizaCheck?.overlapsFrom && !statementReading?.fulizaAlreadyRecorded ? (
                   <Text style={[styles.hint, { color: colors.destructive, marginTop: 4 }]} testID="mpesa-fuliza-overlap">
                     Fuliza charges are already recorded for {fulizaCheck.overlapsFrom} to {fulizaCheck.overlapsTo}, which overlaps this
                     statement, so its Fuliza charges line starts unticked: ticking it would count the shared days' fees twice.

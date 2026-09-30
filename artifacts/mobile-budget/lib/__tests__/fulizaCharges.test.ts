@@ -95,8 +95,10 @@ describe('on the import screen', () => {
     expect(lib).toContain("if (line.type === 'transaction_charge') return chargeCategory || defaultCategoryFor(line, categoryNames);");
   });
 
-  it('starts the Fuliza line unticked when charges for overlapping days are already recorded, and says why', () => {
-    expect(screen).toContain('if (overlap.overlapsFrom && built[line.index]) built[line.index] = { ...built[line.index], include: false };');
+  it('takes what an overlapping statement already recorded off the Fuliza lines, rather than unticking them', () => {
+    // Unticking lost the days the earlier statement did not cover; the lines
+    // now add only the difference (withoutRecordedFuliza).
+    expect(screen).toContain('const reading = withoutRecordedFuliza(');
     expect(screen).toContain('testID="mpesa-fuliza-overlap"');
   });
 
