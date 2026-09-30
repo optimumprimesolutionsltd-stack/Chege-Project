@@ -59,7 +59,7 @@ export default function MoreScreen() {
       key: 'business',
       icon: 'briefcase',
       title: 'Business',
-      hint: 'Sales, cost of goods sold, expenses and profit for each side hustle',
+      hint: 'Sales, cost of goods sold, expenses and profit for each business',
       href: '/business',
       show: hasBusiness,
     },

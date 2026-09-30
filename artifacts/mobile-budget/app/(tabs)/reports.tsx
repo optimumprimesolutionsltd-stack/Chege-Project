@@ -697,7 +697,7 @@ export default function ReportsScreen() {
             <Pressable
               onPress={() => router.push('/business')}
               accessibilityRole="button"
-              accessibilityLabel="See profit and loss for each side hustle"
+              accessibilityLabel="See profit and loss for each business"
               testID="open-business"
               style={({ pressed }) => [
                 styles.spendOnCard,
@@ -709,7 +709,7 @@ export default function ReportsScreen() {
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={[styles.spendOnTitle, { color: colors.foreground }]}>Business</Text>
                 <Text style={[styles.spendOnSub, { color: colors.mutedForeground }]} numberOfLines={2}>
-                  Sales, cost of goods sold, expenses and profit for each side hustle.
+                  Sales, cost of goods sold, expenses and profit for each business.
                 </Text>
               </View>
               <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
@@ -1153,7 +1153,7 @@ export default function ReportsScreen() {
                 </Text>
                 {canManageCostCategories ? (
                   <Text style={[styles.sectionSub, { color: colors.mutedForeground, marginTop: 2 }]}>
-                    Running a side hustle through one of these? Open it and link a cost category (like Stock) to see real profit, not just the sale amount.
+                    Running a business through one of these? Open it and link a cost category (like Stock) to see real profit, not just the sale amount.
                   </Text>
                 ) : null}
               </View>

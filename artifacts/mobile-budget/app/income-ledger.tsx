@@ -276,7 +276,7 @@ export default function IncomeLedgerScreen() {
               style={[styles.totalCaption, { color: colors.mutedForeground, marginTop: 4, textAlign: 'center' }]}
               testID="income-ledger-net-of-costs"
             >
-              Received KES {formatKES(data?.received ?? 0)} less KES {formatKES(data?.costs ?? 0)} your side hustles cost to run
+              Received KES {formatKES(data?.received ?? 0)} less KES {formatKES(data?.costs ?? 0)} your income streams cost to earn
             </Text>
           ) : null}
           {!isLoading && otherParts.length > 0 ? (

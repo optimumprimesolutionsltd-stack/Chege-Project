@@ -51,6 +51,6 @@ describe('linking categories as an income stream\'s cost', () => {
     // Nothing pointed a manager toward this until they happened to open a
     // stream and notice the picker. A manager-only hint on the section
     // heading means it can be found without already knowing it exists.
-    expect(reports).toContain('Running a side hustle through one of these? Open it and link a cost category');
+    expect(reports).toContain('Running a business through one of these? Open it and link a cost category');
   });
 });

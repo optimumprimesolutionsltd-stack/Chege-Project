@@ -1431,7 +1431,7 @@ export default function Budget() {
              </div>
              {businessCostsSpent > 0 ? (
                <p className="mt-3 text-xs text-muted-foreground" data-testid="budget-business-costs">
-                 Not counted here: {formatKes(businessCostsSpent)} of side-hustle costs, which come off that business's profit instead.
+                 Not counted here: {formatKes(businessCostsSpent)} of income-stream costs, which come off that income stream's profit instead.
                </p>
              ) : null}
            </CardContent>

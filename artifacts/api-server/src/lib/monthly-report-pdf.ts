@@ -336,7 +336,7 @@ export function createMonthlyReportPdf(data: MonthlyReportPdfData): Promise<Buff
       for (const heading of data.budgetPlan) {
         ensureRoom(24);
         document.font("Helvetica-Bold").fontSize(9).fillColor("#103A2D")
-          .text(compactText(heading.name + (heading.business ? "  (side hustle)" : ""), 60), SIDE_MARGIN, y + 6, { width: 380, lineBreak: false });
+          .text(compactText(heading.name + (heading.business ? "  (income stream)" : ""), 60), SIDE_MARGIN, y + 6, { width: 380, lineBreak: false });
         document.text(formatKes(heading.budget), SIDE_MARGIN + 384, y + 6, { width: 127, align: "right", lineBreak: false });
         document.moveTo(SIDE_MARGIN, y + 22).lineTo(PAGE_WIDTH - SIDE_MARGIN, y + 22).strokeColor("#E6ECE9").lineWidth(0.5).stroke();
         y += 22;
@@ -355,7 +355,7 @@ export function createMonthlyReportPdf(data: MonthlyReportPdfData): Promise<Buff
       ], 24);
       if (businessTotal > 0) {
         tableRow([
-          { text: "Side hustle costs, budgeted apart", x: SIDE_MARGIN, width: 380, color: "#60736C" },
+          { text: "Income-stream costs, budgeted apart", x: SIDE_MARGIN, width: 380, color: "#60736C" },
           { text: formatKes(businessTotal), x: SIDE_MARGIN + 384, width: 127, align: "right", color: "#60736C" },
         ], 22);
       }
@@ -363,7 +363,7 @@ export function createMonthlyReportPdf(data: MonthlyReportPdfData): Promise<Buff
 
     if (data.businesses) {
       y += 16;
-      sectionTitle("Business", "Profit and loss for each side hustle: sales, the cost of the goods sold, then its running expenses.");
+      sectionTitle("Business", "Profit and loss for each business: sales, the cost of the goods sold, then its running expenses.");
       const columns = [
         { label: "Business", x: SIDE_MARGIN, width: 116 },
         { label: "Sales", x: SIDE_MARGIN + 118, width: 76, align: "right" as const },
@@ -374,7 +374,7 @@ export function createMonthlyReportPdf(data: MonthlyReportPdfData): Promise<Buff
       ];
       tableHeader(columns);
       if (data.businesses.length === 0) {
-        tableRow([{ text: "No side hustle has its costs linked yet.", x: SIDE_MARGIN, width: CONTENT_WIDTH, color: "#60736C" }], 28);
+        tableRow([{ text: "No business has its costs linked yet.", x: SIDE_MARGIN, width: CONTENT_WIDTH, color: "#60736C" }], 28);
       }
       data.businesses.forEach((business) => {
         tableRow([

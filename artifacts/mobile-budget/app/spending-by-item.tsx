@@ -126,7 +126,7 @@ export default function SpendingByItemScreen() {
             {category
               ? `Within ${category}`
               : hasBusiness && scope === 'business'
-              ? 'Stock and other side-hustle costs'
+              ? 'Stock and other income-stream costs'
               : groupBy === 'category'
               ? 'Every expense, grouped by category'
               : 'Every expense, grouped by what it was for'}

@@ -302,7 +302,7 @@ export default function BusinessScreen() {
         </Pressable>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={[styles.title, { color: colors.foreground }]} numberOfLines={1}>Business</Text>
-          <Text style={[styles.subtitle, { color: colors.mutedForeground }]} numberOfLines={1}>Profit and loss for each side hustle</Text>
+          <Text style={[styles.subtitle, { color: colors.mutedForeground }]} numberOfLines={1}>Profit and loss for each business</Text>
         </View>
         {businesses.length > 0 ? (
           <Pressable onPress={toggleAllDetails} accessibilityRole="button" hitSlop={8} testID="business-details-all">
@@ -330,7 +330,7 @@ export default function BusinessScreen() {
           <ActivityIndicator color={colors.primary} style={{ marginTop: 24 }} />
         ) : businesses.length === 0 ? (
           <View style={[styles.note, { borderColor: colors.border }]} testID="business-none">
-            <Text style={[styles.noteText, { color: colors.foreground, fontFamily: 'Inter_600SemiBold' }]}>No side hustle set up yet</Text>
+            <Text style={[styles.noteText, { color: colors.foreground, fontFamily: 'Inter_600SemiBold' }]}>No business set up yet</Text>
             <Text style={[styles.noteText, { color: colors.mutedForeground }]}>
               On Reports, open an income stream and link its costs - stock, fuel, repairs - with Cost categories. It then shows here as a business.
             </Text>
