@@ -11,3 +11,11 @@ describe('the Ask Jamvi sheet', () => {
     expect(home).toContain('testID="ask-jamvi-close"');
   });
 });
+
+// "If you close an open tab it exits the whole Ask Jamvi."
+describe('coming back from a screen an answer opened', () => {
+  it('reopens Ask Jamvi with the conversation still there', () => {
+    expect(home).toContain('onPress={() => { reopenAsk.current = true; setAskOpen(false); router.push(link.route as never); }}');
+    expect(home).toContain('if (reopenAsk.current) {');
+  });
+});

@@ -20,7 +20,7 @@ import Animated, {
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
-import { Redirect, router } from 'expo-router';
+import { Redirect, router, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -186,6 +186,18 @@ export default function DashboardScreen() {
 
   const [refreshing, setRefreshing] = useState(false);
   const [askOpen, setAskOpen] = useState(false);
+  // Opening a screen from an answer ("Open Reports") closes the sheet to show
+  // it; coming back to Home should land back in the conversation, not leave
+  // Ask Jamvi behind. The answer and thread are still held here.
+  const reopenAsk = React.useRef(false);
+  useFocusEffect(
+    React.useCallback(() => {
+      if (reopenAsk.current) {
+        reopenAsk.current = false;
+        setAskOpen(true);
+      }
+    }, []),
+  );
   const [askQuery, setAskQuery] = useState('');
   const [askAnswer, setAskAnswer] = useState<(AskResponse & { question?: string }) | null>(null);
   const [askError, setAskError] = useState<string | null>(null);
@@ -925,7 +937,7 @@ export default function DashboardScreen() {
                     {(askAnswer.links ?? []).map((link) => (
                       <Pressable
                         key={link.route}
-                        onPress={() => { setAskOpen(false); router.push(link.route as never); }}
+                        onPress={() => { reopenAsk.current = true; setAskOpen(false); router.push(link.route as never); }}
                         accessibilityRole="button"
                         style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, borderWidth: 1, borderColor: colors.primary }}
                       >
