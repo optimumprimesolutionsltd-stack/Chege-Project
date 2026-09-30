@@ -502,14 +502,28 @@ export type RecordedRow = {
 export function notOnStatement(
   reading: StatementReading,
   rows: readonly RecordedRow[],
-): { rows: Array<RecordedRow & { why: string; effect: number }>; net: number } {
+): { rows: Array<RecordedRow & { why: string; effect: number; fixable: boolean }>; net: number } {
   if (!reading.firstDate || !reading.lastDate) return { rows: [], net: 0 };
   const first = reading.firstDate;
   const last = reading.lastDate;
   const onStatement = new Set(reading.lines.map((line) => line.receipt).filter((code): code is string => Boolean(code)));
   const receiptOf = new Map(rows.map((row) => [row.id, row.mpesaReceipt ?? null]));
   const recordedReceipts = new Set(rows.map((row) => row.mpesaReceipt).filter((code): code is string => Boolean(code)));
-  const found: Array<RecordedRow & { why: string; effect: number }> = [];
+  const found: Array<RecordedRow & { why: string; effect: number; fixable: boolean }> = [];
+  // This statement's own Fuliza lines, and whether each is saved whole. When it
+  // is, an earlier overlapping statement's line is a duplicate beyond doubt;
+  // when only the difference was saved ("less … already recorded"), the
+  // earlier one is part of the total and must stay.
+  const ownFuliza = new Map<string, string>();
+  for (const line of reading.lines) {
+    if (line.receipt && (line.type === 'fuliza_fee' || line.type === 'fuliza_borrowed')) ownFuliza.set(line.receipt.slice(0, 2), line.receipt);
+  }
+  const savedWhole = (prefix: string) => {
+    const own = ownFuliza.get(prefix);
+    return Boolean(own) && rows.some((row) => row.mpesaReceipt === own && !/already recorded\)/.test(row.description ?? ''));
+  };
+  // A statement's Fuliza charges include every Fuliza fee in its days.
+  const coversFulizaFees = ownFuliza.has('FZ');
   for (const row of rows) {
     const day = String(row.date).slice(0, 10);
     if (day < first || day > last) continue;
@@ -522,12 +536,21 @@ export function notOnStatement(
       // does not list is caught below instead - counting both would double it.
       const parent = receiptOf.get(row.chargeForTransactionId) ?? null;
       if (parent && [...recordedReceipts].some((code) => code.startsWith(`${parent}C`) && onStatement.has(code))) {
-        found.push({ ...row, why: 'Charge recorded twice: with its payment and on its own', effect });
+        found.push({ ...row, why: 'Charge recorded twice: with its payment and on its own', effect, fixable: true });
       }
       continue;
     }
     if (row.mpesaReceipt && onStatement.has(row.mpesaReceipt)) continue;
-    found.push({ ...row, why: row.mpesaReceipt ? 'Its M-Pesa code is not on this statement' : 'No M-Pesa code: typed in or pasted', effect });
+    const fulizaPrefix = row.mpesaReceipt?.match(/^(FZ|FB)\d{12}$/)?.[1];
+    if (row.mpesaReceipt && /^[A-Z0-9]{8,15}FEE$/.test(row.mpesaReceipt) && coversFulizaFees) {
+      found.push({ ...row, why: "Fuliza fee already inside this statement's Fuliza charges", effect, fixable: true });
+      continue;
+    }
+    if (fulizaPrefix && savedWhole(fulizaPrefix)) {
+      found.push({ ...row, why: "From an earlier statement: replaced by this statement's Fuliza line", effect, fixable: true });
+      continue;
+    }
+    found.push({ ...row, why: row.mpesaReceipt ? 'Its M-Pesa code is not on this statement' : 'No M-Pesa code: typed in or pasted', effect, fixable: false });
   }
   const net = Math.round(found.reduce((sum, row) => sum + row.effect, 0) * 100) / 100;
   return { rows: found, net };
