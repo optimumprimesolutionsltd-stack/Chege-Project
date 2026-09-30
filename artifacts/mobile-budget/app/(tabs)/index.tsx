@@ -491,13 +491,14 @@ export default function DashboardScreen() {
             <View style={[styles.overviewNavCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                 <Text style={[styles.overviewNavEyebrow, { color: colors.primary }]}>GROUP OVERVIEW</Text>
-                <Pressable onPress={() => setArrangingAreas(true)} hitSlop={8} accessibilityRole="button" testID="overview-arrange">
+                <Pressable onPress={() => setArrangingAreas(true)} hitSlop={8} accessibilityRole="button" accessibilityLabel="Arrange your group areas: reorder, hide or show them" testID="overview-arrange" style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Feather name="move" size={13} color={colors.primary} />
                   <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>Arrange</Text>
                 </Pressable>
               </View>
               <Text style={[styles.overviewNavTitle, { color: colors.foreground }]}>Your group areas</Text>
               <Text style={[styles.overviewNavSubtitle, { color: colors.mutedForeground }]}>
-                Quickly see what each part of your group helps you manage.
+                Quickly see what each part of your group helps you manage. Tap Arrange to put them in your order or hide the ones you don't use.
               </Text>
               <View style={styles.overviewNavGrid}>
                 {overviewShortcuts.map((shortcut) => (
@@ -518,6 +519,25 @@ export default function DashboardScreen() {
                     <Feather name="chevron-right" size={13} color={shortcut.color} style={styles.overviewNavChevron} />
                   </Pressable>
                 ))}
+                {/* Hidden areas are not gone: this says how many and brings them back. */}
+                {overviewShortcuts.length < allShortcuts.length ? (
+                  <Pressable
+                    testID="overview-shortcut-more"
+                    accessibilityRole="button"
+                    accessibilityLabel={`${allShortcuts.length - overviewShortcuts.length} more areas hidden. Open Arrange to show them.`}
+                    style={({ pressed }) => [
+                      styles.overviewNavButton,
+                      { backgroundColor: colors.muted, borderColor: colors.border, borderStyle: 'dashed', opacity: pressed ? 0.78 : 1 },
+                    ]}
+                    onPress={() => setArrangingAreas(true)}
+                  >
+                    <Feather name="plus" size={18} color={colors.primary} />
+                    <Text style={[styles.overviewNavButtonText, { color: colors.primary }]}>{allShortcuts.length - overviewShortcuts.length} more</Text>
+                    <Text style={[styles.overviewNavButtonDescription, { color: colors.mutedForeground }]} numberOfLines={2}>
+                      {allShortcuts.filter((shortcut) => !overviewShortcuts.some((shown) => shown.id === shortcut.id)).map((shortcut) => shortcut.label).join(', ')}
+                    </Text>
+                  </Pressable>
+                ) : null}
               </View>
               <ArrangeSheet
                 visible={arrangingAreas}

@@ -48,7 +48,7 @@ export const PageScrollView = React.forwardRef<ScrollView, ScrollViewProps & Wit
 
   const { listProps, thumb } = useFastScroller(
     scroller,
-    (offset) => ref.current?.scrollTo({ y: offset, animated: false }),
+    (offset) => ref.current?.scrollTo({ y: offset, animated: true }),
     props,
   );
 
@@ -87,7 +87,7 @@ export const ScrollerScrollView = React.forwardRef<ScrollView, ScrollViewProps &
   }, [forwardedRef]);
   const { listProps, thumb } = useFastScroller(
     scroller,
-    (offset) => ref.current?.scrollTo({ y: offset, animated: false }),
+    (offset) => ref.current?.scrollTo({ y: offset, animated: true }),
     props,
   );
   if (!scroller) return <ScrollView ref={setRef} {...props} />;
@@ -113,7 +113,7 @@ export function PageFlatList<ItemT>({ scroller, ...props }: FlatListProps<ItemT>
 
   const { listProps, thumb } = useFastScroller(
     scroller,
-    (offset) => ref.current?.scrollToOffset({ offset, animated: false }),
+    (offset) => ref.current?.scrollToOffset({ offset, animated: true }),
     props,
   );
   if (!scroller) return <FlatList ref={ref} {...props} />;

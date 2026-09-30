@@ -56,6 +56,8 @@ import { getCategoryIcon } from '@/lib/categoryIcons';
 import { getExpenseEditHref } from '@/lib/expenseEditLink';
 import { workspaceBudgetName } from '@/lib/workspaceIdentity';
 import { GROUP_ATTRIBUTION } from "@/lib/attribution";
+import { ContributionMemberCard } from '@/components/ContributionMemberCard';
+import { contributionsByDay, versusLastMonth } from '@/lib/contributionInsights';
 
 const MONTH_PREF_KEY = 'expenses_month_pref';
 
@@ -274,10 +276,19 @@ export default function HistoryScreen() {
     { query: { queryKey: getGetDashboardSummaryQueryKey({ month, year }), retry: false, enabled: activeTab === 'contributions' } },
   );
   const contributionMembers = ((summary as { memberContributions?: ContributionMember[] } | undefined)?.memberContributions ?? []);
+  const previousMonth = month === 1 ? 12 : month - 1;
+  const previousYear = month === 1 ? year - 1 : year;
+  const { data: previousSummary } = useGetDashboardSummary(
+    { month: previousMonth, year: previousYear },
+    { query: { queryKey: getGetDashboardSummaryQueryKey({ month: previousMonth, year: previousYear }), retry: false, enabled: activeTab === 'contributions' } },
+  );
+  const previousMembers = (previousSummary as { memberContributions?: ContributionMember[] } | undefined)?.memberContributions;
   const activityFeed = recentActivity.data ?? [];
   const activityLoading = recentActivity.isLoading;
   const activityError = recentActivity.isError;
   const contributions = (contributionsQuery.data ?? []) as Contribution[];
+  // Standalone contributions under a heading for each day they were recorded.
+  const contributionRows = useMemo(() => contributionsByDay(contributions), [contributions]);
   const isSharedWorkspace = group?.isPrivate === false;
   const currentMember = members.find((member) => member.userId === user?.id);
   const isContributionManager = group?.isPrivate === true
@@ -959,26 +970,47 @@ export default function HistoryScreen() {
           <View style={styles.empty}><Feather name="alert-circle" size={36} color={colors.destructive} /><Text style={[styles.emptyTitle, { color: colors.foreground }]}>Couldn’t load contributions</Text><Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Check your group access, then pull down to try again.</Text></View>
         ) : (
           <PageFlatList scroller={{ top: 12, bottom: insets.bottom + 110 }}
-            data={contributions}
-            keyExtractor={(item) => `contribution-${item.id}`}
+            data={contributionRows}
+            keyExtractor={(row) => (row.kind === 'day' ? `contribution-day-${row.day}` : `contribution-${row.item.id}`)}
             ListHeaderComponent={
               <View style={styles.contributionListHeader}>
-                <View style={[styles.contributionIntro, { backgroundColor: colors.primary + '10', borderColor: colors.primary + '33' }]}>
-                  <Feather name="info" size={16} color={colors.primary} />
-                  <Text style={[styles.contributionIntroText, { color: colors.mutedForeground }]}>Personal expense portions, bank deposits, and savings contributions are counted once. The group funding stays with the group.</Text>
-                </View>
-                <View style={[styles.householdTotal, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                  <Text style={[styles.householdTotalLabel, { color: colors.mutedForeground }]}>Group contribution total</Text>
-                  <Text style={[styles.householdTotalAmount, { color: colors.foreground }]}>KES {formatKES(contributionMembers.reduce((sum, member) => sum + member.contributed, 0))}</Text>
-                </View>
-                {contributionMembers.map((member) => (
-                  <View key={member.userId} style={[styles.contributionMember, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                    <View style={styles.contributionMemberTop}>
-                      <View><Text style={[styles.contributionMemberName, { color: colors.foreground }]}>{member.name}</Text><Text style={[styles.contributionMemberTarget, { color: colors.mutedForeground }]}>{member.target == null ? 'No monthly target' : `Target KES ${formatKES(member.target)}`}</Text></View>
-                      <Text style={[styles.contributionMemberAmount, { color: colors.primary }]}>KES {formatKES(member.contributed)}</Text>
+                {(() => {
+                  const total = contributionMembers.reduce((sum, member) => sum + member.contributed, 0);
+                  const previousTotal = previousMembers ? previousMembers.reduce((sum, member) => sum + member.contributed, 0) : null;
+                  const compared = versusLastMonth(total, previousTotal, MONTHS_SHORT[previousMonth - 1]);
+                  if (total === 0 && contributions.length === 0) {
+                    // Nothing yet: say so, and offer the way to start, not a bare KES 0.
+                    return (
+                      <View style={[styles.householdTotal, { backgroundColor: colors.card, borderColor: colors.border, alignItems: 'center', gap: 8 }]} testID="contributions-empty-month">
+                        <Feather name="users" size={26} color={colors.mutedForeground} />
+                        <Text style={[styles.emptyTitle, { color: colors.foreground, marginTop: 0 }]}>Nobody has contributed for {MONTHS_SHORT[month - 1]} yet</Text>
+                        {compared ? <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>{MONTHS_SHORT[previousMonth - 1]} had KES {formatKES(previousTotal ?? 0)}.</Text> : null}
+                        {isSharedWorkspace ? (
+                          <Pressable onPress={() => router.push('/record-contributions')} style={[styles.contributionCta, { backgroundColor: colors.primary }]} accessibilityRole="button" testID="contributions-record-month">
+                            <Feather name="plus-circle" size={15} color={colors.primaryForeground} />
+                            <Text style={{ color: colors.primaryForeground, fontFamily: 'Inter_600SemiBold' }}>Record this month</Text>
+                          </Pressable>
+                        ) : null}
+                      </View>
+                    );
+                  }
+                  return (
+                    <View style={[styles.householdTotal, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                      <Text style={[styles.householdTotalLabel, { color: colors.mutedForeground }]}>Put in for {MONTHS_SHORT[month - 1]} {year}</Text>
+                      <Text style={[styles.householdTotalAmount, { color: colors.foreground }]}>KES {formatKES(total)}</Text>
+                      {compared ? (
+                        <Text style={[styles.contributionCompare, { color: compared.up == null ? colors.mutedForeground : compared.up ? colors.primary : colors.destructive }]} testID="contributions-vs-last-month">
+                          {compared.text}
+                        </Text>
+                      ) : null}
+                      <Text style={[styles.contributionCaption, { color: colors.mutedForeground }]}>
+                        Money paid in, expenses paid from members' own pockets and savings - each counted once. Tap a member to see the entries.
+                      </Text>
                     </View>
-                    <View style={styles.contributionStats}><Text style={[styles.contributionStat, { color: colors.mutedForeground }]}>Spent <Text style={{ color: colors.foreground }}>KES {formatKES(member.spent)}</Text></Text><Text style={[styles.contributionStat, { color: colors.mutedForeground }]}>Net <Text style={{ color: member.net >= 0 ? colors.primary : colors.destructive }}>KES {formatKES(member.net)}</Text></Text></View>
-                  </View>
+                  );
+                })()}
+                {contributionMembers.map((member) => (
+                  <ContributionMemberCard key={member.userId} member={member} month={month} year={year} canManage={isContributionManager} />
                 ))}
                 {sharedHouseholdRows.length > 0 && (
                   <View style={[styles.sharedFunding, { backgroundColor: colors.muted, borderColor: colors.border }]}>
@@ -996,12 +1028,17 @@ export default function HistoryScreen() {
                 <Text style={[styles.contributionRowsTitle, { color: colors.foreground }]}>Standalone contributions</Text>
               </View>
             }
-            renderItem={({ item }) => (
+            renderItem={({ item: row }) => row.kind === 'day' ? (
+              <View style={styles.contributionDay}>
+                <Text style={[styles.contributionDayLabel, { color: colors.mutedForeground }]}>{formatDate(row.day)}</Text>
+                <Text style={[styles.contributionDayLabel, { color: colors.mutedForeground }]}>{row.count} · KES {formatKES(row.total)}</Text>
+              </View>
+            ) : (
               <ContributionRow
-                contribution={item}
+                contribution={row.item}
                 colors={colors}
-                onEdit={canEditContribution(item) ? () => openContributionEdit(item) : undefined}
-                onRemove={canRemoveContribution(item) ? () => removeContribution(item) : undefined}
+                onEdit={canEditContribution(row.item) ? () => openContributionEdit(row.item) : undefined}
+                onRemove={canRemoveContribution(row.item) ? () => removeContribution(row.item) : undefined}
               />
             )}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
@@ -1545,12 +1582,12 @@ function ContributionRow({
   return (
     <View style={[styles.standaloneContributionRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <View style={[styles.rowIcon, { backgroundColor: colors.primary + '18' }]}>
-        <Feather name="trending-up" size={16} color={colors.primary} />
+        <Text style={{ color: colors.primary, fontFamily: 'Inter_700Bold', fontSize: 15 }}>{contribution.userName.trim()[0]?.toUpperCase() ?? '?'}</Text>
       </View>
       <View style={styles.rowInfo}>
         <Text style={[styles.rowDesc, { color: colors.foreground }]} numberOfLines={1}>{contribution.userName}</Text>
         <Text style={[styles.rowMeta, { color: colors.mutedForeground }]}>
-          {MONTHS_SHORT[contribution.month - 1]} {contribution.year} · Added {formatDate(contribution.createdAt)}
+          Towards {MONTHS_SHORT[contribution.month - 1]} {contribution.year} · recorded {new Date(contribution.createdAt).toLocaleTimeString('en-KE', { hour: 'numeric', minute: '2-digit' })}
         </Text>
         {contribution.note ? <Text style={[styles.rowNotes, { color: colors.mutedForeground }]}>{contribution.note}</Text> : null}
       </View>
@@ -1605,6 +1642,11 @@ const styles = StyleSheet.create({
   recurringBannerAction: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
 
   list: { paddingHorizontal: 14, paddingTop: 14 },
+  contributionCompare: { fontSize: 13, fontFamily: 'Inter_600SemiBold', marginTop: 4 },
+  contributionCaption: { fontSize: 12, lineHeight: 17, fontFamily: 'Inter_400Regular', marginTop: 8 },
+  contributionCta: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 999, paddingHorizontal: 16, paddingVertical: 10, marginTop: 4 },
+  contributionDay: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 4, paddingTop: 12, paddingBottom: 6 },
+  contributionDayLabel: { fontSize: 12, fontFamily: 'Inter_600SemiBold', textTransform: 'uppercase', letterSpacing: 0.4 },
   contributionListHeader: { gap: 10, paddingBottom: 8 },
   contributionIntro: { flexDirection: 'row', gap: 8, borderWidth: 1, borderRadius: 12, padding: 12 },
   contributionIntroText: { flex: 1, fontSize: 12, lineHeight: 17, fontFamily: 'Inter_400Regular' },

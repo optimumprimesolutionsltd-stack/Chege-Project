@@ -1,20 +1,21 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
-  Animated,
-  PanResponder,
+  Pressable,
   View,
   type LayoutChangeEvent,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 
-// A thumb this tall, on a track at the right edge; only for a list at least
-// this many screens long - a short one scrolls fine without.
-const THUMB_HEIGHT = 52;
+// Only for a page at least this many screens long - a short one scrolls fine without.
 const SCROLLER_MIN_SCREENS = 2.5;
+// A jump leaves a little of the last screen showing, so the place is not lost.
+const PAGE_OVERLAP = 80;
+const EDGE = 24;
 
-/** Where the thumb's track starts and stops, clear of a header and the floating buttons. */
+/** Where the arrows sit, clear of a header and the floating buttons. */
 export type ScrollerInsets = { top: number; bottom: number };
 
 type ScrollHandlers = {
@@ -24,13 +25,14 @@ type ScrollHandlers = {
 };
 
 /**
- * A thumb at the right edge that can be dragged to fly through a long page -
- * a year of transactions took minutes of flicking. Give it the list's own
- * handlers (they are called too) and a way to jump; spread `listProps` on the
- * list and put `thumb` beside it, both inside a `flex: 1` View.
+ * Up and down arrows at the right edge of a long page: a tap moves a screen,
+ * a long press goes to the top or the bottom - a year of transactions took
+ * minutes of flicking. Give it the list's own handlers (they are called too)
+ * and a way to jump; spread `listProps` on the list and put `thumb` beside
+ * it, both inside a `flex: 1` View.
  *
- * Sizes change rarely and are state; the offset changes every frame and is
- * only an animated value, so scrolling never re-renders the list.
+ * The offset is kept in a ref; state changes only when an arrow appears or
+ * goes, so scrolling never re-renders the list.
  */
 export function useFastScroller(
   insets: ScrollerInsets | undefined,
@@ -41,41 +43,30 @@ export function useFastScroller(
   const [sizes, setSizes] = useState({ height: 0, content: 0 });
   const sizesRef = useRef(sizes);
   sizesRef.current = sizes;
-  const offset = useRef(new Animated.Value(0)).current;
   const offsetRef = useRef(0);
-  const dragStart = useRef(0);
-  const [dragging, setDragging] = useState(false);
-  const scrollToRef = useRef(scrollTo);
-  scrollToRef.current = scrollTo;
+  const [edges, setEdges] = useState({ atTop: true, atBottom: false });
+  const edgesRef = useRef(edges);
 
-  const track = Math.max(0, sizes.height - (insets?.top ?? 0) - (insets?.bottom ?? 0));
-  const trackRef = useRef(track);
-  trackRef.current = track;
-  const maxOffset = Math.max(1, sizes.content - sizes.height);
-  const travel = Math.max(1, track - THUMB_HEIGHT);
-  const show = insets != null && sizes.height > 0 && sizes.content > sizes.height * SCROLLER_MIN_SCREENS && track > THUMB_HEIGHT * 2;
+  const updateEdges = (offset: number) => {
+    const { height, content } = sizesRef.current;
+    const next = { atTop: offset <= EDGE, atBottom: offset >= content - height - EDGE };
+    if (next.atTop !== edgesRef.current.atTop || next.atBottom !== edgesRef.current.atBottom) {
+      edgesRef.current = next;
+      setEdges(next);
+    }
+  };
 
-  const drag = useMemo(() => PanResponder.create({
-    onStartShouldSetPanResponder: () => true,
-    onMoveShouldSetPanResponder: () => true,
-    onPanResponderTerminationRequest: () => false,
-    onPanResponderGrant: () => {
-      const { height, content } = sizesRef.current;
-      const room = Math.max(1, trackRef.current - THUMB_HEIGHT);
-      dragStart.current = (offsetRef.current / Math.max(1, content - height)) * room;
-      setDragging(true);
-    },
-    onPanResponderMove: (_event, gesture) => {
-      const { height, content } = sizesRef.current;
-      const room = Math.max(1, trackRef.current - THUMB_HEIGHT);
-      const top = Math.min(room, Math.max(0, dragStart.current + gesture.dy));
-      scrollToRef.current((top / room) * Math.max(0, content - height));
-    },
-    onPanResponderRelease: () => setDragging(false),
-    onPanResponderTerminate: () => setDragging(false),
-  }), []);
+  const jump = (to: 'up' | 'down' | 'top' | 'bottom') => {
+    const { height, content } = sizesRef.current;
+    const max = Math.max(0, content - height);
+    const step = Math.max(100, height - PAGE_OVERLAP);
+    const target = to === 'top' ? 0 : to === 'bottom' ? max : to === 'up' ? offsetRef.current - step : offsetRef.current + step;
+    scrollTo(Math.min(max, Math.max(0, target)));
+  };
 
   if (!insets) return { listProps: handlers, thumb: null };
+
+  const show = sizes.height > 0 && sizes.content > sizes.height * SCROLLER_MIN_SCREENS;
 
   const listProps = {
     scrollEventThrottle: 16,
@@ -90,31 +81,44 @@ export function useFastScroller(
     },
     onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       offsetRef.current = event.nativeEvent.contentOffset.y;
-      offset.setValue(event.nativeEvent.contentOffset.y);
+      updateEdges(offsetRef.current);
       handlers.onScroll?.(event);
     },
   };
 
+  const arrow = (direction: 'up' | 'down') => (
+    <Pressable
+      onPress={() => jump(direction)}
+      onLongPress={() => jump(direction === 'up' ? 'top' : 'bottom')}
+      hitSlop={6}
+      accessibilityRole="button"
+      accessibilityLabel={direction === 'up' ? 'Up a screen. Hold to go to the top.' : 'Down a screen. Hold to go to the bottom.'}
+      testID={`page-scroller-${direction}`}
+      style={({ pressed }) => ({
+        width: 38,
+        height: 38,
+        borderRadius: 19,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: colors.card,
+        borderWidth: 1,
+        borderColor: colors.border,
+        opacity: pressed ? 1 : 0.88,
+        shadowColor: '#000',
+        shadowOpacity: 0.15,
+        shadowRadius: 4,
+        shadowOffset: { width: 0, height: 2 },
+        elevation: 3,
+      })}
+    >
+      <Feather name={direction === 'up' ? 'chevron-up' : 'chevron-down'} size={20} color={colors.primary} />
+    </Pressable>
+  );
+
   const thumb = show ? (
-    <View pointerEvents="box-none" style={{ position: 'absolute', right: 0, top: insets.top, height: track, width: 30 }}>
-      <Animated.View
-        {...drag.panHandlers}
-        accessibilityRole="adjustable"
-        accessibilityLabel="Scroller - drag to move quickly through the page"
-        testID="page-scroller"
-        hitSlop={{ left: 12, top: 8, bottom: 8 }}
-        style={{
-          position: 'absolute',
-          right: 2,
-          width: 26,
-          height: THUMB_HEIGHT,
-          alignItems: 'center',
-          justifyContent: 'center',
-          transform: [{ translateY: offset.interpolate({ inputRange: [0, maxOffset], outputRange: [0, travel], extrapolate: 'clamp' }) }],
-        }}
-      >
-        <View style={{ width: dragging ? 8 : 6, height: THUMB_HEIGHT - 8, borderRadius: 4, backgroundColor: colors.primary, opacity: dragging ? 0.95 : 0.6 }} />
-      </Animated.View>
+    <View pointerEvents="box-none" style={{ position: 'absolute', right: 10, top: insets.top, bottom: insets.bottom, justifyContent: 'flex-end', gap: 8 }} testID="page-scroller">
+      {!edges.atTop ? arrow('up') : null}
+      {!edges.atBottom ? arrow('down') : null}
     </View>
   ) : null;
 
