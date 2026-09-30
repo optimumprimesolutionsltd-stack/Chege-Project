@@ -946,6 +946,41 @@ export default function MpesaImportScreen() {
     () => (statementReading && account ? notOnStatement(statementReading, (account.transactions ?? []) as unknown as RecordedRow[]) : null),
     [statementReading, account],
   );
+  // "Fix these for me": the entries the check can prove are duplicates of this
+  // statement - a pasted Fuliza fee its Fuliza charges already hold, an
+  // earlier statement's Fuliza line it replaces, a charge kept twice - removed
+  // after one confirmation. Anything it cannot prove stays listed to decide.
+  const [fixingExtras, setFixingExtras] = useState(false);
+  const fixableExtras = (extras?.rows ?? []).filter((row) => row.fixable);
+  const fixExtras = () => {
+    if (fixableExtras.length === 0 || fixingExtras) return;
+    const total = Math.round(fixableExtras.reduce((sum, row) => sum + row.effect, 0) * 100) / 100;
+    Alert.alert(
+      `Remove ${fixableExtras.length} ${fixableExtras.length === 1 ? 'duplicate' : 'duplicates'}?`,
+      `${fixableExtras.map((row) => `· ${String(row.date).slice(0, 10)} · ${row.description ?? ''} · KES ${formatExact(Math.abs(row.effect))}`).join('\n')}\n\nThese are already counted by this statement. Removing them moves the balance by KES ${formatExact(-total)}.`,
+      [
+        { text: 'Keep them', style: 'cancel' },
+        {
+          text: 'Remove them',
+          style: 'destructive',
+          onPress: async () => {
+            setFixingExtras(true);
+            let failed = 0;
+            for (const row of fixableExtras) {
+              try {
+                await customFetch(`/api/joint-account/${row.id}`, { method: 'DELETE' });
+              } catch {
+                failed += 1;
+              }
+            }
+            await queryClient.invalidateQueries();
+            setFixingExtras(false);
+            if (failed > 0) Alert.alert('Some were not removed', `${failed} could not be removed. Open Bank to delete them by hand.`);
+          },
+        },
+      ],
+    );
+  };
   const fixOpeningBalance = async () => {
     if (!openingFix || !accountId || openingSaving) return;
     setOpeningSaving(true);
@@ -1513,6 +1548,19 @@ export default function MpesaImportScreen() {
                     <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0 }]}>
                       These move the balance but M-Pesa has no record of them. Open Bank and delete any that did not happen, or were recorded twice.
                     </Text>
+                    {fixableExtras.length > 0 && canManageBudget ? (
+                      <Pressable
+                        onPress={fixExtras}
+                        disabled={fixingExtras}
+                        style={[styles.primary, { backgroundColor: colors.primary, opacity: fixingExtras ? 0.6 : 1, marginVertical: 6 }]}
+                        accessibilityRole="button"
+                        testID="mpesa-fix-extras"
+                      >
+                        {fixingExtras
+                          ? <ActivityIndicator color="#fff" />
+                          : <Text style={styles.primaryText}>Fix {fixableExtras.length} for me</Text>}
+                      </Pressable>
+                    ) : null}
                     {extras.rows.slice(0, 20).map((row) => (
                       <Text key={row.id} style={[styles.hint, { color: colors.foreground, marginTop: 0 }]} numberOfLines={2}>
                         • {String(row.date).slice(0, 10)} · {row.description ?? ''} · {row.effect < 0 ? '−' : '+'}KES {formatExact(Math.abs(row.effect))} ({row.why})

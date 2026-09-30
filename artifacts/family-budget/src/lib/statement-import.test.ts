@@ -311,3 +311,34 @@ describe("Fuliza from overlapping statements", () => {
   });
 });
 const round2 = (value: number) => Math.round(value * 100) / 100;
+
+// "Can the app fix these itself?" Only what it can prove is a duplicate.
+describe("fixing what is not on the statement", () => {
+  const line = (index: number, type: string, direction: "in" | "out", amount: number, receipt: string) => ({
+    index, status: "ready" as const, reason: null, receipt, direction, type, amount, description: type, named: false, date: "2026-09-30", fee: null, mpesaBalance: null, alreadyRecorded: null,
+  });
+  const reading = {
+    ...statementLines([]), opening: 12024.59, closing: 0, firstDate: "2026-09-01", lastDate: "2026-09-30",
+    lines: [line(0, "fuliza_fee", "out", 720.24, "FZ260901260930"), line(1, "fuliza_borrowed", "in", 3305.07, "FB260901260930")],
+  };
+  const recorded = [
+    { id: 1, date: "2026-09-30", type: "disbursement", amount: 720.24, description: "Fuliza charges 2026-09-01 to 2026-09-30", mpesaReceipt: "FZ260901260930" },
+    { id: 2, date: "2026-09-30", type: "deposit", amount: 3305.07, description: "Borrowed from Fuliza", mpesaReceipt: "FB260901260930" },
+    { id: 3, date: "2026-09-29", type: "disbursement", amount: 0.2, description: "Fuliza access fee", mpesaReceipt: "TJT1234ABCFEE" },
+    { id: 4, date: "2026-09-29", type: "disbursement", amount: 32.66, description: "Fuliza access fee", mpesaReceipt: "TJT1234ABDFEE" },
+    { id: 5, date: "2026-09-27", type: "disbursement", amount: 688.25, description: "Fuliza charges 2026-09-01 to 2026-09-27", mpesaReceipt: "FZ260901260927" },
+    { id: 6, date: "2026-09-12", type: "disbursement", amount: 500, description: "Typed in" },
+  ];
+
+  it("marks the duplicates it can prove, and leaves the rest to decide", () => {
+    const { rows } = notOnStatement(reading, recorded);
+    expect(rows.filter((row) => row.fixable).map((row) => row.id)).toEqual([3, 4, 5]);
+    expect(rows.find((row) => row.id === 6)?.fixable).toBe(false);
+  });
+
+  it("keeps an earlier statement\u2019s Fuliza line when only the difference was saved from this one", () => {
+    const difference = recorded.map((row) => (row.id === 1 ? { ...row, amount: 31.99, description: "Fuliza charges 2026-09-01 to 2026-09-30 (less KES 688.25 already recorded)" } : row));
+    const { rows } = notOnStatement(reading, difference);
+    expect(rows.find((row) => row.id === 5)?.fixable).toBe(false);
+  });
+});
