@@ -10,6 +10,7 @@ import {
   Image,
   Modal,
   TextInput,
+  ScrollView as AskScroll,
 } from 'react-native';
 import Animated, {
   cancelAnimation,
@@ -855,6 +856,9 @@ export default function DashboardScreen() {
                 <Feather name="x" size={22} color={colors.mutedForeground} />
               </Pressable>
             </View>
+            {/* Scrolls inside the sheet, so a long answer never pushes the
+                close button off the top of the screen. */}
+            <AskScroll style={{ flexShrink: 1 }} contentContainerStyle={{ gap: 12, paddingBottom: 8 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
             <TextInput
               value={askQuery}
               onChangeText={setAskQuery}
@@ -930,14 +934,20 @@ export default function DashboardScreen() {
                     ))}
                   </View>
                 ) : null}
-                <Pressable onPress={newAskConversation} accessibilityRole="button" testID="ask-jamvi-new" hitSlop={6} style={{ marginTop: 6 }}>
-                  <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 12 }}>New question</Text>
-                </Pressable>
+                <View style={{ flexDirection: 'row', gap: 18, marginTop: 6 }}>
+                  <Pressable onPress={newAskConversation} accessibilityRole="button" testID="ask-jamvi-new" hitSlop={6}>
+                    <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 12 }}>New question</Text>
+                  </Pressable>
+                  <Pressable onPress={() => setAskOpen(false)} accessibilityRole="button" testID="ask-jamvi-close" hitSlop={6}>
+                    <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 12 }}>Close</Text>
+                  </Pressable>
+                </View>
                 <Text style={[styles.askAnswerMeta, { color: colors.mutedForeground }]}>
                   Read-only · {askAnswer.workspaceScoped ? 'Current budget only' : 'Unscoped'}
                 </Text>
               </View>
             ) : null}
+            </AskScroll>
           </View>
         </KeyboardAvoidingView>
       </Modal>
@@ -1110,7 +1120,7 @@ const styles = StyleSheet.create({
   groupCtaButton: { minHeight: 46, borderRadius: 12, paddingHorizontal: 14, marginTop: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   groupCtaButtonText: { fontSize: 13, fontFamily: 'Inter_700Bold' },
   askModalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(1, 28, 78, 0.48)' },
-  askModalSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 18, paddingBottom: 28 },
+  askModalSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 18, paddingBottom: 28, maxHeight: '92%' },
   askModalHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 16 },
   askModalTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 11, flex: 1 },
   askModalIcon: { width: 38, height: 38, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
