@@ -1027,6 +1027,41 @@ export default function MpesaImportScreen() {
       ],
     );
   };
+  // This statement's own Fuliza lines saved from an earlier download of the
+  // same days: brought up to what this statement says, after one tap.
+  const fulizaUpdates = (missing?.amounts ?? []).filter((row) => row.fixable);
+  const [updatingFuliza, setUpdatingFuliza] = useState(false);
+  const updateFuliza = () => {
+    if (fulizaUpdates.length === 0 || updatingFuliza) return;
+    Alert.alert(
+      'Update to this statement?',
+      `${fulizaUpdates.map((row) => `· ${row.description}: KES ${formatExact(row.recorded)} → ${formatExact(row.statement)}`).join('\n')}\n\nThis statement covers more of the same days, so its Fuliza figures are the ones to keep.`,
+      [
+        { text: 'Not now', style: 'cancel' },
+        {
+          text: 'Update',
+          onPress: async () => {
+            setUpdatingFuliza(true);
+            let failed = 0;
+            for (const row of fulizaUpdates) {
+              try {
+                await customFetch(`/api/joint-account/${row.id}`, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ amount: row.statement, date: row.date }),
+                });
+              } catch {
+                failed += 1;
+              }
+            }
+            await queryClient.invalidateQueries();
+            setUpdatingFuliza(false);
+            if (failed > 0) Alert.alert('Some were not updated', `${failed} could not be updated. Edit them on Bank.`);
+          },
+        },
+      ],
+    );
+  };
   const fixOpeningBalance = async () => {
     if (!openingFix || !accountId || openingSaving) return;
     setOpeningSaving(true);
@@ -1640,6 +1675,19 @@ export default function MpesaImportScreen() {
                         • {charge.date} · {charge.description} · −KES {formatExact(charge.amount)} (the payment is saved, its charge is not)
                       </Text>
                     ))}
+                    {fulizaUpdates.length > 0 && canManageBudget ? (
+                      <Pressable
+                        onPress={updateFuliza}
+                        disabled={updatingFuliza}
+                        style={[styles.primary, { backgroundColor: colors.primary, opacity: updatingFuliza ? 0.6 : 1, marginVertical: 6 }]}
+                        accessibilityRole="button"
+                        testID="mpesa-update-fuliza"
+                      >
+                        {updatingFuliza
+                          ? <ActivityIndicator color="#fff" />
+                          : <Text style={styles.primaryText}>Update {fulizaUpdates.length} Fuliza {fulizaUpdates.length === 1 ? 'line' : 'lines'} to this statement</Text>}
+                      </Pressable>
+                    ) : null}
                     {missing.amounts.slice(0, 20).map((row) => (
                       <Text key={`a-${row.id}`} style={[styles.hint, { color: colors.destructive, marginTop: 0 }]} numberOfLines={2}>
                         • {row.date} · {row.description}: saved as KES {formatExact(row.recorded)}, the statement says KES {formatExact(row.statement)}. Open it on Bank to correct it.
