@@ -268,6 +268,47 @@ export default function PartiesScreen() {
     );
   };
 
+  // The balances are figures, moved only when an offer is accepted or one is
+  // typed in - so with the offers turned down, everybody showed nothing owed.
+  // This adds up the entries linked to each person and offers the result.
+  const [working, setWorking] = useState(false);
+  type WorkedChange = { id: number; name: string; entries: number; now: { owedToUs: number; owedByUs: number }; workedOut: { owedToUs: number; owedByUs: number } };
+  const workOutFromEntries = async () => {
+    if (working) return;
+    setWorking(true);
+    try {
+      const { changes } = await customFetch<{ changes: WorkedChange[] }>('/api/contributors/worked-out');
+      if (changes.length === 0) {
+        Alert.alert('Nothing to change', 'The balances here already match the entries linked to each person. Entries not linked to anybody are not counted.');
+        return;
+      }
+      const lines = changes.map((change) => {
+        const parts = [];
+        if (change.now.owedByUs !== change.workedOut.owedByUs) parts.push(`you owe ${formatKES(change.now.owedByUs)} → ${formatKES(change.workedOut.owedByUs)}`);
+        if (change.now.owedToUs !== change.workedOut.owedToUs) parts.push(`owes you ${formatKES(change.now.owedToUs)} → ${formatKES(change.workedOut.owedToUs)}`);
+        return `· ${change.name}: ${parts.join(', ')}`;
+      });
+      Alert.alert('From your entries', `${lines.join('\n')}\n\nWorked out from the entries linked to each person.`, [
+        { text: 'Not now', style: 'cancel' },
+        {
+          text: 'Use these',
+          onPress: async () => {
+            try {
+              await customFetch('/api/contributors/worked-out', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+              await queryClient.invalidateQueries({ queryKey: ['parties'] });
+            } catch (error: unknown) {
+              Alert.alert('Could not update them', error instanceof Error ? error.message : 'Please try again.');
+            }
+          },
+        },
+      ]);
+    } catch (error: unknown) {
+      Alert.alert('Could not work it out', error instanceof Error ? error.message : 'Please try again.');
+    } finally {
+      setWorking(false);
+    }
+  };
+
   // Who owes who as a PDF on its own, to hand to somebody or keep.
   const [exporting, setExporting] = useState(false);
   const downloadPdf = async () => {
@@ -324,6 +365,16 @@ export default function PartiesScreen() {
           <Text style={{ color: '#22c55e', fontFamily: 'Inter_700Bold', fontSize: 17 }}>KES {formatKES(totals.owed)}</Text>
         </View>
       </View>
+      <Pressable
+        onPress={() => void workOutFromEntries()}
+        disabled={working}
+        accessibilityRole="button"
+        testID="parties-work-out"
+        style={{ flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', marginTop: 10, paddingVertical: 6, opacity: working ? 0.6 : 1 }}
+      >
+        {working ? <ActivityIndicator size="small" color={colors.primary} /> : <Feather name="refresh-cw" size={14} color={colors.primary} />}
+        <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>Work it out from my entries</Text>
+      </Pressable>
       {/* Shown, never stored: the two columns stay apart so neither is hidden. */}
       <Text style={{ color: colors.mutedForeground, fontSize: 11, marginTop: 6 }} testID="parties-net">
         Net: {totals.net >= 0 ? 'KES ' + formatKES(totals.net) + ' in your favour' : 'KES ' + formatKES(Math.abs(totals.net)) + ' against you'}

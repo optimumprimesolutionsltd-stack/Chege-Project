@@ -30,6 +30,7 @@ import { createContributionStatementPdf } from "../lib/contribution-statement-pd
 import { groupVerifyCode } from "../lib/contribution-verification";
 import { nairobiNow } from "../lib/nairobiTime";
 import { notAReversal } from "../lib/reversal-links";
+import { workOutBalances } from "../lib/who-owes-who";
 import {
   CONTRIBUTOR_NAME_MAX,
   contributorNameMessage,
@@ -349,6 +350,70 @@ const contributorUpdate = z.object({
  * added, which meant that in practice it was never set at all - and the
  * arrears column, which is measured against it, was empty for every group.
  */
+/**
+ * Who owes who, worked out from the entries linked to each person (see
+ * lib/who-owes-who.ts), beside the balances as they stand - offered, and set
+ * only when somebody says so.
+ */
+async function workedOutBalances(groupId: number) {
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Nairobi", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  const [rows, parties] = await Promise.all([
+    db.execute(sql`
+      SELECT tx.type, tx.amount::float8 AS amount, tx.is_lending AS "isLending",
+             tx.settles_contributor_id AS "settlesContributorId",
+             link.party_id AS "linkPartyId", link.kind AS "linkKind"
+      FROM joint_account_transactions tx
+      LEFT JOIN debt_entry_links link ON link.transaction_id = tx.id AND link.group_id = tx.group_id
+      WHERE tx.group_id = ${groupId}
+        AND tx.date <= ${today}
+        AND (link.party_id IS NOT NULL OR tx.settles_contributor_id IS NOT NULL)
+    `).then((result) => result.rows as Array<{ type: string; amount: number; isLending: boolean | null; settlesContributorId: number | null; linkPartyId: number | null; linkKind: string | null }>),
+    db.select({
+      id: groupContributorsTable.id,
+      name: groupContributorsTable.name,
+      owedToUs: groupContributorsTable.owedToUs,
+      owedByUs: groupContributorsTable.owedByUs,
+    })
+      .from(groupContributorsTable)
+      .where(and(eq(groupContributorsTable.groupId, groupId), isNull(groupContributorsTable.archivedAt))),
+  ]);
+  const worked = workOutBalances(rows);
+  return parties
+    .filter((party) => worked.has(party.id))
+    .map((party) => {
+      const found = worked.get(party.id)!;
+      return {
+        id: party.id,
+        name: party.name,
+        entries: found.entries,
+        now: { owedToUs: party.owedToUs ?? 0, owedByUs: party.owedByUs ?? 0 },
+        workedOut: { owedToUs: found.owedToUs, owedByUs: found.owedByUs },
+      };
+    })
+    .filter((party) => party.now.owedToUs !== party.workedOut.owedToUs || party.now.owedByUs !== party.workedOut.owedByUs);
+}
+
+router.get("/contributors/worked-out", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  res.json({ changes: await workedOutBalances(groupId) });
+});
+
+router.post("/contributors/worked-out", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  if (!requireGroupManager(req, res)) return;
+  const changes = await workedOutBalances(groupId);
+  await db.transaction(async (trx) => {
+    for (const change of changes) {
+      await trx.update(groupContributorsTable)
+        .set({ owedToUs: change.workedOut.owedToUs, owedByUs: change.workedOut.owedByUs })
+        .where(and(eq(groupContributorsTable.id, change.id), eq(groupContributorsTable.groupId, groupId)));
+    }
+  });
+  res.json({ updated: changes.length });
+});
+
 router.patch("/contributors/:id", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
