@@ -38,3 +38,19 @@ describe("Who owes who, worked out from entries", () => {
     expect(post).toContain("if (!requireGroupManager(req, res)) return;");
   });
 });
+
+// "I thought it should be under the Debt tab": Fuliza still owed, saved before
+// imports linked it, is counted against Fuliza, which is added if missing.
+describe("Fuliza from statements", () => {
+  const route = readFileSync("src/routes/contributors.ts", "utf8");
+  it("counts unlinked Borrowed-from-Fuliza and Fuliza repayments against Fuliza", () => {
+    expect(route).toContain("tx.mpesa_receipt ~ '^F[BR][0-9]{12}$'");
+    expect(route).toContain('if (/^FB/.test(row.receipt)) return { ...row, linkPartyId: fulizaId, linkKind: "borrowed" };');
+    expect(route).toContain('if (/^FR/.test(row.receipt)) return { ...row, linkPartyId: fulizaId, linkKind: "pay-back" };');
+  });
+
+  it("adds Fuliza to Who owes who when it is not there, on confirming", () => {
+    expect(route).toContain('name: "Fuliza",');
+    expect(route).toContain("if (change.id === FULIZA_TO_ADD) {");
+  });
+});
