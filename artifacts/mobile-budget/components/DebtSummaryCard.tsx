@@ -10,7 +10,7 @@ import { formatMonthKey, summariseDebts, type DebtWithPayment } from '@/lib/debt
 
 type CategoryRow = DebtWithPayment & { budgetAmount?: number | null };
 
-type Party = { id: number; name: string; owedByUs?: number | null };
+type Party = { id: number; name: string; owedByUs?: number | null; owedToUs?: number | null };
 
 /**
  * Put away, not answered for ever.
@@ -108,6 +108,16 @@ export function DebtSummaryCard({ canTrackDebt = false }: { canTrackDebt?: boole
     staleTime: 30_000,
   });
   const owedToPeople = parties.reduce((total, party) => total + Math.max(0, party.owedByUs ?? 0), 0);
+  // And the other side of Who owes who: money people owe you. It was never
+  // on this card, so the home screen told half the story.
+  const owedToYou = parties.reduce((total, party) => total + Math.max(0, party.owedToUs ?? 0), 0);
+  const owedToYouLine = owedToYou > 0 ? (
+    <Pressable onPress={() => router.push('/parties')} accessibilityRole="button" hitSlop={6} testID="home-debt-owed-to-you">
+      <Text style={[styles.sub, { color: colors.mutedForeground, marginTop: 4 }]}>
+        Owed to you: <Text style={{ color: '#22c55e', fontFamily: 'Inter_700Bold' }}>KES {kes(owedToYou)}</Text> · Who owes who
+      </Text>
+    </Pressable>
+  ) : null;
 
   const debts: DebtWithPayment[] = categories
     .filter((row) => row.debtBalance !== null && row.debtBalance !== undefined)
@@ -149,6 +159,34 @@ export function DebtSummaryCard({ canTrackDebt = false }: { canTrackDebt?: boole
         <Text style={[styles.sub, { color: colors.mutedForeground }]}>
           From borrowing recorded on the Banking tab. Mark a budget category as a debt to get an end date as well.
         </Text>
+        {owedToYouLine}
+      </Pressable>
+    );
+  }
+
+  if (debts.length === 0 && owedToYou > 0) {
+    // Nothing owed by you, but people owe you: still worth a line on Home.
+    return (
+      <Pressable
+        onPress={() => router.push('/parties')}
+        accessibilityRole="button"
+        accessibilityLabel={`People owe you KES ${kes(owedToYou)}. Open Who owes who.`}
+        testID="home-debt-owed-to-you-card"
+        style={({ pressed }) => [
+          styles.card,
+          { backgroundColor: colors.card, borderColor: pressed ? colors.primary : colors.border },
+        ]}
+      >
+        <View style={styles.headRow}>
+          <View style={styles.headLeft}>
+            <Feather name="users" size={16} color="#22c55e" />
+            <Text style={[styles.heading, { color: colors.foreground }]}>Who owes who</Text>
+          </View>
+          <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+        </View>
+        <Text style={[styles.label, { color: colors.mutedForeground }]}>OWED TO YOU</Text>
+        <Text style={[styles.headline, { color: '#22c55e' }]}>KES {kes(owedToYou)}</Text>
+        <Text style={[styles.sub, { color: colors.mutedForeground }]}>You owe nobody anything.</Text>
       </Pressable>
     );
   }
@@ -224,7 +262,8 @@ export function DebtSummaryCard({ canTrackDebt = false }: { canTrackDebt?: boole
   }
 
   const view = summariseDebts(debts, 'snowball');
-  const clearedEverything = view.totalOwed === 0;
+  // Not "all clear" while money is still owed to people in Who owes who.
+  const clearedEverything = view.totalOwed === 0 && owedToPeople === 0;
   const debtFree = formatMonthKey(view.debtFreeOn);
 
   return (
@@ -277,6 +316,7 @@ export function DebtSummaryCard({ canTrackDebt = false }: { canTrackDebt?: boole
           ) : null}
         </>
       )}
+      {owedToYouLine}
       {view.clearedCount > 0 && !clearedEverything ? (
         <Text style={[styles.cleared, { color: '#22c55e' }]}>
           {view.clearedCount} already paid off
