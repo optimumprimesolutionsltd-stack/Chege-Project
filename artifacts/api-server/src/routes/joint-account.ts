@@ -14,6 +14,7 @@ import {
   bankAccountsTable,
   groupsTable,
   reversalLinksTable,
+  importTidyKeptTable,
 } from "@workspace/db";
 import { and, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
@@ -30,6 +31,7 @@ import { headingAmong, postingToHeadingError } from "../lib/category-headings";
 import { memberLedgerName } from "../lib/contributor-name";
 import { GROUP_ATTRIBUTION } from "../lib/attribution";
 import { reversalLinksReady, soleReversalCandidate } from "../lib/reversal-links";
+import { importTidyKeptReady } from "../lib/import-tidy-kept";
 import { createBankStatementPdf } from "../lib/bank-statement-pdf";
 
 const router = Router();
@@ -730,6 +732,10 @@ router.get("/joint-account/statement", async (req, res): Promise<void> => {
  * Fuliza charges are left alone. Nothing else about an entry changes.
  */
 async function importTidyTargets(groupId: number, accountId: number) {
+  // Entries somebody chose to leave as they are, once the table exists.
+  const keptFilter = importTidyKeptReady()
+    ? sql`AND NOT EXISTS (SELECT 1 FROM import_tidy_kept kept WHERE kept.transaction_id = tx.id)`
+    : sql``;
   const [builtIn] = await db
     .select({ name: budgetCategoriesTable.name })
     .from(budgetCategoriesTable)
@@ -745,6 +751,7 @@ async function importTidyTargets(groupId: number, accountId: number) {
           AND tx.type = 'disbursement'
           AND tx.expense_category IS NOT NULL
           AND lower(btrim(tx.expense_category)) NOT IN ('m-pesa charges', 'fuliza charges')
+          ${keptFilter}
           AND (
             (tx.charge_for_transaction_id IS NOT NULL AND parent.mpesa_receipt IS NOT NULL)
             OR (tx.mpesa_receipt ~ '^[A-Z0-9]{8,12}C[0-9]+$')
@@ -760,6 +767,7 @@ async function importTidyTargets(groupId: number, accountId: number) {
       AND tx.type = 'disbursement'
       AND tx.made_by_id IS NULL
       AND tx.bank_transfer_id IS NULL
+      ${keptFilter}
       AND (tx.mpesa_receipt IS NOT NULL OR parent.mpesa_receipt IS NOT NULL)
   `).then((result) => (result.rows as Array<{ id: number }>).map((row) => Number(row.id)));
   return { chargeCategory: builtIn?.name ?? null, charges, unpaid };
@@ -811,6 +819,30 @@ router.post("/joint-account/import-tidy", async (req, res): Promise<void> => {
     }
   });
   res.json({ charges: chargeCategory ? charges.length : 0, payer: unpaid.length });
+});
+
+/**
+ * Leave these as they are: never offered by the tidy again, on any device.
+ * Only entries the tidy would offer in this account are recorded, so nothing
+ * else can be marked through here. 503 until the table exists, and the phone
+ * then remembers on the device instead.
+ */
+router.post("/joint-account/import-tidy/keep", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  if (!requireGroupManager(req, res)) return;
+  const body = TidyBody.safeParse(req.body ?? {});
+  if (!body.success || !body.data.ids || body.data.ids.length === 0) { res.status(400).json({ error: "Choose the entries to leave as they are." }); return; }
+  if (!importTidyKeptReady()) { res.status(503).json({ error: "This cannot be kept yet. Try again in a minute." }); return; }
+  const found = await importTidyTargets(groupId, body.data.accountId);
+  const offered = new Set([...found.charges.map((row) => Number(row.id)), ...found.unpaid]);
+  const ids = body.data.ids.filter((id) => offered.has(id));
+  if (ids.length > 0) {
+    await db.insert(importTidyKeptTable)
+      .values(ids.map((transactionId) => ({ transactionId, groupId })))
+      .onConflictDoNothing();
+  }
+  res.json({ kept: ids.length });
 });
 
 router.get("/joint-account/statement.pdf", async (req, res): Promise<void> => {

@@ -23,6 +23,7 @@ describe('tidy imported entries', () => {
     expect(bank).toContain("text: 'Leave as they are'");
     expect(bank).toContain('`jamvi:tidy-left:${tidyAccountId}`');
     expect(bank).toContain('{ accountId: tidyAccountId, ids: shownIds }');
+    expect(bank).toContain("await customFetch('/api/joint-account/import-tidy/keep', {");
   });
 
   it('names each entry on the server and limits a tidy to the ids given', () => {

@@ -2285,10 +2285,22 @@ export default function BankScreen() {
       { text: 'Not now', style: 'cancel' },
       ...(importTidy.legacy ? [] : [{
         text: 'Leave as they are',
-        onPress: () => {
+        onPress: async () => {
+          // Kept on the server, so no device offers them again; remembered
+          // here too, and only here when the server cannot keep them yet.
           const next = new Set([...tidyLeft, ...shownIds]);
           setTidyLeft(next);
           if (tidyLeftKey) AsyncStorage.setItem(tidyLeftKey, JSON.stringify([...next])).catch(() => {});
+          try {
+            await customFetch('/api/joint-account/import-tidy/keep', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ accountId: tidyAccountId, ids: shownIds }),
+            });
+            await refetchImportTidy();
+          } catch {
+            // Remembered on this phone meanwhile.
+          }
         },
       }]),
       {
