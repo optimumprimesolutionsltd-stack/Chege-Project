@@ -686,7 +686,7 @@ export default function ReportsScreen() {
           <ActivityIndicator color={colors.primary} size="large" />
         </View>
       ) : (
-        <PageScrollView
+        <PageScrollView scroller={{ top: 12, bottom: insets.bottom + 110 }}
           ref={scrollRef}
           contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 120 }]}
           refreshControl={<RefreshControl refreshing={false} onRefresh={onRefresh} tintColor={colors.primary} />}

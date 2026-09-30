@@ -87,7 +87,7 @@ describe('Reports summary cards', () => {
 
   it('scrolls through a forwarded ref, keeping the focus reset intact', () => {
     expect(reports).toContain('ref={scrollRef}');
-    expect(scrollReset).toContain('React.forwardRef<ScrollView, ScrollViewProps>');
+    expect(scrollReset).toContain('React.forwardRef<ScrollView, ScrollViewProps & WithScroller>');
     // Both handles must reach the node: ours resets on focus, the caller's scrolls.
     expect(scrollReset).toContain('const setRef = useCallback((node: ScrollView | null) => {');
     expect(scrollReset).toContain("ref.current?.scrollTo({ x: 0, y: 0, animated: false });");

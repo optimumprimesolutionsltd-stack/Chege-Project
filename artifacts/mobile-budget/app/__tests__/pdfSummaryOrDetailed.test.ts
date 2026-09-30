@@ -29,18 +29,43 @@ describe('a PDF of a grouped list, as a summary or detailed', () => {
   });
 });
 
-// A long list gets a thumb to drag; scrolling never re-renders the list.
-describe('the scroller on Bank', () => {
-  it('is asked for by Bank, clear of the header and the floating buttons', () => {
+// A long page gets a thumb to drag; scrolling never re-renders the list.
+describe('the scroller', () => {
+  it('is on every long page, clear of its header and floating buttons', () => {
     expect(read('app/(tabs)/bank.tsx')).toContain("scroller={{ top: topPad + 12, bottom: (Platform.OS === 'web' ? 100 : insets.bottom + 110) }}");
+    for (const tab of ['budget', 'contributions', 'debt', 'goals', 'history', 'index', 'reports', 'settings']) {
+      expect(read(`app/(tabs)/${tab}.tsx`)).toContain('scroller={{ top: 12, bottom: insets.bottom + 110 }}');
+    }
+    for (const page of ['expense-ledger', 'income-ledger', 'business', 'spending-by-item']) {
+      const screen = read(`app/${page}.tsx`);
+      expect(screen).toContain('<ScrollerScrollView scroller={{ top: 8, bottom: insets.bottom + 16 }}');
+      expect(screen).toContain('</ScrollerScrollView>');
+    }
+    expect(read('app/parties.tsx')).toContain('scroller={{ top: 8, bottom: 24 }}');
+    expect(read('app/mpesa-import.tsx')).toContain('scroller={{ top: 8, bottom: insets.bottom + 120 }}');
   });
 
-  it('drags the list and follows it through an animated value, only on a long list', () => {
-    const list = read('components/PageScrollReset.tsx');
-    expect(list).toContain('testID="page-scroller"');
-    expect(list).toContain('ref.current?.scrollToOffset({ offset: (top / room) * Math.max(0, content - height), animated: false });');
-    expect(list).toContain('offset.setValue(event.nativeEvent.contentOffset.y);');
-    expect(list).toContain('sizes.content > sizes.height * SCROLLER_MIN_SCREENS');
-    expect(list).toContain('if (!scroller) return <FlatList ref={ref} {...props} />;');
+  it('drags the page and follows it through an animated value, only on a long page', () => {
+    const hook = read('components/FastScroller.tsx');
+    expect(hook).toContain('testID="page-scroller"');
+    expect(hook).toContain('scrollToRef.current((top / room) * Math.max(0, content - height));');
+    expect(hook).toContain('offset.setValue(event.nativeEvent.contentOffset.y);');
+    expect(hook).toContain('sizes.content > sizes.height * SCROLLER_MIN_SCREENS');
+    const lists = read('components/PageScrollReset.tsx');
+    expect(lists).toContain('if (!scroller) return <FlatList ref={ref} {...props} />;');
+    expect(lists).toContain("(offset) => ref.current?.scrollTo({ y: offset, animated: false })");
+  });
+});
+
+// The view buttons light up on the tap; the long list follows.
+describe('switching how a ledger is shown', () => {
+  it('shows the choice at once and renders the list from a deferred value', () => {
+    for (const page of ['expense-ledger', 'income-ledger']) {
+      const screen = read(`app/${page}.tsx`);
+      expect(screen).toContain('const shownView = useDeferredValue(view);');
+      expect(screen).toContain('pressed && !active && { backgroundColor: colors.border }');
+    }
+    expect(read('app/expense-ledger.tsx')).toContain(") : shownView === 'category' ? (");
+    expect(read('app/income-ledger.tsx')).toContain(") : shownView === 'stream' ? (");
   });
 });

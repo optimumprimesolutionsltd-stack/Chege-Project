@@ -1439,7 +1439,7 @@ export default function BudgetScreen() {
         </View>
       </Modal>
 
-      <PageScrollView
+      <PageScrollView scroller={{ top: 12, bottom: insets.bottom + 110 }}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.secondary} />}
         contentContainerStyle={{ paddingBottom: Platform.OS === 'web' ? 100 : insets.bottom + 110 }}

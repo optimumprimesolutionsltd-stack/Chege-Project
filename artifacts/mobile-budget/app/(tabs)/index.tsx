@@ -362,7 +362,7 @@ export default function DashboardScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <PageScrollView
+      <PageScrollView scroller={{ top: 12, bottom: insets.bottom + 110 }}
         style={{ backgroundColor: colors.background }}
         overScrollMode="never"
         // Which budget you are looking at should not scroll away. Index 1 is

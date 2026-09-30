@@ -19,6 +19,7 @@ import {
 } from '@workspace/api-client-react';
 import { isoDay, longDay, orderedRange } from '@/lib/dayRange';
 import { useColors } from '@/hooks/useColors';
+import { ScrollerScrollView } from '@/components/PageScrollReset';
 import { useHasBusiness } from '@/hooks/useHasBusiness';
 import { getExpenseEditHref } from '@/lib/expenseEditLink';
 import { GROUP_ATTRIBUTION } from "@/lib/attribution";
@@ -134,7 +135,7 @@ export default function SpendingByItemScreen() {
         </View>
       </View>
 
-      <ScrollView
+      <ScrollerScrollView scroller={{ top: 8, bottom: insets.bottom + 16 }}
         contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 32 }]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -382,7 +383,7 @@ export default function SpendingByItemScreen() {
             );
           })
         )}
-      </ScrollView>
+      </ScrollerScrollView>
     </View>
   );
 }

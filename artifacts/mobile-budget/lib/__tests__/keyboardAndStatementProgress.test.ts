@@ -18,8 +18,8 @@ describe('pages move clear of the keyboard', () => {
   });
 
   it('keeps the plain scroll view on the web, where there is no such keyboard', () => {
-    expect(page).toContain("if (Platform.OS !== 'web') {");
-    expect(page).toContain('return <ScrollView ref={setRef} {...props} />;');
+    expect(page).toContain("const list = Platform.OS !== 'web' ? (");
+    expect(page).toContain(') : <ScrollView ref={setRef} {...props} {...listProps} />;');
   });
 });
 

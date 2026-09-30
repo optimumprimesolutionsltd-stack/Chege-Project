@@ -858,7 +858,7 @@ export default function HistoryScreen() {
         isLoading ? (
           <ActivityIndicator color={colors.primary} style={{ marginTop: 60 }} size="large" />
         ) : (
-          <PageFlatList
+          <PageFlatList scroller={{ top: 12, bottom: insets.bottom + 110 }}
             data={expenseRows}
             keyExtractor={(row) =>
               row._kind === 'exp-header'
@@ -954,7 +954,7 @@ export default function HistoryScreen() {
         ) : summaryError || contributionsQuery.isError ? (
           <View style={styles.empty}><Feather name="alert-circle" size={36} color={colors.destructive} /><Text style={[styles.emptyTitle, { color: colors.foreground }]}>Couldn’t load contributions</Text><Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Check your group access, then pull down to try again.</Text></View>
         ) : (
-          <PageFlatList
+          <PageFlatList scroller={{ top: 12, bottom: insets.bottom + 110 }}
             data={contributions}
             keyExtractor={(item) => `contribution-${item.id}`}
             ListHeaderComponent={
@@ -1011,7 +1011,7 @@ export default function HistoryScreen() {
         ) : activityError ? (
           <View style={styles.empty}><Feather name="alert-circle" size={36} color={colors.destructive} /><Text style={[styles.emptyTitle, { color: colors.foreground }]}>Couldn’t load activity</Text><Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Pull down to try again.</Text></View>
         ) : (
-          <PageFlatList
+          <PageFlatList scroller={{ top: 12, bottom: insets.bottom + 110 }}
             data={activityRows}
             keyExtractor={(row) =>
               row._kind === 'header' ? `hdr-${row.date}` : `child-${row.groupDate}-${row.item.id}`

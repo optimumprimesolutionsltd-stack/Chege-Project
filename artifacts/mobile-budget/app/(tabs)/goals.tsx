@@ -1054,7 +1054,7 @@ export default function GoalsScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <PageScrollView
+      <PageScrollView scroller={{ top: 12, bottom: insets.bottom + 110 }}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.secondary} />
