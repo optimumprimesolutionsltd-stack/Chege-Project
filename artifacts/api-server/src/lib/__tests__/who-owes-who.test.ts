@@ -45,12 +45,21 @@ describe("Fuliza from statements", () => {
   const route = readFileSync("src/routes/contributors.ts", "utf8");
   it("counts unlinked Borrowed-from-Fuliza and Fuliza repayments against Fuliza", () => {
     expect(route).toContain("tx.mpesa_receipt ~ '^F[BR][0-9]{12}$'");
-    expect(route).toContain('if (/^FB/.test(row.receipt)) return { ...row, linkPartyId: fulizaId, linkKind: "borrowed" };');
-    expect(route).toContain('if (/^FR/.test(row.receipt)) return { ...row, linkPartyId: fulizaId, linkKind: "pay-back" };');
+    expect(route).toContain('const kind = /^FB/.test(row.receipt) ? "borrowed" as const : /^FR/.test(row.receipt) ? "pay-back" as const : null;');
+    expect(route).toContain("return { ...row, linkPartyId: fulizaId, linkKind: kind };");
   });
 
-  it("adds Fuliza to Who owes who when it is not there, on confirming", () => {
+  it("adds Safaricom PLC to Who owes who when it is not there, on confirming", () => {
     expect(route).toContain('name: "Safaricom PLC",');
-    expect(route).toContain("if (change.id === FULIZA_TO_ADD) {");
+    expect(route).toContain("if (fulizaId === null && (toAdd || fulizaLinks.length > 0)) {");
+  });
+});
+
+// "The report will be wrong - push what is in history to it."
+describe("Fuliza history", () => {
+  it("links every unlinked statement Fuliza entry to the creditor when the balances are used", () => {
+    const route = readFileSync("src/routes/contributors.ts", "utf8");
+    expect(route).toContain("fulizaLinks.push({ transactionId: Number(row.id), kind });");
+    expect(route).toContain(".onConflictDoNothing({ target: debtEntryLinksTable.transactionId });");
   });
 });
