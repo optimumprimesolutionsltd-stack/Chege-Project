@@ -854,12 +854,28 @@ export default function HistoryScreen() {
         </Pressable>
       )}
 
+      {activeTab === 'expenses' && expEditor.editing ? (
+        // In reach at the top while choosing - it used to sit after the last
+        // of hundreds of expenses, so Edit seemed to do nothing.
+        <View style={{ paddingHorizontal: 16 }} testID="history-expense-edit-bar">
+          <ListEditorFooter
+            editor={expEditor}
+            summary={`Tap the bin beside an expense to mark it. ${expenses.filter((exp) => expEditor.isRemoving(exp.id)).length} expense${
+              expenses.filter((exp) => expEditor.isRemoving(exp.id)).length === 1 ? '' : 's'
+            } marked for deletion.`}
+          />
+        </View>
+      ) : null}
+
       {activeTab === 'expenses' ? (
         isLoading ? (
           <ActivityIndicator color={colors.primary} style={{ marginTop: 60 }} size="large" />
         ) : (
           <PageFlatList scroller={{ top: 12, bottom: insets.bottom + 110 }}
             data={expenseRows}
+            // A FlatList only redraws its rows when data or extraData changes, so
+            // without this Edit changed nothing on screen: no remove buttons.
+            extraData={`${expEditor.editing}-${expenses.filter((exp) => expEditor.isRemoving(exp.id)).length}-${expEditor.saving}`}
             keyExtractor={(row) =>
               row._kind === 'exp-header'
                 ? `ehdr-${row.date}`
@@ -915,18 +931,6 @@ export default function HistoryScreen() {
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
             contentContainerStyle={[styles.list, { paddingBottom: Platform.OS === 'web' ? 100 : insets.bottom + 100 }]}
             showsVerticalScrollIndicator={false}
-            ListFooterComponent={
-              expEditor.editing ? (
-                <View style={{ paddingHorizontal: 16 }}>
-                  <ListEditorFooter
-                    editor={expEditor}
-                    summary={`${expenses.filter((exp) => expEditor.isRemoving(exp.id)).length} expense${
-                      expenses.filter((exp) => expEditor.isRemoving(exp.id)).length === 1 ? '' : 's'
-                    } marked for deletion.`}
-                  />
-                </View>
-              ) : null
-            }
             ListEmptyComponent={
               <View style={styles.empty}>
                 <Feather name="inbox" size={36} color={colors.mutedForeground} />
