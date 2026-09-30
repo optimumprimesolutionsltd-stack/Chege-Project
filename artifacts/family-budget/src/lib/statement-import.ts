@@ -600,6 +600,56 @@ export function withoutRecordedFuliza(reading: StatementReading, recorded: reado
   return { ...reading, lines, fulizaAlreadyRecorded: round(alreadyIn) };
 }
 
+/**
+ * The other half of notOnStatement: what the statement has that this account
+ * does not, among entries it already holds. A payment saved without its M-Pesa
+ * charge (a pasted message whose charge went nowhere, a save that failed after
+ * the payment) left the balance above M-Pesa's by that charge - his +25 - and
+ * nothing listed it, because the payment itself was there. Also a payment
+ * saved for a different amount than the statement shows. A missing charge can
+ * be added for the person; a different amount is only said.
+ */
+export function missingInJamvi(
+  reading: StatementReading,
+  rows: readonly RecordedRow[],
+): {
+  charges: Array<{ parentId: number; date: string; amount: number; description: string }>;
+  amounts: Array<{ id: number; date: string; description: string; recorded: number; statement: number }>;
+  net: number;
+} {
+  const byReceipt = new Map(rows.filter((row) => row.mpesaReceipt).map((row) => [row.mpesaReceipt as string, row]));
+  const chargedIds = new Set(rows.map((row) => row.chargeForTransactionId).filter((id): id is number => id != null));
+  const recordedCodes = [...byReceipt.keys()];
+  const charges: Array<{ parentId: number; date: string; amount: number; description: string }> = [];
+  const amounts: Array<{ id: number; date: string; description: string; recorded: number; statement: number }> = [];
+  for (const line of reading.lines) {
+    if (line.status !== "ready" || !line.receipt || line.amount === null) continue;
+    const saved = byReceipt.get(line.receipt);
+    if (!saved) continue;
+    const recorded = Number(saved.amount) || 0;
+    if (Math.abs(recorded - line.amount) >= 0.01) {
+      amounts.push({ id: saved.id, date: String(saved.date).slice(0, 10), description: saved.description ?? line.description ?? "", recorded, statement: line.amount });
+    }
+    if (line.direction === "out" && line.fee && line.fee > 0) {
+      // Kept with its payment, saved on its own, or - from an older version that
+      // did not link them - a bank charge of that amount the same day naming the payee.
+      const payee = (saved.description ?? "").toLowerCase();
+      const chargeKept = chargedIds.has(saved.id)
+        || recordedCodes.some((code) => code.startsWith(`${line.receipt}C`))
+        || rows.some((row) => row.type === "disbursement"
+          && String(row.date).slice(0, 10) === String(saved.date).slice(0, 10)
+          && Math.abs((Number(row.amount) || 0) - (line.fee ?? 0)) < 0.01
+          && /^bank charge/i.test(row.description ?? "")
+          && payee !== "" && (row.description ?? "").toLowerCase().includes(payee.slice(0, 12)));
+      if (!chargeKept) {
+        charges.push({ parentId: saved.id, date: line.date ?? String(saved.date).slice(0, 10), amount: line.fee, description: `Bank charge — ${saved.description ?? line.description ?? ""}` });
+      }
+    }
+  }
+  const net = Math.round((charges.reduce((sum, charge) => sum - charge.amount, 0)) * 100) / 100;
+  return { charges, amounts, net };
+}
+
 export interface Reconciliation {
   opening: number;
   closing: number;
