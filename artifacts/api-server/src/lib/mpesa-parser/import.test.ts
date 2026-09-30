@@ -280,3 +280,15 @@ describe("sending a report when the CRM is not set up", () => {
     expect(route).not.toMatch(/console\.|logger\.|req\.log/);
   });
 });
+
+// "How do we handle this?" - the Fuliza repayment message read as a payment out.
+describe("a Fuliza repayment message", () => {
+  it("is left out with a reason, fully or partly paid", async () => {
+    const { toImportItem } = await import("./import");
+    const full = toImportItem("TJT1234ABC Confirmed. Ksh 3,230.07 from your M-PESA has been used to fully pay your outstanding Fuliza M-PESA. Available Fuliza M-PESA limit is Ksh 5,000.00. M-PESA balance is Ksh 12.50.", 0);
+    expect(full).toMatchObject({ status: "skipped", type: "fuliza_repayment", amount: 3230.07, receipt: "TJT1234ABC" });
+    expect(full.reason).toContain("not spending");
+    const partly = toImportItem("TJT1234ABD Confirmed. Ksh 500.00 from your M-PESA has been used to partially pay your outstanding Fuliza M-PESA. Available Fuliza M-PESA limit is Ksh 2,000.00.", 1);
+    expect(partly).toMatchObject({ status: "skipped", type: "fuliza_repayment", amount: 500 });
+  });
+});
