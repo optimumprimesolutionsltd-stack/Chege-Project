@@ -23,7 +23,10 @@ import { useColors } from '@/hooks/useColors';
 import { PageScrollView } from '@/components/PageScrollReset';
 import { handleLapsedError } from '@/lib/lapsedError';
 import { readAmount, toMoney } from '@/lib/bankAmount';
-import { customFetch } from '@workspace/api-client-react';
+import { customFetch, getDashboardMonthlyReportPdf } from '@workspace/api-client-react';
+import { Paths } from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
+import { writePdf } from '@/lib/savePdf';
 
 type Party = {
   id: number;
@@ -265,13 +268,46 @@ export default function PartiesScreen() {
     );
   };
 
+  // Who owes who as a PDF on its own, to hand to somebody or keep.
+  const [exporting, setExporting] = useState(false);
+  const downloadPdf = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const blob = await getDashboardMonthlyReportPdf(
+        { includeSummary: false, includeBudget: false, includeIncome: false, includeDebts: true },
+        { responseType: 'blob', cache: 'no-store' },
+      );
+      const today = new Date().toISOString().slice(0, 10);
+      const file = await writePdf(Paths.cache, `jamvi-who-owes-who-${today}.pdf`, blob as Blob);
+      if (!(await Sharing.isAvailableAsync())) throw new Error('Sharing is not available on this device.');
+      await Sharing.shareAsync(file.uri, { mimeType: 'application/pdf', dialogTitle: 'Save or share Who owes who', UTI: 'com.adobe.pdf' });
+    } catch (error: unknown) {
+      Alert.alert('Could not make the PDF', error instanceof Error ? error.message : 'Please try again.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <PageScrollView style={{ backgroundColor: colors.background }} contentContainerStyle={{ padding: 16, paddingBottom: 48 }}>
       <View style={styles.headerRow}>
         <Pressable onPress={() => router.back()} testID="parties-back" accessibilityRole="button" accessibilityLabel="Go back">
           <Feather name="arrow-left" size={22} color={colors.foreground} />
         </Pressable>
-        <Text style={[styles.title, { color: colors.foreground }]}>Who owes who</Text>
+        <Text style={[styles.title, { color: colors.foreground, flex: 1 }]}>Who owes who</Text>
+        <Pressable
+          onPress={() => void downloadPdf()}
+          disabled={exporting}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Download Who owes who as PDF"
+          testID="parties-pdf"
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderColor: colors.border, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, opacity: exporting ? 0.6 : 1 }}
+        >
+          {exporting ? <ActivityIndicator size="small" color={colors.primary} /> : <Feather name="download" size={15} color={colors.primary} />}
+          <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>PDF</Text>
+        </Pressable>
       </View>
       <Text style={[styles.sub, { color: colors.mutedForeground }]}>
         Money you owe, and money other people owe you, in one list. A loan from a bank sits here the same way money

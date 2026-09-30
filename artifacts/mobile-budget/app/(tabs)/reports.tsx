@@ -762,6 +762,28 @@ export default function ReportsScreen() {
             <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
           </Pressable>
 
+          {/* Who owes you and whom you owe, as it stands - found under More before, never here. */}
+          <Pressable
+            onPress={() => router.push('/parties')}
+            accessibilityRole="button"
+            accessibilityLabel="See who owes you and who you owe"
+            testID="open-who-owes-who"
+            style={({ pressed }) => [
+              styles.spendOnCard,
+              { backgroundColor: colors.card, borderColor: colors.border },
+              pressed && { opacity: 0.85 },
+            ]}
+          >
+            <Feather name="users" size={18} color={colors.primary} />
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={[styles.spendOnTitle, { color: colors.foreground }]}>Who owes who</Text>
+              <Text style={[styles.spendOnSub, { color: colors.mutedForeground }]} numberOfLines={2}>
+                Money owed to you and money you owe, person by person, with a PDF.
+              </Text>
+            </View>
+            <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+          </Pressable>
+
           {/* The plan on its own - what is budgeted, heading by heading - to read or hand out as a PDF. */}
           <Pressable
             onPress={() => router.push('/budget-plan')}
