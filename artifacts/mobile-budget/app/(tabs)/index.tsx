@@ -113,6 +113,8 @@ const SHARED_OVERVIEW_SHORTCUTS: Shortcut[] = [
   { icon: 'target',      label: 'Goals',         color: '#6C9FE6', bg: '#0A254E', route: '/(tabs)/goals',         description: 'Track targets' },
   { icon: 'credit-card', label: 'Bank',          color: '#08B7B0', bg: '#0B343B', route: '/(tabs)/bank',          description: 'Manage funds' },
   { icon: 'pie-chart',   label: 'Reports',       color: '#6C9FE6', bg: '#0A254E', route: '/(tabs)/reports',       description: 'Understand trends' },
+  // What you owe and are owed - loans, Fuliza, people - one tap from Home.
+  { icon: 'trending-down', label: 'Debt',        color: '#F87171', bg: '#3A1212', route: '/(tabs)/debt',          description: 'What you owe' },
 ];
 
 // Only reachable from Home through the setup guide's one-time "Invite a

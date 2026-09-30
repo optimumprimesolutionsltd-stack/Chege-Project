@@ -54,3 +54,12 @@ describe("Fuliza from statements", () => {
     expect(route).toContain("if (change.id === FULIZA_TO_ADD) {");
   });
 });
+
+// "The report will be wrong - push what is in history to it."
+describe("Fuliza history", () => {
+  it("links every unlinked statement Fuliza entry to the creditor when the balances are used", () => {
+    const route = readFileSync("src/routes/contributors.ts", "utf8");
+    expect(route).toContain("fulizaLinks.push({ transactionId: Number(row.id), kind });");
+    expect(route).toContain(".onConflictDoNothing({ target: debtEntryLinksTable.transactionId });");
+  });
+});

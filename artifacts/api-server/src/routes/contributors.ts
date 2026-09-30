@@ -20,6 +20,7 @@ import {
   groupsTable,
   jointAccountDepositSplitsTable,
   jointAccountTxTable,
+  debtEntryLinksTable,
   usersTable,
 } from "@workspace/db";
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
@@ -362,7 +363,7 @@ async function workedOutBalances(groupId: number) {
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Nairobi", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
   const [rows, parties] = await Promise.all([
     db.execute(sql`
-      SELECT tx.type, tx.amount::float8 AS amount, tx.is_lending AS "isLending",
+      SELECT tx.id, tx.type, tx.amount::float8 AS amount, tx.is_lending AS "isLending",
              tx.settles_contributor_id AS "settlesContributorId", tx.mpesa_receipt AS "receipt",
              link.party_id AS "linkPartyId", link.kind AS "linkKind"
       FROM joint_account_transactions tx
@@ -370,7 +371,7 @@ async function workedOutBalances(groupId: number) {
       WHERE tx.group_id = ${groupId}
         AND tx.date <= ${today}
         AND (link.party_id IS NOT NULL OR tx.settles_contributor_id IS NOT NULL OR tx.mpesa_receipt ~ '^F[BR][0-9]{12}$')
-    `).then((result) => result.rows as Array<{ type: string; amount: number; isLending: boolean | null; settlesContributorId: number | null; receipt: string | null; linkPartyId: number | null; linkKind: string | null }>),
+    `).then((result) => result.rows as Array<{ id: number; type: string; amount: number; isLending: boolean | null; settlesContributorId: number | null; receipt: string | null; linkPartyId: number | null; linkKind: string | null }>),
     db.select({
       id: groupContributorsTable.id,
       name: groupContributorsTable.name,
@@ -387,15 +388,20 @@ async function workedOutBalances(groupId: number) {
   // Safaricom lends Fuliza: a creditor already named for either is the one.
   const fuliza = parties.find((party) => /fuliza/i.test(party.name) || party.name.trim().toLowerCase().startsWith("safaricom"));
   const fulizaId = fuliza?.id ?? FULIZA_TO_ADD;
+  // Those Fuliza entries, to be linked to the creditor when the balances are
+  // used - so its history (and report) holds every borrowing and repayment
+  // behind the balance, not a figure with nothing under it.
+  const fulizaLinks: Array<{ transactionId: number; kind: "borrowed" | "pay-back" }> = [];
   const withFuliza = rows.map((row) => {
     if (row.linkPartyId != null || row.settlesContributorId != null || !row.receipt) return row;
-    if (/^FB/.test(row.receipt)) return { ...row, linkPartyId: fulizaId, linkKind: "borrowed" };
-    if (/^FR/.test(row.receipt)) return { ...row, linkPartyId: fulizaId, linkKind: "pay-back" };
-    return row;
+    const kind = /^FB/.test(row.receipt) ? "borrowed" as const : /^FR/.test(row.receipt) ? "pay-back" as const : null;
+    if (!kind) return row;
+    fulizaLinks.push({ transactionId: Number(row.id), kind });
+    return { ...row, linkPartyId: fulizaId, linkKind: kind };
   });
   const worked = workOutBalances(withFuliza);
   const known = fuliza ? parties : [...parties, { id: FULIZA_TO_ADD, name: "Safaricom PLC", owedToUs: null, owedByUs: null }];
-  return known
+  const changes = known
     .filter((party) => worked.has(party.id))
     .map((party) => {
       const found = worked.get(party.id)!;
@@ -408,37 +414,49 @@ async function workedOutBalances(groupId: number) {
       };
     })
     .filter((party) => party.now.owedToUs !== party.workedOut.owedToUs || party.now.owedByUs !== party.workedOut.owedByUs);
+  return { changes, fulizaLinks, fulizaId: fuliza?.id ?? null };
 }
 
 router.get("/contributors/worked-out", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
-  res.json({ changes: await workedOutBalances(groupId) });
+  const { changes, fulizaLinks } = await workedOutBalances(groupId);
+  res.json({ changes, toLink: fulizaLinks.length });
 });
 
 router.post("/contributors/worked-out", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
   if (!requireGroupManager(req, res)) return;
-  const changes = await workedOutBalances(groupId);
+  const { changes, fulizaLinks, fulizaId: existingFulizaId } = await workedOutBalances(groupId);
   await db.transaction(async (trx) => {
+    // Safaricom PLC, added with its balance when it is not in Who owes who yet.
+    let fulizaId = existingFulizaId;
+    const toAdd = changes.find((change) => change.id === FULIZA_TO_ADD);
+    if (fulizaId === null && (toAdd || fulizaLinks.length > 0)) {
+      const [added] = await trx.insert(groupContributorsTable).values({
+        groupId,
+        name: "Safaricom PLC",
+        kind: "institution",
+        owedToUs: toAdd?.workedOut.owedToUs ?? 0,
+        owedByUs: toAdd?.workedOut.owedByUs ?? 0,
+      }).returning({ id: groupContributorsTable.id });
+      fulizaId = added.id;
+    }
+    // Its history: every Fuliza entry the statements recorded, linked to it.
+    if (fulizaId !== null && fulizaLinks.length > 0) {
+      await trx.insert(debtEntryLinksTable)
+        .values(fulizaLinks.map((link) => ({ groupId, transactionId: link.transactionId, partyId: fulizaId!, kind: link.kind })))
+        .onConflictDoNothing({ target: debtEntryLinksTable.transactionId });
+    }
     for (const change of changes) {
-      if (change.id === FULIZA_TO_ADD) {
-        await trx.insert(groupContributorsTable).values({
-          groupId,
-          name: "Safaricom PLC",
-          kind: "institution",
-          owedToUs: change.workedOut.owedToUs,
-          owedByUs: change.workedOut.owedByUs,
-        });
-        continue;
-      }
+      if (change.id === FULIZA_TO_ADD) continue;
       await trx.update(groupContributorsTable)
         .set({ owedToUs: change.workedOut.owedToUs, owedByUs: change.workedOut.owedByUs })
         .where(and(eq(groupContributorsTable.id, change.id), eq(groupContributorsTable.groupId, groupId)));
     }
   });
-  res.json({ updated: changes.length });
+  res.json({ updated: changes.length, linked: fulizaLinks.length });
 });
 
 router.patch("/contributors/:id", async (req, res): Promise<void> => {
