@@ -597,7 +597,7 @@ export default function ContributionsScreen() {
         colors={colors}
       />
 
-      <PageScrollView
+      <PageScrollView scroller={{ top: 12, bottom: insets.bottom + 110 }}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4ade80" />}
         contentContainerStyle={[styles.scroll, { paddingBottom: Platform.OS === 'web' ? 100 : insets.bottom + 110 }]}

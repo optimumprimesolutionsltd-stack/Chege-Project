@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useDeferredValue, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -25,6 +25,7 @@ import { writePdf } from '@/lib/savePdf';
 import { askPdfDetail, type PdfDetail } from '@/lib/pdfDetail';
 import { isoDay, longDay, monthStartIso, orderedRange } from '@/lib/dayRange';
 import { useColors } from '@/hooks/useColors';
+import { ScrollerScrollView } from '@/components/PageScrollReset';
 
 function formatKES(n?: number | null): string {
   if (n === undefined || n === null) return '—';
@@ -61,6 +62,9 @@ export default function IncomeLedgerScreen() {
   const [search, setSearch] = useState('');
   // A statement by day, or filed by the stream it came from with a total each.
   const [view, setView] = useState<'date' | 'stream'>('date');
+  // The button lights up on the tap; the list, which can be hundreds of rows,
+  // follows a moment later. Rebuilding it first made every tap feel hesitant.
+  const shownView = useDeferredValue(view);
   const [opened, setOpened] = useState<Set<string>>(new Set());
   const toggleGroup = (key: string) =>
     setOpened((current) => {
@@ -247,7 +251,7 @@ export default function IncomeLedgerScreen() {
         </Pressable>
       </View>
 
-      <ScrollView
+      <ScrollerScrollView scroller={{ top: 8, bottom: insets.bottom + 16 }}
         contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 32 }]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -349,7 +353,7 @@ export default function IncomeLedgerScreen() {
                 accessibilityRole="button"
                 accessibilityState={{ selected: active }}
                 testID={`income-ledger-view-${value}`}
-                style={[styles.segmentButton, active && { backgroundColor: colors.primary }]}
+                style={({ pressed }) => [styles.segmentButton, active && { backgroundColor: colors.primary }, pressed && !active && { backgroundColor: colors.border }]}
               >
                 <Text style={[styles.segmentText, { color: active ? colors.primaryForeground : colors.foreground }]}>{label}</Text>
               </Pressable>
@@ -378,7 +382,7 @@ export default function IncomeLedgerScreen() {
                 : 'No income recorded between these dates.'}
             </Text>
           </View>
-        ) : view === 'stream' ? (
+        ) : shownView === 'stream' ? (
           streamGroups.map(renderGroup)
         ) : (
           days.map((day) => (
@@ -390,7 +394,7 @@ export default function IncomeLedgerScreen() {
             </View>
           ))
         )}
-      </ScrollView>
+      </ScrollerScrollView>
     </View>
   );
 }

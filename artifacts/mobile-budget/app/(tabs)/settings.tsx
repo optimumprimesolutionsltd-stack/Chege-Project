@@ -919,7 +919,7 @@ export default function SettingsScreen() {
         <ScreenHint>Your account, your budget and who can see it.</ScreenHint>
       </View>
 
-      <PageScrollView
+      <PageScrollView scroller={{ top: 12, bottom: insets.bottom + 110 }}
         ref={scrollRef}
         contentContainerStyle={[styles.content, { paddingBottom: Platform.OS === 'web' ? 100 : insets.bottom + 100 }]}
         showsVerticalScrollIndicator={false}

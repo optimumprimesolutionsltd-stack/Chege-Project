@@ -7,6 +7,7 @@ import { router } from 'expo-router';
 import { autoLinkReversals, getGetDashboardBusinessQueryKey, useGetDashboardBusiness } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
+import { ScrollerScrollView } from '@/components/PageScrollReset';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const LOSS = '#ef4444';
@@ -311,7 +312,7 @@ export default function BusinessScreen() {
         ) : null}
       </View>
 
-      <ScrollView contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 32 }]} showsVerticalScrollIndicator={false}>
+      <ScrollerScrollView scroller={{ top: 8, bottom: insets.bottom + 16 }} contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 32 }]} showsVerticalScrollIndicator={false}>
         <View style={styles.monthRow}>
           <Pressable onPress={() => step(-1)} hitSlop={10} accessibilityRole="button" accessibilityLabel="Previous month" testID="business-prev">
             <Feather name="chevron-left" size={22} color={colors.foreground} />
@@ -359,7 +360,7 @@ export default function BusinessScreen() {
             </Text>
           </>
         )}
-      </ScrollView>
+      </ScrollerScrollView>
     </View>
   );
 }

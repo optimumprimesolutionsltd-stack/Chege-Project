@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useDeferredValue, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -21,6 +21,7 @@ import {
 } from '@workspace/api-client-react';
 import { isoDay, longDay, monthStartIso, orderedRange } from '@/lib/dayRange';
 import { useColors } from '@/hooks/useColors';
+import { ScrollerScrollView } from '@/components/PageScrollReset';
 import { getExpenseEditHref } from '@/lib/expenseEditLink';
 import { groupByCategory, groupByItem } from '@/lib/groupExpenses';
 import { Paths } from 'expo-file-system';
@@ -62,6 +63,9 @@ export default function ExpenseLedgerScreen() {
   // How the entries are laid out: as a statement by day, or filed by what
   // they were for. The filed views show a total per group, tap to open one.
   const [view, setView] = useState<'date' | 'category' | 'item'>('date');
+  // The button lights up on the tap; the list, which can be hundreds of rows,
+  // follows a moment later. Rebuilding it first made every tap feel hesitant.
+  const shownView = useDeferredValue(view);
   const [opened, setOpened] = useState<Set<string>>(new Set());
   const toggleGroup = (key: string) =>
     setOpened((current) => {
@@ -257,7 +261,7 @@ export default function ExpenseLedgerScreen() {
         </Pressable>
       </View>
 
-      <ScrollView
+      <ScrollerScrollView scroller={{ top: 8, bottom: insets.bottom + 16 }}
         contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 32 }]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -371,13 +375,14 @@ export default function ExpenseLedgerScreen() {
                 accessibilityRole="button"
                 accessibilityState={{ selected: active }}
                 testID={`expense-ledger-view-${value}`}
-                style={[styles.segmentButton, active && { backgroundColor: colors.primary }]}
+                style={({ pressed }) => [styles.segmentButton, active && { backgroundColor: colors.primary }, pressed && !active && { backgroundColor: colors.border }]}
               >
                 <Text style={[styles.segmentText, { color: active ? colors.primaryForeground : colors.foreground }]}>{label}</Text>
               </Pressable>
             );
           })}
         </View>
+        {shownView !== view ? <ActivityIndicator color={colors.primary} style={{ marginTop: 12 }} testID="expense-ledger-view-switching" /> : null}
 
         {isError ? (
           <Pressable
@@ -400,9 +405,9 @@ export default function ExpenseLedgerScreen() {
                 : 'No expenses recorded between these dates.'}
             </Text>
           </View>
-        ) : view === 'category' ? (
+        ) : shownView === 'category' ? (
           <>{scopedCategoryGroups.map(renderGroup)}</>
-        ) : view === 'item' ? (
+        ) : shownView === 'item' ? (
           itemGroups.map(renderGroup)
         ) : (
           days.map((day) => (
@@ -414,7 +419,7 @@ export default function ExpenseLedgerScreen() {
             </View>
           ))
         )}
-      </ScrollView>
+      </ScrollerScrollView>
     </View>
   );
 }

@@ -333,7 +333,7 @@ export default function PartiesScreen() {
   };
 
   return (
-    <PageScrollView style={{ backgroundColor: colors.background }} contentContainerStyle={{ padding: 16, paddingBottom: 48 }}>
+    <PageScrollView scroller={{ top: 8, bottom: 24 }} style={{ backgroundColor: colors.background }} contentContainerStyle={{ padding: 16, paddingBottom: 48 }}>
       <View style={styles.headerRow}>
         <Pressable onPress={() => router.back()} testID="parties-back" accessibilityRole="button" accessibilityLabel="Go back">
           <Feather name="arrow-left" size={22} color={colors.foreground} />

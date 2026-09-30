@@ -1392,7 +1392,7 @@ export default function MpesaImportScreen() {
         </View>
       </View>
 
-      <PageScrollView ref={scrollRef} style={{ backgroundColor: colors.background }} contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 120 }]} keyboardShouldPersistTaps="handled">
+      <PageScrollView scroller={{ top: 8, bottom: insets.bottom + 120 }} ref={scrollRef} style={{ backgroundColor: colors.background }} contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 120 }]} keyboardShouldPersistTaps="handled">
         <View style={[styles.card, styles.budgetRow, { backgroundColor: colors.card, borderColor: colors.border }]} testID="mpesa-budget-row">
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0 }]}>These will be saved in</Text>

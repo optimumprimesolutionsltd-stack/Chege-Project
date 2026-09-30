@@ -120,7 +120,7 @@ export default function DebtScreen() {
         )}
       </LinearGradient>
 
-      <PageScrollView
+      <PageScrollView scroller={{ top: 12, bottom: insets.bottom + 110 }}
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 120 }]}
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={() => void refetch()} tintColor={colors.primary} />}
         showsVerticalScrollIndicator={false}
