@@ -15,9 +15,11 @@ const SCROLLER_MIN_SCREENS = 2.5;
 const PAGE_OVERLAP = 80;
 const EDGE = 24;
 // Held: pixels a frame to start, how much faster each frame, and the fastest.
-const GLIDE_START = 6;
-const GLIDE_ACCELERATION = 0.4;
-const GLIDE_MAX = 60;
+const HOLD_DELAY = 250;
+const GLIDE_TICK = 16;
+const GLIDE_START = 8;
+const GLIDE_ACCELERATION = 0.5;
+const GLIDE_MAX = 70;
 
 /** Where the arrows sit, clear of a header and the floating buttons. */
 export type ScrollerInsets = { top: number; bottom: number };
@@ -72,25 +74,41 @@ export function useFastScroller(
 
   // Held down, the page keeps moving - faster the longer it is held - until
   // the finger lifts or the end is reached.
-  const gliding = useRef<{ frame: number | null; speed: number; offset: number }>({ frame: null, speed: 0, offset: 0 });
+  // Pressed: a timer; still held after HOLD_DELAY, the page moves on a steady
+  // tick until the finger lifts. Not onLongPress, which Android cancels on
+  // the smallest wobble - holding an arrow did nothing.
+  const gliding = useRef<{ hold: ReturnType<typeof setTimeout> | null; tick: ReturnType<typeof setInterval> | null; speed: number; offset: number; moved: boolean }>({ hold: null, tick: null, speed: 0, offset: 0, moved: false });
   const stopGlide = () => {
-    if (gliding.current.frame !== null) cancelAnimationFrame(gliding.current.frame);
-    gliding.current.frame = null;
+    const glide = gliding.current;
+    if (glide.hold !== null) clearTimeout(glide.hold);
+    if (glide.tick !== null) clearInterval(glide.tick);
+    glide.hold = null;
+    glide.tick = null;
   };
-  const startGlide = (direction: 'up' | 'down') => {
+  const pressIn = (direction: 'up' | 'down') => {
     stopGlide();
-    gliding.current = { frame: null, speed: GLIDE_START, offset: offsetRef.current };
-    const step = () => {
-      const { height, content } = sizesRef.current;
-      const max = Math.max(0, content - height);
+    gliding.current.moved = false;
+    gliding.current.hold = setTimeout(() => {
       const glide = gliding.current;
-      glide.offset = Math.min(max, Math.max(0, glide.offset + (direction === 'up' ? -glide.speed : glide.speed)));
-      glide.speed = Math.min(GLIDE_MAX, glide.speed + GLIDE_ACCELERATION);
-      scrollToRef.current(glide.offset, false);
-      if ((direction === 'up' && glide.offset <= 0) || (direction === 'down' && glide.offset >= max)) { glide.frame = null; return; }
-      glide.frame = requestAnimationFrame(step);
-    };
-    gliding.current.frame = requestAnimationFrame(step);
+      glide.hold = null;
+      glide.moved = true;
+      glide.speed = GLIDE_START;
+      glide.offset = offsetRef.current;
+      glide.tick = setInterval(() => {
+        const { height, content } = sizesRef.current;
+        const max = Math.max(0, content - height);
+        glide.offset = Math.min(max, Math.max(0, glide.offset + (direction === 'up' ? -glide.speed : glide.speed)));
+        glide.speed = Math.min(GLIDE_MAX, glide.speed + GLIDE_ACCELERATION);
+        scrollToRef.current(glide.offset, false);
+        if ((direction === 'up' && glide.offset <= 0) || (direction === 'down' && glide.offset >= max)) stopGlide();
+      }, GLIDE_TICK);
+    }, HOLD_DELAY);
+  };
+  // A tap moves a screen; a hold that already moved the page does not also jump.
+  const release = (direction: 'up' | 'down') => {
+    const held = gliding.current.moved;
+    stopGlide();
+    if (!held) jump(direction);
   };
   useEffect(() => stopGlide, []);
 
@@ -118,10 +136,8 @@ export function useFastScroller(
 
   const arrow = (direction: 'up' | 'down') => (
     <Pressable
-      onPress={() => jump(direction)}
-      onLongPress={() => startGlide(direction)}
-      onPressOut={stopGlide}
-      delayLongPress={250}
+      onPressIn={() => pressIn(direction)}
+      onPressOut={() => release(direction)}
       hitSlop={6}
       accessibilityRole="button"
       accessibilityLabel={direction === 'up' ? 'Up a screen. Hold to keep scrolling up.' : 'Down a screen. Hold to keep scrolling down.'}

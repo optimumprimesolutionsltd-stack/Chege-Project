@@ -63,6 +63,35 @@ const PDF_SECTIONS: ReadonlyArray<{ key: PdfSectionKey; label: string; hint: str
   { key: "debts", label: "Who owes who", hint: "As it stands today" },
 ];
 
+/**
+ * How the two long lists are laid out: by date, or grouped with a subtotal
+ * each - and grouped, as each group's total alone (summary) or with every
+ * entry under it (detailed). The same choice the phone asks before a PDF.
+ */
+type ExpensesLayout = "date" | "category-summary" | "category-detailed" | "item-summary" | "item-detailed";
+type IncomeLayout = "date" | "stream-summary" | "stream-detailed";
+const EXPENSES_LAYOUTS: ReadonlyArray<{ value: ExpensesLayout; label: string }> = [
+  { value: "date", label: "By date" },
+  { value: "category-summary", label: "By category - summary" },
+  { value: "category-detailed", label: "By category - detailed" },
+  { value: "item-summary", label: "By item - summary" },
+  { value: "item-detailed", label: "By item - detailed" },
+];
+const INCOME_LAYOUTS: ReadonlyArray<{ value: IncomeLayout; label: string }> = [
+  { value: "date", label: "By date" },
+  { value: "stream-summary", label: "By income stream - summary" },
+  { value: "stream-detailed", label: "By income stream - detailed" },
+];
+
+/** The report query's layout parameters for the two lists. */
+export function pdfLayoutParams(expenses: ExpensesLayout, income: IncomeLayout) {
+  const [expensesGroupBy, expensesDetail] = expenses === "date" ? [] : expenses.split("-") as ["category" | "item", "summary" | "detailed"];
+  return {
+    ...(expensesGroupBy ? { expensesGroupBy, expensesDetail } : {}),
+    ...(income === "date" ? {} : { incomeGroupBy: "stream" as const, incomeDetail: income === "stream-summary" ? "summary" as const : "detailed" as const }),
+  };
+}
+
 export default function IncomeStreamsReport() {
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
@@ -127,6 +156,8 @@ export default function IncomeStreamsReport() {
   const [pdfSections, setPdfSections] = useState<Record<PdfSectionKey, boolean>>({
     summary: true, budget: true, income: true, business: false, expenses: false, incomeEntries: false, debts: false,
   });
+  const [expensesLayout, setExpensesLayout] = useState<ExpensesLayout>("date");
+  const [incomeLayout, setIncomeLayout] = useState<IncomeLayout>("date");
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadMessage, setDownloadMessage] = useState<string | null>(null);
   const { data: report, isLoading, isError, refetch } = useGetDashboardIncomeStreams(
@@ -276,6 +307,7 @@ export default function IncomeStreamsReport() {
         includeExpenses: pdfSections.expenses,
         includeIncomeEntries: pdfSections.incomeEntries,
         includeDebts: pdfSections.debts,
+        ...pdfLayoutParams(pdfSections.expenses ? expensesLayout : "date", pdfSections.incomeEntries ? incomeLayout : "date"),
       }, { responseType: "blob", cache: "no-store" });
       const href = URL.createObjectURL(reportPdf);
       const anchor = document.createElement("a");
@@ -337,6 +369,32 @@ export default function IncomeStreamsReport() {
                 {section.label}
               </label>
             ))}
+            {pdfSections.expenses ? (
+              <label className="flex items-center gap-1.5">
+                Expenses
+                <select
+                  value={expensesLayout}
+                  onChange={(event) => setExpensesLayout(event.target.value as ExpensesLayout)}
+                  className="rounded-md border border-border bg-background px-1.5 py-0.5 text-xs text-foreground"
+                  data-testid="select-pdf-expenses-layout"
+                >
+                  {EXPENSES_LAYOUTS.map((layout) => <option key={layout.value} value={layout.value}>{layout.label}</option>)}
+                </select>
+              </label>
+            ) : null}
+            {pdfSections.incomeEntries ? (
+              <label className="flex items-center gap-1.5">
+                Income
+                <select
+                  value={incomeLayout}
+                  onChange={(event) => setIncomeLayout(event.target.value as IncomeLayout)}
+                  className="rounded-md border border-border bg-background px-1.5 py-0.5 text-xs text-foreground"
+                  data-testid="select-pdf-income-layout"
+                >
+                  {INCOME_LAYOUTS.map((layout) => <option key={layout.value} value={layout.value}>{layout.label}</option>)}
+                </select>
+              </label>
+            ) : null}
           </div>
           ) : null}
           {canDownloadPdf ? <Button

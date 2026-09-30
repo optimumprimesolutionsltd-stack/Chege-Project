@@ -42,6 +42,58 @@ import { ContributionPlan } from "@/components/contribution-plan";
 import { ContributionVariance } from "@/components/contribution-variance";
 import { MerryGoRound } from "@/components/merry-go-round";
 import { workspaceLabel } from "@/lib/workspace-identity";
+import { breakdownEntries, sourceParts, versusLastMonth, type MemberBreakdown } from "@/lib/contribution-insights";
+
+/**
+ * Where a member's money came from this month - money in, expenses they paid,
+ * savings - and, opened, every entry behind the figure.
+ */
+function MemberSources({ userId, month, year }: { userId: string; month: number; year: number }) {
+  const [open, setOpen] = useState(false);
+  const { data, isLoading } = useQuery<MemberBreakdown>({
+    queryKey: ["member-breakdown", userId, month, year],
+    queryFn: async () => {
+      const response = await fetch(`/api/dashboard/member-breakdown?userId=${encodeURIComponent(userId)}&month=${month}&year=${year}`, { credentials: "include" });
+      if (!response.ok) throw new Error("Could not load this member's entries.");
+      return response.json();
+    },
+    staleTime: 60_000,
+  });
+  const parts = sourceParts(data?.totals);
+  const entries = breakdownEntries(data);
+  if (isLoading) return <div className="h-10 animate-pulse rounded-xl bg-muted/60" />;
+  return (
+    <div className="space-y-2" data-testid={`member-sources-${userId}`}>
+      {parts.length > 0 ? (
+        <div className="flex flex-wrap gap-2">
+          {parts.map((part) => (
+            <div key={part.label} className="rounded-lg bg-muted/50 px-3 py-1.5">
+              <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{part.label}</p>
+              <p className="text-sm font-bold text-foreground">{formatKes(part.amount)}</p>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      <button type="button" onClick={() => setOpen((value) => !value)} className="flex items-center gap-1 text-sm font-semibold text-primary" data-testid={`member-entries-toggle-${userId}`}>
+        {open ? "Hide entries" : `See ${entries.length} ${entries.length === 1 ? "entry" : "entries"}`}
+        {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+      </button>
+      {open ? (
+        <div className="divide-y rounded-xl border">
+          {entries.length === 0 ? <p className="px-3 py-2 text-sm text-muted-foreground">Nothing recorded for this month.</p> : entries.map((entry) => (
+            <div key={entry.key} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+              <div className="min-w-0">
+                <p className="truncate font-medium">{entry.label}</p>
+                <p className="text-xs text-muted-foreground">{entry.kind}{entry.date ? ` · ${formatDate(entry.date)}` : ""}</p>
+              </div>
+              <p className="shrink-0 font-semibold">{formatKes(entry.amount)}</p>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 function fundingEntryLabel(recordType: "expense" | "deposit" | "savings") {
   if (recordType === "deposit") return "Joint Bank deposit";
@@ -110,9 +162,11 @@ function ProgressBar({ value, max, color }: { value: number; max: number; color:
 
 function MemberCard({
   member, accentColor, incomeStreams, isIncomeStreamsLoading, incomeStreamsError, onOpenLedger,
-  budgetName, pdfMode, pdfFromKey, pdfToKey, pdfDayFrom, pdfDayTo, canDownloadPdf,
+  budgetName, pdfMode, pdfFromKey, pdfToKey, pdfDayFrom, pdfDayTo, canDownloadPdf, month, year,
 }: {
   member: MemberContrib;
+  month: number;
+  year: number;
   accentColor: string;
   incomeStreams: IncomeStream[];
   isIncomeStreamsLoading: boolean;
@@ -178,6 +232,8 @@ function MemberCard({
             </p>
           </div>
         </div>
+
+        <MemberSources userId={userId} month={month} year={year} />
 
         {/* Income source plan */}
         <div className="space-y-2.5 pt-1">
@@ -316,6 +372,10 @@ export default function Contributions() {
   const [pdfDayTo, setPdfDayTo] = useState(todayKey);
 
   const { data: summary, isLoading } = useGetDashboardSummary({ month, year });
+  // Last month, for the comparison under the group total.
+  const previousMonth = month === 1 ? 12 : month - 1;
+  const previousYear = month === 1 ? year - 1 : year;
+  const { data: previousSummary } = useGetDashboardSummary({ month: previousMonth, year: previousYear });
   const {
     data: incomeStreamReport,
     isLoading: isIncomeStreamsLoading,
@@ -780,6 +840,18 @@ export default function Contributions() {
               <p className="text-xs text-muted-foreground mt-1.5">
                 {Math.round(totalTarget > 0 ? (totalContrib / totalTarget) * 100 : 0)}% of combined target
               </p>
+              {(() => {
+                const previousMembers = (previousSummary as { memberContributions?: MemberContrib[] } | undefined)?.memberContributions;
+                const compared = versusLastMonth(totalContrib, previousMembers ? previousMembers.reduce((sum, member) => sum + member.contributed, 0) : null, formatMonthYear(previousMonth, previousYear));
+                return compared ? (
+                  <p className={`mt-1 text-sm font-semibold ${compared.up == null ? "text-muted-foreground" : compared.up ? "text-success" : "text-destructive"}`} data-testid="contributions-vs-last-month">{compared.text}</p>
+                ) : null;
+              })()}
+              {!isLoading && totalContrib === 0 ? (
+                <p className="mt-2 rounded-lg bg-muted/60 px-3 py-2 text-sm text-muted-foreground" data-testid="contributions-empty-month">
+                  Nobody has contributed for {formatMonthYear(month, year)} yet. Record this month's contributions below to start.
+                </p>
+              ) : null}
             </div>
             <div className="mt-5 grid grid-cols-3 gap-3 border-t pt-4">
               <div>
@@ -887,6 +959,8 @@ export default function Contributions() {
               pdfDayFrom={pdfDayFrom}
               pdfDayTo={pdfDayTo}
               canDownloadPdf={isSharedWorkspace && canManageContributions}
+              month={month}
+              year={year}
             />
           ))}
         </div>

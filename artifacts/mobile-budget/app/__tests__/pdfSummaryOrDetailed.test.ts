@@ -48,8 +48,9 @@ describe('the scroller arrows', () => {
   it('moves a screen per tap and keeps moving while held, only on a long page', () => {
     const hook = read('components/FastScroller.tsx');
     expect(hook).toContain('testID={`page-scroller-${direction}`}');
-    expect(hook).toContain('onLongPress={() => startGlide(direction)}');
-    expect(hook).toContain('onPressOut={stopGlide}');
+    expect(hook).toContain('onPressIn={() => pressIn(direction)}');
+    expect(hook).toContain('onPressOut={() => release(direction)}');
+    expect(hook).toContain('if (!held) jump(direction);');
     expect(hook).toContain("{!edges.atTop ? arrow('up') : null}");
     expect(hook).toContain('sizes.content > sizes.height * SCROLLER_MIN_SCREENS');
     const lists = read('components/PageScrollReset.tsx');
