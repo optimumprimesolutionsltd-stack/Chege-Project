@@ -737,7 +737,7 @@ async function importTidyTargets(groupId: number, accountId: number) {
     .limit(1);
   const charges = builtIn
     ? await db.execute(sql`
-        SELECT tx.id, tx.amount::float8 AS amount
+        SELECT tx.id, tx.amount::float8 AS amount, tx.description, tx.date::text AS date
         FROM joint_account_transactions tx
         LEFT JOIN joint_account_transactions parent ON parent.id = tx.charge_for_transaction_id AND parent.group_id = tx.group_id
         WHERE tx.group_id = ${groupId}
@@ -749,7 +749,7 @@ async function importTidyTargets(groupId: number, accountId: number) {
             (tx.charge_for_transaction_id IS NOT NULL AND parent.mpesa_receipt IS NOT NULL)
             OR (tx.mpesa_receipt ~ '^[A-Z0-9]{8,12}C[0-9]+$')
           )
-      `).then((result) => result.rows as Array<{ id: number; amount: number }>)
+      `).then((result) => result.rows as Array<{ id: number; amount: number; description: string | null; date: string }>)
     : [];
   const unpaid = await db.execute(sql`
     SELECT tx.id
@@ -766,6 +766,9 @@ async function importTidyTargets(groupId: number, accountId: number) {
 }
 
 const TidyQuery = z.object({ accountId: z.coerce.number().int().positive() });
+// Only these entries, when given: the ones the person was shown and did not
+// choose to leave as they are. Left out, everything found (older phones).
+const TidyBody = TidyQuery.extend({ ids: z.array(z.number().int().positive()).max(5_000).optional() });
 
 router.get("/joint-account/import-tidy", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
@@ -778,6 +781,9 @@ router.get("/joint-account/import-tidy", async (req, res): Promise<void> => {
     charges: charges.length,
     chargesAmount: Math.round(charges.reduce((sum, row) => sum + Number(row.amount), 0) * 100) / 100,
     payer: unpaid.length,
+    // Each one by id, so the phone can name them and leave some as they are.
+    chargeRows: charges.map((row) => ({ id: Number(row.id), amount: Number(row.amount), description: row.description ?? "", date: String(row.date).slice(0, 10) })),
+    payerIds: unpaid,
   });
 });
 
@@ -785,9 +791,13 @@ router.post("/joint-account/import-tidy", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
   if (!requireGroupManager(req, res)) return;
-  const query = TidyQuery.safeParse(req.body ?? {});
+  const query = TidyBody.safeParse(req.body ?? {});
   if (!query.success) { res.status(400).json({ error: "Choose an account." }); return; }
-  const { chargeCategory, charges, unpaid } = await importTidyTargets(groupId, query.data.accountId);
+  const found = await importTidyTargets(groupId, query.data.accountId);
+  const only = query.data.ids ? new Set(query.data.ids) : null;
+  const chargeCategory = found.chargeCategory;
+  const charges = only ? found.charges.filter((row) => only.has(Number(row.id))) : found.charges;
+  const unpaid = only ? found.unpaid.filter((id) => only.has(id)) : found.unpaid;
   await db.transaction(async (trx) => {
     if (chargeCategory && charges.length > 0) {
       await trx.update(jointAccountTxTable)

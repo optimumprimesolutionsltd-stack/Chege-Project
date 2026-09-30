@@ -2231,24 +2231,66 @@ export default function BankScreen() {
   // charges under another category, and payments put down to "the group".
   // Shown, then fixed in one tap by whoever may manage the account.
   const tidyAccountId = selectedAccountId ?? accounts[0]?.id ?? null;
-  const { data: importTidy, refetch: refetchImportTidy } = useQuery<{ chargeCategory: string | null; charges: number; chargesAmount: number; payer: number }>({
+  const { data: importTidyFound, refetch: refetchImportTidy } = useQuery<{ chargeCategory: string | null; charges: number; chargesAmount: number; payer: number; chargeRows?: Array<{ id: number; amount: number; description: string; date: string }>; payerIds?: number[] }>({
     queryKey: ['import-tidy', tidyAccountId],
     queryFn: () => customFetch(`/api/joint-account/import-tidy?accountId=${tidyAccountId}`),
     enabled: canManageAccount && tidyAccountId !== null,
     staleTime: 60_000,
   });
+  // Entries the person chose to leave as they are - a payment the import took
+  // for a charge, say - are never offered again. Kept on this phone.
+  const [tidyLeft, setTidyLeft] = useState<Set<number>>(new Set());
+  const tidyLeftKey = tidyAccountId !== null ? `jamvi:tidy-left:${tidyAccountId}` : null;
+  useEffect(() => {
+    setTidyLeft(new Set());
+    if (!tidyLeftKey) return;
+    AsyncStorage.getItem(tidyLeftKey)
+      .then((raw) => { if (raw) setTidyLeft(new Set((JSON.parse(raw) as number[]).filter(Number.isFinite))); })
+      .catch(() => {});
+  }, [tidyLeftKey]);
+  const importTidy = useMemo(() => {
+    if (!importTidyFound) return undefined;
+    if (!importTidyFound.chargeRows || !importTidyFound.payerIds) return { ...importTidyFound, chargeRows: [], payerIds: [], legacy: true };
+    const chargeRows = importTidyFound.chargeRows.filter((row) => !tidyLeft.has(row.id));
+    const payerIds = importTidyFound.payerIds.filter((id) => !tidyLeft.has(id));
+    return {
+      ...importTidyFound,
+      chargeRows,
+      payerIds,
+      charges: chargeRows.length,
+      chargesAmount: Math.round(chargeRows.reduce((sum, row) => sum + row.amount, 0) * 100) / 100,
+      payer: payerIds.length,
+      legacy: false,
+    };
+  }, [importTidyFound, tidyLeft]);
   const tidyCount = (importTidy?.chargeCategory ? importTidy.charges : 0) + (importTidy?.payer ?? 0);
   const [tidying, setTidying] = useState(false);
   const tidyImports = () => {
     if (!importTidy || tidyAccountId === null) return;
     const lines = [
       importTidy.chargeCategory && importTidy.charges > 0
-        ? `· ${importTidy.charges} M-Pesa ${importTidy.charges === 1 ? 'charge' : 'charges'} (KES ${formatKES(importTidy.chargesAmount)}) move to ${importTidy.chargeCategory}`
+        ? `· ${importTidy.charges} M-Pesa ${importTidy.charges === 1 ? 'charge' : 'charges'} (KES ${formatKES(importTidy.chargesAmount)}) move to ${importTidy.chargeCategory}${
+          importTidy.chargeRows.length > 0
+            ? '\n' + importTidy.chargeRows.slice(0, 5).map((row) => `   ${row.date.slice(8, 10)}/${row.date.slice(5, 7)} ${row.description || 'Charge'} · KES ${formatKES(row.amount)}`).join('\n') + (importTidy.chargeRows.length > 5 ? `\n   and ${importTidy.chargeRows.length - 5} more` : '')
+            : ''
+        }`
         : null,
       importTidy.payer > 0 ? `· ${importTidy.payer} imported ${importTidy.payer === 1 ? 'payment' : 'payments'} recorded as paid by you, not the group` : null,
     ].filter(Boolean);
-    Alert.alert('Tidy imported entries?', `${lines.join('\n')}\n\nNothing else about them changes.`, [
+    const shownIds = [
+      ...(importTidy.chargeCategory ? importTidy.chargeRows.map((row) => row.id) : []),
+      ...importTidy.payerIds,
+    ];
+    Alert.alert('Tidy imported entries?', `${lines.join('\n')}\n\nNothing else about them changes. If Jamvi has these wrong, leave them as they are and it will not ask again.`, [
       { text: 'Not now', style: 'cancel' },
+      ...(importTidy.legacy ? [] : [{
+        text: 'Leave as they are',
+        onPress: () => {
+          const next = new Set([...tidyLeft, ...shownIds]);
+          setTidyLeft(next);
+          if (tidyLeftKey) AsyncStorage.setItem(tidyLeftKey, JSON.stringify([...next])).catch(() => {});
+        },
+      }]),
       {
         text: 'Tidy them',
         onPress: async () => {
@@ -2257,7 +2299,8 @@ export default function BankScreen() {
             await customFetch('/api/joint-account/import-tidy', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ accountId: tidyAccountId }),
+              // Only what was shown: never an entry left as it is.
+              body: JSON.stringify(importTidy.legacy ? { accountId: tidyAccountId } : { accountId: tidyAccountId, ids: shownIds }),
             });
             await Promise.all([refetchImportTidy(), queryClient.invalidateQueries()]);
           } catch (error: unknown) {

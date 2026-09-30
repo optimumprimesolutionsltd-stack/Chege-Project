@@ -45,15 +45,16 @@ describe('the scroller arrows', () => {
     expect(read('app/mpesa-import.tsx')).toContain('scroller={{ top: 8, bottom: insets.bottom + 120 }}');
   });
 
-  it('moves a screen per tap and to the end on a long press, only on a long page', () => {
+  it('moves a screen per tap and keeps moving while held, only on a long page', () => {
     const hook = read('components/FastScroller.tsx');
     expect(hook).toContain('testID={`page-scroller-${direction}`}');
-    expect(hook).toContain("onLongPress={() => jump(direction === 'up' ? 'top' : 'bottom')}");
+    expect(hook).toContain('onLongPress={() => startGlide(direction)}');
+    expect(hook).toContain('onPressOut={stopGlide}');
     expect(hook).toContain("{!edges.atTop ? arrow('up') : null}");
     expect(hook).toContain('sizes.content > sizes.height * SCROLLER_MIN_SCREENS');
     const lists = read('components/PageScrollReset.tsx');
     expect(lists).toContain('if (!scroller) return <FlatList ref={ref} {...props} />;');
-    expect(lists).toContain("(offset) => ref.current?.scrollTo({ y: offset, animated: true })");
+    expect(lists).toContain("(offset, animated) => ref.current?.scrollTo({ y: offset, animated })");
   });
 });
 

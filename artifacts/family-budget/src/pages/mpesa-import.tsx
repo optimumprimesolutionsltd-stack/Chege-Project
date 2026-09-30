@@ -101,6 +101,9 @@ const STATEMENT_DRAFT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
 const SELECT_CLASS = "flex h-11 w-full rounded-md border border-input bg-card px-3 py-2 text-sm";
 
+// The server checks and changes at most 2,000 receipts per request.
+const RECEIPT_BATCH = 1_000;
+
 /**
  * Paste M-Pesa messages, look over what Jamvi read, and save the lot.
  *
@@ -108,6 +111,7 @@ const SELECT_CLASS = "flex h-11 w-full rounded-md border border-input bg-card px
  * that was seen on screen, and a message already recorded is skipped, never
  * counted twice. What was pasted is read and forgotten.
  */
+
 export default function MpesaImportPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -293,14 +297,19 @@ export default function MpesaImportPage() {
   const markRecorded = async (all: PreviewLine[]): Promise<PreviewLine[]> => {
     const codes = [...new Set(all.map((line) => line.receipt).filter((code): code is string => Boolean(code)))];
     if (codes.length === 0) return all;
-    const response = await fetch("/api/mpesa/import/check-receipts", {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ receipts: codes }),
-    });
-    const body = (await response.json().catch(() => ({}))) as { recorded?: Array<{ receipt: string; date: string; description: string; category?: string | null; editable?: boolean }>; error?: string };
-    if (!response.ok || !body.recorded) throw new Error(body.error ?? "Could not check what is already recorded.");
+    // A year's statement holds thousands of codes; the server takes 2,000 at a time.
+    const body: { recorded: Array<{ receipt: string; date: string; description: string; category?: string | null; editable?: boolean }> } = { recorded: [] };
+    for (let start = 0; start < codes.length; start += RECEIPT_BATCH) {
+      const response = await fetch("/api/mpesa/import/check-receipts", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ receipts: codes.slice(start, start + RECEIPT_BATCH) }),
+      });
+      const part = (await response.json().catch(() => ({}))) as { recorded?: typeof body.recorded; error?: string };
+      if (!response.ok || !part.recorded) throw new Error(part.error ?? "Could not check what is already recorded.");
+      body.recorded.push(...part.recorded);
+    }
     const recorded = new Map(body.recorded.map((row) => [row.receipt, { date: row.date, description: row.description, category: row.category ?? null, editable: row.editable === true }]));
     return all.map((line) => {
       const existing = line.receipt ? recorded.get(line.receipt) : undefined;
@@ -521,14 +530,19 @@ export default function MpesaImportPage() {
     if (!window.confirm(`Change ${pendingChanges.length} ${pendingChanges.length === 1 ? "category" : "categories"}?\n\nOnly the category changes. Their amounts, dates and everything else stay as they are.`)) return;
     setRecategorising(true);
     try {
-      const response = await fetch("/api/mpesa/import/recategorise", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ changes: pendingChanges }),
-      });
-      const body = (await response.json().catch(() => ({}))) as { updated?: number; skipped?: string[]; error?: string };
-      if (!response.ok || body.updated === undefined) throw new Error(body.error ?? "Could not change them.");
+      const body: { updated: number; skipped: string[] } = { updated: 0, skipped: [] };
+      for (let start = 0; start < pendingChanges.length; start += RECEIPT_BATCH) {
+        const response = await fetch("/api/mpesa/import/recategorise", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ changes: pendingChanges.slice(start, start + RECEIPT_BATCH) }),
+        });
+        const part = (await response.json().catch(() => ({}))) as { updated?: number; skipped?: string[]; error?: string };
+        if (!response.ok || part.updated === undefined) throw new Error(part.error ?? "Could not change them.");
+        body.updated += part.updated;
+        body.skipped.push(...(part.skipped ?? []));
+      }
       const skipped = body.skipped ?? [];
       const done = new Set(pendingChanges.filter((change) => !skipped.includes(change.receipt)).map((change) => change.receipt));
       const next = (lines ?? []).map((item) =>
