@@ -186,6 +186,7 @@ export default function DashboardScreen() {
 
   const [refreshing, setRefreshing] = useState(false);
   const [askOpen, setAskOpen] = useState(false);
+  const [openTurn, setOpenTurn] = useState<string | null>(null);
   // Opening a screen from an answer ("Open Reports") closes the sheet to show
   // it; coming back to Home should land back in the conversation, not leave
   // Ask Jamvi behind. The answer and thread are still held here.
@@ -917,12 +918,18 @@ export default function DashboardScreen() {
             ) : null}
             {askThread.length > 0 ? (
               <View style={{ gap: 6 }} testID="ask-jamvi-thread">
-                {askThread.slice(-3).map((turn, index) => (
-                  <View key={`${index}-${turn.question}`} style={{ gap: 2 }}>
-                    <Text style={[styles.askAnswerMeta, { color: colors.mutedForeground }]} numberOfLines={2}>You: {turn.question}</Text>
-                    <Text style={[styles.askAnswerMeta, { color: colors.foreground }]} numberOfLines={3}>{turn.answer}</Text>
-                  </View>
-                ))}
+                {askThread.slice(-3).map((turn, index) => {
+                  // A folded summary: tap to read it whole, tap again to fold it.
+                  const key = `${index}-${turn.question}`;
+                  const open = openTurn === key;
+                  return (
+                    <Pressable key={key} onPress={() => setOpenTurn(open ? null : key)} accessibilityRole="button" accessibilityState={{ expanded: open }} testID={`ask-jamvi-turn-${index}`} style={{ gap: 2 }}>
+                      <Text style={[styles.askAnswerMeta, { color: colors.mutedForeground }]} numberOfLines={open ? undefined : 2}>You: {turn.question}</Text>
+                      <Text style={[styles.askAnswerMeta, { color: colors.foreground }]} numberOfLines={open ? undefined : 3}>{turn.answer}</Text>
+                      <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 11 }}>{open ? 'Show less' : 'Show all'}</Text>
+                    </Pressable>
+                  );
+                })}
               </View>
             ) : null}
             {askAnswer ? (
@@ -950,8 +957,9 @@ export default function DashboardScreen() {
                   <Pressable onPress={newAskConversation} accessibilityRole="button" testID="ask-jamvi-new" hitSlop={6}>
                     <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 12 }}>New question</Text>
                   </Pressable>
-                  <Pressable onPress={() => setAskOpen(false)} accessibilityRole="button" testID="ask-jamvi-close" hitSlop={6}>
-                    <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 12 }}>Close</Text>
+                  {/* Tucks the answer away and stays in Ask Jamvi; the X at the top is what leaves. */}
+                  <Pressable onPress={() => setAskAnswer(null)} accessibilityRole="button" testID="ask-jamvi-hide-answer" hitSlop={6}>
+                    <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 12 }}>Hide answer</Text>
                   </Pressable>
                 </View>
                 <Text style={[styles.askAnswerMeta, { color: colors.mutedForeground }]}>
