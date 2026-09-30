@@ -22,6 +22,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { isoDay, longDay, monthStartIso, orderedRange } from '@/lib/dayRange';
+import { incomeTotal, leftToPlan, planWith } from '@/lib/budgetTotals';
 import { effectiveBudgets } from '@workspace/category-tree';
 import { CategorySearchBox } from '@/components/CategorySearchBox';
 import { useColors } from '@/hooks/useColors';
@@ -796,6 +797,16 @@ export default function BudgetScreen() {
   const budgetFor = (category: BudgetCategory) => storedBudgets.get(category.id) ?? category.budgetAmount;
   const reportedCategoryNames = new Set(breakdown.map(category => category.category));
   const unusedCategories = activeCategories.filter(category => !reportedCategoryNames.has(category.name));
+  // What the household plan adds up to, and what is expected to come in, so a
+  // figure can be moved and the effect read off without a calculator. Leaves
+  // only, and not an income stream's own costs, which are budgeted apart.
+  const hasSubcategories = (id: number) => allCategories.some((category) => (category.parentId ?? null) === id);
+  const isStreamCost = (category: BudgetCategory) => (category as BudgetCategory & { reducesIncomeSourceId?: number | null }).reducesIncomeSourceId != null;
+  const plannedHousehold = reportBudget + unusedCategories
+    .filter((category) => !hasSubcategories(category.id) && !isStreamCost(category))
+    .reduce((sum, category) => sum + budgetFor(category), 0);
+  const expectedIncome = incomeTotal(incomeSources);
+  const planLeft = leftToPlan(plannedHousehold, expectedIncome);
   const tiersToShow = Array.from(new Set([
     1,
     2,
@@ -1048,6 +1059,25 @@ export default function BudgetScreen() {
                     <Text style={[styles.priorityHint, { color: colors.mutedForeground }]}>
                       Leave it blank, or enter 0, if you are not budgeting this yet. Existing expenses stay recorded.
                     </Text>
+                    {formCostSourceId == null && !recurringSetupActive ? (() => {
+                      // The plan with this figure in it, as it is typed.
+                      const current = editTarget && !hasSubcategories(editTarget.id) && !isStreamCost(editTarget) ? budgetFor(editTarget) : 0;
+                      const next = planWith(plannedHousehold, current, formAmount);
+                      const left = leftToPlan(next.total, expectedIncome);
+                      return (
+                        <View style={[styles.planLive, { backgroundColor: colors.muted, borderColor: colors.border }]} testID="budget-plan-live">
+                          <Text style={[styles.planLiveText, { color: colors.foreground }]}>
+                            Household budget becomes KES {formatKES(next.total)}
+                            {next.change !== 0 ? <Text style={{ color: next.change > 0 ? colors.destructive : colors.primary }}>{' (' + (next.change > 0 ? '+' : '−') + formatKES(Math.abs(next.change)) + ')'}</Text> : null}
+                          </Text>
+                          {left ? (
+                            <Text style={[styles.planLiveText, { color: left.over ? colors.destructive : colors.primary }]}>
+                              {left.text} of KES {formatKES(expectedIncome)} expected
+                            </Text>
+                          ) : null}
+                        </View>
+                      );
+                    })() : null}
                   </>
                 )}
                 {/* A category that already holds subcategories cannot itself
@@ -1876,9 +1906,39 @@ export default function BudgetScreen() {
                     </View>
                   ))}
                 </View>
+                {(() => {
+                  const saved = incomeTotal(sources);
+                  const shown = editingIncome ? incomeTotal(sources, incomeDrafts) : saved;
+                  return (
+                    <View style={[styles.incomeTotalRow, { borderColor: colors.border }]} testID={`income-total-${userId}`}>
+                      <Text style={[styles.incomeTotalLabel, { color: colors.mutedForeground }]}>Total</Text>
+                      <Text style={[styles.incomeTotalValue, { color: colors.foreground }]}>
+                        KES {formatKES(shown)}
+                        {shown !== saved ? <Text style={{ color: shown > saved ? colors.primary : colors.destructive }}>{` (${shown > saved ? '+' : '−'}${formatKES(Math.abs(shown - saved))})`}</Text> : null}
+                      </Text>
+                    </View>
+                  );
+                })()}
               </View>
             ))
           )}
+          {incomeSources.length > 0 ? (() => {
+            const shown = editingIncome ? incomeTotal(incomeSources, incomeDrafts) : expectedIncome;
+            const left = leftToPlan(plannedHousehold, shown);
+            return (
+              <View style={[styles.incomeGrandTotal, { backgroundColor: colors.muted, borderColor: colors.border }]} testID="income-grand-total">
+                <View style={styles.incomeTotalRowInner}>
+                  <Text style={[styles.incomeTotalLabel, { color: colors.foreground }]}>Expected income</Text>
+                  <Text style={[styles.incomeTotalValue, { color: colors.foreground }]}>KES {formatKES(shown)}</Text>
+                </View>
+                <View style={styles.incomeTotalRowInner}>
+                  <Text style={[styles.incomeTotalLabel, { color: colors.mutedForeground }]}>Household budget</Text>
+                  <Text style={[styles.incomeTotalValue, { color: colors.mutedForeground }]}>KES {formatKES(plannedHousehold)}</Text>
+                </View>
+                {left ? <Text style={[styles.planLiveText, { color: left.over ? colors.destructive : colors.primary, marginTop: 4 }]}>{left.text}</Text> : null}
+              </View>
+            );
+          })() : null}
           {editingIncome ? (
             <View style={styles.incomeFooter} testID="income-edit-footer">
               <Pressable onPress={cancelIncomeEdit} disabled={savingIncomeAmounts} style={styles.incomeFooterCancel} accessibilityRole="button">
@@ -2217,6 +2277,17 @@ export default function BudgetScreen() {
                   </Pressable>
                 );
               })}
+              <View style={[styles.categoryTotal, { backgroundColor: colors.muted, borderColor: colors.border }]} testID="budget-categories-total">
+                <View style={styles.incomeTotalRowInner}>
+                  <Text style={[styles.incomeTotalLabel, { color: colors.foreground }]}>Total budgeted</Text>
+                  <Text style={[styles.incomeTotalValue, { color: colors.foreground }]}>KES {formatKES(plannedHousehold)}</Text>
+                </View>
+                <View style={styles.incomeTotalRowInner}>
+                  <Text style={[styles.incomeTotalLabel, { color: colors.mutedForeground }]}>Spent so far</Text>
+                  <Text style={[styles.incomeTotalValue, { color: colors.mutedForeground }]}>KES {formatKES(reportActual)}</Text>
+                </View>
+                {planLeft ? <Text style={[styles.planLiveText, { color: planLeft.over ? colors.destructive : colors.primary, marginTop: 4 }]}>{planLeft.text} of KES {formatKES(expectedIncome)} expected income</Text> : null}
+              </View>
               {/* At the end of the list as well as the header, which scrolls
                   away. The tier rows carry an Add too, but somebody has to
                   already know what a tier is to find it. */}
@@ -2254,6 +2325,14 @@ export default function BudgetScreen() {
 }
 
 const styles = StyleSheet.create({
+  planLive: { marginTop: 8, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, gap: 3 },
+  planLiveText: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
+  incomeTotalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, marginTop: 6, paddingTop: 10 },
+  incomeTotalRowInner: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 2 },
+  incomeTotalLabel: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
+  incomeTotalValue: { fontSize: 14, fontFamily: 'Inter_700Bold' },
+  incomeGrandTotal: { borderWidth: 1, borderRadius: 12, padding: 12, marginTop: 10 },
+  categoryTotal: { borderWidth: 1, borderRadius: 12, padding: 12, marginTop: 12 },
   container: { flex: 1 },
   header: { paddingHorizontal: 24, paddingBottom: 24 },
   headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },

@@ -37,6 +37,7 @@ import { workspaceLabel } from "@/lib/workspace-identity";
 import { useListEditor } from "@/hooks/use-list-editor";
 import { EditableName, ListEditButton, ListEditorFooter, RemoveRowButton } from "@/components/list-editor";
 import { GROUP_ATTRIBUTION } from "@/lib/attribution";
+import { ImportTidyBanner } from "@/components/import-tidy-banner";
 
 // GROUP_ATTRIBUTION is represented as null — never implicitly attributed to the signed-in user.
 const JOINT_BANK_ID = null as null;
@@ -1595,6 +1596,8 @@ export default function Bank() {
           )}
         </CardContent>
       </Card>
+
+      <ImportTidyBanner accountId={selectedAccountId ?? accounts[0]?.id ?? null} canManage={canManageAccount} />
 
       <BankPeriodPicker
         preset={periodPreset}
