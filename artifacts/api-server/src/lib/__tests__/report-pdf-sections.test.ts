@@ -42,3 +42,23 @@ describe("the bank statement PDF, money in or out only", () => {
     }
   });
 });
+
+// "A plain budget report that shows what we have budgeted for, with a PDF",
+// and "All expenses: I can't export by category".
+describe("the budget plan and expenses by category", () => {
+  it("build", async () => {
+    const pdf = await createMonthlyReportPdf({
+      ...base,
+      budgetPlan: [
+        { name: "Food", budget: 20000, children: [{ name: "Groceries", budget: 15000 }, { name: "Eating out", budget: 5000 }] },
+        { name: "Rent", budget: 25000, children: [] },
+        { name: "Stock", budget: 50000, business: true, children: [] },
+      ],
+      expenses: entries.map((row, i) => ({ ...row, detail: i % 3 === 0 ? "Food" : "Transport" })),
+      expensesGroupedBy: "category",
+    });
+    expect(pdf.subarray(0, 5).toString()).toBe("%PDF-");
+    const byItem = await createMonthlyReportPdf({ ...base, expenses: entries, expensesGroupedBy: "item" });
+    expect(byItem.subarray(0, 5).toString()).toBe("%PDF-");
+  });
+});

@@ -762,6 +762,28 @@ export default function ReportsScreen() {
             <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
           </Pressable>
 
+          {/* The plan on its own - what is budgeted, heading by heading - to read or hand out as a PDF. */}
+          <Pressable
+            onPress={() => router.push('/budget-plan')}
+            accessibilityRole="button"
+            accessibilityLabel="See what you have budgeted for"
+            testID="open-budget-plan"
+            style={({ pressed }) => [
+              styles.spendOnCard,
+              { backgroundColor: colors.card, borderColor: colors.border },
+              pressed && { opacity: 0.85 },
+            ]}
+          >
+            <Feather name="list" size={18} color={colors.primary} />
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={[styles.spendOnTitle, { color: colors.foreground }]}>Budget plan</Text>
+              <Text style={[styles.spendOnSub, { color: colors.mutedForeground }]} numberOfLines={2}>
+                What you have budgeted for, heading by heading, with a PDF.
+              </Text>
+            </View>
+            <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+          </Pressable>
+
           {/* Whether the month kept to its budget: planned against spent,
               category by category, overspends first. */}
           <Pressable

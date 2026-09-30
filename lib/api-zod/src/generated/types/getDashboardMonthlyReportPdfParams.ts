@@ -5,6 +5,7 @@
  * Jamvi API — personal and group money management
  * OpenAPI spec version: 0.1.0
  */
+import type { GetDashboardMonthlyReportPdfExpensesGroupBy } from './getDashboardMonthlyReportPdfExpensesGroupBy';
 import type { GetDashboardMonthlyReportPdfExpensesScope } from './getDashboardMonthlyReportPdfExpensesScope';
 
 export type GetDashboardMonthlyReportPdfParams = {
@@ -56,6 +57,14 @@ includeIncomeEntries?: boolean;
  * Include Who owes who as it stands now. Defaults to false.
  */
 includeDebts?: boolean;
+/**
+ * With includeExpenses, a section per category or per item with subtotals, rather than by date.
+ */
+expensesGroupBy?: GetDashboardMonthlyReportPdfExpensesGroupBy;
+/**
+ * Include the budget as planned - headings, sub-categories and budgets, no spending. Defaults to false.
+ */
+includeBudgetPlan?: boolean;
 /**
  * With includeExpenses, household lists only household expenses (a side hustle's costs left out) and business only those costs. Left out, every expense.
  */

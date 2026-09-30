@@ -134,6 +134,8 @@ export default function ExpenseLedgerScreen() {
           includeIncome: false,
           includeExpenses: true,
           ...(hasBusiness ? { expensesScope: scope } : {}),
+          // The way it is shown: by category or by item, each with its subtotal.
+          ...(view !== 'date' ? { expensesGroupBy: view } : {}),
         },
         { responseType: 'blob', cache: 'no-store' },
       );
