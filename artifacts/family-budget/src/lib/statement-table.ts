@@ -208,29 +208,59 @@ export function checkRunningBalance(rows: readonly StatementRow[]): { checked: n
     else groups.push({ start: i, end: i + 1 });
   }
 
-  const failedAt: number[] = [];
-  let checked = 0;
-  for (let g = 0; g < groups.length - 1; g += 1) {
-    const later = groups[g];
-    const earlier = groups[g + 1];
-    // The rows of one receipt are not always listed in the same order (a payment and
-    // its charge can come either way round), so a Fuliza payment shows partial
-    // balances part-way through, so the balance after the whole group is the one on
-    // whichever of its rows lines up.
-    const afters = ordered.slice(later.start, later.end).map((row) => row.balance);
-    const befores = ordered.slice(earlier.start, earlier.end).map((row) => row.balance);
+  const balancesOf = (group: { start: number; end: number }) => ordered.slice(group.start, group.end).map((row) => row.balance);
+  const netOf = (group: { start: number; end: number }) => {
     let net = 0;
-    for (let i = later.start; i < later.end; i += 1) net += (ordered[i].paidIn ?? 0) - (ordered[i].withdrawn ?? 0);
-    const usable = afters.some((v) => v !== null) && befores.some((v) => v !== null);
-    if (!usable) continue;
-    checked += 1;
-    const fits = afters.some(
+    for (let i = group.start; i < group.end; i += 1) net += (ordered[i].paidIn ?? 0) - (ordered[i].withdrawn ?? 0);
+    return net;
+  };
+  // The rows of one receipt are not always listed in the same order (a payment and
+  // its charge can come either way round), so a Fuliza payment shows partial
+  // balances part-way through, so the balance after the whole group is the one on
+  // whichever of its rows lines up.
+  const lineUp = (afters: Array<number | null>, befores: Array<number | null>, net: number) =>
+    afters.some(
       (after) =>
         after !== null &&
         befores.some((before) => before !== null && Math.abs(Math.round((before + net) * 100) / 100 - after) <= 0.01),
     );
-    if (!fits) failedAt.push(newestFirst ? later.start : rows.length - 1 - later.start);
+
+  // fits[g]: whether group g"s balance follows from group g + 1"s; null when a side has no balance.
+  const fits: Array<boolean | null> = [];
+  let checked = 0;
+  for (let g = 0; g < groups.length - 1; g += 1) {
+    const afters = balancesOf(groups[g]);
+    const befores = balancesOf(groups[g + 1]);
+    if (!afters.some((v) => v !== null) || !befores.some((v) => v !== null)) { fits.push(null); continue; }
+    checked += 1;
+    fits.push(lineUp(afters, befores, netOf(groups[g])));
   }
+
+  // Safaricom sometimes prints a wrong balance on a line or two - around a
+  // reversal, the balance shown mid-way was not the balance then - while the
+  // amounts are right: across the run, what came in and went out takes the
+  // balance before it to the balance after it exactly. A misread amount never
+  // bridges like that, so a short run that does is the statement"s slip, not ours.
+  const MAX_RUN = 6;
+  for (let g = 0; g < fits.length; g += 1) {
+    if (fits[g] !== false) continue;
+    let bridged = false;
+    for (let a = Math.max(0, g - MAX_RUN + 1); a <= g && !bridged; a += 1) {
+      for (let b = g; b < Math.min(fits.length, a + MAX_RUN) && !bridged; b += 1) {
+        let net = 0;
+        for (let k = a; k <= b; k += 1) net += netOf(groups[k]);
+        if (lineUp(balancesOf(groups[a]), balancesOf(groups[b + 1]), net)) {
+          for (let k = a; k <= b; k += 1) if (fits[k] === false) fits[k] = true;
+          bridged = true;
+        }
+      }
+    }
+  }
+
+  const failedAt: number[] = [];
+  fits.forEach((fit, g) => {
+    if (fit === false) failedAt.push(newestFirst ? groups[g].start : rows.length - 1 - groups[g].start);
+  });
   return { checked, failedAt, ok: failedAt.length === 0 };
 }
 

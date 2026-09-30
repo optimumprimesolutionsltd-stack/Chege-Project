@@ -62,6 +62,28 @@ describe('checkRunningBalance', () => {
     const rows = readStatementRows([page()]).map((r, i) => (i === 0 ? { ...r, withdrawn: 400 } : r));
     expect(checkRunningBalance(rows).ok).toBe(false);
   });
+
+  // Newest first, as printed. Safaricom showed 86 then 0 mid-way through a
+  // reversal, where the balance was really 166 then 80 - the amounts are right.
+  const base: StatementRow = { receipt: '', time: '', details: '', status: 'Completed', paidIn: null, withdrawn: null, balance: 0 };
+  const misprinted: StatementRow[] = [
+    { ...base, receipt: 'TEST000006', time: '2026-05-30 16:10:00', details: 'Customer Transfer to - 0700***000 SAMPLE', withdrawn: 0, balance: 0 },
+    { ...base, receipt: 'TEST000005', time: '2026-05-30 15:56:15', details: 'Send Money Reversal via API to - 0700***001 SAMPLE', withdrawn: 80, balance: 0 },
+    { ...base, receipt: 'TEST000004', time: '2026-05-30 15:54:33', details: 'Customer Bundle Purchase with Fuliza to 000000 SAMPLE', withdrawn: 86, balance: 0 },
+    { ...base, receipt: 'TEST000004', time: '2026-05-30 15:54:33', details: 'OverDraft of Credit Party', paidIn: 86, balance: 86 },
+    { ...base, receipt: 'TEST000003', time: '2026-05-30 15:27:08', details: 'Funds received from - 0700***001 SAMPLE', paidIn: 80, balance: 80 },
+    { ...base, receipt: 'TEST000002', time: '2026-05-30 11:12:18', details: 'Customer Transfer of Funds Charge', withdrawn: 7, balance: 0 },
+    { ...base, receipt: 'TEST000001', time: '2026-05-30 09:00:00', details: 'Funds received from - 0700***002 SAMPLE', paidIn: 7, balance: 7 },
+  ];
+
+  it('passes a statement whose printed balance slips for a line or two while the amounts still bridge the gap', () => {
+    expect(checkRunningBalance(misprinted)).toMatchObject({ ok: true, failedAt: [] });
+  });
+
+  it('still fails that stretch when an amount inside it was misread', () => {
+    const misread = misprinted.map((r) => (r.receipt === 'TEST000005' ? { ...r, withdrawn: 800 } : r));
+    expect(checkRunningBalance(misread).ok).toBe(false);
+  });
 });
 
 describe('resolveDirections', () => {
