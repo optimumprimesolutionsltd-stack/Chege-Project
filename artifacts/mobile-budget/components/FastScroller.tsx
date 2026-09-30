@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Pressable,
   View,
@@ -14,6 +14,10 @@ const SCROLLER_MIN_SCREENS = 2.5;
 // A jump leaves a little of the last screen showing, so the place is not lost.
 const PAGE_OVERLAP = 80;
 const EDGE = 24;
+// Held: pixels a frame to start, how much faster each frame, and the fastest.
+const GLIDE_START = 6;
+const GLIDE_ACCELERATION = 0.4;
+const GLIDE_MAX = 60;
 
 /** Where the arrows sit, clear of a header and the floating buttons. */
 export type ScrollerInsets = { top: number; bottom: number };
@@ -26,7 +30,7 @@ type ScrollHandlers = {
 
 /**
  * Up and down arrows at the right edge of a long page: a tap moves a screen,
- * a long press goes to the top or the bottom - a year of transactions took
+ * holding one keeps the page moving until it is let go - a year of transactions took
  * minutes of flicking. Give it the list's own handlers (they are called too)
  * and a way to jump; spread `listProps` on the list and put `thumb` beside
  * it, both inside a `flex: 1` View.
@@ -36,10 +40,12 @@ type ScrollHandlers = {
  */
 export function useFastScroller(
   insets: ScrollerInsets | undefined,
-  scrollTo: (offset: number) => void,
+  scrollTo: (offset: number, animated: boolean) => void,
   handlers: ScrollHandlers,
 ) {
   const colors = useColors();
+  const scrollToRef = useRef(scrollTo);
+  scrollToRef.current = scrollTo;
   const [sizes, setSizes] = useState({ height: 0, content: 0 });
   const sizesRef = useRef(sizes);
   sizesRef.current = sizes;
@@ -61,8 +67,32 @@ export function useFastScroller(
     const max = Math.max(0, content - height);
     const step = Math.max(100, height - PAGE_OVERLAP);
     const target = to === 'top' ? 0 : to === 'bottom' ? max : to === 'up' ? offsetRef.current - step : offsetRef.current + step;
-    scrollTo(Math.min(max, Math.max(0, target)));
+    scrollToRef.current(Math.min(max, Math.max(0, target)), true);
   };
+
+  // Held down, the page keeps moving - faster the longer it is held - until
+  // the finger lifts or the end is reached.
+  const gliding = useRef<{ frame: number | null; speed: number; offset: number }>({ frame: null, speed: 0, offset: 0 });
+  const stopGlide = () => {
+    if (gliding.current.frame !== null) cancelAnimationFrame(gliding.current.frame);
+    gliding.current.frame = null;
+  };
+  const startGlide = (direction: 'up' | 'down') => {
+    stopGlide();
+    gliding.current = { frame: null, speed: GLIDE_START, offset: offsetRef.current };
+    const step = () => {
+      const { height, content } = sizesRef.current;
+      const max = Math.max(0, content - height);
+      const glide = gliding.current;
+      glide.offset = Math.min(max, Math.max(0, glide.offset + (direction === 'up' ? -glide.speed : glide.speed)));
+      glide.speed = Math.min(GLIDE_MAX, glide.speed + GLIDE_ACCELERATION);
+      scrollToRef.current(glide.offset, false);
+      if ((direction === 'up' && glide.offset <= 0) || (direction === 'down' && glide.offset >= max)) { glide.frame = null; return; }
+      glide.frame = requestAnimationFrame(step);
+    };
+    gliding.current.frame = requestAnimationFrame(step);
+  };
+  useEffect(() => stopGlide, []);
 
   if (!insets) return { listProps: handlers, thumb: null };
 
@@ -89,10 +119,12 @@ export function useFastScroller(
   const arrow = (direction: 'up' | 'down') => (
     <Pressable
       onPress={() => jump(direction)}
-      onLongPress={() => jump(direction === 'up' ? 'top' : 'bottom')}
+      onLongPress={() => startGlide(direction)}
+      onPressOut={stopGlide}
+      delayLongPress={250}
       hitSlop={6}
       accessibilityRole="button"
-      accessibilityLabel={direction === 'up' ? 'Up a screen. Hold to go to the top.' : 'Down a screen. Hold to go to the bottom.'}
+      accessibilityLabel={direction === 'up' ? 'Up a screen. Hold to keep scrolling up.' : 'Down a screen. Hold to keep scrolling down.'}
       testID={`page-scroller-${direction}`}
       style={({ pressed }) => ({
         width: 38,

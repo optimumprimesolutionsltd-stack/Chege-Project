@@ -354,6 +354,9 @@ function CategorySheet({
   );
 }
 
+// The server checks and changes at most 2,000 receipts per request.
+const RECEIPT_BATCH = 1_000;
+
 /**
  * Paste M-Pesa messages, look over what Jamvi read, and save the lot.
  *
@@ -361,6 +364,7 @@ function CategorySheet({
  * category they have seen, and a message already recorded is skipped, never
  * counted twice. What was pasted is read and forgotten.
  */
+
 export default function MpesaImportScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -765,11 +769,17 @@ export default function MpesaImportScreen() {
   const markRecorded = async (all: PreviewLine[]): Promise<PreviewLine[]> => {
     const codes = [...new Set(all.map((line) => line.receipt).filter((code): code is string => Boolean(code)))];
     if (codes.length === 0) return all;
-    const body = await customFetch<{ recorded: Array<{ receipt: string; date: string; description: string; category?: string | null; editable?: boolean }> }>('/api/mpesa/import/check-receipts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ receipts: codes }),
-    });
+    // A year's statement holds thousands of codes; the server takes 2,000 at a time.
+    const found: Array<{ receipt: string; date: string; description: string; category?: string | null; editable?: boolean }> = [];
+    for (let start = 0; start < codes.length; start += RECEIPT_BATCH) {
+      const body = await customFetch<{ recorded: typeof found }>('/api/mpesa/import/check-receipts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ receipts: codes.slice(start, start + RECEIPT_BATCH) }),
+      });
+      found.push(...body.recorded);
+    }
+    const body = { recorded: found };
     const recorded = new Map(body.recorded.map((row) => [row.receipt, { date: row.date, description: row.description, category: row.category ?? null, editable: row.editable === true }]));
     return all.map((line) => {
       const existing = line.receipt ? recorded.get(line.receipt) : undefined;
@@ -1144,11 +1154,16 @@ export default function MpesaImportScreen() {
           onPress: async () => {
             setRecategorising(true);
             try {
-              const result = await customFetch<{ updated: number; skipped: string[] }>('/api/mpesa/import/recategorise', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ changes: pendingChanges }),
-              });
+              const result = { updated: 0, skipped: [] as string[] };
+              for (let start = 0; start < pendingChanges.length; start += RECEIPT_BATCH) {
+                const part = await customFetch<{ updated: number; skipped: string[] }>('/api/mpesa/import/recategorise', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ changes: pendingChanges.slice(start, start + RECEIPT_BATCH) }),
+                });
+                result.updated += part.updated;
+                result.skipped.push(...part.skipped);
+              }
               const done = new Set(pendingChanges.filter((change) => !result.skipped.includes(change.receipt)).map((change) => change.receipt));
               const next = (lines ?? []).map((item) =>
                 item.receipt && done.has(item.receipt) && item.alreadyRecorded
