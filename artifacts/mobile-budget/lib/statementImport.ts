@@ -41,6 +41,8 @@ export interface StatementReading {
   loanOwedAtStart?: number;
   /** Draws and repayments no line accounts for; 0 when the split above covers them. */
   loanLeftOut?: number;
+  /** What overlapping statements already recorded of this one's Fuliza lines, as it moved the balance (see withoutRecordedFuliza). */
+  fulizaAlreadyRecorded?: number;
   /** The first and last day the statement has entries for; null when it has none. */
   firstDate?: string | null;
   lastDate?: string | null;
@@ -531,6 +533,50 @@ export function notOnStatement(
   return { rows: found, net };
 }
 
+/**
+ * A statement's Fuliza lines less what an overlapping statement already
+ * recorded. Statements overlap (1 to 29 September, then 1 to 30): the second
+ * works out Fuliza charges and what is still owed for all its days, so saving
+ * them whole counted the shared days twice. Each line now adds only the
+ * difference; one that adds nothing is left out, saying why. What is already
+ * recorded is counted as already in the account, so the balance check holds.
+ */
+export function withoutRecordedFuliza(reading: StatementReading, recorded: readonly RecordedRow[]): StatementReading {
+  if (!reading.firstDate || !reading.lastDate) return reading;
+  const first = reading.firstDate;
+  const last = reading.lastDate;
+  const day = (compact: string) => `20${compact.slice(0, 2)}-${compact.slice(2, 4)}-${compact.slice(4, 6)}`;
+  const round = (value: number) => Math.round(value * 100) / 100;
+  const earlier = (prefix: string, receipt: string | null) =>
+    recorded.filter((row) => {
+      const match = row.mpesaReceipt?.match(/^(FZ|FB)(\d{6})(\d{6})$/);
+      if (!match || match[1] !== prefix || row.mpesaReceipt === receipt) return false;
+      return day(match[2]) <= last && day(match[3]) >= first;
+    });
+  let alreadyIn = 0;
+  const lines = reading.lines.map((line) => {
+    const prefix = line.type === 'fuliza_fee' ? 'FZ' : line.type === 'fuliza_borrowed' ? 'FB' : null;
+    if (!prefix || line.amount === null || line.status !== 'ready') return line;
+    const rows = earlier(prefix, line.receipt);
+    if (rows.length === 0) return line;
+    const already = round(rows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0));
+    alreadyIn += prefix === 'FZ' ? -already : already;
+    const left = round(line.amount - already);
+    if (left < 0.01) {
+      return {
+        ...line,
+        status: 'skipped' as const,
+        direction: null,
+        reason: left < -0.005
+          ? `KES ${already.toLocaleString('en-KE')} is already recorded from an earlier statement, more than this one works out. Check the earlier one.`
+          : 'Already recorded from an earlier statement covering the same days.',
+      };
+    }
+    return { ...line, amount: left, description: `${line.description} (less KES ${already.toLocaleString('en-KE')} already recorded)` };
+  });
+  return { ...reading, lines, fulizaAlreadyRecorded: round(alreadyIn) };
+}
+
 export interface Reconciliation {
   opening: number;
   closing: number;
@@ -556,7 +602,7 @@ export function reconcile(reading: StatementReading, included: (line: PreviewLin
   const effect = (line: PreviewLine) => (line.amount === null || !line.direction ? 0 : line.direction === 'in' ? line.amount : -(line.amount + (line.fee ?? 0)));
   const ready = reading.lines.filter((line) => line.status === 'ready');
   // What the account already has counts as matched: it is in the balance already.
-  const alreadyIn = round(ready.filter((line) => line.alreadyRecorded).reduce((sum, line) => sum + effect(line), 0));
+  const alreadyIn = round(ready.filter((line) => line.alreadyRecorded).reduce((sum, line) => sum + effect(line), 0) + (reading.fulizaAlreadyRecorded ?? 0));
   const saved = round(ready.filter((line) => !line.alreadyRecorded && included(line)).reduce((sum, line) => sum + effect(line), 0));
   const notSaved = round(ready.filter((line) => !line.alreadyRecorded && !included(line)).reduce((sum, line) => sum + effect(line), 0));
   const statementChange = round(reading.closing - reading.opening);

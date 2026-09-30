@@ -92,7 +92,7 @@ import { runPool, savePosting, SAVE_CONCURRENCY, type PostingApi } from "@/lib/s
 import { parseStoredRules, payeeKey, payeeName, ruleLabel, rulesStorageKey, withRule, withoutRule, type PayeeRules } from "@/lib/payee-learning";
 import { saveDebtLinks } from "@/lib/debt-reversal";
 import type { DebtEntryLink } from "@/lib/debt-links";
-import { fulizaOwedBefore, reconcile, statementLines, type StatementReading } from "@/lib/statement-import";
+import { fulizaOwedBefore, reconcile, statementLines, withoutRecordedFuliza, type RecordedRow, type StatementReading } from "@/lib/statement-import";
 import { checkRunningBalance, readStatementRows, resolveDirections } from "@/lib/statement-table";
 import { fetchOtherBudgetOptions, type OtherBudgetOptions } from "@/lib/other-budget-options";
 
@@ -321,7 +321,11 @@ export default function MpesaImportPage() {
       }
       // Fuliza an earlier statement left owed is repaid first in this one, not charged as fees.
       const recordedRows = (account?.transactions ?? []) as Array<{ mpesaReceipt?: string | null; amount?: number | string | null }>;
-      const reading = statementLines(rows, fulizaOwedBefore(statementLines(rows).firstDate, recordedRows));
+      // Less what an overlapping statement already recorded of its Fuliza lines.
+      const reading = withoutRecordedFuliza(
+        statementLines(rows, fulizaOwedBefore(statementLines(rows).firstDate, recordedRows)),
+        recordedRows as unknown as RecordedRow[],
+      );
       const checked = await markRecorded(reading.lines);
       const shown = applyNicknames(checked, readStoredNicknames());
       const left = [
