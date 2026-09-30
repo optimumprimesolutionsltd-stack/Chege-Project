@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi, onTestFinished } from "vitest";
 import express from "express";
 import request from "supertest";
 
@@ -100,6 +100,10 @@ describe("GET /dashboard/income-streams-trend", () => {
   });
 
   it("places each month's funding in the right column, per stream", async () => {
+    // July to September: pinned, so the columns do not move when the month does.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-09-20T09:00:00Z"));
+    onTestFinished(() => { vi.useRealTimers(); });
     mockedDb.execute.mockResolvedValue({
       rows: [
         { incomeSourceId: 1, sourceName: "Ujenzi salary", year: 2026, month: 7, amount: "58000" },

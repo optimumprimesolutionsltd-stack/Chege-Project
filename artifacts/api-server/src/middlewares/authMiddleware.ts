@@ -6,6 +6,7 @@ import {
   getOidcConfig,
   getSession,
   getSessionId,
+  touchSession,
   updateSession,
   type AuthUser,
   type SessionData,
@@ -32,14 +33,24 @@ declare global {
   }
 }
 
+/**
+ * Renews the sign-in provider's access token when it has run out, when it can.
+ *
+ * Jamvi never uses that token after sign-in - it only proved who the person
+ * was - and the Jamvi session has its own life (SESSION_TTL, renewed as it is
+ * used). So a token that cannot be renewed is no reason to end the session.
+ * It used to be: an hour after a Google sign-in, the first request with no
+ * refresh token, or one Google hiccup while a statement import sent thousands
+ * of requests, deleted the session and signed the person out mid-import.
+ */
 async function refreshIfExpired(
   sid: string,
   session: SessionData,
-): Promise<SessionData | null> {
+): Promise<SessionData> {
   const now = Math.floor(Date.now() / 1000);
   if (!session.expires_at || now <= session.expires_at) return session;
 
-  if (!session.refresh_token) return null;
+  if (!session.refresh_token) return session;
 
   try {
     const config = await getOidcConfig();
@@ -52,7 +63,7 @@ async function refreshIfExpired(
     await updateSession(sid, session);
     return session;
   } catch {
-    return null;
+    return session;
   }
 }
 
@@ -79,11 +90,8 @@ export async function authMiddleware(
   }
 
   const refreshed = await refreshIfExpired(sid, session);
-  if (!refreshed) {
-    await clearSession(res, sid);
-    next();
-    return;
-  }
+  // Seven days from the last use, not from sign-in.
+  void touchSession(sid);
 
   req.user = refreshed.user;
   next();

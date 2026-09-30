@@ -141,6 +141,27 @@ export async function updateSession(
     .where(eq(sessionsTable.sid, sid));
 }
 
+// When each session's expiry was last pushed on, so it is written at most
+// once an hour however many requests arrive.
+const touched = new Map<string, number>();
+const TOUCH_EVERY = 60 * 60 * 1000;
+
+/**
+ * Keeps a session in use alive: seven days from its last use rather than from
+ * sign-in, so nobody is signed out in the middle of something. Never throws.
+ */
+export async function touchSession(sid: string): Promise<void> {
+  const nowMs = Date.now();
+  if (nowMs - (touched.get(sid) ?? 0) < TOUCH_EVERY) return;
+  touched.set(sid, nowMs);
+  if (touched.size > 10_000) touched.clear();
+  try {
+    await db.update(sessionsTable).set({ expire: new Date(nowMs + SESSION_TTL) }).where(eq(sessionsTable.sid, sid));
+  } catch {
+    touched.delete(sid);
+  }
+}
+
 export async function deleteSession(sid: string): Promise<void> {
   await db.delete(sessionsTable).where(eq(sessionsTable.sid, sid));
 }

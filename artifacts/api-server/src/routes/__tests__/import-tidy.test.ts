@@ -22,3 +22,23 @@ describe("tidying imported entries", () => {
     expect(post).toContain("if (!requireGroupManager(req, res)) return;");
   });
 });
+
+// "Incase the app is wrong, there should be an option for leave as it is."
+describe("leaving imported entries as they are", () => {
+  it("leaves kept entries out of both kinds of tidy once the table exists", () => {
+    expect(tidy).toContain("AND NOT EXISTS (SELECT 1 FROM import_tidy_kept kept WHERE kept.transaction_id = tx.id)");
+    expect(tidy.match(/\$\{keptFilter\}/g)?.length).toBe(2);
+  });
+
+  it("keeps only entries the tidy would offer, for a manager, and says when it cannot yet", () => {
+    const keep = tidy.slice(tidy.indexOf('router.post("/joint-account/import-tidy/keep"'));
+    expect(keep).toContain("if (!requireGroupManager(req, res)) return;");
+    expect(keep).toContain("const ids = body.data.ids.filter((id) => offered.has(id));");
+    expect(keep).toContain("res.status(503)");
+    expect(keep).toContain(".onConflictDoNothing()");
+  });
+
+  it("tidies only the entries shown when ids are sent", () => {
+    expect(tidy).toContain("const charges = only ? found.charges.filter((row) => only.has(Number(row.id))) : found.charges;");
+  });
+});

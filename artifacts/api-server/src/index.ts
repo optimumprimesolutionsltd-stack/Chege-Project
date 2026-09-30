@@ -10,6 +10,7 @@ import { ensureSubscriptionPlanCatalogue } from "./lib/subscription-catalog";
 import { runSubscriptionLifecycle } from "./lib/subscription-reminders";
 import { runAccountDeletions, sendAccountDeletionReminders } from "./lib/account-deletion";
 import { ensureReversalLinks } from "./lib/reversal-links";
+import { ensureImportTidyKept } from "./lib/import-tidy-kept";
 
 // Backfill removed — contributions are now derived from deposits + direct expense payments
 
@@ -65,6 +66,7 @@ async function startServer() {
   // After listening for the same reason: linking a reversal is worth having,
   // not worth failing a boot for. See lib/reversal-links.ts.
   void ensureReversalLinks();
+  void ensureImportTidyKept();
 
   void ensureSubscriptionPlanCatalogue()
     .then(() => logger.info("Subscription plan catalogue is seeded"))

@@ -593,3 +593,15 @@ export const reversalLinksTable = pgTable("reversal_links", {
 ]);
 
 export type ReversalLink = typeof reversalLinksTable.$inferSelect;
+
+/**
+ * Imported entries somebody chose to leave as they are when Bank offered to
+ * tidy them, so they are never offered again (migration 0049).
+ */
+export const importTidyKeptTable = pgTable("import_tidy_kept", {
+  transactionId: integer("transaction_id").primaryKey().references(() => jointAccountTxTable.id, { onDelete: "cascade" }),
+  groupId: integer("group_id").notNull().references(() => groupsTable.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("import_tidy_kept_group_idx").on(table.groupId),
+]);
