@@ -36,7 +36,7 @@ export interface ImportItem {
   reason: string | null;
   receipt: string | null;
   direction: ImportDirection | null;
-  type: MpesaTransactionType | "fuliza_notice" | "fuliza_fee" | null;
+  type: MpesaTransactionType | "fuliza_notice" | "fuliza_fee" | "fuliza_repayment" | null;
   amount: number | null;
   /** What the money went to, or came from, in words worth keeping as the note. */
   description: string | null;
@@ -112,10 +112,26 @@ const skipped = (index: number, reason: string, partial: Partial<ImportItem> = {
 // it as one would count the same spending twice.
 const FULIZA_NOTICE = /^\s*([A-Z0-9]{8,15})\s+[Cc]onfirmed\.?\s*Fuliza\s+M-?PESA\s+amount\s+is\s+Ksh\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)/i;
 export const FULIZA_FEE_SUFFIX = "FEE";
+// "Ksh 3,230.07 from your M-PESA has been used to fully pay your outstanding
+// Fuliza M-PESA." Paying the loan back is not spending: what it bought is
+// already recorded as its own payment, and counting this too would double it.
+const FULIZA_REPAYMENT = /has\s+been\s+used\s+to\s+(?:fully|partially|partly)\s+(?:re)?pay\s+(?:your\s+)?outstanding\s+Fuliza/i;
+const FIRST_AMOUNT = /Ksh\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)/i;
+const CODE_AT_START = /^\s*([A-Z0-9]{8,15})\s+[Cc]onfirmed/;
 const ACCESS_FEE = /access\s+fee\s+charged\s+Ksh\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)/i;
 
 /** Turns one message into what the review list shows. Reads only what the parser found. */
 export function toImportItem(message: string, index: number): ImportItem {
+  if (FULIZA_REPAYMENT.test(message)) {
+    const amountText = message.match(FIRST_AMOUNT)?.[1];
+    const amount = amountText ? Number(amountText.replace(/,/g, "")) : NaN;
+    return skipped(
+      index,
+      `Fuliza being paid back${Number.isFinite(amount) ? ` (KES ${amount.toLocaleString("en-KE")})` : ""}. ` +
+        "It is not spending: what the loan paid for is already its own message.",
+      { type: "fuliza_repayment", receipt: message.match(CODE_AT_START)?.[1]?.toUpperCase() ?? null, amount: Number.isFinite(amount) ? amount : null },
+    );
+  }
   const notice = message.match(FULIZA_NOTICE);
   if (notice) {
     const code = notice[1].toUpperCase();
