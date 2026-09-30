@@ -178,12 +178,12 @@ export function balanceChanges(
   return changes;
 }
 
-/** The name Fuliza goes by in Who owes who. */
-export const FULIZA_PARTY_NAME = "Fuliza";
+/** The name Fuliza goes by in Who owes who: Safaricom lends it. */
+export const FULIZA_PARTY_NAME = "Safaricom PLC";
 
 /** Fuliza in Who owes who, when it is there. */
 export const findFulizaParty = (parties: readonly PartyLite[]): PartyLite | null =>
-  parties.find((party) => clean(party.name) === clean(FULIZA_PARTY_NAME)) ?? null;
+  parties.find((party) => clean(party.name).includes("fuliza") || clean(party.name).startsWith("safaricom")) ?? null;
 
 /** Whether any ticked line needs Fuliza in Who owes who. */
 export const needsFulizaParty = (lines: readonly PreviewLine[], choices: Record<number, Choice>): boolean =>
