@@ -5,8 +5,11 @@
  * Jamvi API — personal and group money management
  * OpenAPI spec version: 0.1.0
  */
+import type { GetDashboardMonthlyReportPdfExpensesDetail } from './getDashboardMonthlyReportPdfExpensesDetail';
 import type { GetDashboardMonthlyReportPdfExpensesGroupBy } from './getDashboardMonthlyReportPdfExpensesGroupBy';
 import type { GetDashboardMonthlyReportPdfExpensesScope } from './getDashboardMonthlyReportPdfExpensesScope';
+import type { GetDashboardMonthlyReportPdfIncomeDetail } from './getDashboardMonthlyReportPdfIncomeDetail';
+import type { GetDashboardMonthlyReportPdfIncomeGroupBy } from './getDashboardMonthlyReportPdfIncomeGroupBy';
 
 export type GetDashboardMonthlyReportPdfParams = {
 /**
@@ -61,6 +64,18 @@ includeDebts?: boolean;
  * With includeExpenses, a section per category or per item with subtotals, rather than by date.
  */
 expensesGroupBy?: GetDashboardMonthlyReportPdfExpensesGroupBy;
+/**
+ * With expensesGroupBy, summary lists only each section's total and count; detailed (the default) lists every entry under it.
+ */
+expensesDetail?: GetDashboardMonthlyReportPdfExpensesDetail;
+/**
+ * With includeIncomeEntries, a section per income stream with subtotals, rather than by date. A split deposit sits under each of its streams at that stream's share.
+ */
+incomeGroupBy?: GetDashboardMonthlyReportPdfIncomeGroupBy;
+/**
+ * With incomeGroupBy, summary lists only each stream's total and count; detailed (the default) lists every entry under it.
+ */
+incomeDetail?: GetDashboardMonthlyReportPdfIncomeDetail;
 /**
  * Include the budget as planned - headings, sub-categories and budgets, no spending. Defaults to false.
  */

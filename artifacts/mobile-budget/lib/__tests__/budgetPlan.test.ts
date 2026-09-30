@@ -35,6 +35,6 @@ describe('the budget plan', () => {
 describe('the All expenses PDF', () => {
   it('follows the view: by category or by item, each with its subtotal', () => {
     const ledger = readFileSync('app/expense-ledger.tsx', 'utf8');
-    expect(ledger).toContain("...(view !== 'date' ? { expensesGroupBy: view } : {}),");
+    expect(ledger).toContain("...(view !== 'date' ? { expensesGroupBy: view, expensesDetail: detail ?? 'detailed' } : {}),");
   });
 });

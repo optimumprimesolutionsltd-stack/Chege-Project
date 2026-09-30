@@ -2344,6 +2344,9 @@ export default function BankScreen() {
 
       <PageFlatList
         data={shownTransactions}
+        // A thumb to drag through months of transactions, clear of the
+        // floating actions and the tab bar at the bottom.
+        scroller={{ top: topPad + 12, bottom: (Platform.OS === 'web' ? 100 : insets.bottom + 110) }}
         keyExtractor={(item) => String(item.id)}
         refreshControl={
           <RefreshControl

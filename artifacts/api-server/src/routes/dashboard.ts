@@ -2423,6 +2423,10 @@ router.get("/dashboard/monthly-report.pdf", async (req, res): Promise<void> => {
   // All expenses' PDF: the household's, without a side hustle's stock, or only those costs.
   const expensesScope = req.query.expensesScope === "household" || req.query.expensesScope === "business" ? req.query.expensesScope : null;
   const expensesGroupBy = req.query.expensesGroupBy === "category" || req.query.expensesGroupBy === "item" ? req.query.expensesGroupBy : undefined;
+  const incomeGroupBy = req.query.incomeGroupBy === "stream" ? "stream" as const : undefined;
+  // A grouped list as its totals only, or with every entry under them (the default).
+  const expensesSummary = expensesGroupBy != null && req.query.expensesDetail === "summary";
+  const incomeSummary = incomeGroupBy != null && req.query.incomeDetail === "summary";
   const includeBudgetPlan = req.query.includeBudgetPlan === "true";
 
   const [group] = await db
@@ -2638,6 +2642,9 @@ router.get("/dashboard/monthly-report.pdf", async (req, res): Promise<void> => {
     includeSummary,
     businesses,
     expensesGroupedBy: expensesGroupBy,
+    expensesSummary,
+    incomeGroupedBy: incomeGroupBy,
+    incomeSummary,
     // The plan on its own: each heading with its sub-categories, as budgeted.
     budgetPlan: includeBudgetPlan
       ? categories
@@ -2664,12 +2671,21 @@ router.get("/dashboard/monthly-report.pdf", async (req, res): Promise<void> => {
       amount: Number(entry.amount),
     })),
     incomeEntries: includeIncomeEntries && incomeLedger
-      ? incomeLedger.entries.map((entry) => ({
-          date: entry.date,
-          description: entry.description,
-          detail: entry.streams.join(" + "),
-          amount: entry.amount,
-        }))
+      ? incomeGroupBy === "stream"
+        // By stream, a split deposit sits under each of its streams at that
+        // stream's share, so each stream's rows add up to what it received.
+        ? incomeLedger.entries.flatMap((entry) => entry.portions.map((portion) => ({
+            date: entry.date,
+            description: entry.description,
+            detail: incomeLedger.streams.find((stream) => stream.incomeSourceId === portion.incomeSourceId)?.name ?? entry.streams.join(" + "),
+            amount: portion.amount,
+          })))
+        : incomeLedger.entries.map((entry) => ({
+            date: entry.date,
+            description: entry.description,
+            detail: entry.streams.join(" + "),
+            amount: entry.amount,
+          }))
       : undefined,
     debts: parties
       ?.map((party) => ({ name: party.name, owedToUs: Number(party.owedToUs ?? 0), owedByUs: Number(party.owedByUs ?? 0) }))

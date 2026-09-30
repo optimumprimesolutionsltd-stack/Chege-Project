@@ -1045,6 +1045,24 @@ paths:
           schema:
             type: string
             enum: [category, item]
+        - name: expensesDetail
+          in: query
+          description: With expensesGroupBy, summary lists only each section's total and count; detailed (the default) lists every entry under it.
+          schema:
+            type: string
+            enum: [summary, detailed]
+        - name: incomeGroupBy
+          in: query
+          description: With includeIncomeEntries, a section per income stream with subtotals, rather than by date. A split deposit sits under each of its streams at that stream's share.
+          schema:
+            type: string
+            enum: [stream]
+        - name: incomeDetail
+          in: query
+          description: With incomeGroupBy, summary lists only each stream's total and count; detailed (the default) lists every entry under it.
+          schema:
+            type: string
+            enum: [summary, detailed]
         - name: includeBudgetPlan
           in: query
           description: Include the budget as planned - headings, sub-categories and budgets, no spending. Defaults to false.
