@@ -54,6 +54,43 @@ export const isFeePosting = (posting: Past): boolean =>
 const spending = (history: readonly Past[]) =>
   history.filter((posting) => posting.type === 'disbursement' && posting.expenseCategory && posting.description && !isFeePosting(posting));
 
+/**
+ * The history, read once: each past payment's words and payee, and which
+ * categories each word has been filed under. Suggesting a category for every
+ * line of a statement used to re-read the whole history per line - splitting
+ * every description again, and rebuilding the word index from scratch - which
+ * for 400 lines against a few hundred past payments kept the phone on
+ * "Checking…" for many seconds. Kept per history list, so a new list (after a
+ * save) is read afresh and an old one is let go.
+ */
+type Prepared = {
+  spend: Array<{ category: string; words: string[] }>;
+  byWord: Map<string, Map<string, Set<string>>>;
+};
+const preparedFor = new WeakMap<readonly Past[], Prepared>();
+function prepare(history: readonly Past[]): Prepared {
+  const cached = preparedFor.get(history);
+  if (cached) return cached;
+  const spend: Prepared['spend'] = [];
+  const byWord: Prepared['byWord'] = new Map();
+  for (const posting of spending(history)) {
+    const words = distinctiveWords(posting.description);
+    const category = posting.expenseCategory as string;
+    spend.push({ category, words });
+    const payee = payeeKey(posting.description);
+    for (const word of words) {
+      const categories = byWord.get(word) ?? new Map<string, Set<string>>();
+      const payees = categories.get(category) ?? new Set<string>();
+      payees.add(payee);
+      categories.set(category, payees);
+      byWord.set(word, categories);
+    }
+  }
+  const prepared = { spend, byWord };
+  preparedFor.set(history, prepared);
+  return prepared;
+}
+
 const exists = (category: string, categoryNames: readonly string[]) => categoryNames.length === 0 || categoryNames.includes(category);
 
 /** A till or paybill number as a rule key: the same shop under a different spelling is still the same number. */
@@ -79,15 +116,15 @@ export function fuzzyCategory(description: string, history: readonly Past[], cat
   const mine = distinctiveWords(description);
   if (mine.length === 0) return '';
   const score = new Map<string, number>();
-  for (const posting of spending(history)) {
-    const theirs = distinctiveWords(posting.description);
+  for (const posting of prepare(history).spend) {
+    const theirs = posting.words;
     if (theirs.length === 0) continue;
     const shared = mine.filter((word) => theirs.includes(word)).length;
     const smaller = Math.min(mine.length, theirs.length);
     // Two shared words, or the whole of a one-word name; and most of the smaller name.
     const enough = shared >= 2 || (shared === 1 && smaller === 1 && mine[0].length >= 4);
     if (!enough || shared / smaller < 0.6) continue;
-    const category = posting.expenseCategory as string;
+    const category = posting.category;
     score.set(category, (score.get(category) ?? 0) + shared / smaller);
   }
   return winner(score, categoryNames);
@@ -101,17 +138,7 @@ export function fuzzyCategory(description: string, history: readonly Past[], cat
 export function wordCategory(description: string, history: readonly Past[], categoryNames: readonly string[] = []): string {
   const mine = distinctiveWords(description);
   if (mine.length === 0) return '';
-  const byWord = new Map<string, Map<string, Set<string>>>();
-  for (const posting of spending(history)) {
-    const payee = payeeKey(posting.description);
-    for (const word of distinctiveWords(posting.description)) {
-      const categories = byWord.get(word) ?? new Map<string, Set<string>>();
-      const payees = categories.get(posting.expenseCategory as string) ?? new Set<string>();
-      payees.add(payee);
-      categories.set(posting.expenseCategory as string, payees);
-      byWord.set(word, categories);
-    }
-  }
+  const { byWord } = prepare(history);
   const score = new Map<string, number>();
   for (const word of mine) {
     const categories = byWord.get(word);
