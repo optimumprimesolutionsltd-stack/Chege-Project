@@ -87,7 +87,7 @@ import type { DebtEntryLink } from '@/lib/debtLinks';
 import { canReadStatements, chooseStatement, statementBase64, type ChosenStatement } from '@/lib/statementFile';
 import { shownFileName } from '@/lib/shownFileName';
 import { readPercent } from '@/lib/statementProgress';
-import { balanceAtEndOf, dayBefore, notOnStatement, withoutRecordedFuliza, type RecordedRow, fulizaChargeOverlap, fulizaCharges, fulizaOwedBefore, reconcile, statementLines, type StatementReading } from '@/lib/statementImport';
+import { balanceAtEndOf, dayBefore, missingInJamvi, notOnStatement, withoutRecordedFuliza, type RecordedRow, fulizaChargeOverlap, fulizaCharges, fulizaOwedBefore, reconcile, statementLines, type StatementReading } from '@/lib/statementImport';
 import { checkRunningBalance, readStatementRows, resolveDirections } from '@/lib/statementTable';
 import type { ReaderMessage } from '@/lib/statementReaderHtml';
 import { fetchOtherBudgetOptions, type OtherBudgetOptions } from '@/lib/otherBudgetOptions';
@@ -981,6 +981,52 @@ export default function MpesaImportScreen() {
       ],
     );
   };
+  // And the other way: what the statement has that this account does not, among
+  // entries it already holds - chiefly a payment saved without its charge.
+  const missing = useMemo(
+    () => (statementReading && account ? missingInJamvi(statementReading, (account.transactions ?? []) as unknown as RecordedRow[]) : null),
+    [statementReading, account],
+  );
+  const [addingMissing, setAddingMissing] = useState(false);
+  const addMissingCharges = () => {
+    if (!missing || missing.charges.length === 0 || addingMissing || !accountId) return;
+    const total = missing.charges.reduce((sum, charge) => sum + charge.amount, 0);
+    Alert.alert(
+      `Add ${missing.charges.length} missing ${missing.charges.length === 1 ? 'charge' : 'charges'}?`,
+      `${missing.charges.map((charge) => `· ${charge.date} · ${charge.description} · KES ${formatExact(charge.amount)}`).join('\n')}\n\nOn the statement, but never saved here. They go under ${effectiveChargeCategory || 'the charges category'}, each beside its payment, and move the balance by KES ${formatExact(-total)}.`,
+      [
+        { text: 'Not now', style: 'cancel' },
+        {
+          text: 'Add them',
+          onPress: async () => {
+            setAddingMissing(true);
+            let failed = 0;
+            for (const charge of missing.charges) {
+              try {
+                await createDisbursement({
+                  data: {
+                    amount: charge.amount,
+                    description: charge.description,
+                    date: charge.date,
+                    madeById: user?.id ?? null,
+                    expenseCategory: effectiveChargeCategory,
+                    destinationKind: 'category',
+                    accountId,
+                    chargeForTransactionId: charge.parentId,
+                  } as never,
+                });
+              } catch {
+                failed += 1;
+              }
+            }
+            await queryClient.invalidateQueries();
+            setAddingMissing(false);
+            if (failed > 0) Alert.alert('Some were not added', `${failed} could not be added. Record them on Bank by hand.`);
+          },
+        },
+      ],
+    );
+  };
   const fixOpeningBalance = async () => {
     if (!openingFix || !accountId || openingSaving) return;
     setOpeningSaving(true);
@@ -1569,6 +1615,36 @@ export default function MpesaImportScreen() {
                     {extras.rows.length > 20 ? (
                       <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0 }]}>and {extras.rows.length - 20} more</Text>
                     ) : null}
+                  </View>
+                ) : null}
+                {missing && (missing.charges.length > 0 || missing.amounts.length > 0) ? (
+                  <View style={{ gap: 3, marginTop: 6 }} testID="mpesa-missing-in-jamvi">
+                    <Text style={[styles.hint, { color: colors.foreground, fontFamily: 'Inter_600SemiBold' }]}>
+                      On the statement but missing here{missing.charges.length > 0 ? `: ${missing.charges.length} ${missing.charges.length === 1 ? 'charge' : 'charges'}, KES ${formatExact(Math.abs(missing.net))}` : ''}
+                    </Text>
+                    {missing.charges.length > 0 && canManageBudget ? (
+                      <Pressable
+                        onPress={addMissingCharges}
+                        disabled={addingMissing}
+                        style={[styles.primary, { backgroundColor: colors.primary, opacity: addingMissing ? 0.6 : 1, marginVertical: 6 }]}
+                        accessibilityRole="button"
+                        testID="mpesa-add-missing"
+                      >
+                        {addingMissing
+                          ? <ActivityIndicator color="#fff" />
+                          : <Text style={styles.primaryText}>Add {missing.charges.length} missing {missing.charges.length === 1 ? 'charge' : 'charges'}</Text>}
+                      </Pressable>
+                    ) : null}
+                    {missing.charges.slice(0, 20).map((charge) => (
+                      <Text key={`c-${charge.parentId}`} style={[styles.hint, { color: colors.foreground, marginTop: 0 }]} numberOfLines={2}>
+                        • {charge.date} · {charge.description} · −KES {formatExact(charge.amount)} (the payment is saved, its charge is not)
+                      </Text>
+                    ))}
+                    {missing.amounts.slice(0, 20).map((row) => (
+                      <Text key={`a-${row.id}`} style={[styles.hint, { color: colors.destructive, marginTop: 0 }]} numberOfLines={2}>
+                        • {row.date} · {row.description}: saved as KES {formatExact(row.recorded)}, the statement says KES {formatExact(row.statement)}. Open it on Bank to correct it.
+                      </Text>
+                    ))}
                   </View>
                 ) : null}
                 <Text style={[styles.hint, { color: colors.mutedForeground }]}>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { balanceAtEndOf, dayBefore, fulizaOwedBefore, notOnStatement, reconcile, statementLines, withoutRecordedFuliza } from "./statement-import";
+import { balanceAtEndOf, dayBefore, fulizaOwedBefore, missingInJamvi, notOnStatement, reconcile, statementLines, withoutRecordedFuliza } from "./statement-import";
 import type { StatementRow } from "./statement-table";
 
 let n = 0;
@@ -340,5 +340,34 @@ describe("fixing what is not on the statement", () => {
     const difference = recorded.map((row) => (row.id === 1 ? { ...row, amount: 31.99, description: "Fuliza charges 2026-09-01 to 2026-09-30 (less KES 688.25 already recorded)" } : row));
     const { rows } = notOnStatement(reading, difference);
     expect(rows.find((row) => row.id === 5)?.fixable).toBe(false);
+  });
+});
+
+// "The balance now shows 25": a payment saved without its 25 charge.
+describe("what the statement has that Jamvi is missing", () => {
+  const payment = (index: number, receipt: string, amount: number, fee: number | null, date: string) => ({
+    index, status: "ready" as const, reason: null, receipt, direction: "out" as const, type: "paybill_payment", amount, description: "Equity Paybill Account", named: true, date, fee, mpesaBalance: null, alreadyRecorded: null,
+  });
+  const reading = {
+    ...statementLines([]), opening: 100, closing: 0, firstDate: "2026-09-01", lastDate: "2026-09-30",
+    lines: [payment(0, "UI1F94WB63", 3000, 25, "2026-09-01"), payment(1, "UI9F95TPXW", 3200, 25, "2026-09-09"), payment(2, "UISF9861HA", 3000, 25, "2026-09-28"), payment(3, "UIXXXXXXXX", 500, null, "2026-09-29")],
+  };
+  const rows = [
+    { id: 10, date: "2026-09-01", type: "disbursement", amount: 3000, description: "Equity Paybill Account", mpesaReceipt: "UI1F94WB63" },
+    { id: 11, date: "2026-09-01", type: "disbursement", amount: 25, description: "Bank charge — Equity Paybill Account", chargeForTransactionId: 10 },
+    { id: 12, date: "2026-09-09", type: "disbursement", amount: 3200, description: "Equity Paybill Account", mpesaReceipt: "UI9F95TPXW" },
+    { id: 13, date: "2026-09-28", type: "disbursement", amount: 3000, description: "Equity Paybill Account", mpesaReceipt: "UISF9861HA" },
+    { id: 14, date: "2026-09-28", type: "disbursement", amount: 25, description: "Bank charge — Equity Paybill Account" },
+    { id: 15, date: "2026-09-29", type: "disbursement", amount: 450, description: "Sample", mpesaReceipt: "UIXXXXXXXX" },
+  ];
+
+  it("finds a payment saved without its charge, and not one whose charge is there unlinked", () => {
+    const { charges, net } = missingInJamvi(reading, rows);
+    expect(charges).toEqual([{ parentId: 12, date: "2026-09-09", amount: 25, description: "Bank charge — Equity Paybill Account" }]);
+    expect(net).toBe(-25);
+  });
+
+  it("says when a payment was saved for a different amount", () => {
+    expect(missingInJamvi(reading, rows).amounts).toEqual([{ id: 15, date: "2026-09-29", description: "Sample", recorded: 450, statement: 500 }]);
   });
 });

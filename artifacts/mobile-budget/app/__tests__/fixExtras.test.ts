@@ -10,3 +10,11 @@ describe('Fix these for me', () => {
     expect(screen).toContain('testID="mpesa-fix-extras"');
   });
 });
+
+describe('Add missing charges', () => {
+  it('adds each beside its payment, under the charges category, after one confirmation', () => {
+    expect(screen).toContain('chargeForTransactionId: charge.parentId,');
+    expect(screen).toContain("text: 'Add them',");
+    expect(screen).toContain('testID="mpesa-add-missing"');
+  });
+});
