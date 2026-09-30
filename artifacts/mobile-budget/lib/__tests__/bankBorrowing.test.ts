@@ -76,9 +76,10 @@ describe('adding it to what you owe', () => {
   it('offers rather than applies, like every other balance change', () => {
     expect(bank).toContain('const offerDebtIncrease = (categoryName: string, amount: number) => {');
     expect(bank).toContain('const offerPartyBorrowing = (party:');
-    // Six offers now: repayment, debt reduction, party settlement, the two
-    // that add what was borrowed, and the one that adds what was lent.
-    expect((bank.match(/\{ text: 'Not now', style: 'cancel' \},/g) ?? []).length).toBe(6);
+    // Seven offers now: repayment, debt reduction, party settlement, the two
+    // that add what was borrowed, the one that adds what was lent, and tidying
+    // imported entries.
+    expect((bank.match(/\{ text: 'Not now', style: 'cancel' \},/g) ?? []).length).toBe(7);
   });
 
   it('works on a debt that starts at nothing outstanding', () => {

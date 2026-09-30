@@ -718,6 +718,91 @@ router.get("/joint-account/statement", async (req, res): Promise<void> => {
   res.json(statement);
 });
 
+/**
+ * Imported M-Pesa entries in one account that an older import filed wrongly,
+ * and the one-tap fix. Two things only:
+ *  - an M-Pesa charge (kept with its payment, or saved on its own) filed under
+ *    anything but M-Pesa charges - the phone could remember a category picked
+ *    once for charges ("School fees") and use it in every budget;
+ *  - an imported payment recorded as paid by "the group": it was the
+ *    importer's own M-Pesa. Per account, so another member's account is never
+ *    touched, and only an owner or admin may do it.
+ * Fuliza charges are left alone. Nothing else about an entry changes.
+ */
+async function importTidyTargets(groupId: number, accountId: number) {
+  const [builtIn] = await db
+    .select({ name: budgetCategoriesTable.name })
+    .from(budgetCategoriesTable)
+    .where(sql`${budgetCategoriesTable.groupId} = ${groupId} AND lower(btrim(${budgetCategoriesTable.name})) = 'm-pesa charges'`)
+    .limit(1);
+  const charges = builtIn
+    ? await db.execute(sql`
+        SELECT tx.id, tx.amount::float8 AS amount
+        FROM joint_account_transactions tx
+        LEFT JOIN joint_account_transactions parent ON parent.id = tx.charge_for_transaction_id AND parent.group_id = tx.group_id
+        WHERE tx.group_id = ${groupId}
+          AND tx.account_id = ${accountId}
+          AND tx.type = 'disbursement'
+          AND tx.expense_category IS NOT NULL
+          AND lower(btrim(tx.expense_category)) NOT IN ('m-pesa charges', 'fuliza charges')
+          AND (
+            (tx.charge_for_transaction_id IS NOT NULL AND parent.mpesa_receipt IS NOT NULL)
+            OR (tx.mpesa_receipt ~ '^[A-Z0-9]{8,12}C[0-9]+$')
+          )
+      `).then((result) => result.rows as Array<{ id: number; amount: number }>)
+    : [];
+  const unpaid = await db.execute(sql`
+    SELECT tx.id
+    FROM joint_account_transactions tx
+    LEFT JOIN joint_account_transactions parent ON parent.id = tx.charge_for_transaction_id AND parent.group_id = tx.group_id
+    WHERE tx.group_id = ${groupId}
+      AND tx.account_id = ${accountId}
+      AND tx.type = 'disbursement'
+      AND tx.made_by_id IS NULL
+      AND tx.bank_transfer_id IS NULL
+      AND (tx.mpesa_receipt IS NOT NULL OR parent.mpesa_receipt IS NOT NULL)
+  `).then((result) => (result.rows as Array<{ id: number }>).map((row) => Number(row.id)));
+  return { chargeCategory: builtIn?.name ?? null, charges, unpaid };
+}
+
+const TidyQuery = z.object({ accountId: z.coerce.number().int().positive() });
+
+router.get("/joint-account/import-tidy", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  const query = TidyQuery.safeParse(req.query);
+  if (!query.success) { res.status(400).json({ error: "Choose an account." }); return; }
+  const { chargeCategory, charges, unpaid } = await importTidyTargets(groupId, query.data.accountId);
+  res.json({
+    chargeCategory,
+    charges: charges.length,
+    chargesAmount: Math.round(charges.reduce((sum, row) => sum + Number(row.amount), 0) * 100) / 100,
+    payer: unpaid.length,
+  });
+});
+
+router.post("/joint-account/import-tidy", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  if (!requireGroupManager(req, res)) return;
+  const query = TidyQuery.safeParse(req.body ?? {});
+  if (!query.success) { res.status(400).json({ error: "Choose an account." }); return; }
+  const { chargeCategory, charges, unpaid } = await importTidyTargets(groupId, query.data.accountId);
+  await db.transaction(async (trx) => {
+    if (chargeCategory && charges.length > 0) {
+      await trx.update(jointAccountTxTable)
+        .set({ expenseCategory: chargeCategory })
+        .where(and(eq(jointAccountTxTable.groupId, groupId), inArray(jointAccountTxTable.id, charges.map((row) => Number(row.id)))));
+    }
+    if (unpaid.length > 0) {
+      await trx.update(jointAccountTxTable)
+        .set({ madeById: req.user!.id })
+        .where(and(eq(jointAccountTxTable.groupId, groupId), inArray(jointAccountTxTable.id, unpaid)));
+    }
+  });
+  res.json({ charges: chargeCategory ? charges.length : 0, payer: unpaid.length });
+});
+
 router.get("/joint-account/statement.pdf", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;

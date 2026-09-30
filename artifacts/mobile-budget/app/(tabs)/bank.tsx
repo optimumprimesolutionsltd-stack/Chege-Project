@@ -2227,6 +2227,48 @@ export default function BankScreen() {
     (transaction) => transaction.type === 'deposit' && /^money back/i.test(transaction.description ?? '') && !transaction.reversal,
   );
   const [matchingReversals, setMatchingReversals] = useState(false);
+  // Imported entries an older import filed wrongly in this account: M-Pesa
+  // charges under another category, and payments put down to "the group".
+  // Shown, then fixed in one tap by whoever may manage the account.
+  const tidyAccountId = selectedAccountId ?? accounts[0]?.id ?? null;
+  const { data: importTidy, refetch: refetchImportTidy } = useQuery<{ chargeCategory: string | null; charges: number; chargesAmount: number; payer: number }>({
+    queryKey: ['import-tidy', tidyAccountId],
+    queryFn: () => customFetch(`/api/joint-account/import-tidy?accountId=${tidyAccountId}`),
+    enabled: canManageAccount && tidyAccountId !== null,
+    staleTime: 60_000,
+  });
+  const tidyCount = (importTidy?.chargeCategory ? importTidy.charges : 0) + (importTidy?.payer ?? 0);
+  const [tidying, setTidying] = useState(false);
+  const tidyImports = () => {
+    if (!importTidy || tidyAccountId === null) return;
+    const lines = [
+      importTidy.chargeCategory && importTidy.charges > 0
+        ? `· ${importTidy.charges} M-Pesa ${importTidy.charges === 1 ? 'charge' : 'charges'} (KES ${formatKES(importTidy.chargesAmount)}) move to ${importTidy.chargeCategory}`
+        : null,
+      importTidy.payer > 0 ? `· ${importTidy.payer} imported ${importTidy.payer === 1 ? 'payment' : 'payments'} recorded as paid by you, not the group` : null,
+    ].filter(Boolean);
+    Alert.alert('Tidy imported entries?', `${lines.join('\n')}\n\nNothing else about them changes.`, [
+      { text: 'Not now', style: 'cancel' },
+      {
+        text: 'Tidy them',
+        onPress: async () => {
+          setTidying(true);
+          try {
+            await customFetch('/api/joint-account/import-tidy', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ accountId: tidyAccountId }),
+            });
+            await Promise.all([refetchImportTidy(), queryClient.invalidateQueries()]);
+          } catch (error: unknown) {
+            Alert.alert('Could not tidy them', error instanceof Error ? error.message : 'Please try again.');
+          } finally {
+            setTidying(false);
+          }
+        },
+      },
+    ]);
+  };
   // Matched quietly, once, when unmatched money back is on screen: until it
   // is, the reversed payment still counts as spending (or as a side hustle's
   // stock) and the money back as income. "Match them" stays for the rest.
@@ -2526,6 +2568,20 @@ export default function BankScreen() {
                       <Feather name="edit-2" size={14} color="#d1fae5" />
                       <Text style={styles.editOpeningBalanceText}>Edit starting balance</Text>
                     </TouchableOpacity>
+                    {canManageAccount && tidyCount > 0 && (
+                      <TouchableOpacity
+                        style={styles.editOpeningBalanceBtn}
+                        onPress={tidyImports}
+                        disabled={tidying}
+                        activeOpacity={0.8}
+                        testID="bank-tidy-imports"
+                      >
+                        {tidying
+                          ? <ActivityIndicator size="small" color="#d1fae5" />
+                          : <Feather name="tool" size={14} color="#d1fae5" />}
+                        <Text style={styles.editOpeningBalanceText}>Tidy {tidyCount} imported</Text>
+                      </TouchableOpacity>
+                    )}
                     {canManageAccount && unmatchedMoneyBack.length > 0 && (
                       <TouchableOpacity
                         style={styles.editOpeningBalanceBtn}
