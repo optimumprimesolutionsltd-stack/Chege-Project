@@ -57,7 +57,7 @@ const PDF_SECTIONS: ReadonlyArray<{ key: PdfSectionKey; label: string; hint: str
   { key: "summary", label: "Summary", hint: "Budget, spent, what is left, number of expenses" },
   { key: "budget", label: "Budget performance", hint: "Each category: budget, spent, left or over" },
   { key: "income", label: "Income streams", hint: "What each income stream brought in" },
-  { key: "business", label: "Business", hint: "Profit and loss for each side hustle" },
+  { key: "business", label: "Business", hint: "Profit and loss for each business" },
   { key: "expenses", label: "Every expense", hint: "The full list, as on All expenses" },
   { key: "incomeEntries", label: "Every piece of income", hint: "The full list, as on All income" },
   { key: "debts", label: "Who owes who", hint: "As it stands today" },
@@ -623,7 +623,7 @@ export default function IncomeStreamsReport() {
             Joint-bank expense portions are excluded because the money was already counted when it was deposited.
             Money saved without a selected stream is shown as Unattributed (no source chosen).
             {canManageCostCategories
-              ? " Running a side hustle through one of these? Open it below and link a cost category (like Stock) to see real profit, not just the sale amount."
+              ? " Running a business through one of these? Open it below and link a cost category (like Stock) to see real profit, not just the sale amount."
               : ""}
           </p>
         </div>

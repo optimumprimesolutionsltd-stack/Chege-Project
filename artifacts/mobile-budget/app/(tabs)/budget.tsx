@@ -899,7 +899,7 @@ export default function BudgetScreen() {
                         { key: 'ledger', label: 'A regular category', testID: 'category-kind-ledger' },
                         { key: 'group', label: 'A group of categories', testID: 'category-kind-group' },
                         // Only once there is an income stream for it to come off.
-                        ...(incomeSources.length > 0 ? [{ key: 'business', label: 'For a side hustle', testID: 'category-kind-business' }] : []),
+                        ...(incomeSources.length > 0 ? [{ key: 'business', label: 'Related to an income stream', testID: 'category-kind-business' }] : []),
                       ] as const).map((option) => {
                         const current = formIsGroup ? 'group' : formCostSourceId != null ? 'business' : 'ledger';
                         const on = current === option.key;
@@ -929,12 +929,12 @@ export default function BudgetScreen() {
                       {formIsGroup
                         ? 'A group holds no money of its own. Add subcategories to it and its budget becomes their total.'
                         : formCostSourceId != null
-                          ? "What a side hustle spends - stock, its transport, its rent. It comes off that side hustle's profit on Business, not out of the household's budget."
+                          ? "A cost of earning an income stream - stock, its transport, its rent. It comes off that income stream's profit on Business, not out of the household's budget."
                           : 'Spending and a budget live here. You can put it inside a group below.'}
                     </Text>
                     {!formIsGroup && formCostSourceId != null ? (
                       <View testID="category-side-hustle">
-                        <Text style={[styles.label, { color: colors.mutedForeground }]}>WHICH SIDE HUSTLE?</Text>
+                        <Text style={[styles.label, { color: colors.mutedForeground }]}>WHICH INCOME STREAM?</Text>
                         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 6 }}>
                           {incomeSources.map((source) => {
                             const on = formCostSourceId === source.id;
@@ -1514,7 +1514,7 @@ export default function BudgetScreen() {
               </View>
               {businessCosts > 0 ? (
                 <Text style={[styles.overallContext, { marginTop: 4 }]} testID="budget-business-costs">
-                  Not counted here: KES {formatKES(businessCosts)} of side-hustle costs, which come off its profit in Business.
+                  Not counted here: KES {formatKES(businessCosts)} of income-stream costs, which come off their profit in Business.
                 </Text>
               ) : null}
               <View style={styles.overallContextRow}>

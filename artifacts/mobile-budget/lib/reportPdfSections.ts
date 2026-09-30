@@ -9,7 +9,7 @@ export const PDF_SECTIONS: ReadonlyArray<{ key: PdfSectionKey; label: string; hi
   { key: 'summary', label: 'Summary', hint: 'Budget, spent, what is left, number of expenses' },
   { key: 'budget', label: 'Budget performance', hint: 'Each category: budget, spent, left or over' },
   { key: 'income', label: 'Income streams', hint: 'What each income stream brought in' },
-  { key: 'business', label: 'Business', hint: 'Profit and loss for each side hustle' },
+  { key: 'business', label: 'Business', hint: 'Profit and loss for each business' },
   { key: 'expenses', label: 'Every expense', hint: 'The full list, as on All expenses' },
   { key: 'incomeEntries', label: 'Every piece of income', hint: 'The full list, as on All income' },
   { key: 'debts', label: 'Who owes who', hint: 'As it stands today' },

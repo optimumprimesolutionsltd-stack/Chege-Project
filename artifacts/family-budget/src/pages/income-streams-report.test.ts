@@ -62,7 +62,7 @@ describe("linking a category as an income stream's cost", () => {
     // Nothing pointed a manager toward this until they happened to open a
     // stream and notice the picker. A manager-only line in the page's own
     // explanation means it can be found without already knowing it exists.
-    expect(reportSource).toContain("Running a side hustle through one of these? Open it below and link a cost category");
+    expect(reportSource).toContain("Running a business through one of these? Open it below and link a cost category");
   });
 });
 

@@ -196,7 +196,7 @@ export default function BudgetReportScreen() {
 
             {businessCosts.length > 0 ? (
               <>
-                <Text style={[styles.section, { color: colors.mutedForeground }]}>Side-hustle costs, not counted above</Text>
+                <Text style={[styles.section, { color: colors.mutedForeground }]}>Income-stream costs, not counted above</Text>
                 <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]} testID="budget-report-business-costs">
                   {businessCosts.map((row) => (
                     <View key={`biz/${row.category}`} style={styles.overRow}>
@@ -205,7 +205,7 @@ export default function BudgetReportScreen() {
                     </View>
                   ))}
                   <Text style={[styles.rowMeta, { color: colors.mutedForeground, paddingBottom: 8 }]}>
-                    These come off the side hustle's profit in Business, so they are not household spending.
+                    These come off their income stream's profit in Business, so they are not household spending.
                   </Text>
                 </View>
               </>

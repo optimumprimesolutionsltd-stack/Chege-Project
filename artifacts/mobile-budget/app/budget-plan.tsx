@@ -115,7 +115,7 @@ export default function BudgetPlanScreen() {
               </Text>
               {plan.businessTotal > 0 ? (
                 <Text style={[styles.totalCaption, { color: colors.mutedForeground }]}>
-                  + {kes(plan.businessTotal)} for side-hustle costs, budgeted apart
+                  + {kes(plan.businessTotal)} for income-stream costs, budgeted apart
                 </Text>
               ) : null}
             </View>
@@ -124,7 +124,7 @@ export default function BudgetPlanScreen() {
                 <View key={heading.name} style={[styles.heading, index > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderColor: colors.border }]} testID={`budget-plan-heading-${heading.name}`}>
                   <View style={styles.line}>
                     <Text style={[styles.headingName, { color: colors.foreground }]} numberOfLines={1}>
-                      {heading.name}{heading.business ? ' · side hustle' : ''}
+                      {heading.name}{heading.business ? ' · income stream' : ''}
                     </Text>
                     <Text style={[styles.headingAmount, { color: colors.foreground }]}>{kes(heading.budget)}</Text>
                   </View>

@@ -350,7 +350,7 @@ export default function ExpenseLedgerScreen() {
           </Text>
           {!isLoading && cogsTotal > 0 ? (
             <Text style={[styles.totalCaption, { color: colors.mutedForeground, marginTop: 4 }]}>
-              + KES {formatKES(cogsTotal)} of side-hustle costs, on the Business costs tab
+              + KES {formatKES(cogsTotal)} of income-stream costs, on the Business costs tab
             </Text>
           ) : null}
         </View>

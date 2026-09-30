@@ -34,7 +34,7 @@ export const ASK_JAMVI_TOOLS = [
     type: "function",
     function: {
       name: "income",
-      description: "Money that came in between two days: the total earned (a side hustle counts its profit), each income stream's received, costs and net, money in that was not income (borrowed, repaid, from savings), and the largest entries. Optional search narrows to descriptions containing it.",
+      description: "Money that came in between two days: the total earned (a business counts its profit), each income stream's received, costs and net, money in that was not income (borrowed, repaid, from savings), and the largest entries. Optional search narrows to descriptions containing it.",
       parameters: { type: "object", properties: { ...RANGE, search: { type: "string" } }, required: ["from", "to"] },
     },
   },
@@ -50,7 +50,7 @@ export const ASK_JAMVI_TOOLS = [
     type: "function",
     function: {
       name: "budget",
-      description: "The household budget for one month against what was spent, per category: budget, spent, left or over. A side hustle's costs are not in it; use business for those.",
+      description: "The household budget for one month against what was spent, per category: budget, spent, left or over. A business's costs are not in it; use business for those.",
       parameters: { type: "object", properties: MONTH, required: ["month", "year"] },
     },
   },
@@ -58,7 +58,7 @@ export const ASK_JAMVI_TOOLS = [
     type: "function",
     function: {
       name: "business",
-      description: "Profit and loss for each side hustle in one month: sales, cost of goods sold, gross profit, expenses, net profit, with each cost by category.",
+      description: "Profit and loss for each business in one month: sales, cost of goods sold, gross profit, expenses, net profit, with each cost by category.",
       parameters: { type: "object", properties: MONTH, required: ["month", "year"] },
     },
   },
