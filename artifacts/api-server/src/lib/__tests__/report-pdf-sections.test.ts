@@ -62,3 +62,26 @@ describe("the budget plan and expenses by category", () => {
     expect(byItem.subarray(0, 5).toString()).toBe("%PDF-");
   });
 });
+
+// A grouped list as its totals only: every section's band, none of its entries.
+describe("a grouped list, as a summary or in detail", () => {
+  const rows = entries.map((row, i) => ({ ...row, detail: ["Food", "Transport", "Rent"][i % 3] }));
+  const pages = (pdf: Buffer) => (pdf.toString("latin1").match(/\/Type \/Page\b/g) ?? []).length;
+
+  it("keeps expenses by category to their totals when a summary is asked for", async () => {
+    const detailed = await createMonthlyReportPdf({ ...base, expenses: rows, expensesGroupedBy: "category" });
+    const summary = await createMonthlyReportPdf({ ...base, expenses: rows, expensesGroupedBy: "category", expensesSummary: true });
+    expect(summary.subarray(0, 5).toString()).toBe("%PDF-");
+    expect(pages(summary)).toBe(1);
+    expect(pages(detailed)).toBeGreaterThan(1);
+  });
+
+  it("lists income by income stream, in detail or as a summary", async () => {
+    const detailed = await createMonthlyReportPdf({ ...base, incomeEntries: rows, incomeGroupedBy: "stream" });
+    const summary = await createMonthlyReportPdf({ ...base, incomeEntries: rows, incomeGroupedBy: "stream", incomeSummary: true });
+    expect(pages(summary)).toBe(1);
+    expect(pages(detailed)).toBeGreaterThan(1);
+    const empty = await createMonthlyReportPdf({ ...base, incomeEntries: [], incomeGroupedBy: "stream" });
+    expect(empty.subarray(0, 5).toString()).toBe("%PDF-");
+  });
+});

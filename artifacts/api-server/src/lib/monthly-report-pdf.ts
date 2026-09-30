@@ -54,6 +54,12 @@ export type MonthlyReportPdfData = {
   businesses?: ReportBusinessRow[];
   /** How the expense list is laid out: by date (the default), or a section per category or per item with its subtotal. */
   expensesGroupedBy?: "category" | "item";
+  /** With expensesGroupedBy, each section's total and count only - no entries under it. */
+  expensesSummary?: boolean;
+  /** How the income list is laid out: by date (the default), or a section per income stream with its subtotal. */
+  incomeGroupedBy?: "stream";
+  /** With incomeGroupedBy, each stream's total and count only - no entries under it. */
+  incomeSummary?: boolean;
   /** The budget as planned - each heading, its sub-categories and their budgets - with no spending beside it. */
   budgetPlan?: Array<{ name: string; budget: number; business?: boolean; children: Array<{ name: string; budget: number }> }>;
   /** Every expense in the period, newest first; left out when absent. */
@@ -276,21 +282,26 @@ export function createMonthlyReportPdf(data: MonthlyReportPdfData): Promise<Buff
 
     // Expenses a section at a time - per category, or per item - each with its
     // entries and subtotal, the biggest first: the way All expenses shows them.
-    const groupedEntryList = (by: "category" | "item", rows: ReportEntryRow[]) => {
+    // Summary keeps only each section's band - its name, count and total.
+    const groupedEntryList = (by: "category" | "item" | "stream", rows: ReportEntryRow[], summary = false) => {
       y += 16;
+      const titles = {
+        category: ["Expenses by category", "Every expense in the period under the category it was filed under, the biggest category first."],
+        item: ["Expenses by item", "Every expense in the period under what it was for, the biggest first."],
+        stream: ["Income by income stream", "Every piece of income in the period under the income stream it came from, the biggest first. A split deposit sits under each of its streams at that stream's share."],
+      } as const;
+      const [title, description] = titles[by];
       sectionTitle(
-        by === "category" ? "Expenses by category" : "Expenses by item",
-        by === "category"
-          ? "Every expense in the period under the category it was filed under, the biggest category first."
-          : "Every expense in the period under what it was for, the biggest first.",
+        summary ? title + " - summary" : title,
+        summary ? description.replace(/^Every (expense|piece of income) in the period under/, (_, what: string) => "The total of every " + what + " in the period for") : description,
       );
       if (rows.length === 0) {
-        tableRow([{ text: "No expenses were recorded in this period.", x: SIDE_MARGIN, width: CONTENT_WIDTH, color: "#60736C" }], 28);
+        tableRow([{ text: by === "stream" ? "No income was recorded in this period." : "No expenses were recorded in this period.", x: SIDE_MARGIN, width: CONTENT_WIDTH, color: "#60736C" }], 28);
         return;
       }
       const groups = new Map<string, { label: string; rows: ReportEntryRow[]; total: number }>();
       for (const row of rows) {
-        const label = (by === "category" ? row.detail : row.description).trim() || "Uncategorized";
+        const label = (by === "item" ? row.description : row.detail).trim() || "Uncategorized";
         const key = label.toLowerCase();
         const group = groups.get(key) ?? { label, rows: [], total: 0 };
         group.rows.push(row);
@@ -307,17 +318,17 @@ export function createMonthlyReportPdf(data: MonthlyReportPdfData): Promise<Buff
         document.font("Helvetica-Bold").fontSize(9.5).fillColor("#103A2D")
           .text(formatKes(group.total), SIDE_MARGIN + 418, y + 7, { width: 93, align: "right", lineBreak: false });
         y += 24;
-        group.rows.forEach((row) => {
+        if (!summary) group.rows.forEach((row) => {
           tableRow([
             { text: row.date.slice(8, 10) + "/" + row.date.slice(5, 7) + "/" + row.date.slice(2, 4), x: SIDE_MARGIN, width: 56 },
-            { text: by === "category" ? row.description : row.detail, x: SIDE_MARGIN + 60, width: 350 },
+            { text: by === "item" ? row.detail : row.description, x: SIDE_MARGIN + 60, width: 350 },
             { text: formatKes(row.amount), x: SIDE_MARGIN + 418, width: 93, align: "right" },
           ], 20);
         });
         y += 6;
       }
       tableRow([
-        { text: `Total, ${rows.length} ${rows.length === 1 ? "entry" : "entries"} in ${groups.size} ${by === "category" ? (groups.size === 1 ? "category" : "categories") : (groups.size === 1 ? "item" : "items")}`, x: SIDE_MARGIN, width: 400, color: "#31584A" },
+        { text: `Total, ${rows.length} ${rows.length === 1 ? "entry" : "entries"} in ${groups.size} ${{ category: groups.size === 1 ? "category" : "categories", item: groups.size === 1 ? "item" : "items", stream: groups.size === 1 ? "income stream" : "income streams" }[by]}`, x: SIDE_MARGIN, width: 400, color: "#31584A" },
         { text: formatKes(rows.reduce((sum, row) => sum + row.amount, 0)), x: SIDE_MARGIN + 418, width: 93, align: "right" },
       ], 24);
     };
@@ -389,12 +400,14 @@ export function createMonthlyReportPdf(data: MonthlyReportPdfData): Promise<Buff
     }
 
     if (data.expenses && data.expensesGroupedBy) {
-      groupedEntryList(data.expensesGroupedBy, data.expenses);
+      groupedEntryList(data.expensesGroupedBy, data.expenses, data.expensesSummary);
     } else if (data.expenses) {
       entryList("Expenses", "Every expense in the period, newest first, with the category it was filed under.", "Category", data.expenses, "No expenses were recorded in this period.");
     }
 
-    if (data.incomeEntries) {
+    if (data.incomeEntries && data.incomeGroupedBy) {
+      groupedEntryList(data.incomeGroupedBy, data.incomeEntries, data.incomeSummary);
+    } else if (data.incomeEntries) {
       entryList("Income", "Every piece of income in the period, newest first, with its income stream. Money borrowed, repaid or moved between your own accounts is not income and is not listed.", "Income stream", data.incomeEntries, "No income was recorded in this period.");
     }
 

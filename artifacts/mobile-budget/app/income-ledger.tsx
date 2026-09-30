@@ -8,15 +8,21 @@ import {
   Pressable,
   Platform,
   TextInput,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import {
+  getDashboardMonthlyReportPdf,
   getGetDashboardIncomeLedgerQueryKey,
   useGetDashboardIncomeLedger,
 } from '@workspace/api-client-react';
+import { Paths } from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
+import { writePdf } from '@/lib/savePdf';
+import { askPdfDetail, type PdfDetail } from '@/lib/pdfDetail';
 import { isoDay, longDay, monthStartIso, orderedRange } from '@/lib/dayRange';
 import { useColors } from '@/hooks/useColors';
 
@@ -76,6 +82,35 @@ export default function IncomeLedgerScreen() {
     // show the previous answer from cache under the new controls.
     query: { queryKey: getGetDashboardIncomeLedgerQueryKey(query) },
   });
+
+  // The list as a PDF, laid out the way it is shown: by date, or by income
+  // stream - then as each stream's total or with every entry under it.
+  const [exporting, setExporting] = useState(false);
+  const downloadPdf = async (detail?: PdfDetail) => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const blob = await getDashboardMonthlyReportPdf(
+        {
+          from: rangeFrom,
+          to: rangeTo,
+          includeSummary: false,
+          includeBudget: false,
+          includeIncome: false,
+          includeIncomeEntries: true,
+          ...(view === 'stream' ? { incomeGroupBy: 'stream' as const, incomeDetail: detail ?? 'detailed' } : {}),
+        },
+        { responseType: 'blob', cache: 'no-store' },
+      );
+      const file = await writePdf(Paths.cache, `jamvi-income-${rangeFrom}-to-${rangeTo}.pdf`, blob as Blob);
+      if (!(await Sharing.isAvailableAsync())) throw new Error('Sharing is not available on this device.');
+      await Sharing.shareAsync(file.uri, { mimeType: 'application/pdf', dialogTitle: 'Save or share income', UTI: 'com.adobe.pdf' });
+    } catch (error: unknown) {
+      Alert.alert('Could not make the PDF', error instanceof Error ? error.message : 'Please try again.');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const entries = data?.entries ?? [];
   const other = data?.otherMoneyIn;
@@ -198,6 +233,18 @@ export default function IncomeLedgerScreen() {
             Everything that came in, newest first
           </Text>
         </View>
+        <Pressable
+          onPress={() => (view === 'stream' ? askPdfDetail('income stream', (detail) => void downloadPdf(detail)) : void downloadPdf())}
+          disabled={exporting || isLoading}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Download income as PDF"
+          testID="income-ledger-pdf"
+          style={[styles.pdfButton, { borderColor: colors.border, opacity: exporting ? 0.6 : 1 }]}
+        >
+          {exporting ? <ActivityIndicator size="small" color={colors.primary} /> : <Feather name="download" size={15} color={colors.primary} />}
+          <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>PDF</Text>
+        </Pressable>
       </View>
 
       <ScrollView
@@ -353,6 +400,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth },
   // Without this the title is starved by the back chevron on a narrow phone.
   headerText: { flex: 1, minWidth: 0 },
+  pdfButton: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
   title: { fontSize: 20, fontFamily: 'Inter_700Bold' },
   subtitle: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 1 },
   body: { padding: 16, gap: 12 },

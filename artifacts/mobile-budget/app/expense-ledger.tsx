@@ -27,6 +27,7 @@ import { Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { getDashboardMonthlyReportPdf } from '@workspace/api-client-react';
 import { writePdf } from '@/lib/savePdf';
+import { askPdfDetail, type PdfDetail } from '@/lib/pdfDetail';
 
 function formatKES(n?: number | null): string {
   if (n === undefined || n === null) return '—';
@@ -121,7 +122,7 @@ export default function ExpenseLedgerScreen() {
   // The list as a PDF: this tab's expenses between these dates, and nothing
   // else - a household PDF never shows a side hustle's stock.
   const [exporting, setExporting] = useState(false);
-  const downloadPdf = async () => {
+  const downloadPdf = async (detail?: PdfDetail) => {
     if (exporting) return;
     setExporting(true);
     try {
@@ -135,7 +136,7 @@ export default function ExpenseLedgerScreen() {
           includeExpenses: true,
           ...(hasBusiness ? { expensesScope: scope } : {}),
           // The way it is shown: by category or by item, each with its subtotal.
-          ...(view !== 'date' ? { expensesGroupBy: view } : {}),
+          ...(view !== 'date' ? { expensesGroupBy: view, expensesDetail: detail ?? 'detailed' } : {}),
         },
         { responseType: 'blob', cache: 'no-store' },
       );
@@ -242,7 +243,8 @@ export default function ExpenseLedgerScreen() {
           </Text>
         </View>
         <Pressable
-          onPress={() => void downloadPdf()}
+          // Grouped, it asks whether each group's total is enough or every entry is wanted.
+          onPress={() => (view === 'date' ? void downloadPdf() : askPdfDetail(view === 'category' ? 'category' : 'item', (detail) => void downloadPdf(detail)))}
           disabled={exporting || isLoading}
           hitSlop={8}
           accessibilityRole="button"

@@ -2290,6 +2290,18 @@ includeDebts?: boolean;
  */
 expensesGroupBy?: GetDashboardMonthlyReportPdfExpensesGroupBy;
 /**
+ * With expensesGroupBy, summary lists only each section's total and count; detailed (the default) lists every entry under it.
+ */
+expensesDetail?: GetDashboardMonthlyReportPdfExpensesDetail;
+/**
+ * With includeIncomeEntries, a section per income stream with subtotals, rather than by date. A split deposit sits under each of its streams at that stream's share.
+ */
+incomeGroupBy?: GetDashboardMonthlyReportPdfIncomeGroupBy;
+/**
+ * With incomeGroupBy, summary lists only each stream's total and count; detailed (the default) lists every entry under it.
+ */
+incomeDetail?: GetDashboardMonthlyReportPdfIncomeDetail;
+/**
  * Include the budget as planned - headings, sub-categories and budgets, no spending. Defaults to false.
  */
 includeBudgetPlan?: boolean;
@@ -2305,6 +2317,29 @@ export type GetDashboardMonthlyReportPdfExpensesGroupBy = typeof GetDashboardMon
 export const GetDashboardMonthlyReportPdfExpensesGroupBy = {
   category: 'category',
   item: 'item',
+} as const;
+
+export type GetDashboardMonthlyReportPdfExpensesDetail = typeof GetDashboardMonthlyReportPdfExpensesDetail[keyof typeof GetDashboardMonthlyReportPdfExpensesDetail];
+
+
+export const GetDashboardMonthlyReportPdfExpensesDetail = {
+  summary: 'summary',
+  detailed: 'detailed',
+} as const;
+
+export type GetDashboardMonthlyReportPdfIncomeGroupBy = typeof GetDashboardMonthlyReportPdfIncomeGroupBy[keyof typeof GetDashboardMonthlyReportPdfIncomeGroupBy];
+
+
+export const GetDashboardMonthlyReportPdfIncomeGroupBy = {
+  stream: 'stream',
+} as const;
+
+export type GetDashboardMonthlyReportPdfIncomeDetail = typeof GetDashboardMonthlyReportPdfIncomeDetail[keyof typeof GetDashboardMonthlyReportPdfIncomeDetail];
+
+
+export const GetDashboardMonthlyReportPdfIncomeDetail = {
+  summary: 'summary',
+  detailed: 'detailed',
 } as const;
 
 export type GetDashboardMonthlyReportPdfExpensesScope = typeof GetDashboardMonthlyReportPdfExpensesScope[keyof typeof GetDashboardMonthlyReportPdfExpensesScope];
