@@ -126,21 +126,54 @@ const clean = (value: string) => value.trim().replace(/\s+/g, " ").toLocaleLower
 export function suggestCategory(description: string, history: readonly PastPosting[]): string {
   const wanted = clean(description);
   if (!wanted) return "";
-  const counts = new Map<string, number>();
+  return mostUsedFor(history).categories.get(wanted) ?? "";
+}
+
+/**
+ * Each description"s most-used category and income source, read from the
+ * history once rather than once per line of a statement (see prepare in
+ * payeeLearning). The first to reach the top count wins, as before.
+ */
+const mostUsed = new WeakMap<readonly PastPosting[], { categories: Map<string, string>; sources: Map<string, number> }>();
+function mostUsedFor(history: readonly PastPosting[]) {
+  const cached = mostUsed.get(history);
+  if (cached) return cached;
+  const categoryCounts = new Map<string, Map<string, number>>();
+  const sourceCounts = new Map<string, Map<number, number>>();
   for (const posting of history) {
-    if (posting.type !== "disbursement" || !posting.expenseCategory || isFeePosting(posting)) continue;
-    if (clean(posting.description) !== wanted) continue;
-    counts.set(posting.expenseCategory, (counts.get(posting.expenseCategory) ?? 0) + 1);
-  }
-  let best = "";
-  let bestCount = 0;
-  for (const [category, count] of counts) {
-    if (count > bestCount) {
-      best = category;
-      bestCount = count;
+    const key = clean(posting.description);
+    if (posting.type === "disbursement" && posting.expenseCategory && !isFeePosting(posting)) {
+      const counts = categoryCounts.get(key) ?? new Map<string, number>();
+      counts.set(posting.expenseCategory, (counts.get(posting.expenseCategory) ?? 0) + 1);
+      categoryCounts.set(key, counts);
+    }
+    if (posting.type === "deposit" && posting.incomeSourceId) {
+      const counts = sourceCounts.get(key) ?? new Map<number, number>();
+      counts.set(posting.incomeSourceId, (counts.get(posting.incomeSourceId) ?? 0) + 1);
+      sourceCounts.set(key, counts);
     }
   }
-  return best;
+  const top = <K,>(counts: Map<K, number>): K | undefined => {
+    let best: K | undefined;
+    let bestCount = 0;
+    for (const [value, count] of counts) {
+      if (count > bestCount) {
+        best = value;
+        bestCount = count;
+      }
+    }
+    return best;
+  };
+  const categories = new Map<string, string>();
+  for (const [key, counts] of categoryCounts) categories.set(key, top(counts) ?? "");
+  const sources = new Map<string, number>();
+  for (const [key, counts] of sourceCounts) {
+    const best = top(counts);
+    if (best != null) sources.set(key, best);
+  }
+  const built = { categories, sources };
+  mostUsed.set(history, built);
+  return built;
 }
 
 /**
@@ -151,21 +184,7 @@ export function suggestCategory(description: string, history: readonly PastPosti
 export function suggestIncomeSource(description: string, history: readonly PastPosting[]): number | null {
   const wanted = clean(description);
   if (!wanted) return null;
-  const counts = new Map<number, number>();
-  for (const posting of history) {
-    if (posting.type !== "deposit" || !posting.incomeSourceId) continue;
-    if (clean(posting.description) !== wanted) continue;
-    counts.set(posting.incomeSourceId, (counts.get(posting.incomeSourceId) ?? 0) + 1);
-  }
-  let best: number | null = null;
-  let bestCount = 0;
-  for (const [id, count] of counts) {
-    if (count > bestCount) {
-      best = id;
-      bestCount = count;
-    }
-  }
-  return best;
+  return mostUsedFor(history).sources.get(wanted) ?? null;
 }
 
 /** Can this line be recorded at all, before anybody has chosen anything? */
