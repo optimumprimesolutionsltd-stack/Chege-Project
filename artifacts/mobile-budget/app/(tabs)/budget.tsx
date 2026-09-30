@@ -697,6 +697,39 @@ export default function BudgetScreen() {
     }
   };
 
+  // A heading made on the spot, when the one wanted is not among the chips:
+  // named, saved, then chosen as this category's parent - without leaving it.
+  const [newParentOpen, setNewParentOpen] = useState(false);
+  const [newParentName, setNewParentName] = useState('');
+  const [creatingParent, setCreatingParent] = useState(false);
+  const createParent = async () => {
+    const name = newParentName.trim();
+    if (!name || creatingParent) return;
+    const existing = allCategories.find((row) => (row.parentId ?? null) === null && row.name.trim().toLowerCase() === name.toLowerCase());
+    if (existing) {
+      setFormParentId(existing.id);
+      setNewParentOpen(false);
+      setNewParentName('');
+      return;
+    }
+    setCreatingParent(true);
+    try {
+      const created = await customFetch<{ id: number }>('/api/budget-categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, budgetAmount: 0, priority: parseInt(formPriority, 10) || 1, parentId: null, reducesIncomeSourceId: null, isRecurring: true, activeMonth: null, activeYear: null }),
+      });
+      await refreshAll();
+      if (created?.id != null) setFormParentId(Number(created.id));
+      setNewParentOpen(false);
+      setNewParentName('');
+    } catch {
+      Alert.alert('Could not add that heading', 'Please try again.');
+    } finally {
+      setCreatingParent(false);
+    }
+  };
+
   const handleDelete = (cat: BudgetCategory) => {
     Alert.alert(
       `Remove "${cat.name}" from "${workspaceBudgetName(group)}"?`,
@@ -1022,7 +1055,17 @@ export default function BudgetScreen() {
                 {!editingParent && !formIsGroup && !recurringSetupActive ? (
                   <>
                     <Text style={[styles.label, { color: colors.mutedForeground }]}>INSIDE ANOTHER CATEGORY</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 6 }}>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 6 }} contentContainerStyle={{ gap: 8 }}>
+                      <Pressable
+                        onPress={() => setNewParentOpen(true)}
+                        testID="category-parent-new"
+                        accessibilityRole="button"
+                        accessibilityLabel="Make a new category to put this one inside"
+                        style={[styles.priorityChip, { backgroundColor: colors.muted, borderColor: colors.primary, borderStyle: 'dashed', flexDirection: 'row', alignItems: 'center', gap: 4 }]}
+                      >
+                        <Feather name="plus" size={13} color={colors.primary} />
+                        <Text style={[styles.priorityChipText, { color: colors.primary }]}>New</Text>
+                      </Pressable>
                       <Pressable
                         onPress={() => setFormParentId(null)}
                         testID="category-parent-none"
@@ -1053,6 +1096,33 @@ export default function BudgetScreen() {
                           </Pressable>
                         ))}
                     </ScrollView>
+                    {newParentOpen ? (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 }} testID="category-parent-new-form">
+                        <TextInput
+                          value={newParentName}
+                          onChangeText={setNewParentName}
+                          placeholder="New heading, e.g. Household"
+                          placeholderTextColor={colors.mutedForeground}
+                          autoFocus
+                          returnKeyType="done"
+                          onSubmitEditing={() => void createParent()}
+                          style={[styles.input, { flex: 1, marginTop: 0, color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]}
+                          testID="category-parent-new-name"
+                        />
+                        <Pressable
+                          onPress={() => void createParent()}
+                          disabled={!newParentName.trim() || creatingParent}
+                          accessibilityRole="button"
+                          testID="category-parent-new-save"
+                          style={{ paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10, backgroundColor: colors.primary, opacity: !newParentName.trim() || creatingParent ? 0.5 : 1 }}
+                        >
+                          {creatingParent ? <ActivityIndicator size="small" color={colors.primaryForeground} /> : <Text style={{ color: colors.primaryForeground, fontFamily: 'Inter_600SemiBold' }}>Add</Text>}
+                        </Pressable>
+                        <Pressable onPress={() => { setNewParentOpen(false); setNewParentName(''); }} hitSlop={8} accessibilityLabel="Cancel the new heading">
+                          <Feather name="x" size={18} color={colors.mutedForeground} />
+                        </Pressable>
+                      </View>
+                    ) : null}
                     <Text style={[styles.priorityHint, { color: colors.mutedForeground }]}>
                       Spending and budgets live on the subcategory. The category above it becomes a heading that totals
                       everything inside it. Change this later to move it somewhere else.

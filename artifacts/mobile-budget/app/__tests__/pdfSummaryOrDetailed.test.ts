@@ -30,7 +30,7 @@ describe('a PDF of a grouped list, as a summary or detailed', () => {
 });
 
 // A long page gets a thumb to drag; scrolling never re-renders the list.
-describe('the scroller', () => {
+describe('the scroller arrows', () => {
   it('is on every long page, clear of its header and floating buttons', () => {
     expect(read('app/(tabs)/bank.tsx')).toContain("scroller={{ top: topPad + 12, bottom: (Platform.OS === 'web' ? 100 : insets.bottom + 110) }}");
     for (const tab of ['budget', 'contributions', 'debt', 'goals', 'history', 'index', 'reports', 'settings']) {
@@ -45,15 +45,15 @@ describe('the scroller', () => {
     expect(read('app/mpesa-import.tsx')).toContain('scroller={{ top: 8, bottom: insets.bottom + 120 }}');
   });
 
-  it('drags the page and follows it through an animated value, only on a long page', () => {
+  it('moves a screen per tap and to the end on a long press, only on a long page', () => {
     const hook = read('components/FastScroller.tsx');
-    expect(hook).toContain('testID="page-scroller"');
-    expect(hook).toContain('scrollToRef.current((top / room) * Math.max(0, content - height));');
-    expect(hook).toContain('offset.setValue(event.nativeEvent.contentOffset.y);');
+    expect(hook).toContain('testID={`page-scroller-${direction}`}');
+    expect(hook).toContain("onLongPress={() => jump(direction === 'up' ? 'top' : 'bottom')}");
+    expect(hook).toContain("{!edges.atTop ? arrow('up') : null}");
     expect(hook).toContain('sizes.content > sizes.height * SCROLLER_MIN_SCREENS');
     const lists = read('components/PageScrollReset.tsx');
     expect(lists).toContain('if (!scroller) return <FlatList ref={ref} {...props} />;');
-    expect(lists).toContain("(offset) => ref.current?.scrollTo({ y: offset, animated: false })");
+    expect(lists).toContain("(offset) => ref.current?.scrollTo({ y: offset, animated: true })");
   });
 });
 
