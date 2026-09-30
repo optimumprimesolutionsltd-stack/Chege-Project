@@ -617,8 +617,9 @@ export function buildPostings(line: PreviewLine, choice: Choice, ctx: PostingCon
     };
   }
 
-  // A shared group's spending defaults to the group, as it does on the Bank form.
-  const madeById = ctx.isShared ? null : ctx.userId;
+  // Paid by whoever is importing: it is their M-Pesa, and "the group" on
+  // every line of a shared group's import hid who actually paid.
+  const madeById = ctx.userId ?? null;
   // Lending is not a cost: no category, and linked to who it went to.
   const lending = choice.debt?.kind === 'lend';
   // Nor is paying Fuliza back: what the loan bought was recorded as spending

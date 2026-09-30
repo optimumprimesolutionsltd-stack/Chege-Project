@@ -169,6 +169,11 @@ export default function MpesaImportPage() {
   // Which of the entries to show: all, or only those still to look at, changed by you, or needing you.
   const [view, setView] = useState<ReviewView>("all");
   const [chargeCategory, setChargeCategory] = useState("");
+  // Charges go to the budget's built-in M-Pesa charges whenever it has one; the
+  // category last picked for charges (remembered across budgets) only stands
+  // in where it has none - it used to file every charge under School fees.
+  const builtInCharge = categories.find((row) => row.name.trim().toLowerCase() === "m-pesa charges")?.name ?? null;
+  const effectiveChargeCategory = builtInCharge ?? chargeCategory;
   const [saving, setSaving] = useState(false);
   // How far a save has got, so two hundred entries travelling to the server together does
   // not just sit behind a spinner with no sign of life.
@@ -213,7 +218,7 @@ export default function MpesaImportPage() {
     try { window.localStorage.setItem(nicknamesKey, JSON.stringify(next)); } catch { /* remembered only when storage allows */ }
     const renamed = applyNicknames(lines, next);
     setLines(renamed);
-    setChoices((current) => refreshSuggestions(renamed, current, history, categories.map((row) => row.name), chargeCategory, rules));
+    setChoices((current) => refreshSuggestions(renamed, current, history, categories.map((row) => row.name), effectiveChargeCategory, rules));
     setNaming(null);
   };
 
@@ -328,7 +333,7 @@ export default function MpesaImportPage() {
       );
       setLines(shown);
       setStatementReading({ ...reading, lines: shown });
-      setChoices(initialChoices(shown, history, categories.map((row) => row.name), chargeCategory, rules, canManageBudget));
+      setChoices(initialChoices(shown, history, categories.map((row) => row.name), effectiveChargeCategory, rules, canManageBudget));
       setStatementPassword("");
     } catch (error) {
       if (error instanceof StatementPasswordError) {
@@ -362,7 +367,7 @@ export default function MpesaImportPage() {
       if (!response.ok || !body.lines) throw new Error(body.error ?? "Could not read them.");
       const shown = applyNicknames(body.lines, readStoredNicknames());
       setLines(shown);
-      setChoices(initialChoices(shown, history, categories.map((row) => row.name), chargeCategory, rules, canManageBudget));
+      setChoices(initialChoices(shown, history, categories.map((row) => row.name), effectiveChargeCategory, rules, canManageBudget));
     } catch (error) {
       toast({ variant: "destructive", title: "Could not read them", description: error instanceof Error ? error.message : "Please try again." });
     } finally {
@@ -445,9 +450,9 @@ export default function MpesaImportPage() {
       const problem = problemWith(item, choices[item.index]);
       if (problem) return `${lineLabel(item)}: ${problem}`;
     }
-    if (summary && summary.fees > 0 && !chargeCategory.trim()) return "Choose a category for the M-Pesa charges.";
+    if (summary && summary.fees > 0 && !effectiveChargeCategory.trim()) return "Choose a category for the M-Pesa charges.";
     return null;
-  }, [lines, choices, summary, chargeCategory]);
+  }, [lines, choices, summary, effectiveChargeCategory]);
 
   // Who owes who, and the categories that track a debt: a payment to or from a
   // person can be a debt or a loan, and paying a debt's category pays it down.
@@ -604,7 +609,7 @@ export default function MpesaImportPage() {
         userId: user?.id,
         isShared,
         today: todayIso(),
-        chargeCategory,
+        chargeCategory: effectiveChargeCategory,
         incomeSources,
         memberIds,
       });
@@ -855,7 +860,7 @@ export default function MpesaImportPage() {
               onChange={(event) => {
                 setSelectedAccountId(Number(event.target.value));
                 // The suggestions come from this account's history, so start them again.
-                setChoices(initialChoices(lines, [], categories.map((row) => row.name), chargeCategory, rules, canManageBudget));
+                setChoices(initialChoices(lines, [], categories.map((row) => row.name), effectiveChargeCategory, rules, canManageBudget));
               }}
               data-testid="mpesa-import-account"
             >
@@ -1334,7 +1339,7 @@ export default function MpesaImportPage() {
                 <select
                   id="mpesa-charge-category"
                   className={`${SELECT_CLASS} ${chargeCategory ? "" : "border-destructive"}`}
-                  value={chargeCategory}
+                  value={effectiveChargeCategory}
                   onChange={(event) => {
                     setChargeCategory(event.target.value);
                     try { window.localStorage.setItem(CHARGE_CATEGORY_KEY, event.target.value); } catch { /* remembered only when storage allows */ }
