@@ -128,9 +128,9 @@ describe('buildPostings', () => {
     expect(built?.fee).not.toHaveProperty('mpesaReceipt');
   });
 
-  it('files spending in a shared group under the group, and in a personal budget under the person', () => {
+  it('files spending as paid by whoever imports it, in a shared group as in a personal budget', () => {
     const shared = buildPostings(line({}), { include: true, category: 'Fun' }, { ...ctx, isShared: true });
-    expect(shared?.main).toMatchObject({ madeById: null });
+    expect(shared?.main).toMatchObject({ madeById: 'u1' });
     expect(buildPostings(line({}), { include: true, category: 'Fun' }, ctx)?.main).toMatchObject({ madeById: 'u1' });
   });
 

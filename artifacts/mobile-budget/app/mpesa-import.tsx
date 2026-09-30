@@ -600,7 +600,7 @@ export default function MpesaImportScreen() {
       .then((checked) => {
         setLines(checked);
         setStatementReading({ ...kept, lines: checked });
-        setChoices(initialChoices(checked, [], [], chargeCategory, {}, canManageBudget));
+        setChoices(initialChoices(checked, [], [], effectiveChargeCategory, {}, canManageBudget));
       });
     // Runs when the budget changes, not on every keystroke.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -649,7 +649,7 @@ export default function MpesaImportScreen() {
     AsyncStorage.setItem(nicknamesKey, JSON.stringify(next)).catch(() => {});
     const renamed = applyNicknames(lines, next);
     setLines(renamed);
-    setChoices((current) => refreshSuggestions(renamed, current, history, categories.map((row) => row.name), chargeCategory, rules));
+    setChoices((current) => refreshSuggestions(renamed, current, history, categories.map((row) => row.name), effectiveChargeCategory, rules));
     setNaming(null);
   };
 
@@ -659,7 +659,7 @@ export default function MpesaImportScreen() {
   // the person chose is never touched.
   useEffect(() => {
     if (!lines) return;
-    setChoices((current) => refreshSuggestions(lines, current, history, categories.map((row) => row.name), chargeCategory, rules));
+    setChoices((current) => refreshSuggestions(lines, current, history, categories.map((row) => row.name), effectiveChargeCategory, rules));
     // Runs when the lists load, not on every choice.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [categoryList, account]);
@@ -724,6 +724,11 @@ export default function MpesaImportScreen() {
   useEffect(() => {
     if (builtInCharge) setChargeCategory(builtInCharge);
   }, [builtInCharge]);
+  // Charges go to the budget's built-in M-Pesa charges whenever it has one.
+  // The last category picked for charges is remembered across budgets, and
+  // when it loaded after the categories it quietly won - filing every charge
+  // under School fees. It now only stands in where there is no built-in one.
+  const effectiveChargeCategory = builtInCharge ?? chargeCategory;
 
   const readMessages = async (pasted: string = text) => {
     if (!pasted.trim()) {
@@ -742,7 +747,7 @@ export default function MpesaImportScreen() {
       setNicknames(known);
       const shown = applyNicknames(response.lines, known);
       setLines(shown);
-      setChoices(initialChoices(shown, history, categories.map((row) => row.name), chargeCategory, rules, canManageBudget));
+      setChoices(initialChoices(shown, history, categories.map((row) => row.name), effectiveChargeCategory, rules, canManageBudget));
       // A restored draft brings back what was chosen by hand, on top of the fresh reading.
       const restoredChoices = pendingChoicesRef.current;
       if (restoredChoices) {
@@ -841,7 +846,7 @@ export default function MpesaImportScreen() {
       );
       setLines(shown);
       setStatementReading({ ...reading, lines: shown });
-      const built = initialChoices(shown, history, categories.map((row) => row.name), chargeCategory, rules, canManageBudget);
+      const built = initialChoices(shown, history, categories.map((row) => row.name), effectiveChargeCategory, rules, canManageBudget);
       // Fuliza charges already recorded for days this statement shares would
       // be counted twice: its Fuliza line starts unticked, and the card says why.
       const receipts = ((account?.transactions ?? []) as Array<{ mpesaReceipt?: string | null }>).map((row) => row.mpesaReceipt);
@@ -986,9 +991,9 @@ export default function MpesaImportScreen() {
       const problem = problemWith(item, choices[item.index]);
       if (problem) return `${lineLabel(item)}: ${problem}`;
     }
-    if (summary && summary.fees > 0 && !chargeCategory.trim()) return 'Choose a category for the M-Pesa charges.';
+    if (summary && summary.fees > 0 && !effectiveChargeCategory.trim()) return 'Choose a category for the M-Pesa charges.';
     return null;
-  }, [lines, choices, summary, chargeCategory]);
+  }, [lines, choices, summary, effectiveChargeCategory]);
 
   // Who owes who, and the categories that track a debt: a payment to or from a
   // person can be a debt or a loan, and paying a debt's category pays it down.
@@ -1115,7 +1120,7 @@ export default function MpesaImportScreen() {
         userId: user?.id,
         isShared,
         today: todayIso(),
-        chargeCategory,
+        chargeCategory: effectiveChargeCategory,
         incomeSources,
         memberIds,
       });
@@ -1427,7 +1432,7 @@ export default function MpesaImportScreen() {
               onSelect={(id) => {
                 setSelectedAccountId(id);
                 // The suggestions come from this account's history, so start them again.
-                setChoices(initialChoices(lines, [], categories.map((row) => row.name), chargeCategory, rules, canManageBudget));
+                setChoices(initialChoices(lines, [], categories.map((row) => row.name), effectiveChargeCategory, rules, canManageBudget));
               }}
               testIDPrefix="mpesa-import-account"
             />
