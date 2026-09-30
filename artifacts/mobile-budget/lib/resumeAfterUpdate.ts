@@ -15,7 +15,7 @@ const MAX_AGE_MS = 5 * 60 * 1000;
 const RESUMABLE = new Set([
   '/budget', '/bank', '/history', '/goals', '/contributions', '/reports', '/settings', '/debt', '/search',
   '/subscription', '/spending-by-item', '/bank-statement', '/bank-day', '/record-contributions',
-  '/contribution-plan', '/parties', '/pass-through', '/expense-ledger', '/income-ledger', '/budget-report', '/business', '/help',
+  '/contribution-plan', '/parties', '/pass-through', '/expense-ledger', '/income-ledger', '/budget-report', '/budget-plan', '/business', '/help',
 ]);
 
 export function isResumable(pathname: string | null | undefined): pathname is string {

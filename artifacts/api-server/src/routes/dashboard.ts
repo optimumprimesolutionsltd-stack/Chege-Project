@@ -2422,6 +2422,8 @@ router.get("/dashboard/monthly-report.pdf", async (req, res): Promise<void> => {
   const includeDebts = req.query.includeDebts === "true";
   // All expenses' PDF: the household's, without a side hustle's stock, or only those costs.
   const expensesScope = req.query.expensesScope === "household" || req.query.expensesScope === "business" ? req.query.expensesScope : null;
+  const expensesGroupBy = req.query.expensesGroupBy === "category" || req.query.expensesGroupBy === "item" ? req.query.expensesGroupBy : undefined;
+  const includeBudgetPlan = req.query.includeBudgetPlan === "true";
 
   const [group] = await db
     .select({ name: groupsTable.name })
@@ -2635,6 +2637,21 @@ router.get("/dashboard/monthly-report.pdf", async (req, res): Promise<void> => {
     })),
     includeSummary,
     businesses,
+    expensesGroupedBy: expensesGroupBy,
+    // The plan on its own: each heading with its sub-categories, as budgeted.
+    budgetPlan: includeBudgetPlan
+      ? categories
+        .filter((category) => category.parentId == null && category.name !== UNCATEGORIZED_CATEGORY)
+        .map((heading) => ({
+          name: heading.name,
+          budget: reportBudgets.get(heading.id) ?? heading.budgetAmount,
+          business: heading.reducesIncomeSourceId != null,
+          children: categories
+            .filter((child) => child.parentId === heading.id)
+            .map((child) => ({ name: child.name, budget: reportBudgets.get(child.id) ?? child.budgetAmount })),
+        }))
+        .filter((heading) => heading.budget > 0 || heading.children.length > 0)
+      : undefined,
     expenses: expenseLedger?.entries.filter((entry) => {
       if (!expensesScope) return true;
       // Business when every category it is filed under is a side hustle's cost.

@@ -52,6 +52,10 @@ export type MonthlyReportPdfData = {
   includeSummary?: boolean;
   /** Each side hustle's profit and loss; left out when absent. */
   businesses?: ReportBusinessRow[];
+  /** How the expense list is laid out: by date (the default), or a section per category or per item with its subtotal. */
+  expensesGroupedBy?: "category" | "item";
+  /** The budget as planned - each heading, its sub-categories and their budgets - with no spending beside it. */
+  budgetPlan?: Array<{ name: string; budget: number; business?: boolean; children: Array<{ name: string; budget: number }> }>;
   /** Every expense in the period, newest first; left out when absent. */
   expenses?: ReportEntryRow[];
   /** Every piece of income in the period, newest first; left out when absent. */
@@ -270,6 +274,93 @@ export function createMonthlyReportPdf(data: MonthlyReportPdfData): Promise<Buff
       ], 22);
     };
 
+    // Expenses a section at a time - per category, or per item - each with its
+    // entries and subtotal, the biggest first: the way All expenses shows them.
+    const groupedEntryList = (by: "category" | "item", rows: ReportEntryRow[]) => {
+      y += 16;
+      sectionTitle(
+        by === "category" ? "Expenses by category" : "Expenses by item",
+        by === "category"
+          ? "Every expense in the period under the category it was filed under, the biggest category first."
+          : "Every expense in the period under what it was for, the biggest first.",
+      );
+      if (rows.length === 0) {
+        tableRow([{ text: "No expenses were recorded in this period.", x: SIDE_MARGIN, width: CONTENT_WIDTH, color: "#60736C" }], 28);
+        return;
+      }
+      const groups = new Map<string, { label: string; rows: ReportEntryRow[]; total: number }>();
+      for (const row of rows) {
+        const label = (by === "category" ? row.detail : row.description).trim() || "Uncategorized";
+        const key = label.toLowerCase();
+        const group = groups.get(key) ?? { label, rows: [], total: 0 };
+        group.rows.push(row);
+        group.total += row.amount;
+        groups.set(key, group);
+      }
+      for (const group of [...groups.values()].sort((a, b) => b.total - a.total)) {
+        ensureRoom(46);
+        document.rect(SIDE_MARGIN, y, CONTENT_WIDTH, 22).fill("#EAF3EE");
+        document.font("Helvetica-Bold").fontSize(9.5).fillColor("#103A2D")
+          .text(compactText(group.label, 50), SIDE_MARGIN + 8, y + 7, { width: 330, lineBreak: false });
+        document.font("Helvetica").fontSize(8).fillColor("#60736C")
+          .text(group.rows.length + (group.rows.length === 1 ? " entry" : " entries"), SIDE_MARGIN + 330, y + 8, { width: 80, align: "right", lineBreak: false });
+        document.font("Helvetica-Bold").fontSize(9.5).fillColor("#103A2D")
+          .text(formatKes(group.total), SIDE_MARGIN + 418, y + 7, { width: 93, align: "right", lineBreak: false });
+        y += 24;
+        group.rows.forEach((row) => {
+          tableRow([
+            { text: row.date.slice(8, 10) + "/" + row.date.slice(5, 7) + "/" + row.date.slice(2, 4), x: SIDE_MARGIN, width: 56 },
+            { text: by === "category" ? row.description : row.detail, x: SIDE_MARGIN + 60, width: 350 },
+            { text: formatKes(row.amount), x: SIDE_MARGIN + 418, width: 93, align: "right" },
+          ], 20);
+        });
+        y += 6;
+      }
+      tableRow([
+        { text: `Total, ${rows.length} ${rows.length === 1 ? "entry" : "entries"} in ${groups.size} ${by === "category" ? (groups.size === 1 ? "category" : "categories") : (groups.size === 1 ? "item" : "items")}`, x: SIDE_MARGIN, width: 400, color: "#31584A" },
+        { text: formatKes(rows.reduce((sum, row) => sum + row.amount, 0)), x: SIDE_MARGIN + 418, width: 93, align: "right" },
+      ], 24);
+    };
+
+    if (data.budgetPlan) {
+      y += 16;
+      sectionTitle("Budget plan", "What is budgeted for, under each heading. A heading's budget is its sub-categories added up.");
+      const columns = [
+        { label: "Category", x: SIDE_MARGIN, width: 380 },
+        { label: "Budget", x: SIDE_MARGIN + 384, width: 127, align: "right" as const },
+      ];
+      tableHeader(columns);
+      if (data.budgetPlan.length === 0) {
+        tableRow([{ text: "Nothing is budgeted for yet.", x: SIDE_MARGIN, width: CONTENT_WIDTH, color: "#60736C" }], 28);
+      }
+      for (const heading of data.budgetPlan) {
+        ensureRoom(24);
+        document.font("Helvetica-Bold").fontSize(9).fillColor("#103A2D")
+          .text(compactText(heading.name + (heading.business ? "  (side hustle)" : ""), 60), SIDE_MARGIN, y + 6, { width: 380, lineBreak: false });
+        document.text(formatKes(heading.budget), SIDE_MARGIN + 384, y + 6, { width: 127, align: "right", lineBreak: false });
+        document.moveTo(SIDE_MARGIN, y + 22).lineTo(PAGE_WIDTH - SIDE_MARGIN, y + 22).strokeColor("#E6ECE9").lineWidth(0.5).stroke();
+        y += 22;
+        for (const child of heading.children) {
+          tableRow([
+            { text: `    ${child.name}`, x: SIDE_MARGIN, width: 380, color: "#31584A" },
+            { text: formatKes(child.budget), x: SIDE_MARGIN + 384, width: 127, align: "right", color: "#31584A" },
+          ], 20);
+        }
+      }
+      const planTotal = data.budgetPlan.filter((heading) => !heading.business).reduce((sum, heading) => sum + heading.budget, 0);
+      const businessTotal = data.budgetPlan.filter((heading) => heading.business).reduce((sum, heading) => sum + heading.budget, 0);
+      tableRow([
+        { text: "Household total", x: SIDE_MARGIN, width: 380, color: "#103A2D" },
+        { text: formatKes(planTotal), x: SIDE_MARGIN + 384, width: 127, align: "right", color: "#103A2D" },
+      ], 24);
+      if (businessTotal > 0) {
+        tableRow([
+          { text: "Side hustle costs, budgeted apart", x: SIDE_MARGIN, width: 380, color: "#60736C" },
+          { text: formatKes(businessTotal), x: SIDE_MARGIN + 384, width: 127, align: "right", color: "#60736C" },
+        ], 22);
+      }
+    }
+
     if (data.businesses) {
       y += 16;
       sectionTitle("Business", "Profit and loss for each side hustle: sales, the cost of the goods sold, then its running expenses.");
@@ -297,7 +388,9 @@ export function createMonthlyReportPdf(data: MonthlyReportPdfData): Promise<Buff
       });
     }
 
-    if (data.expenses) {
+    if (data.expenses && data.expensesGroupedBy) {
+      groupedEntryList(data.expensesGroupedBy, data.expenses);
+    } else if (data.expenses) {
       entryList("Expenses", "Every expense in the period, newest first, with the category it was filed under.", "Category", data.expenses, "No expenses were recorded in this period.");
     }
 

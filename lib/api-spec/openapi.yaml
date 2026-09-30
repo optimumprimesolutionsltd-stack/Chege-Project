@@ -1039,6 +1039,17 @@ paths:
           description: Include Who owes who as it stands now. Defaults to false.
           schema:
             type: boolean
+        - name: expensesGroupBy
+          in: query
+          description: With includeExpenses, a section per category or per item with subtotals, rather than by date.
+          schema:
+            type: string
+            enum: [category, item]
+        - name: includeBudgetPlan
+          in: query
+          description: Include the budget as planned - headings, sub-categories and budgets, no spending. Defaults to false.
+          schema:
+            type: boolean
         - name: expensesScope
           in: query
           description: >-

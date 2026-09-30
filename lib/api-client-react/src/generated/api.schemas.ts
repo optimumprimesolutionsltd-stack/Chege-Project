@@ -2286,10 +2286,26 @@ includeIncomeEntries?: boolean;
  */
 includeDebts?: boolean;
 /**
+ * With includeExpenses, a section per category or per item with subtotals, rather than by date.
+ */
+expensesGroupBy?: GetDashboardMonthlyReportPdfExpensesGroupBy;
+/**
+ * Include the budget as planned - headings, sub-categories and budgets, no spending. Defaults to false.
+ */
+includeBudgetPlan?: boolean;
+/**
  * With includeExpenses, household lists only household expenses (a side hustle's costs left out) and business only those costs. Left out, every expense.
  */
 expensesScope?: GetDashboardMonthlyReportPdfExpensesScope;
 };
+
+export type GetDashboardMonthlyReportPdfExpensesGroupBy = typeof GetDashboardMonthlyReportPdfExpensesGroupBy[keyof typeof GetDashboardMonthlyReportPdfExpensesGroupBy];
+
+
+export const GetDashboardMonthlyReportPdfExpensesGroupBy = {
+  category: 'category',
+  item: 'item',
+} as const;
 
 export type GetDashboardMonthlyReportPdfExpensesScope = typeof GetDashboardMonthlyReportPdfExpensesScope[keyof typeof GetDashboardMonthlyReportPdfExpensesScope];
 
