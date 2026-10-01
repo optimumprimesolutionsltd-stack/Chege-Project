@@ -6,7 +6,7 @@ import React, {
   useState,
   type ReactNode,
 } from 'react';
-import * as SecureStore from 'expo-secure-store';
+import { clearSessionToken, readSessionToken, writeSessionToken } from '@/lib/sessionToken';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
@@ -16,7 +16,7 @@ import { clearQueryClientCache } from '@/lib/queryPersist';
 
 WebBrowser.maybeCompleteAuthSession();
 
-export const AUTH_TOKEN_KEY = 'auth_session_token';
+export { AUTH_TOKEN_KEY } from '@/lib/sessionToken';
 // The last verified user, kept so a cold start can render the app straight
 // away and revalidate in the background instead of showing a spinner until
 // the network answers who you are.
@@ -85,7 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchUser = useCallback(async () => {
     try {
-      const token = await SecureStore.getItemAsync(AUTH_TOKEN_KEY);
+      const token = await readSessionToken();
       if (!token) {
         setUser(null);
         await cacheUser(null);
@@ -99,7 +99,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (res.status === 401) {
         // The session is genuinely gone — only then sign the person out.
-        await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
+        await clearSessionToken();
         setUser(null);
         await cacheUser(null);
         return;
@@ -115,7 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(data.user as AuthUser);
         await cacheUser(data.user as AuthUser);
       } else {
-        await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
+        await clearSessionToken();
         setUser(null);
         await cacheUser(null);
       }
@@ -133,7 +133,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let active = true;
     (async () => {
       try {
-        const token = await SecureStore.getItemAsync(AUTH_TOKEN_KEY);
+        const token = await readSessionToken();
         const cached = token ? await AsyncStorage.getItem(AUTH_USER_CACHE_KEY) : null;
         if (active && cached) {
           setUser(JSON.parse(cached) as AuthUser);
@@ -156,7 +156,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const parsed = Linking.parse(url);
       if (parsed.hostname === 'auth' && parsed.queryParams?.token) {
         const token = parsed.queryParams.token as string;
-        await SecureStore.setItemAsync(AUTH_TOKEN_KEY, token);
+        await writeSessionToken(token);
         setIsLoading(true);
         await fetchUser();
       }
@@ -195,7 +195,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (parsed.hostname !== 'auth' || !parsed.queryParams?.token) return 'failed';
 
       const token = parsed.queryParams.token as string;
-      await SecureStore.setItemAsync(AUTH_TOKEN_KEY, token);
+      await writeSessionToken(token);
       setIsLoading(true);
       await fetchUser();
       return 'success';
@@ -210,7 +210,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     try {
-      const token = await SecureStore.getItemAsync(AUTH_TOKEN_KEY);
+      const token = await readSessionToken();
       if (token) {
         const apiBase = getApiBaseUrl();
         await fetch(`${apiBase}/api/mobile-auth/logout`, {
@@ -221,7 +221,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       // swallow
     } finally {
-      await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
+      await clearSessionToken();
       await AsyncStorage.removeItem(ACTIVE_WORKSPACE_STORAGE_KEY);
       await cacheUser(null);
       await clearQueryClientCache();
@@ -230,7 +230,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const saveDisplayName = useCallback(async (name: string) => {
-    const token = await SecureStore.getItemAsync(AUTH_TOKEN_KEY);
+    const token = await readSessionToken();
     if (!token) throw new Error('Your sign-in session has expired.');
 
     const response = await fetch(`${getApiBaseUrl()}/api/auth/display-name`, {
@@ -253,7 +253,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const saveProfilePhoto = useCallback(async (photoPath: string | null) => {
-    const token = await SecureStore.getItemAsync(AUTH_TOKEN_KEY);
+    const token = await readSessionToken();
     if (!token) throw new Error('Your sign-in session has expired.');
 
     const response = await fetch(`${getApiBaseUrl()}/api/auth/profile-photo`, {
