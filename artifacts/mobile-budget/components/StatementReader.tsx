@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View } from 'react-native';
 import { readerHtml, type ReaderMessage } from '@/lib/statementReaderHtml';
 
@@ -13,6 +13,8 @@ try {
 } catch {
   WebView = null;
 }
+
+export const READER_STOPPED = 'The phone ran short of memory reading this statement. Close other apps and try again, or read a shorter statement - a few months at a time.';
 
 export interface ReaderJob {
   base64: string;
@@ -36,6 +38,14 @@ export function StatementReader({ job, warm = false, onDone }: { job: ReaderJob 
   jobRef.current = job;
   const pageReady = useRef(false);
   const sentJob = useRef<ReaderJob | null>(null);
+  // A page the phone has stopped cannot be used again: a new one is made.
+  const [generation, setGeneration] = useState(0);
+  const pageGone = () => {
+    pageReady.current = false;
+    sentJob.current = null;
+    setGeneration((value) => value + 1);
+    if (jobRef.current) onDone({ type: 'error', message: READER_STOPPED });
+  };
   const wanted = job !== null || warm;
 
   // Hands the job to the page once both are there: the page ready and a job
@@ -69,6 +79,7 @@ export function StatementReader({ job, warm = false, onDone }: { job: ReaderJob 
   return (
     <View style={{ height: 0, width: 0, overflow: 'hidden' }} pointerEvents="none" testID="statement-reader">
       <Page
+        key={generation}
         ref={ref}
         originWhitelist={['about:*', 'https://statement.invalid*']}
         source={{ html, baseUrl: 'https://statement.invalid' }}
@@ -96,6 +107,10 @@ export function StatementReader({ job, warm = false, onDone }: { job: ReaderJob 
           onDone(message);
         }}
         onError={() => onDone({ type: 'error', message: 'The statement reader could not start.' })}
+        // The phone can stop the hidden page when memory runs short. It used to
+        // go quiet, and the read waited 90 seconds before giving up.
+        onRenderProcessGone={pageGone}
+        onContentProcessDidTerminate={pageGone}
       />
     </View>
   );

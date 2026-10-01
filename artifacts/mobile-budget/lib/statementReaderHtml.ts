@@ -45,7 +45,11 @@ window.__read = async (base64, password) => {
     }
     const pages = [];
     for (let number = 1; number <= doc.numPages; number += 1) {
-      const content = await (await doc.getPage(number)).getTextContent();
+      const page = await doc.getPage(number);
+      const content = await page.getTextContent();
+      // Let go of the page once its text is out: kept, a long statement's
+      // pages filled the phone's memory and the reader was killed.
+      page.cleanup();
       pages.push(
         content.items
           .filter((item) => typeof item.str === 'string' && item.str.trim() !== '')
@@ -53,6 +57,7 @@ window.__read = async (base64, password) => {
       );
       post({ type: 'progress', page: number, of: doc.numPages });
     }
+    doc.destroy();
     post({ type: 'pages', pages });
   } catch (error) {
     post({ type: 'error', message: String((error && error.message) || error) });
