@@ -1,3 +1,5 @@
+import { TransferEditor, type TransferRow } from "@/components/transfer-editor";
+import { ReversalLink } from "@/components/reversal-link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   useGetJointAccount, useCreateDeposit, useCreateDisbursement, useUpdateJointAccountTransaction, useDeleteJointAccountTransaction, useDeleteExpense,
@@ -182,6 +184,8 @@ export default function Bank() {
   // One entry to another account: the same update as Move a day, for a single
   // wrong-account entry, so it need not be deleted and retyped.
   const [movingTx, setMovingTx] = useState<EditableTransaction | null>(null);
+  // A bank-to-bank transfer being corrected (components/transfer-editor).
+  const [editingTransfer, setEditingTransfer] = useState<TransferRow | null>(null);
   const [movingOne, setMovingOne] = useState(false);
   const moveOneTo = async (targetAccountId: number, targetName: string) => {
     if (!movingTx || movingOne) return;
@@ -1494,6 +1498,7 @@ export default function Bank() {
 
   return (
     <div className="space-y-8 pb-12 max-w-2xl">
+      <TransferEditor transfer={editingTransfer} categoryNames={(categories ?? []).map((row) => row.name)} onClose={() => setEditingTransfer(null)} onChanged={invalidate} />
       <div>
         <h1 className="text-3xl font-display font-bold text-foreground">
           Bank accounts{account?.accountName ? ` · ${account.accountName}` : ""}
@@ -2681,6 +2686,11 @@ export default function Bank() {
                 </p>
               )}
 
+              {/* Money back linked to the payment it reversed, or the payment's note - as on the phone. */}
+              {editingTransaction ? (
+                <ReversalLink transaction={editingTransaction as never} canManage={canManageAccount} onChanged={invalidate} />
+              ) : null}
+
               <div className="flex flex-wrap justify-end gap-3 pt-1">
                 <Button type="button" variant="outline" onClick={resetForm} className="h-12 px-6">
                   {sitting !== null ? "Done" : "Cancel"}
@@ -2819,6 +2829,16 @@ export default function Bank() {
                       data-testid={`button-edit-tx-${tx.id}`}
                       className="hover:bg-muted h-9 w-9"
                       onClick={() => openEdit(tx)}
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </Button>}
+                    {!txEditor.editing && canManageAccount && isBankTransfer && <Button
+                      variant="ghost"
+                      size="icon"
+                      data-testid={`button-edit-transfer-${tx.id}`}
+                      aria-label="Edit transfer"
+                      className="hover:bg-muted h-9 w-9"
+                      onClick={() => setEditingTransfer(tx as unknown as TransferRow)}
                     >
                       <Pencil className="w-4 h-4" />
                     </Button>}
