@@ -1,3 +1,4 @@
+import { MonthStepper } from "@/components/month-stepper";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -566,6 +567,7 @@ export default function IncomeStreamsReport() {
             </div>
           ) : periodView === "custom" ? (
             <div className="grid gap-3 sm:grid-cols-2">
+              <MonthStepper from={customStartDate} to={customEndDate} onChange={(nextFrom, nextTo) => { setCustomStartDate(nextFrom); setCustomEndDate(nextTo); }} testId="income-streams-month" className="sm:col-span-2" />
               <label className="grid gap-1.5 text-sm font-medium text-foreground">
                 Start date
                 <input

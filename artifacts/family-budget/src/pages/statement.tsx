@@ -6,6 +6,7 @@
  * because that is the only order in which a running balance means anything.
  */
 
+import { MonthStepper } from "@/components/month-stepper";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2, FileDown } from "lucide-react";
@@ -127,6 +128,7 @@ export default function StatementPage() {
               ))}
             </select>
           </label>
+          <MonthStepper from={from} to={to} onChange={(nextFrom, nextTo) => { setFrom(nextFrom); setTo(nextTo); }} testId="statement-month" className="sm:col-span-full" />
           <label className="space-y-1 text-sm">
             <span className="font-semibold text-foreground">From</span>
             <Input type="date" value={from} onChange={(event) => setFrom(event.target.value)} className="h-10 bg-card" data-testid="input-statement-from" />

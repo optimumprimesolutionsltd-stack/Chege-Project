@@ -1,3 +1,4 @@
+import { MonthStepper } from "@/components/month-stepper";
 import { CalendarRange } from "lucide-react";
 import type { PeriodPreset } from "@/lib/bank-period";
 
@@ -45,7 +46,8 @@ export function BankPeriodPicker({
         </button>
       ))}
       {preset === "custom" ? (
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <MonthStepper from={from} to={to} onChange={(nextFrom, nextTo) => { onFrom(nextFrom); onTo(nextTo); }} testId="bank-period-month" className="w-full sm:w-auto sm:min-w-56" />
           <input
             type="date"
             value={from}
