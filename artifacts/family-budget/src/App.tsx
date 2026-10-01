@@ -4,7 +4,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Component, type ErrorInfo, type ReactNode, useEffect } from 'react';
 import { AuthProvider, useAuth } from '@workspace/replit-auth-web';
-import { applyAppearance, readAppearance } from '@/lib/appearance';
+import { applyAppearance, followDeviceAppearance, readAppearance } from '@/lib/appearance';
 import LoginPage from '@/pages/login';
 import { Layout } from '@/components/layout';
 import { PlanChoiceGate } from '@/components/plan-choice-gate';
@@ -333,6 +333,7 @@ function MainRouter() {
 function App() {
   useEffect(() => {
     applyAppearance(readAppearance());
+    return followDeviceAppearance();
   }, []);
 
   return (
