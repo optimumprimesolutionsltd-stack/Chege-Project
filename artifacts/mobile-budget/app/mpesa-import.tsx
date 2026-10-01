@@ -1245,6 +1245,18 @@ export default function MpesaImportScreen() {
 
   // Throwing a statement away loses days of choices, so it is asked first -
   // from the top of the screen or the bottom. What is already saved stays.
+  // Asked first, like Start over, so a stray tap does not leave the entries.
+  const confirmReadAgain = () => {
+    Alert.alert(
+      'Read this statement again?',
+      'Choose the same statement PDF and type its password. Everything you have confirmed or changed is kept, and nothing is saved or removed. You can go back to your entries until it is read.',
+      [
+        { text: 'Not now', style: 'cancel' },
+        { text: 'Read it again', onPress: () => setRereading(true) },
+      ],
+    );
+  };
+
   const confirmStartOver = () => {
     const worked = confirmedCount;
     Alert.alert(
@@ -1677,7 +1689,7 @@ export default function MpesaImportScreen() {
                 <Text style={[styles.hint, { color: colors.foreground, marginTop: 0 }]}>
                   Jamvi could not work out this statement's starting and closing balance, so it cannot check them or set this account's starting balance. Reading it again with the latest Jamvi fixes that, and keeps your choices.
                 </Text>
-                <Pressable onPress={() => setRereading(true)} accessibilityRole="button" testID="mpesa-balance-missing-read-again">
+                <Pressable onPress={confirmReadAgain} accessibilityRole="button" testID="mpesa-balance-missing-read-again">
                   <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>Read my statement again</Text>
                 </Pressable>
               </View>
@@ -2394,7 +2406,7 @@ export default function MpesaImportScreen() {
             ) : null}
 
             {statementReading ? (
-              <Pressable onPress={() => setRereading(true)} style={styles.secondary} accessibilityRole="button" testID="mpesa-read-again">
+              <Pressable onPress={confirmReadAgain} style={styles.secondary} accessibilityRole="button" testID="mpesa-read-again">
                 <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>Read my statement again (keeps your choices)</Text>
               </Pressable>
             ) : null}
