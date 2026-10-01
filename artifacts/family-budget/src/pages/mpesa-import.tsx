@@ -1,3 +1,5 @@
+import { Input } from "@/components/ui/input";
+import { CategoryGroupPicker, resolveGroupChoice, type GroupChoice } from "@/components/category-group-picker";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
@@ -12,6 +14,8 @@ import {
   useTransferBankToSavings,
   useTransferSavingsToBank,
   useGetBudgetCategories,
+  useCreateBudgetCategory,
+  getGetBudgetCategoriesQueryKey,
   useGetGroup,
   useGetJointAccount,
   useGetJointAccounts,
@@ -81,6 +85,8 @@ import {
 // Shared with the day of banking and the Bank form: a fee is the same expense every time.
 const CHARGE_CATEGORY_KEY = "jamvi:last-charge-category";
 
+// The category list's "+ Add a category..." entry: opens the form, never a category.
+const ADD_CATEGORY = "__add_category__";
 const todayIso = () => new Date(Date.now() + 3 * 3_600_000).toISOString().slice(0, 10);
 
 type Outcome = { saved: number; repeats: number; failed: Array<{ what: string; why: string }> };
@@ -125,6 +131,21 @@ export default function MpesaImportPage() {
   const accounts = accountList as unknown as Array<{ id: number; name: string }>;
   const { data: categoryList = [], isLoading: categoriesLoading, isError: categoriesError, refetch: refetchCategories } = useGetBudgetCategories();
   const categories = categoryList as unknown as CategoryRow[];
+  // "+ Add a category..." on an entry: a category made here, with its budget
+  // and group, and set on that entry. The phone has had this all along.
+  const createCategory = useCreateBudgetCategory();
+  const [addingFor, setAddingFor] = useState<number | null>(null);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [newCategoryBudget, setNewCategoryBudget] = useState("");
+  const [newCategoryGroup, setNewCategoryGroup] = useState<GroupChoice>("none");
+  const [newCategoryGroupName, setNewCategoryGroupName] = useState("");
+  const closeAddCategory = () => {
+    setAddingFor(null);
+    setNewCategoryName("");
+    setNewCategoryBudget("");
+    setNewCategoryGroup("none");
+    setNewCategoryGroupName("");
+  };
   const categoryTree = useMemo(() => buildCategoryTree(categories), [categories]);
   const search = useCategorySearch(categoryTree);
   const createDeposit = useCreateDeposit();
@@ -522,6 +543,40 @@ export default function MpesaImportPage() {
 
   const setCategory = (index: number, category: string) =>
     setChoices((current) => chooseLineCategory(lines ?? [], current, index, category));
+  const addCategoryFor = async (index: number) => {
+    const name = newCategoryName.trim();
+    if (!name) {
+      toast({ variant: "destructive", title: "Name it", description: "Give this category a clear name, such as Transport or Airtime." });
+      return;
+    }
+    const existing = categories.find((row) => row.name.trim().toLocaleLowerCase() === name.toLocaleLowerCase());
+    if (existing) {
+      setCategory(index, existing.name);
+      closeAddCategory();
+      return;
+    }
+    const budgetAmount = newCategoryBudget.trim() === "" ? 0 : Number(newCategoryBudget.replace(/[^0-9]/g, ""));
+    if (!Number.isInteger(budgetAmount) || budgetAmount < 0) {
+      toast({ variant: "destructive", title: "Budget not valid", description: "Enter a whole number of shillings, or leave it blank to budget it later." });
+      return;
+    }
+    try {
+      const placed = await resolveGroupChoice(newCategoryGroup, newCategoryGroupName, categories, (groupName) =>
+        createCategory.mutateAsync({ data: { name: groupName, budgetAmount: 0, priority: 3, isRecurring: true, activeMonth: null, activeYear: null } }));
+      if ("error" in placed) {
+        toast({ variant: "destructive", title: "Choose where it goes", description: placed.error });
+        return;
+      }
+      const created = await createCategory.mutateAsync({
+        data: { name, budgetAmount, priority: 3, isRecurring: true, activeMonth: null, activeYear: null, ...(placed.parentId !== null ? { parentId: placed.parentId } : {}) },
+      });
+      await queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
+      setCategory(index, created.name);
+      closeAddCategory();
+    } catch (error) {
+      toast({ variant: "destructive", title: "Could not add it", description: error instanceof Error ? error.message : "Please try again." });
+    }
+  };
 
   // Changing the category of entries already recorded: nothing else about them is touched.
   const pendingChanges = useMemo(() => categoryChanges(lines ?? [], recat), [lines, recat]);
@@ -1051,7 +1106,14 @@ export default function MpesaImportPage() {
                     <select
                       className={`${SELECT_CLASS} ${choice.category ? "" : "border-destructive"}`}
                       value={choice.category}
-                      onChange={(event) => setCategory(item.index, event.target.value)}
+                      onChange={(event) => {
+                        if (event.target.value === ADD_CATEGORY) {
+                          closeAddCategory();
+                          setAddingFor(item.index);
+                          return;
+                        }
+                        setCategory(item.index, event.target.value);
+                      }}
                       data-testid={`mpesa-line-category-${item.index}`}
                     >
                       <option value="">Choose what it was for</option>
@@ -1064,7 +1126,29 @@ export default function MpesaImportPage() {
                           <option key={group.name} value={group.name}>{group.name}</option>
                         ),
                       )}
+                      {canManageBudget ? <option value={ADD_CATEGORY}>+ Add a category…</option> : null}
                     </select>
+                  ) : null}
+                  {addingFor === item.index ? (
+                    <div className="space-y-2 rounded-lg border border-primary/30 bg-primary/5 p-3" data-testid={`mpesa-line-new-category-${item.index}`}>
+                      <Input value={newCategoryName} onChange={(event) => setNewCategoryName(event.target.value)} placeholder="Name it, such as Transport" className="h-10 bg-card" autoFocus data-testid="mpesa-new-category-name" />
+                      <Input value={newCategoryBudget} onChange={(event) => setNewCategoryBudget(event.target.value)} inputMode="numeric" placeholder="Monthly budget, KES (optional)" className="h-10 bg-card" data-testid="mpesa-new-category-budget" />
+                      <CategoryGroupPicker
+                        categories={categories}
+                        value={newCategoryGroup}
+                        onChange={setNewCategoryGroup}
+                        groupName={newCategoryGroupName}
+                        onGroupName={setNewCategoryGroupName}
+                        disabled={createCategory.isPending}
+                        testId="mpesa-new-category"
+                      />
+                      <div className="flex gap-2">
+                        <Button variant="outline" onClick={closeAddCategory} disabled={createCategory.isPending}>Cancel</Button>
+                        <Button className="flex-1" onClick={() => void addCategoryFor(item.index)} disabled={createCategory.isPending} data-testid="mpesa-new-category-add">
+                          {createCategory.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Add and use it"}
+                        </Button>
+                      </div>
+                    </div>
                   ) : null}
                   {out && choice?.include && !isMove(choice) && choice.category && categoryPath(choice.category, categories) !== choice.category ? (
                     <p className="text-xs text-muted-foreground" data-testid={`mpesa-line-path-${item.index}`}>

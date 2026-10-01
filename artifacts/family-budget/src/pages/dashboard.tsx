@@ -1,3 +1,4 @@
+import { CategoryGroupPicker, resolveGroupChoice, type GroupChoice } from "@/components/category-group-picker";
 import { useEffect, useMemo, useState } from "react";
 import {
   useGetDashboardSummary,
@@ -851,6 +852,9 @@ function ExpenseForm({
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryBudget, setNewCategoryBudget] = useState("");
+  // Which group it goes under, or a new one (components/category-group-picker).
+  const [newCategoryGroup, setNewCategoryGroup] = useState<GroupChoice>("none");
+  const [newCategoryGroupName, setNewCategoryGroupName] = useState("");
   const [saveOtherAsCategory, setSaveOtherAsCategory] = useState(false);
   const [paidFromBank, setPaidFromBank] = useState(false);
   const [allowMixedFunding, setAllowMixedFunding] = useState(false);
@@ -1152,8 +1156,14 @@ function ExpenseForm({
       return;
     }
     try {
+      const placed = await resolveGroupChoice(newCategoryGroup, newCategoryGroupName, categories, (groupName) =>
+        createCategory.mutateAsync({ data: { name: groupName, budgetAmount: 0, priority: 1, isRecurring: true } }));
+      if ("error" in placed) {
+        toast({ variant: "destructive", title: "Choose where it goes", description: placed.error });
+        return;
+      }
       const created = await createCategory.mutateAsync({
-        data: { name, budgetAmount, priority: 1, isRecurring: true },
+        data: { name, budgetAmount, priority: 1, isRecurring: true, ...(placed.parentId !== null ? { parentId: placed.parentId } : {}) },
       });
       setCategoryAllocations(current => {
         const next = appendCreatedCategoryAllocation(current, created.name);
@@ -1162,6 +1172,8 @@ function ExpenseForm({
       });
       setNewCategoryName("");
       setNewCategoryBudget("");
+      setNewCategoryGroup("none");
+      setNewCategoryGroupName("");
       setIsAddingCategory(false);
       await qc.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
       toast({ title: "Category added", description: `${created.name} was added to this expense.` });
@@ -1812,6 +1824,17 @@ function ExpenseForm({
                    step="1"
                    className="h-10 bg-card"
                  />
+                 <div className="sm:col-span-3">
+                   <CategoryGroupPicker
+                     categories={categories as unknown as Array<{ id: number; name: string; parentId?: number | null }>}
+                     value={newCategoryGroup}
+                     onChange={setNewCategoryGroup}
+                     groupName={newCategoryGroupName}
+                     onGroupName={setNewCategoryGroupName}
+                     disabled={createCategory.isPending}
+                     testId="dashboard-new-category"
+                   />
+                 </div>
                  <Button type="button" className="h-10" disabled={createCategory.isPending} onClick={() => void handleAddCategory()}>
                    {createCategory.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Add"}
                  </Button>

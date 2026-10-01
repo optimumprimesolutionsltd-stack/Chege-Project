@@ -304,6 +304,9 @@ const PayerPill = React.memo(function PayerPill({
   );
 });
 
+// "Where does it go?" a group that does not exist yet: made, then used.
+const NEW_GROUP = -1;
+
 export default function AddExpenseSheet() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -414,6 +417,8 @@ export default function AddExpenseSheet() {
   // could never be the selection and could never be offered as a parent.
   const [newCategoryParentId, setNewCategoryParentId] = useState<number | null>(null);
   const [newCategoryName, setNewCategoryName] = useState('');
+  // "+ New group": the group is made first, then the category goes inside it.
+  const [newCategoryGroupName, setNewCategoryGroupName] = useState('');
   const [newCategoryBudget, setNewCategoryBudget] = useState('');
   const [newCategoryRecurring, setNewCategoryRecurring] = useState(true);
   const [newCategoryPriority, setNewCategoryPriority] = useState('3');
@@ -924,9 +929,14 @@ export default function AddExpenseSheet() {
     // Captured before the awaits: this can move while the request is in
     // flight, and a child must not land under whatever happens to be chosen by
     // the time it returns.
-    const nestUnder = newCategoryParentId === null
+    let nestUnder: { id: number; name: string } | null = newCategoryParentId === null || newCategoryParentId === NEW_GROUP
       ? null
       : categories.find((row) => row.id === newCategoryParentId) ?? null;
+    const groupName = newCategoryGroupName.trim();
+    if (newCategoryParentId === NEW_GROUP && !groupName) {
+      Alert.alert('Name the group', 'Give the new group a name, such as Children or Household.');
+      return;
+    }
     const budgetAmount = Number(newCategoryBudget);
     const priority = Number(newCategoryPriority);
     const [expenseYear, expenseMonth] = date.split('-').map(Number);
@@ -940,6 +950,17 @@ export default function AddExpenseSheet() {
     }
 
     try {
+      if (newCategoryParentId === NEW_GROUP) {
+        // An existing top-level category of that name is used as the group.
+        const sameName = categories.find((row) => row.name.trim().toLocaleLowerCase() === groupName.toLocaleLowerCase());
+        if (sameName && sameName.parentId) {
+          Alert.alert('Already a subcategory', `"${sameName.name}" is inside another group, so it cannot hold categories. Pick another name.`);
+          return;
+        }
+        nestUnder = sameName ?? await createCategory.mutateAsync({
+          data: { name: groupName, budgetAmount: 0, priority, isRecurring: true, activeMonth: null, activeYear: null },
+        });
+      }
       const created = await createCategory.mutateAsync({
         data: {
           name,
@@ -986,7 +1007,7 @@ export default function AddExpenseSheet() {
           : error instanceof Error ? error.message : 'Check the category details and try again.',
       );
     }
-  }, [canManageCategories, categories, createCategory, date, newCategoryAddToBudget, newCategoryBudget, newCategoryName, newCategoryParentId, newCategoryPriority, newCategoryRecurring, nestingParent, nestingParentName, queryClient]);
+  }, [canManageCategories, categories, createCategory, date, newCategoryAddToBudget, newCategoryBudget, newCategoryGroupName, newCategoryName, newCategoryParentId, newCategoryPriority, newCategoryRecurring, nestingParent, nestingParentName, queryClient]);
 
   const handleCreateBankAccount = useCallback(async () => {
     const name = newBankAccountName.trim();
@@ -1851,6 +1872,23 @@ export default function AddExpenseSheet() {
                   Its own group
                 </Text>
               </Pressable>
+              <Pressable
+                onPress={() => setNewCategoryParentId(NEW_GROUP)}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: newCategoryParentId === NEW_GROUP }}
+                testID="create-category-parent-new-group"
+                style={[
+                  styles.parentChoiceChip,
+                  {
+                    borderColor: newCategoryParentId === NEW_GROUP ? colors.primary : colors.border,
+                    backgroundColor: newCategoryParentId === NEW_GROUP ? colors.primary + '1F' : colors.background,
+                  },
+                ]}
+              >
+                <Text style={{ color: newCategoryParentId === NEW_GROUP ? colors.primary : colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>
+                  ＋ New group
+                </Text>
+              </Pressable>
               {categoryTree.map((group) => {
                 const parent = categories.find((row) => row.name === group.name);
                 if (!parent) return null;
@@ -1878,6 +1916,17 @@ export default function AddExpenseSheet() {
                 );
               })}
             </View>
+            {newCategoryParentId === NEW_GROUP ? (
+              <TextInput
+                value={newCategoryGroupName}
+                onChangeText={setNewCategoryGroupName}
+                placeholder="Name the new group, such as Children"
+                placeholderTextColor={colors.mutedForeground}
+                autoCorrect={false}
+                style={[styles.categoryCreateInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.background, marginTop: 8 }]}
+                testID="create-category-new-group-name"
+              />
+            ) : null}
             {canManageCategories ? (
               <View style={[styles.categoryRecurringRow, { borderColor: colors.border, backgroundColor: colors.background }]}>
                 <View style={{ flex: 1 }}>

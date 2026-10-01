@@ -122,6 +122,9 @@ function toCents(value: number): number {
   return Math.round(value * 100);
 }
 
+// "Add category" under a group that does not exist yet: made, then used.
+const NEW_GROUP = -1;
+
 export default function Bank() {
   const bankEditId = getBankEditDeepLink();
   const { data: group } = useGetGroup();
@@ -304,6 +307,10 @@ export default function Bank() {
   // It used to have no say: everything landed at the top level, which is how a
   // budget acquires a flat list of strays beside the groups it was given.
   const [newCategoryParentId, setNewCategoryParentId] = useState<number | null>(null);
+  // "+ New group" (NEW_GROUP): the group is made first, then the category goes
+  // inside it. And its monthly budget, set here rather than on Budget later.
+  const [newCategoryGroupName, setNewCategoryGroupName] = useState("");
+  const [newCategoryBudget, setNewCategoryBudget] = useState("");
   const [addingCategory, setAddingCategory] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<EditableTransaction | null>(null);
   const [transferDirection, setTransferDirection] = useState<"to_savings" | "from_savings">("to_savings");
@@ -637,18 +644,50 @@ export default function Bank() {
       return;
     }
 
+    const budgetAmount = newCategoryBudget.trim() === "" ? 0 : Number(newCategoryBudget.replace(/[^0-9]/g, ""));
+    if (!Number.isInteger(budgetAmount) || budgetAmount < 0) {
+      toast({ variant: "destructive", title: "Budget not valid", description: "Enter a whole number of shillings, or leave it blank to budget it later." });
+      return;
+    }
+    const groupName = newCategoryGroupName.trim();
+    if (newCategoryParentId === NEW_GROUP && !groupName) {
+      toast({ variant: "destructive", title: "Name the group", description: "Give the new group a name, such as Children or Household." });
+      return;
+    }
+
     setAddingCategory(true);
     try {
-      const parent = newCategoryParentId === null
-        ? null
-        : categories?.find((row) => row.id === newCategoryParentId) ?? null;
+      let parent: { id: number; name: string; priority?: number | null; color?: string | null; parentId?: number | null } | null =
+        newCategoryParentId === null || newCategoryParentId === NEW_GROUP
+          ? null
+          : categories?.find((row) => row.id === newCategoryParentId) ?? null;
+      if (newCategoryParentId === NEW_GROUP) {
+        // An existing top-level category of that name is used as the group.
+        const sameName = categories?.find((row) => row.name.trim().toLowerCase() === groupName.toLowerCase()) ?? null;
+        if (sameName && sameName.parentId) {
+          toast({ variant: "destructive", title: "Already a subcategory", description: `"${sameName.name}" is inside another group, so it cannot hold categories. Pick another name.` });
+          return;
+        }
+        if (sameName) {
+          parent = sameName;
+        } else {
+          const groupResponse = await fetch("/api/budget-categories", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: groupName, budgetAmount: 0, priority: 3, color: "#6B7280" }),
+          });
+          if (!groupResponse.ok) throw new Error("Could not create the group");
+          parent = await groupResponse.json();
+        }
+      }
       const response = await fetch("/api/budget-categories", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name,
-          budgetAmount: 0,
+          budgetAmount,
           // A child takes its group's tier: the ranking is what the group is
           // worth against other groups, and asking again per ledger invites
           // two answers to one question. A new group starts in the middle
@@ -664,6 +703,8 @@ export default function Bank() {
       setExpenseCategory(category.name);
       setNewCategoryName("");
       setNewCategoryParentId(null);
+      setNewCategoryGroupName("");
+      setNewCategoryBudget("");
       setShowCategoryCreator(false);
       queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
       toast({ title: "Category added", description: `${category.name} is ready to use.` });
@@ -2160,6 +2201,15 @@ export default function Bank() {
                           >
                             Its own group
                           </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={newCategoryParentId === NEW_GROUP ? "default" : "outline"}
+                            onClick={() => setNewCategoryParentId(NEW_GROUP)}
+                            data-testid="button-new-category-parent-new-group"
+                          >
+                            + New group
+                          </Button>
                           {categoryTree.map((group) => {
                             const parent = categories?.find((row) => row.name === group.name);
                             if (!parent) return null;
@@ -2177,6 +2227,23 @@ export default function Bank() {
                             );
                           })}
                         </div>
+                        {newCategoryParentId === NEW_GROUP ? (
+                          <Input
+                            data-testid="input-new-category-group-name"
+                            value={newCategoryGroupName}
+                            onChange={e => setNewCategoryGroupName(e.target.value)}
+                            placeholder="Name the new group, such as Children"
+                            className="h-10 bg-card"
+                          />
+                        ) : null}
+                        <Input
+                          data-testid="input-new-category-budget"
+                          value={newCategoryBudget}
+                          onChange={e => setNewCategoryBudget(e.target.value)}
+                          inputMode="numeric"
+                          placeholder="Monthly budget, KES (optional)"
+                          className="h-10 bg-card"
+                        />
                         <div className="flex flex-col gap-2 sm:flex-row">
                         <Input
                           data-testid="input-new-expense-category"

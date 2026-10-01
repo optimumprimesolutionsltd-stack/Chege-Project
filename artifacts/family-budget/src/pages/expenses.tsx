@@ -1,3 +1,4 @@
+import { CategoryGroupPicker, resolveGroupChoice, type GroupChoice } from "@/components/category-group-picker";
 import { useState, useEffect, useMemo } from "react";
 
 // Expense priority tiers from the budget document
@@ -275,6 +276,9 @@ export default function Expenses() {
   const [isCreatingCategory, setIsCreatingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryBudget, setNewCategoryBudget] = useState("");
+  // Which group it goes under, or a new one (components/category-group-picker).
+  const [newCategoryGroup, setNewCategoryGroup] = useState<GroupChoice>("none");
+  const [newCategoryGroupName, setNewCategoryGroupName] = useState("");
   const [newCategoryRecurring, setNewCategoryRecurring] = useState(true);
   const [newCategoryPriority, setNewCategoryPriority] = useState("3");
   const [newCategoryAddToBudget, setNewCategoryAddToBudget] = useState(false);
@@ -703,6 +707,12 @@ export default function Expenses() {
     }
 
     try {
+      const placed = await resolveGroupChoice(newCategoryGroup, newCategoryGroupName, (categories ?? []) as unknown as Array<{ id: number; name: string; parentId?: number | null }>, (groupName) =>
+        createCategory.mutateAsync({ data: { name: groupName, budgetAmount: 0, priority, isRecurring: true, activeMonth: null, activeYear: null } }));
+      if ("error" in placed) {
+        toast({ variant: "destructive", title: "Choose where it goes", description: placed.error });
+        return;
+      }
       const category = await createCategory.mutateAsync({
         data: {
           name: newCategoryName.trim(),
@@ -711,6 +721,7 @@ export default function Expenses() {
           isRecurring: newCategoryRecurring,
           activeMonth: newCategoryRecurring ? null : expenseMonth,
           activeYear: newCategoryRecurring ? null : expenseYear,
+          ...(placed.parentId !== null ? { parentId: placed.parentId } : {}),
         },
       });
       form.setCategoryAllocations((current) => {
@@ -719,6 +730,8 @@ export default function Expenses() {
       setIsCreatingCategory(false);
       setNewCategoryName("");
       setNewCategoryBudget("");
+      setNewCategoryGroup("none");
+      setNewCategoryGroupName("");
       setNewCategoryRecurring(true);
       setNewCategoryPriority("3");
       setNewCategoryAddToBudget(false);
@@ -1794,6 +1807,17 @@ export default function Expenses() {
                 aria-label="New category name"
                 className="h-10 border-input bg-card text-foreground placeholder:text-muted-foreground"
               />
+              {canManageCategories ? (
+                <CategoryGroupPicker
+                  categories={(categories ?? []) as unknown as Array<{ id: number; name: string; parentId?: number | null }>}
+                  value={newCategoryGroup}
+                  onChange={setNewCategoryGroup}
+                  groupName={newCategoryGroupName}
+                  onGroupName={setNewCategoryGroupName}
+                  disabled={createCategory.isPending}
+                  testId="expenses-new-category"
+                />
+              ) : null}
               {canManageCategories ? (
                 <div className="flex items-center justify-between gap-3 rounded-lg border border-border/70 bg-card px-3 py-2">
                   <div>

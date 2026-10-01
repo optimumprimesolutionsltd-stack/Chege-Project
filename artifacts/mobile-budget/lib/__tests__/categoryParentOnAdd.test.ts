@@ -31,6 +31,6 @@ describe('adding a category in the M-Pesa picker', () => {
 
   it('the day of banking already does the same, so the two agree', () => {
     const day = read('app/bank-day.tsx');
-    expect(day).toContain('...(newParentId !== null ? { parentId: newParentId } : {}),');
+    expect(day).toContain('...(parentId !== null ? { parentId } : {}),');
   });
 });
