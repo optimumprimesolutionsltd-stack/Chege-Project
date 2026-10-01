@@ -68,6 +68,7 @@ type LedgerTarget = { category: string; isBudgeted: boolean };
 type PriorityTier = { priority: number; label: string; description: string };
 
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const MONTHS_LONG = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const RECURRING_BUDGET_HANDOFF_KEY = 'jamvi:recurring-budget-handoff';
 
 const PRIORITY_LABELS: Record<number, string> = {
@@ -154,6 +155,10 @@ export default function BudgetScreen() {
 
   // Add / Edit modal state
   const [editTarget, setEditTarget] = useState<BudgetCategory | null>(null);
+  // The budget the category had in the month on screen, which may differ from
+  // its budget now (budget history): the form starts from it, and changing it
+  // asks how far the change reaches.
+  const [editMonthAmount, setEditMonthAmount] = useState<number | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [manageOpen, setManageOpen] = useState(false);
   const [managePriority, setManagePriority] = useState<number | null>(null);
@@ -237,7 +242,13 @@ export default function BudgetScreen() {
     setManageOpen(false);
     setEditTarget(cat);
     setFormName(cat.name);
-    setFormAmount(cat.budgetAmount.toString());
+    {
+      const monthRow = (breakdown as unknown as Array<{ category: string; budgetAmount: number }>).find((row) => row.category === cat.name);
+      const isHeading = allCategories.some((row) => row.parentId === cat.id);
+      const shown = cat.isRecurring && monthRow && !isHeading ? Number(monthRow.budgetAmount) : cat.budgetAmount;
+      setFormAmount(shown.toString());
+      setEditMonthAmount(shown);
+    }
     setFormPriority(cat.priority.toString());
     setFormParentId(cat.parentId ?? null);
     setFormIsGroup(allCategories.some((row) => row.parentId === cat.id));
@@ -627,7 +638,32 @@ export default function BudgetScreen() {
       ],
     );
   };
-  const handleSave = async () => {
+  /**
+   * Changing a regular budget asks how far the change reaches. Earlier months
+   * always keep the budget they had; the choice is this month and on
+   * (suggested), or this month alone.
+   */
+  const handleSave = () => {
+    const rawAmount = formAmount.trim();
+    const amt = rawAmount === '' ? 0 : parseInt(rawAmount, 10);
+    const changesBudget = editTarget && editTarget.isRecurring && formIsRecurring && !formIsGroup
+      && !isNaN(amt) && amt >= 0 && formName.trim() !== '' && editMonthAmount !== null && amt !== editMonthAmount;
+    if (!changesBudget) {
+      void saveCategory(null);
+      return;
+    }
+    const label = `${MONTHS_LONG[month - 1]} ${year}`;
+    Alert.alert(
+      `Change the ${formName.trim()} budget?`,
+      `From KES ${editMonthAmount!.toLocaleString('en-KE')} to KES ${amt.toLocaleString('en-KE')}. Months before ${label} keep the budget they had.`,
+      [
+        { text: `From ${label} on`, onPress: () => void saveCategory({ budgetFrom: { year, month } }) },
+        { text: `Only ${label}`, onPress: () => void saveCategory({ onlyThisMonth: { year, month } }) },
+        { text: 'Cancel', style: 'cancel' },
+      ],
+    );
+  };
+  const saveCategory = async (reach: { budgetFrom: { year: number; month: number } } | { onlyThisMonth: { year: number; month: number } } | null) => {
     const rawAmount = formAmount.trim();
     // A blank amount means nothing budgeted yet, on a new category as much as
     // on an existing one. Requiring it only when creating made a heading
@@ -665,6 +701,7 @@ export default function BudgetScreen() {
           isRecurring: formIsRecurring,
           activeMonth: formIsRecurring ? null : formActiveMonth,
           activeYear: formIsRecurring ? null : formActiveYear,
+          ...(editTarget && reach ? reach : {}),
         }),
       });
       await refreshAll();

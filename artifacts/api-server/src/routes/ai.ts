@@ -1,3 +1,4 @@
+import { monthBudgets } from "../lib/budget-months";
 import { Router } from "express";
 import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import {
@@ -49,10 +50,12 @@ router.get("/ai/budget-summary", async (req, res): Promise<void> => {
   const [group, budgetRows, expenseTotal, categoryRows, incomeRow, bankSpentRow, goals, expenseLedger, bankLedger, bankAccounts, incomeSources, contributions, members, allExpenseLedger, allBankLedger, allTimeExpenseTotal, allTimeIncomeTotal, allTimeBankSpent, allTimeCategoryRows, allContributions] = await Promise.all([
     db.select({ name: groupsTable.name, kind: groupsTable.kind, isPrivate: sql<boolean>`${groupsTable.privateOwnerUserId} IS NOT NULL` })
       .from(groupsTable).where(eq(groupsTable.id, groupId)).limit(1),
-    db.select({ name: budgetCategoriesTable.name, budgetAmount: budgetCategoriesTable.budgetAmount, priority: budgetCategoriesTable.priority })
+    // Each with the budget it had in this month (lib/budget-months).
+    db.select({ id: budgetCategoriesTable.id, name: budgetCategoriesTable.name, budgetAmount: budgetCategoriesTable.budgetAmount, priority: budgetCategoriesTable.priority })
       .from(budgetCategoriesTable)
       .where(sql`${budgetCategoriesTable.groupId} = ${groupId} AND (${budgetCategoriesTable.isRecurring} = true OR (${budgetCategoriesTable.activeMonth} = ${month} AND ${budgetCategoriesTable.activeYear} = ${year}))`)
-      .orderBy(budgetCategoriesTable.priority, budgetCategoriesTable.name),
+      .orderBy(budgetCategoriesTable.priority, budgetCategoriesTable.name)
+      .then((rows) => monthBudgets(groupId, rows, year, month)),
     db.select({ total: sql<number>`COALESCE(SUM(${expensesTable.amount}), 0)` })
       .from(expensesTable).where(and(eq(expensesTable.groupId, groupId), monthFilter)),
     db.execute(sql`

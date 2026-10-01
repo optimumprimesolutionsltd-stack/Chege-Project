@@ -35,6 +35,7 @@ import {
   GetDashboardMonthlyReportPdfQueryParams,
 } from "@workspace/api-zod";
 import { memberLedgerName } from "../lib/contributor-name";
+import { monthBudgets } from "../lib/budget-months";
 import { effectiveBudgets, totalBudget as sumBudget } from "@workspace/category-tree";
 import { getActiveGroupId, requireGroupManager } from "../lib/activeGroup";
 import { buildContributionHistory, historyMonths } from "../lib/contribution-history";
@@ -86,7 +87,8 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
   // The live total — never hardcoded, and never a plain SUM of every row.
   // A parent carries no budget of its own; it is the sum of its subcategories,
   // so adding both counted Food against its own Groceries.
-  const budgetRows = await db
+  // Each with the budget it had in this month (lib/budget-months).
+  const budgetRows = await monthBudgets(groupId, await db
     .select({
       id: budgetCategoriesTable.id,
       parentId: budgetCategoriesTable.parentId,
@@ -94,7 +96,7 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
       reducesIncomeSourceId: budgetCategoriesTable.reducesIncomeSourceId,
     })
     .from(budgetCategoriesTable)
-    .where(sql`${budgetCategoriesTable.groupId} = ${groupId} AND (${budgetCategoriesTable.isRecurring} = true OR (${budgetCategoriesTable.activeMonth} = ${month} AND ${budgetCategoriesTable.activeYear} = ${year}))`);
+    .where(sql`${budgetCategoriesTable.groupId} = ${groupId} AND (${budgetCategoriesTable.isRecurring} = true OR (${budgetCategoriesTable.activeMonth} = ${month} AND ${budgetCategoriesTable.activeYear} = ${year}))`), year, month);
   // A side hustle's costs (a category linked to an income stream) come out of
   // that stream's profit, not the household's budget - as on the Budget
   // report. Home's "what did I spend" and "am I on track" counted stock
@@ -842,11 +844,12 @@ router.get("/dashboard/category-breakdown", async (req, res): Promise<void> => {
   const month = parsed.success && parsed.data.month != null ? Math.round(parsed.data.month) : now.getUTCMonth() + 1;
   const year = parsed.success && parsed.data.year != null ? Math.round(parsed.data.year) : now.getUTCFullYear();
 
-  const categories = await db
+  // Each with the budget it had in this month (lib/budget-months).
+  const categories = await monthBudgets(groupId, await db
     .select()
     .from(budgetCategoriesTable)
     .where(sql`${budgetCategoriesTable.groupId} = ${groupId} AND (${budgetCategoriesTable.isRecurring} = true OR (${budgetCategoriesTable.activeMonth} = ${month} AND ${budgetCategoriesTable.activeYear} = ${year}))`)
-    .orderBy(budgetCategoriesTable.priority);
+    .orderBy(budgetCategoriesTable.priority), year, month);
 
   // Every category in the group, not just this month's, so a child whose
   // parent is not itself active this month still knows whose it is.
@@ -2436,11 +2439,13 @@ router.get("/dashboard/monthly-report.pdf", async (req, res): Promise<void> => {
     .limit(1);
 
   const [categories, spentByCategory, disbursementsByCategory, expenseTotal, incomeResult] = await Promise.all([
+    // Each with the budget it had in this month (lib/budget-months).
     db
       .select()
       .from(budgetCategoriesTable)
       .where(sql`${budgetCategoriesTable.groupId} = ${groupId} AND (${budgetCategoriesTable.isRecurring} = true OR (${budgetCategoriesTable.activeMonth} = ${month} AND ${budgetCategoriesTable.activeYear} = ${year}))`)
-      .orderBy(budgetCategoriesTable.priority),
+      .orderBy(budgetCategoriesTable.priority)
+      .then((rows) => monthBudgets(groupId, rows, year, month)),
     db.execute(sql`
       SELECT category, COALESCE(SUM(amount), 0) AS total FROM (
         SELECT allocation.category, allocation.amount
