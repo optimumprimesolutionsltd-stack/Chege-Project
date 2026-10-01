@@ -1886,7 +1886,7 @@ export default function Bank() {
               variant="secondary"
               className="h-12 w-full px-4 rounded-xl"
             >
-              Paste M-Pesa messages
+              Import M-Pesa
             </Button>
           </Link>
         </div>
