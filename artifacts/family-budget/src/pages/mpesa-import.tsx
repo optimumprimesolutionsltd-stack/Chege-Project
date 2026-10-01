@@ -22,6 +22,7 @@ import {
 import { useAuth } from "@workspace/replit-auth-web";
 import { buildCategoryTree, type CategoryRow } from "@workspace/category-tree";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -50,6 +51,13 @@ import {
   recategorisable,
   reviewCounts,
   reviewStatus,
+  carryChoices,
+  isConfirmedToSave,
+  confirmableLines,
+  categorisableLines,
+  confirmLines,
+  categoriseLines,
+  lineMatches,
   type ReviewView,
   redactForReport,
   refreshSuggestions,
@@ -81,6 +89,8 @@ import {
 // Shared with the day of banking and the Bank form: a fee is the same expense every time.
 const CHARGE_CATEGORY_KEY = "jamvi:last-charge-category";
 
+// Entries drawn at a time on the review (see shownCount).
+const LINES_PER_PAGE = 100;
 const todayIso = () => new Date(Date.now() + 3 * 3_600_000).toISOString().slice(0, 10);
 
 type Outcome = { saved: number; repeats: number; failed: Array<{ what: string; why: string }> };
@@ -172,6 +182,16 @@ export default function MpesaImportPage() {
   const [recategorising, setRecategorising] = useState(false);
   // Which of the entries to show: all, or only those still to look at, changed by you, or needing you.
   const [view, setView] = useState<ReviewView>("all");
+  // Search over the review ("bundle", "KPLC", a till, a category): what is
+  // found can be confirmed, or given one category, all together.
+  const [find, setFind] = useState("");
+  const [bulkCategory, setBulkCategory] = useState("");
+  // A full statement is thousands of entries: drawn a page at a time.
+  const [shownCount, setShownCount] = useState(LINES_PER_PAGE);
+  // Reading the same statement again shows the picker without clearing the
+  // work in progress or its copy in this browser; the new reading keeps every
+  // choice (carryChoices).
+  const [rereading, setRereading] = useState(false);
   const [chargeCategory, setChargeCategory] = useState("");
   // Charges go to the budget's built-in M-Pesa charges whenever it has one; the
   // category last picked for charges (remembered across budgets) only stands
@@ -344,9 +364,13 @@ export default function MpesaImportPage() {
       setStatementNote(
         `Read ${shown.length} entries from your statement. It adds up.${left.length > 0 ? ` Left out because they are not spending or income: ${left.join(" and ")}. What a Fuliza loan paid for is recorded as a normal payment${reading.loanOwedAtEnd ? ", and Fuliza still owed at the end is listed as borrowed" : ""}.` : ""}`,
       );
+      const fresh = initialChoices(shown, history, categories.map((row) => row.name), effectiveChargeCategory, rules, canManageBudget);
+      // Reading the same statement again keeps what was already worked through.
+      const built = lines ? carryChoices(lines, choices, shown, fresh) : fresh;
       setLines(shown);
       setStatementReading({ ...reading, lines: shown });
-      setChoices(initialChoices(shown, history, categories.map((row) => row.name), effectiveChargeCategory, rules, canManageBudget));
+      setChoices(built);
+      setRereading(false);
       setStatementPassword("");
     } catch (error) {
       if (error instanceof StatementPasswordError) {
@@ -452,9 +476,13 @@ export default function MpesaImportPage() {
   }, [lines, choices]);
   const showProblem = () => {
     if (firstProblemIndex === null) return;
-    // The entry may be hidden by a filter: show everything first, then go to it.
+    // The entry may be hidden by a filter or the search, or not drawn yet:
+    // show everything as far as it, then go to it.
     setView("all");
-    window.setTimeout(() => document.querySelector(`[data-testid="mpesa-line-${firstProblemIndex}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 80);
+    setFind("");
+    const at = (lines ?? []).filter(isRecordable).findIndex((item) => item.index === firstProblemIndex);
+    setShownCount((count) => Math.max(count, Math.ceil((at + 1) / LINES_PER_PAGE) * LINES_PER_PAGE));
+    window.setTimeout(() => document.querySelector(`[data-testid="mpesa-line-${firstProblemIndex}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 150);
   };
   const review = useMemo(() => (lines ? reviewCounts(lines, choices) : null), [lines, choices]);
   const firstProblem = useMemo(() => {
@@ -519,6 +547,45 @@ export default function MpesaImportPage() {
   };
   const recordable = lines?.filter(isRecordable) ?? [];
   const notImported = lines?.filter((item) => !isRecordable(item)) ?? [];
+  const inView = recordable.filter((item) => (view === "all" || reviewStatus(item, choices[item.index]) === view) && lineMatches(item, find, choices[item.index]?.category));
+  const toConfirm = find.trim() ? confirmableLines(inView, choices) : [];
+  const toCategorise = find.trim() ? categorisableLines(inView, choices) : [];
+  const confirmedLines = recordable.filter((item) => isConfirmedToSave(item, choices[item.index]));
+  const confirmedCount = confirmedLines.length;
+  const confirmedFees = confirmedLines.some((item) => (item.fee ?? 0) > 0);
+  // A new statement starts again from the first page. Changing the view or
+  // the search does too - in their handlers, not here, so that going to a
+  // problem can draw further after switching to All.
+  useEffect(() => {
+    setShownCount(LINES_PER_PAGE);
+  }, [lines?.length]);
+  // Keeps Jamvi's suggestion as checked, or takes that back.
+  const confirm = (index: number, confirmed: boolean) =>
+    setChoices((current) => ({ ...current, [index]: { ...current[index], confirmed } }));
+  const confirmFound = () => {
+    if (!window.confirm(`Confirm ${toConfirm.length} ${toConfirm.length === 1 ? "entry" : "entries"}?\n\nEvery suggestion found for "${find.trim()}", including any not shown yet, is kept as Jamvi suggested. Nothing is saved until you click Save.`)) return;
+    setChoices((current) => confirmLines(toConfirm, current));
+  };
+  const categoriseFound = () => {
+    const name = bulkCategory.trim();
+    if (!name) return;
+    if (!window.confirm(`Put ${toCategorise.length} ${toCategorise.length === 1 ? "entry" : "entries"} under ${name}?\n\nEvery entry found for "${find.trim()}" that is money out, including any not shown yet. They count as confirmed, and nothing is saved until you click Save.`)) return;
+    setChoices((current) => categoriseLines(toCategorise, current, name));
+  };
+  const readAgain = () => {
+    if (!window.confirm("Read this statement again?\n\nChoose the same statement PDF and type its password. Everything you have confirmed or changed is kept, and nothing is saved or removed. You can go back to your entries until it is read.")) return;
+    setRereading(true);
+  };
+  // Throwing a statement away loses days of choices, so it is asked first.
+  const startOverStatement = () => {
+    const worked = confirmedCount;
+    if (!window.confirm(`Start over with this statement?\n\n${worked > 0 ? `The ${worked} ${worked === 1 ? "entry" : "entries"} you have confirmed or changed but not saved will be lost. ` : ""}Anything already saved stays in your budget.`)) return;
+    setRereading(false);
+    setLines(null);
+    setChoices({});
+    setStatementNote(null);
+    setStatementReading(null);
+  };
 
   const setCategory = (index: number, category: string) =>
     setChoices((current) => chooseLineCategory(lines ?? [], current, index, category));
@@ -584,7 +651,21 @@ export default function MpesaImportPage() {
 
   const saveAll = async () => {
     if (!lines || !accountId || saving) return;
-    if (firstProblem) {
+    // A statement is worked through over days: only what has been confirmed
+    // goes, and only after saying so. Pasted messages save everything ready.
+    const onlyConfirmed = statementReading !== null;
+    if (onlyConfirmed) {
+      if (confirmedCount === 0) {
+        toast({ title: "Nothing confirmed yet", description: "Tick Confirm on the entries you have checked, or change them, and they are saved. The rest stay here for later." });
+        return;
+      }
+      if (confirmedFees && !effectiveChargeCategory.trim()) {
+        toast({ variant: "destructive", title: "Not quite ready", description: "Choose a category for the M-Pesa charges." });
+        return;
+      }
+      const left = recordable.length - confirmedCount;
+      if (!window.confirm(`Save ${confirmedCount} ${confirmedCount === 1 ? "entry" : "entries"}?\n\nOnly the ${confirmedCount === 1 ? "entry" : "entries"} you have confirmed or changed.${left > 0 ? ` The other ${left} stay here for later.` : ""}`)) return;
+    } else if (firstProblem) {
       toast({ variant: "destructive", title: "Not quite ready", description: firstProblem });
       return;
     }
@@ -622,6 +703,7 @@ export default function MpesaImportPage() {
     const toSave = lines.flatMap((item) => {
       const choice = saveChoices[item.index];
       if (!choice?.include || !isRecordable(item)) return [];
+      if (onlyConfirmed && !isConfirmedToSave(item, choice)) return [];
       const built = buildPostings(item, choice, {
         accountId,
         userId: user?.id,
@@ -813,8 +895,16 @@ export default function MpesaImportPage() {
         </p>
       </div>
 
-      {!lines ? (
+      {!lines || rereading ? (
         <>
+          {rereading ? (
+            <Card data-testid="mpesa-rereading">
+              <CardContent className="space-y-2 p-4">
+                <p className="text-sm text-foreground">Choose the same statement PDF and read it again. Everything you have confirmed or changed is kept.</p>
+                <button type="button" onClick={() => setRereading(false)} className="text-sm font-semibold text-primary" data-testid="mpesa-rereading-back">Back to my entries</button>
+              </CardContent>
+            </Card>
+          ) : null}
           <Card>
             <CardContent className="space-y-2 p-4 text-sm text-foreground">
               <p><span className="font-bold text-primary">1</span>  Open your Messages app and hold on an M-Pesa message.</p>
@@ -896,6 +986,17 @@ export default function MpesaImportPage() {
           {statementNote ? (
             <p className="rounded-xl border border-border bg-card p-3 text-sm text-foreground" data-testid="mpesa-statement-note">{statementNote}</p>
           ) : null}
+          {statementReading ? (
+            <div className="flex flex-wrap gap-4">
+              <button type="button" onClick={readAgain} className="text-sm font-semibold text-primary" data-testid="mpesa-read-again">Read my statement again (keeps your choices)</button>
+              <button type="button" onClick={startOverStatement} className="text-sm font-semibold text-destructive" data-testid="mpesa-statement-start-over">Start over with this statement</button>
+            </div>
+          ) : null}
+          {statementReading && !balanceCheck ? (
+            <p className="rounded-xl border border-border bg-card p-3 text-sm text-foreground" data-testid="mpesa-balance-missing">
+              Jamvi could not work out this statement's starting and closing balance, so it cannot check them or set this account's starting balance. Reading it again with the latest Jamvi fixes that, and keeps your choices.
+            </p>
+          ) : null}
           {balanceCheck ? (
             <Card data-testid="mpesa-statement-balance">
               <CardContent className="space-y-2 p-4 text-sm">
@@ -974,13 +1075,13 @@ export default function MpesaImportPage() {
                   {([
                     ["all", "All"],
                     ["needs", "Needs you"],
-                    ["changed", "Changed by you"],
+                    ["changed", statementReading ? "Confirmed by you" : "Changed by you"],
                     ["suggested", "Suggested"],
                   ] as Array<[ReviewView, string]>).map(([key, label]) => (
                     <button
                       key={key}
                       type="button"
-                      onClick={() => setView(key)}
+                      onClick={() => { setView(key); setShownCount(LINES_PER_PAGE); }}
                       aria-pressed={view === key}
                       data-testid={`mpesa-review-${key}`}
                       className={`rounded-full border px-3 py-1.5 text-sm font-semibold ${view === key ? "border-primary bg-primary/10 text-primary" : "border-border bg-muted text-foreground"}`}
@@ -989,11 +1090,43 @@ export default function MpesaImportPage() {
                     </button>
                   ))}
                 </div>
+                <Input
+                  value={find}
+                  onChange={(event) => { setFind(event.target.value); setShownCount(LINES_PER_PAGE); }}
+                  placeholder="Find entries or a category, e.g. bundle"
+                  className="mt-2"
+                  data-testid="mpesa-review-find"
+                />
+                {find.trim() ? (
+                  <div className="space-y-2">
+                    <p className="text-xs text-muted-foreground" data-testid="mpesa-review-find-count">{inView.length} found</p>
+                    {toConfirm.length > 0 ? (
+                      <Button variant="outline" className="w-full" onClick={confirmFound} data-testid="mpesa-review-confirm-found">
+                        Confirm all {toConfirm.length} suggestions found
+                      </Button>
+                    ) : null}
+                    {toCategorise.length > 0 ? (
+                      <div className="flex gap-2">
+                        <select
+                          value={bulkCategory}
+                          onChange={(event) => setBulkCategory(event.target.value)}
+                          className="h-10 flex-1 rounded-md border border-input bg-background px-3 text-sm"
+                          aria-label="One category for every entry found"
+                          data-testid="mpesa-review-bulk-category"
+                        >
+                          <option value="">Choose one category for all {toCategorise.length}</option>
+                          {categories.map((row) => <option key={row.name} value={row.name}>{row.name}</option>)}
+                        </select>
+                        <Button onClick={categoriseFound} disabled={!bulkCategory} data-testid="mpesa-review-categorise-found">Apply</Button>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
               </CardContent>
             </Card>
           ) : null}
 
-          {recordable.filter((item) => view === "all" || reviewStatus(item, choices[item.index]) === view).map((item) => {
+          {inView.slice(0, shownCount).map((item) => {
             const choice = choices[item.index];
             const out = item.direction === "out";
             const status = reviewStatus(item, choice);
@@ -1005,8 +1138,14 @@ export default function MpesaImportPage() {
                       className={`text-xs font-semibold ${status === "needs" ? "text-destructive" : status === "changed" ? "text-primary" : "text-muted-foreground"}`}
                       data-testid={`mpesa-line-status-${item.index}`}
                     >
-                      {status === "needs" ? "Needs you" : status === "changed" ? "You changed this" : "Suggested by Jamvi"}
+                      {status === "needs" ? "Needs you" : status === "changed" ? (choice?.confirmed ? "Confirmed" : "You changed this") : "Suggested by Jamvi"}
                     </p>
+                  ) : null}
+                  {statementReading && choice?.include && (status === "suggested" || choice?.confirmed) ? (
+                    <label className="flex w-fit cursor-pointer items-center gap-2 text-sm font-semibold text-primary" data-testid={`mpesa-line-confirm-${item.index}`}>
+                      <input type="checkbox" checked={Boolean(choice?.confirmed)} onChange={(event) => confirm(item.index, event.target.checked)} />
+                      {choice?.confirmed ? "Confirmed" : "Confirm"}
+                    </label>
                   ) : null}
                   <div className="flex items-center gap-3">
                     <input
@@ -1349,6 +1488,11 @@ export default function MpesaImportPage() {
               </Card>
             );
           })}
+          {inView.length > shownCount ? (
+            <Button variant="outline" className="w-full" onClick={() => setShownCount((count) => count + LINES_PER_PAGE)} data-testid="mpesa-show-more">
+              Show the next {Math.min(LINES_PER_PAGE, inView.length - shownCount)} ({inView.length - shownCount} more)
+            </Button>
+          ) : null}
 
           {summary && summary.fees > 0 ? (
             <Card>
@@ -1430,8 +1574,8 @@ export default function MpesaImportPage() {
               </button>
             ) : null}
             <div className="flex gap-3">
-              <Button variant="outline" onClick={() => { setLines(null); setChoices({}); setStatementNote(null); setStatementReading(null); }}>Start again</Button>
-              <Button onClick={saveAll} disabled={saving || !summary || summary.count === 0} className="flex-1 gap-2" data-testid="mpesa-import-save">
+              <Button variant="outline" onClick={statementReading ? startOverStatement : () => { setLines(null); setChoices({}); setStatementNote(null); setStatementReading(null); }}>Start again</Button>
+              <Button onClick={saveAll} disabled={saving || !summary || summary.count === 0 || (statementReading !== null && confirmedCount === 0)} className="flex-1 gap-2" data-testid="mpesa-import-save">
                 {saving ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -1440,7 +1584,9 @@ export default function MpesaImportPage() {
                     ) : null}
                   </>
                 ) : (
-                  `Save ${summary?.count ?? 0} ${summary?.count === 1 ? "entry" : "entries"}`
+                  statementReading
+                    ? `Save ${confirmedCount} confirmed`
+                    : `Save ${summary?.count ?? 0} ${summary?.count === 1 ? "entry" : "entries"}`
                 )}
               </Button>
             </div>
