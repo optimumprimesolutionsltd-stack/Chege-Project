@@ -1,3 +1,4 @@
+import { MonthStepper } from "@/components/month-stepper";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Download, Eye, EyeOff, Loader2 } from "lucide-react";
@@ -470,6 +471,7 @@ export function DownloadContributions({
           </>
         ) : (
           <>
+            <MonthStepper from={dayFrom} to={dayTo} onChange={(nextFrom, nextTo) => { onDayFromChange(nextFrom); onDayToChange(nextTo); }} testId="contribution-export-month" className="col-span-full" />
             <label className="text-sm">
               <span className="mb-1 block font-medium text-foreground">From</span>
               <input
