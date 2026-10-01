@@ -1149,6 +1149,7 @@ export default function MpesaImportScreen() {
     // The entry may be hidden by a filter, or not drawn yet: show everything
     // as far as it, then go to it.
     setView('all');
+    setFind('');
     const at = (lines ?? []).filter(isRecordable).findIndex((item) => item.index === firstProblemIndex);
     const drawing = at >= shownCount;
     if (drawing) setShownCount(Math.ceil((at + 1) / LINES_PER_PAGE) * LINES_PER_PAGE);
@@ -1204,10 +1205,13 @@ export default function MpesaImportScreen() {
     );
   };
   // A new statement, or another view of it, starts again from the first page.
+  // A new statement starts again from the first page. Changing the view or
+  // the search does too - in their handlers, not here, so that going to a
+  // problem can draw further after switching to All.
   useEffect(() => {
     setShownCount(LINES_PER_PAGE);
     setShownSkipped(LINES_PER_PAGE);
-  }, [view, lines?.length, find]);
+  }, [lines?.length]);
 
   // Changing the category of entries already recorded: nothing else about them is touched.
   const pendingChanges = useMemo(() => categoryChanges(lines ?? [], recat), [lines, recat]);
@@ -1902,7 +1906,7 @@ export default function MpesaImportScreen() {
                     return (
                       <Pressable
                         key={key}
-                        onPress={() => setView(key)}
+                        onPress={() => { setView(key); setShownCount(LINES_PER_PAGE); }}
                         accessibilityRole="button"
                         accessibilityState={{ selected: on }}
                         testID={`mpesa-review-${key}`}
@@ -1924,7 +1928,7 @@ export default function MpesaImportScreen() {
                 </View>
                 <TextInput
                   value={find}
-                  onChangeText={setFind}
+                  onChangeText={(value) => { setFind(value); setShownCount(LINES_PER_PAGE); }}
                   placeholder="Find entries or a category, e.g. bundle"
                   placeholderTextColor={colors.mutedForeground}
                   autoCorrect={false}
