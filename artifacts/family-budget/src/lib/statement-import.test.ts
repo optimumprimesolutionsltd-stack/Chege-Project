@@ -339,7 +339,27 @@ describe("fixing what is not on the statement", () => {
   it("keeps an earlier statement\u2019s Fuliza line when only the difference was saved from this one", () => {
     const difference = recorded.map((row) => (row.id === 1 ? { ...row, amount: 31.99, description: "Fuliza charges 2026-09-01 to 2026-09-30 (less KES 688.25 already recorded)" } : row));
     const { rows } = notOnStatement(reading, difference);
-    expect(rows.find((row) => row.id === 5)?.fixable).toBe(false);
+    // Part of the total this statement's line was cut by: never offered for
+    // deletion, and not listed as an extra either.
+    expect(rows.find((row) => row.id === 5)).toBeUndefined();
+  });
+
+  // January to September read after September was imported: September"s Fuliza
+  // lines are dated the statement's last day, and were listed as "In Jamvi but
+  // not on this statement" although this statement's own lines were cut by them.
+  it("does not list an earlier statement’s Fuliza lines that this one was cut by", () => {
+    const year = {
+      ...statementLines([]), opening: 6573.99, closing: 0, firstDate: "2026-01-01", lastDate: "2026-09-30",
+      lines: [
+        line(0, "fuliza_fee", "out", 4000, "FZ260101260930"),
+        { ...line(1, "fuliza_borrowed", "in", 2474.13, "FB260101260930"), status: "skipped" as const, direction: null },
+      ],
+    };
+    const september = [
+      { id: 11, date: "2026-09-30", type: "deposit", amount: 2474.13, description: "Borrowed from Fuliza (still owed at the end)", mpesaReceipt: "FB260901260930" },
+      { id: 12, date: "2026-09-30", type: "disbursement", amount: 753.3, description: "Fuliza charges 2026-09-01 to 2026-09-30", mpesaReceipt: "FZ260901260930" },
+    ];
+    expect(notOnStatement(year, september).rows).toEqual([]);
   });
 });
 
