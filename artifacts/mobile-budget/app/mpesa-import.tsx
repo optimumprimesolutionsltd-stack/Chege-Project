@@ -81,6 +81,7 @@ import { rememberMpesaCard } from '@/lib/mpesaCard';
 import { keepScreenAwakeWhileSaving, letScreenSleepAgain } from '@/lib/keepAwake';
 import { getImportProgress, setImportProgress, useImportProgress } from '@/lib/importProgress';
 import { clearSavePending, hasPendingSave, markSavePending } from '@/lib/importSaveJob';
+import { retryWhenCutOff } from '@/lib/saveWhileAway';
 import { runPool, savePosting, SAVE_CONCURRENCY, type PostingApi } from '@/lib/savePosting';
 import { parseStoredRules, payeeKey, payeeName, ruleLabel, rulesStorageKey, withRule, withoutRule, type PayeeRules } from '@/lib/payeeLearning';
 import { saveDebtLinks } from '@/lib/debtReversal';
@@ -1432,7 +1433,9 @@ export default function MpesaImportScreen() {
     try {
       await runPool(toSave, SAVE_CONCURRENCY, async ({ item, choice, built }) => {
         try {
-          const posted = await savePosting(built, postingApi, accountId);
+          // Waits while Jamvi is behind another app, and tries again an entry whose
+          // request the phone cut off (lib/saveWhileAway).
+          const posted = await retryWhenCutOff(() => savePosting(built, postingApi, accountId));
           if (choice.debt && posted.id) debtLinks.push({ transactionId: posted.id, partyId: choice.debt.partyId, kind: choice.debt.kind });
           if (posted.feeFailed) result.failed.push({ what: `${item.description} charge`, why: 'The entry saved, but its charge did not.' });
           result.saved += 1;
