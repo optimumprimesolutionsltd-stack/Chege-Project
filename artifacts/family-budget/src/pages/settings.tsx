@@ -26,7 +26,7 @@ import { GroupInviteLinks } from "@/components/group-invite-links";
 import { ReadOnlyLink } from "@/components/read-only-link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getGetMembersQueryKey } from "@workspace/api-client-react";
-import { Award, BookOpen, BriefcaseBusiness, Camera, Coffee, Gift, Heart, Home, LockKeyhole, LogOut, MapPin, Moon, Palette, Pencil, ShoppingBag, Star, Sun, Trash2, TrendingUp, Truck, User, UserPlus, Users, Shield, Send, RotateCcw, Wrench, X, MessageSquare } from "lucide-react";
+import { Award, BookOpen, BriefcaseBusiness, Camera, Coffee, Gift, Heart, Home, LockKeyhole, LogOut, MapPin, Monitor, Moon, Palette, Pencil, ShoppingBag, Star, Sun, Trash2, TrendingUp, Truck, User, UserPlus, Users, Shield, Send, RotateCcw, Wrench, X, MessageSquare } from "lucide-react";
 import { FeedbackDialog } from "@/components/feedback-dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { WORKSPACE_NAME_STYLES, workspaceNameClass } from "@/lib/workspace-identity";
@@ -719,7 +719,7 @@ export default function Settings() {
     applyAppearance(nextAppearance);
     saveAppearance(nextAppearance);
     toast({
-      title: nextAppearance === "white" ? "White appearance selected" : "Jamvi night selected",
+      title: nextAppearance === "system" ? "Following this device" : nextAppearance === "white" ? "White appearance selected" : "Jamvi night selected",
       description: "This preference is saved on this device.",
     });
   };
@@ -765,11 +765,31 @@ export default function Settings() {
             <CardTitle>Appearance</CardTitle>
           </div>
           <CardDescription>
-            Choose how Jamvi looks on this device. Your current Jamvi night theme stays selected unless you choose White.
+            Choose how Jamvi looks on this device. Unless you choose, it follows the device's own light or dark setting.
           </CardDescription>
         </CardHeader>
         <CardContent className="px-4 pb-4 sm:px-6 sm:pb-6">
-          <div className="grid gap-3 sm:grid-cols-2" role="radiogroup" aria-label="Application appearance">
+          <div className="grid gap-3 sm:grid-cols-3" role="radiogroup" aria-label="Application appearance">
+            <button
+              type="button"
+              role="radio"
+              aria-checked={appearance === "system"}
+              onClick={() => chooseAppearance("system")}
+              data-testid="appearance-system"
+              className={`flex min-h-24 items-center gap-3 rounded-xl border p-4 text-left transition-colors ${
+                appearance === "system"
+                  ? "border-primary bg-primary/10 text-foreground ring-2 ring-primary/15"
+                  : "border-border bg-card text-foreground hover:bg-muted"
+              }`}
+            >
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-muted text-primary shadow-sm">
+                <Monitor className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <span>
+                <span className="block text-sm font-semibold">Match this device</span>
+                <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">Light or dark, as your phone or computer is set.</span>
+              </span>
+            </button>
             <button
               type="button"
               role="radio"
@@ -804,7 +824,7 @@ export default function Settings() {
                 <Moon className="h-5 w-5" aria-hidden="true" />
               </span>
               <span>
-                <span className="block text-sm font-semibold">Jamvi night <span className="font-normal text-muted-foreground">(current)</span></span>
+                <span className="block text-sm font-semibold">Jamvi night</span>
                 <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">The existing navy look with softer contrast.</span>
               </span>
             </button>
