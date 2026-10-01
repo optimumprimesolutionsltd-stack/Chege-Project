@@ -5,7 +5,8 @@ import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 
 import { useColors } from '@/hooks/useColors';
-import { MPESA_CARD_KEY, rememberMpesaCard, shouldShowMpesaCard } from '@/lib/mpesaCard';
+import { useGetGroup } from '@workspace/api-client-react';
+import { mpesaCardKey, rememberMpesaCard, shouldShowMpesaCard } from '@/lib/mpesaCard';
 
 /**
  * The first thing on Home until it has been used: Jamvi's best trick.
@@ -14,16 +15,20 @@ import { MPESA_CARD_KEY, rememberMpesaCard, shouldShowMpesaCard } from '@/lib/mp
 export function MpesaImportCard() {
   const colors = useColors();
   const [show, setShow] = useState(false);
+  // Remembered for each workspace: used in a shared group, it still shows on Personal.
+  const { data: group } = useGetGroup();
+  const groupId = group?.id ?? null;
 
   useEffect(() => {
+    if (groupId === null) return undefined;
     let alive = true;
-    AsyncStorage.getItem(MPESA_CARD_KEY)
+    AsyncStorage.getItem(mpesaCardKey(groupId))
       .then((stored) => alive && setShow(shouldShowMpesaCard(stored)))
       .catch(() => alive && setShow(true));
     return () => {
       alive = false;
     };
-  }, []);
+  }, [groupId]);
 
   if (!show) return null;
   return (
@@ -43,7 +48,7 @@ export function MpesaImportCard() {
       </Text>
       <Pressable
         onPress={() => {
-          void rememberMpesaCard('done');
+          void rememberMpesaCard('done', groupId);
           setShow(false);
           router.push('/mpesa-import' as never);
         }}
@@ -55,7 +60,7 @@ export function MpesaImportCard() {
       </Pressable>
       <Pressable
         onPress={() => {
-          void rememberMpesaCard('dismissed');
+          void rememberMpesaCard('dismissed', groupId);
           setShow(false);
         }}
         accessibilityRole="button"

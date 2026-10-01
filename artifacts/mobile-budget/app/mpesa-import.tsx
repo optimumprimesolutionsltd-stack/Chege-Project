@@ -1412,7 +1412,7 @@ export default function MpesaImportScreen() {
       }
       setOutcome(result);
       setImportProgress({ stage: 'done', saved: result.saved, repeats: result.repeats, failed: result.failed.length });
-      if (result.saved > 0) void rememberMpesaCard('done');
+      if (result.saved > 0) void rememberMpesaCard('done', group?.id);
       // A reversal just saved is matched to the payment it undid when only one
       // could be it, so it never counts as income. Quietly: the rest are left
       // for Bank's "Match them", and a failure here costs nothing.
@@ -1526,8 +1526,8 @@ export default function MpesaImportScreen() {
           <Feather name="chevron-left" size={24} color={colors.foreground} />
         </Pressable>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.title, { color: colors.foreground }]}>Paste M-Pesa messages</Text>
-          <ScreenHint>Turn your M-Pesa messages into entries, without typing.</ScreenHint>
+          <Text style={[styles.title, { color: colors.foreground }]}>Import M-Pesa</Text>
+          <ScreenHint>Read your M-Pesa statement, or paste messages, into entries - without typing.</ScreenHint>
         </View>
       </View>
 
