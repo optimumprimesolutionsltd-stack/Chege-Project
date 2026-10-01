@@ -409,3 +409,29 @@ describe("Fuliza lines from an earlier download of the same statement", () => {
     expect(missingInJamvi(reading, rows).amounts).toEqual([{ id: 1, date: "2026-09-30", description: "Fuliza charges", recorded: 720.24, statement: 741.5, fixable: true }]);
   });
 });
+
+// Safaricom printed 86 then 0 mid-way through a reversal, where the balance was
+// really 80 throughout - the amounts are right. The statement check passes it,
+// so the opening and closing must come through too: without them a full year's
+// statement showed no balance check and no "Start this account at" offer.
+describe("opening and closing across a misprinted balance", () => {
+  const base: StatementRow = { receipt: "", time: "", details: "", status: "Completed", paidIn: null, withdrawn: null, balance: 0 };
+  const misprinted: StatementRow[] = [
+    { ...base, receipt: "TEST000006", time: "2026-05-30 16:10:00", details: "Customer Transfer to - 0700***000 SAMPLE", withdrawn: 0, balance: 0 },
+    { ...base, receipt: "TEST000005", time: "2026-05-30 15:56:15", details: "Send Money Reversal via API to - 0700***001 SAMPLE", withdrawn: 80, balance: 0 },
+    { ...base, receipt: "TEST000004", time: "2026-05-30 15:54:33", details: "Customer Bundle Purchase with Fuliza to 000000 SAMPLE", withdrawn: 86, balance: 0 },
+    { ...base, receipt: "TEST000004", time: "2026-05-30 15:54:33", details: "OverDraft of Credit Party", paidIn: 86, balance: 86 },
+    { ...base, receipt: "TEST000003", time: "2026-05-30 15:27:08", details: "Funds received from - 0700***001 SAMPLE", paidIn: 80, balance: 80 },
+    { ...base, receipt: "TEST000002", time: "2026-05-30 11:12:18", details: "Customer Transfer of Funds Charge", withdrawn: 7, balance: 0 },
+    { ...base, receipt: "TEST000001", time: "2026-05-30 09:00:00", details: "Funds received from - 0700***002 SAMPLE", paidIn: 7, balance: 7 },
+  ];
+
+  it("carries the balance the amounts give across the misprint", () => {
+    expect(statementLines(misprinted)).toMatchObject({ opening: 0, closing: 0 });
+  });
+
+  it("still reads a clean statement from its printed balances", () => {
+    const clean = misprinted.map((row) => (row.receipt === "TEST000004" ? { ...row, balance: 80 } : row));
+    expect(statementLines(clean)).toMatchObject({ opening: 0, closing: 0 });
+  });
+});
