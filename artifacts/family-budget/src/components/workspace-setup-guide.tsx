@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import {
   useGetBudgetCategories,
@@ -31,6 +32,18 @@ export function WorkspaceSetupGuide({ userId }: { userId?: string }) {
     );
   const shouldShow = group?.isPrivate === true || (isShared && isManager);
   const workspaceId = group?.id;
+  // Asked of the server, so an import made on the phone ticks it here too. Never
+  // holds up the rest of the checklist: until it answers, the step is open.
+  const mpesaQuery = useQuery<{ imported: boolean }>({
+    queryKey: ["mpesa-import-status", workspaceId],
+    queryFn: async () => {
+      const response = await fetch("/api/mpesa/import/status", { credentials: "include" });
+      if (!response.ok) throw new Error("Could not check the M-Pesa import");
+      return response.json();
+    },
+    enabled: workspaceId != null,
+    staleTime: 60_000,
+  });
   const storageKey = workspaceId ? getWorkspaceSetupStorageKey(workspaceId) : null;
   const [collapsed, setCollapsed] = useState(false);
   const [reviewIndex, setReviewIndex] = useState<number | null>(null);
@@ -46,6 +59,7 @@ export function WorkspaceSetupGuide({ userId }: { userId?: string }) {
 
   const steps = getWorkspaceSetupSteps({
     isShared,
+    mpesaImported: mpesaQuery.data?.imported === true,
     categories: categoriesQuery.data ?? [],
     incomeSources: incomeQuery.data ?? [],
     bankAccounts: accountsQuery.data ?? [],

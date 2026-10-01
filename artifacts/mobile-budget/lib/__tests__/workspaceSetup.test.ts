@@ -25,17 +25,17 @@ describe('workspace setup', () => {
       goals: [],
       members: [{}],
     });
-    expect(steps.map((step) => step.id)).toEqual(['budget', 'income', 'bank', 'goals', 'invite']);
-    expect(firstIncompleteWorkspaceSetupStep(steps)?.id).toBe('goals');
-    expect(steps[4].complete).toBe(false);
+    expect(steps.map((step) => step.id)).toEqual(['budget', 'income', 'bank', 'mpesa', 'goals', 'invite']);
+    expect(firstIncompleteWorkspaceSetupStep(steps)?.id).toBe('mpesa');
+    expect(steps.find((step) => step.id === 'invite')?.complete).toBe(false);
   });
 
   it('does not include invitations for Personal budgets and completes shared invitations at two members', () => {
     const completePersonal = deriveWorkspaceSetup({
-      isShared: false, categories: [{ name: 'Rent', budgetAmount: 1 }], incomeSources: [{}], bankAccounts: [{}], goals: [{}], members: [{}],
+      isShared: false, categories: [{ name: 'Rent', budgetAmount: 1 }], incomeSources: [{}], bankAccounts: [{}], goals: [{}], members: [{}], mpesaImported: true,
     });
     const completeShared = deriveWorkspaceSetup({
-      isShared: true, categories: [{ name: 'Rent', budgetAmount: 1 }], incomeSources: [{}], bankAccounts: [{}], goals: [{}], members: [{}, {}],
+      isShared: true, categories: [{ name: 'Rent', budgetAmount: 1 }], incomeSources: [{}], bankAccounts: [{}], goals: [{}], members: [{}, {}], mpesaImported: true,
     });
     expect(firstIncompleteWorkspaceSetupStep(completePersonal)).toBeNull();
     expect(firstIncompleteWorkspaceSetupStep(completeShared)).toBeNull();

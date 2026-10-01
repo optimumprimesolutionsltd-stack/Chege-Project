@@ -16,9 +16,9 @@ describe("workspace setup model", () => {
     const steps = getWorkspaceSetupSteps({
       isShared: true,
       categories: [{ name: "Food", budgetAmount: 5000 }],
-      incomeSources: [{}], bankAccounts: [{}], goals: [{}], memberCount: 2,
+      incomeSources: [{}], bankAccounts: [{}], goals: [{}], memberCount: 2, mpesaImported: true,
     });
-    expect(steps.map((step) => step.id)).toEqual(["budget", "income", "bank", "goals", "invite"]);
+    expect(steps.map((step) => step.id)).toEqual(["budget", "income", "bank", "mpesa", "goals", "invite"]);
     expect(getFirstIncompleteSetupStep(steps)).toBeNull();
   });
 

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import { db, jointAccountTxTable } from "@workspace/db";
 import { getActiveGroupId, requireGroupManager } from "../lib/activeGroup";
 import { canonicalExpenseCategoryName } from "../lib/categoryNames";
@@ -70,6 +70,22 @@ const previewSchema = z.object({
  * same rule the parser was built under. Recording goes through the ordinary
  * deposit and disbursement routes, which carry the receipt and refuse a repeat.
  */
+/**
+ * Whether this workspace has anything saved from M-Pesa - an entry carrying an
+ * M-Pesa code - for the setup checklist's "Import your M-Pesa" step. Asked of
+ * the server, not the device, so an import on the phone ticks it on the web.
+ */
+router.get("/mpesa/import/status", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  const [row] = await db
+    .select({ id: jointAccountTxTable.id })
+    .from(jointAccountTxTable)
+    .where(and(eq(jointAccountTxTable.groupId, groupId), isNotNull(jointAccountTxTable.mpesaReceipt)))
+    .limit(1);
+  res.json({ imported: Boolean(row) });
+});
+
 router.post("/mpesa/import/preview", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;

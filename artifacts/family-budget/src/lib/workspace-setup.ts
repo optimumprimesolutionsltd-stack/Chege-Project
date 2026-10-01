@@ -1,4 +1,4 @@
-export type WorkspaceSetupStepId = "budget" | "income" | "bank" | "goals" | "invite";
+export type WorkspaceSetupStepId = "budget" | "income" | "bank" | "mpesa" | "goals" | "invite";
 
 export type WorkspaceSetupStep = {
   id: WorkspaceSetupStepId;
@@ -22,7 +22,10 @@ export function getWorkspaceSetupSteps({
   bankAccounts,
   goals,
   memberCount,
+  mpesaImported = false,
 }: {
+  /** Something has been saved from M-Pesa in this workspace. */
+  mpesaImported?: boolean;
   isShared: boolean;
   categories: Category[];
   incomeSources: unknown[];
@@ -39,6 +42,9 @@ export function getWorkspaceSetupSteps({
     { id: "budget", title: "Plan your monthly budget", description: "Add a category with a planned amount.", route: "/budget", action: "Plan monthly budget", complete: hasBudget },
     { id: "income", title: "Add an income source", description: "Record where your monthly income comes from.", route: "/budget", action: "Add income source", complete: incomeSources.length > 0 },
     { id: "bank", title: "Add a bank account", description: "Keep the money you track in one place.", route: "/bank", action: "Add bank account", complete: bankAccounts.length > 0 },
+    // Jamvi's headline: a month of M-Pesa filled in, not typed. After the bank
+    // step, since an import saves into an account.
+    { id: "mpesa", title: "Import your M-Pesa", description: "Read a statement or paste messages, and your spending is filled in.", route: "/mpesa-import", action: "Import M-Pesa", complete: mpesaImported },
     { id: "goals", title: "Create a savings goal", description: "Set something meaningful to save toward.", route: "/savings-goals", action: "Create savings goal", complete: goals.length > 0 },
   ];
   if (isShared) {
