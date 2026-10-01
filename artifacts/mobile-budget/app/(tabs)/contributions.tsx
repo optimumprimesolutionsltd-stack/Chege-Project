@@ -24,6 +24,7 @@ import { ContributionSheet } from '@/components/ContributionSheet';
 import { ContributionVariance } from '@/components/ContributionVariance';
 import { ContributionExport } from '@/components/ContributionExport';
 import { MerryGoRound } from '@/components/MerryGoRound';
+import { ContributionHistory } from '@/components/ContributionHistory';
 import {
   useGetDashboardSummary,
   useGetDashboardIncomeStreams,
@@ -624,6 +625,7 @@ export default function ContributionsScreen() {
             </View>
             <ContributionSheet canManage={group?.role === 'owner' || group?.role === 'admin'} />
             <ContributionVariance canManage={group?.role === 'owner' || group?.role === 'admin'} />
+            <ContributionHistory />
             <MerryGoRound canManage={group?.role === 'owner' || group?.role === 'admin'} />
             <ContributionExport />
           </View>

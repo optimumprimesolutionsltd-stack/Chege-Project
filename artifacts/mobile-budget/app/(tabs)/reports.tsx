@@ -51,6 +51,8 @@ import { WorkspaceIdentityRow } from '@/components/WorkspaceIdentityRow';
 import { useHasBusiness } from '@/hooks/useHasBusiness';
 import { ScreenHint } from '@/components/ScreenHint';
 import { MonthStepper } from '@/components/MonthStepper';
+import { PeriodTotalsCard } from '@/components/PeriodTotalsCard';
+import { SpendingTrendCard } from '@/components/SpendingTrendCard';
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -1321,6 +1323,17 @@ export default function ReportsScreen() {
                 })}
               </>
             )}
+          </View>
+
+          {/* ── Period totals and 6-month spending trend (as on the web) ── */}
+          <View style={styles.section}>
+            <PeriodTotalsCard
+              startDate={customDates ? orderedRange(dayFrom, dayTo)[0] : `${year}-${String(month).padStart(2, '0')}-01`}
+              endDate={customDates ? orderedRange(dayFrom, dayTo)[1] : isoDay(new Date(year, month, 0))}
+            />
+          </View>
+          <View style={styles.section}>
+            <SpendingTrendCard />
           </View>
 
           {/* ── Income trend ── */}
