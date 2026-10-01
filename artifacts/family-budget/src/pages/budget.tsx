@@ -309,7 +309,7 @@ function CategoryLedgers({
 function CategoryDialog({
   open, onClose, initial, onSaved, reportMonth, reportYear, defaultPriority = 1,
   recurringSetup = false, defaultName = "", defaultAmount = "", tiers,
-  parentOptions = [], hasChildren = false,
+  parentOptions = [], hasChildren = false, monthAmount = null,
 }: {
   open: boolean;
   onClose: () => void;
@@ -328,10 +328,18 @@ function CategoryDialog({
   /** True when the category being edited already holds ledgers of its own, in
    *  which case it cannot become one. */
   hasChildren?: boolean;
+  /** The budget the category had in the month on screen (budget history),
+   *  which may differ from its budget now. The form starts from it. */
+  monthAmount?: number | null;
 }) {
   const { toast } = useToast();
   const [name, setName] = useState(initial?.name ?? defaultName);
-  const [amount, setAmount] = useState(initial?.budgetAmount?.toString() ?? defaultAmount);
+  // A regular budget starts from what it was in the month on screen.
+  const startAmount = initial && initial.isRecurring && !hasChildren && monthAmount != null ? monthAmount : initial?.budgetAmount;
+  const [amount, setAmount] = useState(startAmount?.toString() ?? defaultAmount);
+  // How far a changed budget reaches: this month on (suggested), or this month
+  // alone. Earlier months keep the budget they had either way.
+  const [reach, setReach] = useState<"from" | "only">("from");
   const [priority, setPriority] = useState(initial?.priority?.toString() ?? defaultPriority.toString());
   const [isRecurring, setIsRecurring] = useState(initial?.isRecurring ?? true);
   const [activeMonth, setActiveMonth] = useState(initial?.activeMonth ?? reportMonth);
@@ -347,14 +355,15 @@ function CategoryDialog({
 
   useEffect(() => {
     setName(initial?.name ?? defaultName);
-    setAmount(initial?.budgetAmount?.toString() ?? defaultAmount);
+    setAmount(startAmount?.toString() ?? defaultAmount);
+    setReach("from");
     setPriority(initial?.priority?.toString() ?? defaultPriority.toString());
     setIsRecurring(initial?.isRecurring ?? true);
     setActiveMonth(initial?.activeMonth ?? reportMonth);
     setActiveYear(initial?.activeYear ?? reportYear);
     setParentId(initial?.parentId ? String(initial.parentId) : "none");
     setIsGroup(hasChildren);
-  }, [initial, open, reportMonth, reportYear, defaultPriority, defaultName, defaultAmount, hasChildren]);
+  }, [initial, open, reportMonth, reportYear, defaultPriority, defaultName, defaultAmount, hasChildren, startAmount]);
 
   // Blank means nothing budgeted yet, on a new category as much as on an
     // existing one. Requiring it only when creating made a heading impossible
@@ -379,9 +388,14 @@ function CategoryDialog({
     });
   };
 
+  const budgetChanges = Boolean(initial?.isRecurring && pendingChange?.isRecurring && !isGroup && startAmount != null && pendingChange.budgetAmount !== startAmount);
+  const monthLabel = formatMonthYear(reportMonth, reportYear);
+
   const confirmSave = async () => {
     if (!pendingChange) return;
     const change = pendingChange;
+    const month = { year: reportYear, month: reportMonth };
+    const reachBody = budgetChanges ? (reach === "only" ? { onlyThisMonth: month } : { budgetFrom: month }) : {};
     setSaving(true);
     try {
       const url = initial ? `/api/budget-categories/${initial.id}` : "/api/budget-categories";
@@ -398,6 +412,7 @@ function CategoryDialog({
           activeYear: change.isRecurring ? null : change.activeYear,
           // A group is top-level by definition — nesting goes one level deep.
           parentId: isGroup || parentId === "none" ? null : Number(parentId),
+          ...reachBody,
         }),
       });
       if (!res.ok) throw new Error("Failed");
@@ -573,11 +588,38 @@ function CategoryDialog({
           <AlertDialogHeader>
             <AlertDialogTitle>{initial ? "Apply budget changes?" : "Add this budget?"}</AlertDialogTitle>
             <AlertDialogDescription>
-              {initial
+              {budgetChanges
+                ? `${pendingChange?.name ?? "This category"}: from ${formatKes(startAmount ?? 0)} to ${formatKes(pendingChange?.budgetAmount ?? 0)}. Months before ${monthLabel} keep the budget they had. Existing expenses will not be changed.`
+                : initial
                 ? `This will apply the changes to ${pendingChange?.name ?? "this category"}: ${formatKes(pendingChange?.budgetAmount ?? 0)} ${pendingChange?.isRecurring ? "every month" : `for ${formatMonthYear(pendingChange?.activeMonth ?? reportMonth, pendingChange?.activeYear ?? reportYear)}`}. Existing expenses will not be changed.`
                 : `This will add ${pendingChange?.name ?? "this category"} with a budget of ${formatKes(pendingChange?.budgetAmount ?? 0)} ${pendingChange?.isRecurring ? "every month" : `for ${formatMonthYear(pendingChange?.activeMonth ?? reportMonth, pendingChange?.activeYear ?? reportYear)}`}.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {budgetChanges ? (
+            <div className="space-y-2" role="radiogroup" aria-label="Which months this budget is for" data-testid="budget-reach">
+              {([
+                ["from", `From ${monthLabel} on`, "Becomes the budget for this month and every month after."],
+                ["only", `Only ${monthLabel}`, "This month alone. Every other month keeps its budget."],
+              ] as const).map(([value, label, hint]) => (
+                <label key={value} className={`flex items-start gap-3 rounded-lg border p-3 cursor-pointer ${reach === value ? "border-primary bg-primary/5" : "border-border"}`}>
+                  <input
+                    type="radio"
+                    name="budget-reach"
+                    value={value}
+                    checked={reach === value}
+                    onChange={() => setReach(value)}
+                    disabled={saving}
+                    className="mt-1"
+                    data-testid={`budget-reach-${value}`}
+                  />
+                  <span>
+                    <span className="block text-sm font-semibold">{label}</span>
+                    <span className="block text-xs text-muted-foreground">{hint}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          ) : null}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={saving}>Cancel</AlertDialogCancel>
             <AlertDialogAction
@@ -1123,6 +1165,7 @@ export default function Budget() {
         tiers={priorityTiers}
         parentOptions={allCategories.filter(category => category.parentId == null && category.id !== editTarget?.id)}
         hasChildren={!!editTarget && allCategories.some(category => category.parentId === editTarget.id)}
+        monthAmount={editTarget ? (breakdown ?? []).find(item => item.category === editTarget.name)?.budgetAmount ?? null : null}
       />
       <Dialog open={tierEditorOpen} onOpenChange={(open) => !savingTiers && setTierEditorOpen(open)}>
         <DialogContent className="sm:max-w-2xl">
