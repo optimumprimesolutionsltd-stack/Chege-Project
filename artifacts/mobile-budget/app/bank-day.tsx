@@ -170,6 +170,9 @@ function chargesOf<T extends { kind: RowKind; charges: ChargeItem[] }>(row: T): 
   return isOutgoing(row.kind) ? row.charges : [];
 }
 
+// "Where does it go?" a group that does not exist yet: made, then used.
+const NEW_GROUP = -1;
+
 export default function BankDayScreen() {
   const colors = useColors();
   const queryClient = useQueryClient();
@@ -1028,6 +1031,8 @@ function CategoryField({
   // null is a top-level category of its own — never a second level, since the
   // server refuses one anyway.
   const [newParentId, setNewParentId] = useState<number | null>(null);
+  // "+ New group": the group is made first, then the category goes inside it.
+  const [newGroupName, setNewGroupName] = useState('');
   const [newBudget, setNewBudget] = useState('');
   const [search, setSearch] = useState('');
   const visibleTree = filterCategoryTree(tree, search);
@@ -1047,7 +1052,24 @@ function CategoryField({
       Alert.alert('Enter a valid monthly budget', 'Use a whole number of KES, or leave it blank.');
       return;
     }
+    const groupName = newGroupName.trim();
+    if (newParentId === NEW_GROUP && !groupName) {
+      Alert.alert('Name the group', 'Give the new group a name, such as Children or Household.');
+      return;
+    }
     try {
+      let parentId: number | null = newParentId;
+      if (newParentId === NEW_GROUP) {
+        // An existing top-level category of that name is used as the group.
+        const sameName = categories.find((candidate) => candidate.name.trim().toLocaleLowerCase() === groupName.toLocaleLowerCase());
+        if (sameName && tree.some((group) => group.children.some((child) => child.trim().toLocaleLowerCase() === groupName.toLocaleLowerCase()))) {
+          Alert.alert('Already a subcategory', `"${sameName.name}" is inside another group, so it cannot hold categories. Pick another name.`);
+          return;
+        }
+        parentId = sameName
+          ? sameName.id
+          : (await createCategory({ data: { name: groupName, budgetAmount: 0, priority: 3, isRecurring: true, activeMonth: null, activeYear: null } })).id;
+      }
       const created = await createCategory({
         data: {
           name,
@@ -1056,13 +1078,14 @@ function CategoryField({
           isRecurring: true,
           activeMonth: null,
           activeYear: null,
-          ...(newParentId !== null ? { parentId: newParentId } : {}),
+          ...(parentId !== null ? { parentId } : {}),
         },
       });
       await queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
       onPick(created.name);
       setNewName('');
       setNewParentId(null);
+      setNewGroupName('');
       setNewBudget('');
       setAdding(false);
       setOpen(false);
@@ -1134,6 +1157,17 @@ function CategoryField({
                 >
                   <Text style={{ color: newParentId === null ? colors.primary : colors.mutedForeground, fontSize: 12 }}>Its own group</Text>
                 </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setNewParentId(NEW_GROUP)}
+                  disabled={creating}
+                  testID={`${testID}-new-parent-new-group`}
+                  style={[
+                    styles.kindChip,
+                    { borderColor: newParentId === NEW_GROUP ? colors.primary : colors.border, backgroundColor: newParentId === NEW_GROUP ? colors.primary + '1F' : 'transparent' },
+                  ]}
+                >
+                  <Text style={{ color: newParentId === NEW_GROUP ? colors.primary : colors.mutedForeground, fontSize: 12 }}>＋ New group</Text>
+                </TouchableOpacity>
                 {tree.map((group) => {
                   const parent = categories.find((candidate) => candidate.name === group.name);
                   if (!parent) return null;
@@ -1154,6 +1188,18 @@ function CategoryField({
                   );
                 })}
               </View>
+              {newParentId === NEW_GROUP ? (
+                <TextInput
+                  value={newGroupName}
+                  onChangeText={setNewGroupName}
+                  placeholder="Name the new group, such as Children"
+                  placeholderTextColor={colors.mutedForeground}
+                  autoCorrect={false}
+                  editable={!creating}
+                  testID={`${testID}-new-group-name`}
+                  style={[styles.input, { borderColor: colors.border, backgroundColor: colors.card, color: colors.foreground }]}
+                />
+              ) : null}
               <TextInput
                 value={newBudget}
                 onChangeText={setNewBudget}
@@ -1166,7 +1212,7 @@ function CategoryField({
               />
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 <TouchableOpacity
-                  onPress={() => { setAdding(false); setNewName(''); setNewParentId(null); setNewBudget(''); }}
+                  onPress={() => { setAdding(false); setNewName(''); setNewParentId(null); setNewGroupName(''); setNewBudget(''); }}
                   disabled={creating}
                   style={[styles.field, { flex: 1, justifyContent: 'center', borderColor: colors.border }]}
                 >

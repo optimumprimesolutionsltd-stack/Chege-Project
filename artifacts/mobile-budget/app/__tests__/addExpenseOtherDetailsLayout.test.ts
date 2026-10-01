@@ -235,9 +235,9 @@ describe('subcategories belong to Detailed mode', () => {
   it('captures the parent before the request, not after it', () => {
     // The choice can move while the create is in flight; a child must not land
     // under whatever happens to be chosen by the time it returns.
-    expect(source).toContain('const nestUnder = newCategoryParentId === null');
+    expect(source).toContain('let nestUnder: { id: number; name: string } | null = newCategoryParentId === null || newCategoryParentId === NEW_GROUP');
     const handler = source.slice(source.indexOf('const handleCreateCategory'), source.indexOf('await createCategory.mutateAsync'));
-    expect(handler).toContain('const nestUnder =');
+    expect(handler).toContain('let nestUnder');
   });
 
   it('says where the category landed', () => {

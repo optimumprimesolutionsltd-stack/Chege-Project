@@ -174,7 +174,9 @@ function CategoryField({
   const search = useCategorySearch(tree);
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
+  // "none", a group's id, or "new": a group made first, named below.
   const [newParent, setNewParent] = useState("none");
+  const [newGroupName, setNewGroupName] = useState("");
   const [newBudget, setNewBudget] = useState("");
 
   const submit = async () => {
@@ -192,7 +194,24 @@ function CategoryField({
       toast({ variant: "destructive", title: "Enter a valid monthly budget", description: "Use a whole number of KES, or leave it blank." });
       return;
     }
+    const groupName = newGroupName.trim();
+    if (newParent === "new" && !groupName) {
+      toast({ variant: "destructive", title: "Name the group", description: "Give the new group a name, such as Children or Household." });
+      return;
+    }
     try {
+      let parentId: number | null = newParent === "none" || newParent === "new" ? null : Number(newParent);
+      if (newParent === "new") {
+        // An existing group of that name is used; a subcategory cannot hold others.
+        const sameGroup = groups.find((group) => group.name.trim().toLocaleLowerCase() === groupName.toLocaleLowerCase());
+        if (!sameGroup && names.some((existing) => existing.trim().toLocaleLowerCase() === groupName.toLocaleLowerCase())) {
+          toast({ variant: "destructive", title: "Already a subcategory", description: `"${groupName}" is inside another group, so it cannot hold categories. Pick another name.` });
+          return;
+        }
+        parentId = sameGroup
+          ? sameGroup.id
+          : (await createCategory.mutateAsync({ data: { name: groupName, budgetAmount: 0, priority: 3, isRecurring: true, activeMonth: null, activeYear: null } })).id;
+      }
       const created = await createCategory.mutateAsync({
         data: {
           name,
@@ -201,13 +220,14 @@ function CategoryField({
           isRecurring: true,
           activeMonth: null,
           activeYear: null,
-          ...(newParent !== "none" ? { parentId: Number(newParent) } : {}),
+          ...(parentId !== null ? { parentId } : {}),
         },
       });
       await queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
       onPick(created.name);
       setNewName("");
       setNewParent("none");
+      setNewGroupName("");
       setNewBudget("");
       setAdding(false);
     } catch (error) {
@@ -221,10 +241,14 @@ function CategoryField({
         <Input value={newName} onChange={(event) => setNewName(event.target.value)} placeholder="New category name" className="h-9 bg-card" data-testid={`${testId}-new-name`} />
         <select className={SELECT_CLASS} value={newParent} onChange={(event) => setNewParent(event.target.value)} data-testid={`${testId}-new-parent`}>
           <option value="none">Not inside a group</option>
+          <option value="new">+ New group…</option>
           {groups.map((group) => (
             <option key={group.id} value={String(group.id)}>Inside {group.name}</option>
           ))}
         </select>
+        {newParent === "new" ? (
+          <Input value={newGroupName} onChange={(event) => setNewGroupName(event.target.value)} placeholder="Name the new group, such as Children" className="h-9 bg-card" data-testid={`${testId}-new-group-name`} />
+        ) : null}
         <Input value={newBudget} onChange={(event) => setNewBudget(event.target.value)} placeholder="Monthly budget (optional)" inputMode="numeric" className="h-9 bg-card" />
         <div className="flex gap-2">
           <Button type="button" size="sm" onClick={() => void submit()} disabled={createCategory.isPending} data-testid={`${testId}-new-save`}>
