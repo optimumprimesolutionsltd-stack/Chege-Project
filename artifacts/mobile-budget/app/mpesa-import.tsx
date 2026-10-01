@@ -76,7 +76,7 @@ import { useDraft } from '@/lib/draft';
 import { clearQueryClientCache } from '@/lib/queryPersist';
 import { ACTIVE_WORKSPACE_STORAGE_KEY } from '@/lib/workspace';
 import { formatExact } from '@/lib/formatExact';
-import { StatementReader, type ReaderJob } from '@/components/StatementReader';
+import { READER_STOPPED, StatementReader, type ReaderJob } from '@/components/StatementReader';
 import { rememberMpesaCard } from '@/lib/mpesaCard';
 import { keepScreenAwakeWhileSaving, letScreenSleepAgain } from '@/lib/keepAwake';
 import { getImportProgress, setImportProgress } from '@/lib/importProgress';
@@ -126,6 +126,8 @@ import {
 // Shared with the day of banking and the Bank form: a fee is the same expense every time.
 const CHARGE_CATEGORY_KEY = 'jamvi:last-charge-category';
 
+// Entries drawn at a time on the review screen (see shownCount).
+const LINES_PER_PAGE = 100;
 const todayIso = () => new Date(Date.now() + 3 * 3_600_000).toISOString().slice(0, 10);
 
 /** A statement is kept this long, so it can be worked through over days. */
@@ -451,6 +453,12 @@ export default function MpesaImportScreen() {
   const [choices, setChoices] = useState<Record<number, Choice>>({});
   // Which of the entries to show: all, or only those still to look at, changed by you, or needing you.
   const [view, setView] = useState<ReviewView>('all');
+  // How many entries are drawn. A full year's statement is thousands of
+  // entries, each a card with rows of buttons, and drawing them all at once
+  // ran the phone out of memory: Android closed Jamvi with no message. The
+  // list is drawn a page at a time; saving still covers every entry.
+  const [shownCount, setShownCount] = useState(LINES_PER_PAGE);
+  const [shownSkipped, setShownSkipped] = useState(LINES_PER_PAGE);
   // Lines whose extra questions (debt, move, savings...) are open. Each closed line is a few native views instead of a dozen, which is what kept toggling snappy with 200 of them.
   const [openMore, setOpenMore] = useState<Set<number>>(new Set());
   const [chargeCategory, setChargeCategory] = useState('');
@@ -832,6 +840,7 @@ export default function MpesaImportScreen() {
           );
           return;
         }
+        if (result.message === READER_STOPPED) throw new Error(READER_STOPPED);
         throw new Error('Jamvi could not open this file. Is it the M-Pesa statement PDF?');
       }
       const rows = resolveDirections(readStatementRows(result.pages));
@@ -1102,9 +1111,13 @@ export default function MpesaImportScreen() {
   const lineTops = React.useRef<Record<number, number>>({});
   const showProblem = () => {
     if (firstProblemIndex === null) return;
-    // The entry may be hidden by a filter: show everything first, then go to it.
+    // The entry may be hidden by a filter, or not drawn yet: show everything
+    // as far as it, then go to it.
     setView('all');
-    setTimeout(() => scrollRef.current?.scrollTo({ y: Math.max(0, (lineTops.current[firstProblemIndex] ?? 0) - 12), animated: true }), 80);
+    const at = (lines ?? []).filter(isRecordable).findIndex((item) => item.index === firstProblemIndex);
+    const drawing = at >= shownCount;
+    if (drawing) setShownCount(Math.ceil((at + 1) / LINES_PER_PAGE) * LINES_PER_PAGE);
+    setTimeout(() => scrollRef.current?.scrollTo({ y: Math.max(0, (lineTops.current[firstProblemIndex] ?? 0) - 12), animated: true }), drawing ? 400 : 80);
   };
   const review = useMemo(() => (lines ? reviewCounts(lines, choices) : null), [lines, choices]);
   const firstProblem = useMemo(() => {
@@ -1139,6 +1152,12 @@ export default function MpesaImportScreen() {
 
   const recordable = lines?.filter(isRecordable) ?? [];
   const notImported = lines?.filter((item) => !isRecordable(item)) ?? [];
+  const inView = recordable.filter((item) => view === 'all' || reviewStatus(item, choices[item.index]) === view);
+  // A new statement, or another view of it, starts again from the first page.
+  useEffect(() => {
+    setShownCount(LINES_PER_PAGE);
+    setShownSkipped(LINES_PER_PAGE);
+  }, [view, lines?.length]);
 
   // Changing the category of entries already recorded: nothing else about them is touched.
   const pendingChanges = useMemo(() => categoryChanges(lines ?? [], recat), [lines, recat]);
@@ -1776,7 +1795,7 @@ export default function MpesaImportScreen() {
               </View>
             ) : null}
 
-            {recordable.filter((item) => view === 'all' || reviewStatus(item, choices[item.index]) === view).map((item) => {
+            {inView.slice(0, shownCount).map((item) => {
               const choice = choices[item.index];
               const out = item.direction === 'out';
               const status = reviewStatus(item, choice);
@@ -2172,6 +2191,18 @@ export default function MpesaImportScreen() {
                 </View>
               );
             })}
+            {inView.length > shownCount ? (
+              <Pressable
+                onPress={() => setShownCount((count) => count + LINES_PER_PAGE)}
+                style={[styles.secondary, { borderColor: colors.border, borderWidth: 1, borderRadius: 12 }]}
+                accessibilityRole="button"
+                testID="mpesa-show-more"
+              >
+                <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>
+                  Show the next {Math.min(LINES_PER_PAGE, inView.length - shownCount)} ({inView.length - shownCount} more)
+                </Text>
+              </Pressable>
+            ) : null}
 
             {summary && summary.fees > 0 && builtInCharge ? (
               <Text style={[styles.hint, { color: colors.mutedForeground }]} testID="mpesa-charge-built-in">
@@ -2197,7 +2228,7 @@ export default function MpesaImportScreen() {
             {notImported.length > 0 ? (
               <View style={{ gap: 8 }}>
                 <Text style={[styles.label, { color: colors.mutedForeground }]}>Not saved ({notImported.length})</Text>
-                {notImported.map((item) => (
+                {notImported.slice(0, shownSkipped).map((item) => (
                   <View key={item.index} style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]} testID={`mpesa-skipped-${item.index}`}>
                     <Text style={[styles.lineTitle, { color: colors.foreground }]}>
                       {item.receipt ? `${item.receipt}${item.amount ? ` · KES ${formatExact(item.amount)}` : ''}` : 'A message'}
@@ -2230,6 +2261,18 @@ export default function MpesaImportScreen() {
                     {reportLink(item)}
                   </View>
                 ))}
+                {notImported.length > shownSkipped ? (
+                  <Pressable
+                    onPress={() => setShownSkipped((count) => count + LINES_PER_PAGE)}
+                    style={[styles.secondary, { borderColor: colors.border, borderWidth: 1, borderRadius: 12 }]}
+                    accessibilityRole="button"
+                    testID="mpesa-show-more-skipped"
+                  >
+                    <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>
+                      Show the next {Math.min(LINES_PER_PAGE, notImported.length - shownSkipped)} ({notImported.length - shownSkipped} more)
+                    </Text>
+                  </Pressable>
+                ) : null}
                 {pendingChanges.length > 0 ? (
                   <Pressable
                     onPress={applyRecategorise}
