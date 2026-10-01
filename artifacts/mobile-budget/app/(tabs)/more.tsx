@@ -77,7 +77,8 @@ export default function MoreScreen() {
       title: 'Search',
       hint: 'Find any expense or payment',
       href: '/(tabs)/search',
-      show: !isShared,
+      // A group's bar has no room for it (Contributions takes the place), so it is here.
+      show: true,
     },
     {
       key: 'owes',

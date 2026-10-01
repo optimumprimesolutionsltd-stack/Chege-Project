@@ -44,6 +44,7 @@ export function visibleTabs(flags: TabFlags): TabName[] {
     ...(showBudget ? (['budget'] as const) : []),
     ...(isShared ? (['contributions'] as const) : []),
     'goals',
+    // A group's bar carries Contributions instead; its Search is under More and the + menu.
     ...(!isShared ? (['search'] as const) : []),
     ...(showReports ? (['reports'] as const) : []),
     ...(showDebt ? (['debt'] as const) : []),

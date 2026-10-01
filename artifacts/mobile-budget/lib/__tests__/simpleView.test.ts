@@ -38,7 +38,8 @@ describe('the More screen', () => {
   it('only lists what this budget has', () => {
     expect(more).toContain('show: showReports');
     expect(more).toContain('show: isShared');
-    expect(more).toContain('show: !isShared');
+    // Search is in More for every budget: a group's bar has no room for it.
+    expect(more).not.toContain('show: !isShared');
     expect(more).toContain('show: showDebt');
   });
 
