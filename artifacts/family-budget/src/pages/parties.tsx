@@ -12,7 +12,7 @@
 
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Pencil, Plus, Users } from "lucide-react";
+import { Loader2, Pencil, Plus, RefreshCw, Users } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -235,6 +235,48 @@ export default function PartiesPage() {
     );
   };
 
+  // The balances are figures, moved only when an offer is accepted or one is
+  // typed in - so with the offers turned down, everybody showed nothing owed.
+  // This adds up the entries linked to each person and offers the result, as
+  // the phone does; the web had no way to.
+  const [working, setWorking] = useState(false);
+  type WorkedChange = { id: number; name: string; entries: number; now: { owedToUs: number; owedByUs: number }; workedOut: { owedToUs: number; owedByUs: number } };
+  const workOutFromEntries = async () => {
+    if (working) return;
+    setWorking(true);
+    try {
+      const response = await fetch("/api/contributors/worked-out", { credentials: "include" });
+      if (!response.ok) throw new Error(((await response.json().catch(() => ({}))) as { error?: string }).error ?? "Please try again.");
+      const { changes, toLink = 0 } = (await response.json()) as { changes: WorkedChange[]; toLink?: number };
+      if (changes.length === 0 && toLink === 0) {
+        toast({ title: "Nothing to change", description: "The balances here already match the entries linked to each person. Entries not linked to anybody are not counted." });
+        return;
+      }
+      const lines = changes.map((change) => {
+        const parts: string[] = [];
+        if (change.now.owedByUs !== change.workedOut.owedByUs) parts.push(`you owe ${formatKes(change.now.owedByUs)} → ${formatKes(change.workedOut.owedByUs)}`);
+        if (change.now.owedToUs !== change.workedOut.owedToUs) parts.push(`owes you ${formatKes(change.now.owedToUs)} → ${formatKes(change.workedOut.owedToUs)}`);
+        return `· ${change.name}: ${parts.join(", ")}`;
+      });
+      // Fuliza entries from statements, attached to Safaricom PLC so its history shows them.
+      if (toLink > 0) lines.push(`· ${toLink} Fuliza ${toLink === 1 ? "entry" : "entries"} from your statements linked to Safaricom PLC, so its history shows them`);
+      if (!window.confirm(`From your entries\n\n${lines.join("\n")}\n\nWorked out from the entries linked to each person. Use these?`)) return;
+      const applied = await fetch("/api/contributors/worked-out", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      if (!applied.ok) throw new Error(((await applied.json().catch(() => ({}))) as { error?: string }).error ?? "Could not update them.");
+      await queryClient.invalidateQueries({ queryKey: ["parties"] });
+      toast({ title: "Balances updated", description: "Worked out from your entries." });
+    } catch (error) {
+      toast({ variant: "destructive", title: "Could not work it out", description: error instanceof Error ? error.message : "Please try again." });
+    } finally {
+      setWorking(false);
+    }
+  };
+
   return (
     <div className="space-y-6 p-4 sm:p-6" data-testid="parties-page">
       <div>
@@ -257,6 +299,16 @@ export default function PartiesPage() {
           </div>
         </CardContent>
       </Card>
+      <button
+        type="button"
+        onClick={() => void workOutFromEntries()}
+        disabled={working}
+        className="flex items-center gap-2 text-sm font-semibold text-primary disabled:opacity-60"
+        data-testid="parties-work-out"
+      >
+        {working ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+        Work it out from my entries
+      </button>
       {/* Shown, never stored: the two columns stay apart so neither is hidden. */}
       <p className="text-xs text-muted-foreground" data-testid="parties-net">
         Net: {totals.net >= 0 ? `${formatKes(totals.net)} in your favour` : `${formatKes(Math.abs(totals.net))} against you`}
