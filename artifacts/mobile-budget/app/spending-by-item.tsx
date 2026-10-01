@@ -23,6 +23,7 @@ import { ScrollerScrollView } from '@/components/PageScrollReset';
 import { useHasBusiness } from '@/hooks/useHasBusiness';
 import { getExpenseEditHref } from '@/lib/expenseEditLink';
 import { GROUP_ATTRIBUTION } from "@/lib/attribution";
+import { MonthStepper } from '@/components/MonthStepper';
 
 function formatKES(n?: number | null): string {
   if (n === undefined || n === null) return '—';
@@ -254,24 +255,27 @@ export default function SpendingByItemScreen() {
         </View>
 
         {customDates ? (
-          <View style={styles.dateRow}>
-            {(['from', 'to'] as const).map((which) => (
-              <Pressable
-                key={which}
-                onPress={() => setPicker(which)}
-                style={[styles.dateField, { borderColor: colors.border }]}
-                accessibilityRole="button"
-                accessibilityLabel={`${which === 'from' ? 'Start' : 'End'} date`}
-                testID={`spending-day-${which}`}
-              >
-                <Text style={[styles.dateCaption, { color: colors.mutedForeground }]}>
-                  {which === 'from' ? 'From' : 'To'}
-                </Text>
-                <Text style={[styles.dateValue, { color: colors.foreground }]}>
-                  {longDay(which === 'from' ? from : to)}
-                </Text>
-              </Pressable>
-            ))}
+          <View style={{ gap: 8 }}>
+            <MonthStepper from={from} to={to} onChange={(nextFrom, nextTo) => { setFrom(nextFrom); setTo(nextTo); }} testID="spending-item-month" />
+            <View style={styles.dateRow}>
+              {(['from', 'to'] as const).map((which) => (
+                <Pressable
+                  key={which}
+                  onPress={() => setPicker(which)}
+                  style={[styles.dateField, { borderColor: colors.border }]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${which === 'from' ? 'Start' : 'End'} date`}
+                  testID={`spending-day-${which}`}
+                >
+                  <Text style={[styles.dateCaption, { color: colors.mutedForeground }]}>
+                    {which === 'from' ? 'From' : 'To'}
+                  </Text>
+                  <Text style={[styles.dateValue, { color: colors.foreground }]}>
+                    {longDay(which === 'from' ? from : to)}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
           </View>
         ) : null}
 

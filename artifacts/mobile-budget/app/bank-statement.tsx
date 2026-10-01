@@ -21,6 +21,7 @@ import { useColors } from '@/hooks/useColors';
 import { PageScrollView } from '@/components/PageScrollReset';
 import { customFetch, useGetGroup, useGetJointAccounts } from '@workspace/api-client-react';
 import { shareStatementPdf } from '@/lib/shareStatementPdf';
+import { MonthStepper } from '@/components/MonthStepper';
 
 type Account = { id: number; name: string };
 
@@ -137,6 +138,7 @@ export default function BankStatementScreen() {
         ))}
       </View>
 
+      <MonthStepper from={from} to={to} onChange={(nextFrom, nextTo) => { setFrom(nextFrom); setTo(nextTo); }} testID="statement-month" />
       <View style={styles.rangeRow}>
         <View style={{ flex: 1 }}>
           <Text style={[styles.label, { color: colors.mutedForeground }]}>From</Text>

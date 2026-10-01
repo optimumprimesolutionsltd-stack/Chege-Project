@@ -14,6 +14,7 @@ import {
   RemoveRowButton,
   useContributorEditor,
 } from '@/components/ContributorEditor';
+import { MonthStepper } from '@/components/MonthStepper';
 
 type GridMonth = { month: number; year: number; label: string };
 type GridRow = {
@@ -207,24 +208,27 @@ export function ContributionVariance({ canManage = false }: { canManage?: boolea
       ) : null}
 
       {open && isCustom ? (
-        <View style={styles.dayRow}>
-          {(['from', 'to'] as const).map((which) => {
-            const value = which === 'from' ? dayFrom : dayTo;
-            return (
-              <Pressable
-                key={which}
-                onPress={() => setPicker(which)}
-                style={[styles.dayField, { borderColor: colors.border }]}
-                testID={`contribution-variance-day-${which}`}
-              >
-                <Text style={[styles.dayLabel, { color: colors.mutedForeground }]}>{which === 'from' ? 'From' : 'To'}</Text>
-                <View style={styles.dayValueRow}>
-                  <Feather name="calendar" size={13} color={colors.primary} />
-                  <Text style={[styles.dayValue, { color: colors.foreground }]}>{longDay(value)}</Text>
-                </View>
-              </Pressable>
-            );
-          })}
+        <View style={{ gap: 8 }}>
+          <MonthStepper from={dayFrom} to={dayTo} onChange={(nextFrom, nextTo) => { setDayFrom(nextFrom); setDayTo(nextTo); }} testID="contribution-variance-month" />
+          <View style={styles.dayRow}>
+            {(['from', 'to'] as const).map((which) => {
+              const value = which === 'from' ? dayFrom : dayTo;
+              return (
+                <Pressable
+                  key={which}
+                  onPress={() => setPicker(which)}
+                  style={[styles.dayField, { borderColor: colors.border }]}
+                  testID={`contribution-variance-day-${which}`}
+                >
+                  <Text style={[styles.dayLabel, { color: colors.mutedForeground }]}>{which === 'from' ? 'From' : 'To'}</Text>
+                  <View style={styles.dayValueRow}>
+                    <Feather name="calendar" size={13} color={colors.primary} />
+                    <Text style={[styles.dayValue, { color: colors.foreground }]}>{longDay(value)}</Text>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
         </View>
       ) : null}
 
