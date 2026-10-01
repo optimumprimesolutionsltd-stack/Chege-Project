@@ -61,6 +61,8 @@ import {
   confirmLines,
   categoriseLines,
   lineMatches,
+  streamableLines,
+  streamLines,
   type ReviewView,
   redactForReport,
   refreshSuggestions,
@@ -571,6 +573,15 @@ export default function MpesaImportPage() {
   const inView = recordable.filter((item) => (view === "all" || reviewStatus(item, choices[item.index]) === view) && lineMatches(item, find, choices[item.index]?.category));
   const toConfirm = find.trim() ? confirmableLines(inView, choices) : [];
   const toCategorise = find.trim() ? categorisableLines(inView, choices) : [];
+  // Money in that was found: one income stream for all of it ("in 50,000" is salary).
+  const toStream = find.trim() ? streamableLines(inView, choices) : [];
+  const [bulkStream, setBulkStream] = useState("");
+  const streamFound = () => {
+    const source = incomeSources.find((row) => String(row.id) === bulkStream);
+    if (!source) return;
+    if (!window.confirm(`Put ${toStream.length} ${toStream.length === 1 ? "entry" : "entries"} under ${source.name}?\n\nEvery entry of money in found for "${find.trim()}", including any not shown yet. They count as confirmed, and nothing is saved until you click Save.`)) return;
+    setChoices((current) => streamLines(toStream, current, source.id));
+  };
   const confirmedLines = recordable.filter((item) => isConfirmedToSave(item, choices[item.index]));
   const confirmedCount = confirmedLines.length;
   const confirmedFees = confirmedLines.some((item) => (item.fee ?? 0) > 0);
@@ -581,8 +592,9 @@ export default function MpesaImportPage() {
     setShownCount(LINES_PER_PAGE);
   }, [lines?.length]);
   // Keeps Jamvi's suggestion as checked, or takes that back.
+  // Confirming keeps Jamvi's suggestion - and remembers it, unless unticked.
   const confirm = (index: number, confirmed: boolean) =>
-    setChoices((current) => ({ ...current, [index]: { ...current[index], confirmed } }));
+    setChoices((current) => ({ ...current, [index]: { ...current[index], confirmed, ...(confirmed ? { remember: current[index]?.remember ?? true } : {}) } }));
   const confirmFound = () => {
     if (!window.confirm(`Confirm ${toConfirm.length} ${toConfirm.length === 1 ? "entry" : "entries"}?\n\nEvery suggestion found for "${find.trim()}", including any not shown yet, is kept as Jamvi suggested. Nothing is saved until you click Save.`)) return;
     setChoices((current) => confirmLines(toConfirm, current));
@@ -1153,7 +1165,7 @@ export default function MpesaImportPage() {
                 <Input
                   value={find}
                   onChange={(event) => { setFind(event.target.value); setShownCount(LINES_PER_PAGE); }}
-                  placeholder="Find entries or a category, e.g. bundle"
+                  placeholder="Find a name, amount or category, e.g. naivas, in 50,000"
                   className="mt-2"
                   data-testid="mpesa-review-find"
                 />
@@ -1178,6 +1190,21 @@ export default function MpesaImportPage() {
                           {categories.map((row) => <option key={row.name} value={row.name}>{row.name}</option>)}
                         </select>
                         <Button onClick={categoriseFound} disabled={!bulkCategory} data-testid="mpesa-review-categorise-found">Apply</Button>
+                      </div>
+                    ) : null}
+                    {toStream.length > 0 && incomeSources.length > 0 ? (
+                      <div className="flex gap-2">
+                        <select
+                          value={bulkStream}
+                          onChange={(event) => setBulkStream(event.target.value)}
+                          className="h-10 flex-1 rounded-md border border-input bg-background px-3 text-sm"
+                          aria-label="One income stream for every entry of money in found"
+                          data-testid="mpesa-review-bulk-stream"
+                        >
+                          <option value="">Choose one income stream for all {toStream.length}</option>
+                          {incomeSources.map((source) => <option key={source.id} value={String(source.id)}>{source.name}</option>)}
+                        </select>
+                        <Button onClick={streamFound} disabled={!bulkStream} data-testid="mpesa-review-stream-found">Apply</Button>
                       </div>
                     ) : null}
                   </div>
@@ -1293,6 +1320,17 @@ export default function MpesaImportPage() {
                         </Button>
                       </div>
                     </div>
+                  ) : null}
+                  {out && choice?.include && !isMove(choice) && choice.category && item.description && rules[payeeKey(item.description)] !== choice.category ? (
+                    // Ticked by itself once a category is chosen or confirmed; untick what Jamvi should not learn.
+                    <label className="flex w-fit cursor-pointer items-center gap-2 text-sm text-foreground" data-testid={`mpesa-line-remember-${item.index}`}>
+                      <input
+                        type="checkbox"
+                        checked={choice.remember === true}
+                        onChange={(event) => setChoices((current) => ({ ...current, [item.index]: { ...current[item.index], remember: event.target.checked } }))}
+                      />
+                      Remember {choice.category} for {payeeName(item.description)}
+                    </label>
                   ) : null}
                   {out && choice?.include && !isMove(choice) && choice.category && categoryPath(choice.category, categories) !== choice.category ? (
                     <p className="text-xs text-muted-foreground" data-testid={`mpesa-line-path-${item.index}`}>
