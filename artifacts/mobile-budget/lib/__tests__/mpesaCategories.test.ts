@@ -60,7 +60,8 @@ describe('choosing by hand', () => {
     const start = initialChoices(lines, [], NAMES);
     expect(start[0]).toMatchObject({ category: 'Airtime & Data', auto: true });
     const next = chooseCategory(lines, start, 0, 'Groceries');
-    expect(next[0]).toEqual({ include: true, category: 'Groceries', auto: false });
+    // Chosen by hand, it is remembered unless the person unticks it.
+    expect(next[0]).toEqual({ include: true, category: 'Groceries', auto: false, remember: true });
   });
 
   it("gives the same payee's empty lines the same category, without touching a line already chosen or another payee", () => {

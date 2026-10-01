@@ -105,6 +105,8 @@ import {
   confirmLines,
   confirmableLines,
   lineMatches,
+  streamableLines,
+  streamLines,
   chooseIncomeSource,
   canUseSavings,
   chooseContribution,
@@ -1021,8 +1023,9 @@ export default function MpesaImportScreen() {
   const toggle = (index: number, include: boolean) =>
     setChoices((current) => ({ ...current, [index]: { ...current[index], include } }));
   // Keeps Jamvi's suggestion as checked, or takes that back.
+  // Confirming keeps Jamvi's suggestion - and remembers it, unless unticked.
   const confirm = (index: number, confirmed: boolean) =>
-    setChoices((current) => ({ ...current, [index]: { ...current[index], confirmed } }));
+    setChoices((current) => ({ ...current, [index]: { ...current[index], confirmed, ...(confirmed ? { remember: current[index]?.remember ?? true } : {}) } }));
 
   const chooseCategory = (name: string) => {
     if (typeof picking === 'string' && picking.startsWith('recat:')) {
@@ -1291,6 +1294,20 @@ export default function MpesaImportScreen() {
   const inView = recordable.filter((item) => (view === 'all' || reviewStatus(item, choices[item.index]) === view) && lineMatches(item, find, choices[item.index]?.category));
   const toConfirm = find.trim() ? confirmableLines(inView, choices) : [];
   const toCategorise = find.trim() ? categorisableLines(inView, choices) : [];
+  // Money in that was found: one income stream for all of it ("in 50,000" is salary).
+  const toStream = find.trim() ? streamableLines(inView, choices) : [];
+  const [streamPickerOpen, setStreamPickerOpen] = useState(false);
+  const streamFound = (source: { id: number; name: string }) => {
+    setStreamPickerOpen(false);
+    Alert.alert(
+      `Put ${toStream.length} ${toStream.length === 1 ? 'entry' : 'entries'} under ${source.name}?`,
+      `Every entry of money in found for "${find.trim()}", including any not shown yet below. They count as confirmed, and nothing is saved until you tap Save.`,
+      [
+        { text: 'Not now', style: 'cancel' },
+        { text: `Put under ${source.name}`, onPress: () => setChoices((current) => streamLines(toStream, current, source.id)) },
+      ],
+    );
+  };
   const confirmFound = () => {
     Alert.alert(
       `Confirm ${toConfirm.length} ${toConfirm.length === 1 ? 'entry' : 'entries'}?`,
@@ -2096,7 +2113,7 @@ export default function MpesaImportScreen() {
                 <TextInput
                   value={find}
                   onChangeText={(value) => { setFind(value); setShownCount(LINES_PER_PAGE); }}
-                  placeholder="Find entries or a category, e.g. bundle"
+                  placeholder="Find a name, amount or category, e.g. naivas, in 50,000"
                   placeholderTextColor={colors.mutedForeground}
                   autoCorrect={false}
                   returnKeyType="search"
@@ -2127,6 +2144,31 @@ export default function MpesaImportScreen() {
                       >
                         <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>Choose one category for all {toCategorise.length}</Text>
                       </Pressable>
+                    ) : null}
+                    {toStream.length > 0 && incomeSources.length > 0 ? (
+                      <Pressable
+                        onPress={() => setStreamPickerOpen((open) => !open)}
+                        style={[styles.secondary, { borderColor: colors.border, borderWidth: 1, borderRadius: 12 }]}
+                        accessibilityRole="button"
+                        testID="mpesa-review-stream-found"
+                      >
+                        <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>Choose one income stream for all {toStream.length}</Text>
+                      </Pressable>
+                    ) : null}
+                    {streamPickerOpen && toStream.length > 0 ? (
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 8, paddingVertical: 2 }} testID="mpesa-review-stream-choices">
+                        {incomeSources.map((source) => (
+                          <Pressable
+                            key={source.id}
+                            onPress={() => streamFound(source)}
+                            accessibilityRole="button"
+                            testID={`mpesa-review-stream-${source.id}`}
+                            style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.muted }}
+                          >
+                            <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>{source.name}</Text>
+                          </Pressable>
+                        ))}
+                      </ScrollView>
                     ) : null}
                   </View>
                 ) : null}

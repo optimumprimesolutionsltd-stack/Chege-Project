@@ -57,7 +57,11 @@ export type Choice = {
    * out to another bank). Neither income nor spending.
    */
   transferTo?: number | null;
-  /** The person ticked "remember this": keep this category for this payee once it is saved. */
+  /**
+   * "Remember this": keep this category for this payee once it is saved. Ticked
+   * by itself when the person chooses or confirms a category - the choice is
+   * the reason to remember it - and they untick what Jamvi should not learn.
+   */
   remember?: boolean;
   /**
    * A savings goal, when this line is money going into savings (out of M-Pesa) or coming
@@ -356,7 +360,8 @@ export function chooseCategory(
   category: string,
 ): Record<number, Choice> {
   const chosen = lines.find((line) => line.index === index);
-  const next: Record<number, Choice> = { ...choices, [index]: { ...choices[index], category, auto: false } };
+  // Remembered unless it was unticked for this line before.
+  const next: Record<number, Choice> = { ...choices, [index]: { ...choices[index], category, auto: false, remember: choices[index]?.remember ?? true } };
   if (!chosen?.description || !category) return next;
   const payee = clean(chosen.description);
   for (const line of lines) {
@@ -856,13 +861,34 @@ export function throughMpesaHints(lines: readonly PreviewLine[]): Set<number> {
  * everything filed there and a statement can be saved a category at a time.
  */
 export function lineMatches(line: PreviewLine, query: string, category?: string): boolean {
-  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  // "KES 1,000" and "ksh 1000" are an amount: the currency word is dropped.
+  const words = query.toLowerCase().replace(/\b(kes|ksh|kshs)\.?(?=\s|\d|$)/g, ' ').split(/\s+/).filter(Boolean);
   if (words.length === 0) return true;
-  const text = [line.description, line.original, line.type?.replace(/_/g, ' '), line.receipt, line.payeeNumber, line.amount === null ? null : String(line.amount), line.date, category]
+  const text = [line.description, line.original, line.type?.replace(/_/g, ' '), line.receipt, line.payeeNumber, line.date, category]
     .filter(Boolean)
     .join(' ')
     .toLowerCase();
-  return words.every((word) => text.includes(word));
+  return words.every((word) => {
+    // "in 50,000" is money received; "out" / "sent" / "paid" is money that left.
+    const direction = DIRECTION_WORDS[word];
+    if (direction) return line.direction === direction;
+    // A number is that exact amount ("2,000" is not 12,000 or 20,000), or the
+    // till or paybill number: paying one amount is often one thing.
+    const amount = amountIn(word);
+    if (amount !== null) {
+      return (line.amount !== null && Math.abs(line.amount - amount) < 0.005) || (line.payeeNumber ?? '').includes(word.replace(/,/g, ''));
+    }
+    return text.includes(word);
+  });
+}
+
+const DIRECTION_WORDS: Record<string, 'in' | 'out'> = { in: 'in', received: 'in', out: 'out', sent: 'out', paid: 'out' };
+
+/** The amount a search word stands for - "1,000", "1000", "1000.50" - or null for a word. */
+export function amountIn(word: string): number | null {
+  if (!/^\d[\d,]*(\.\d{1,2})?$/.test(word)) return null;
+  const value = Number(word.replace(/,/g, ''));
+  return Number.isFinite(value) ? value : null;
 }
 
 /** Lines among `lines` that "Confirm all" would confirm: ticked, a suggestion, and nothing missing. */
@@ -878,17 +904,32 @@ export function categorisableLines(lines: readonly PreviewLine[], choices: Recor
   });
 }
 
+/** Lines among `lines` that one income stream can be given to: ticked money in, not a debt, a move or a member's contribution. */
+export function streamableLines(lines: readonly PreviewLine[], choices: Record<number, Choice>): PreviewLine[] {
+  return lines.filter((line) => {
+    const choice = choices[line.index];
+    return Boolean(choice?.include) && isRecordable(line) && line.direction === 'in' && !choice.debt && !isMove(choice) && !choice.contributorId;
+  });
+}
+
+/** Gives each of `lines` the same income stream, chosen by the person (so each counts as confirmed). */
+export function streamLines(lines: readonly PreviewLine[], choices: Record<number, Choice>, incomeSourceId: number): Record<number, Choice> {
+  const next = { ...choices };
+  for (const line of lines) next[line.index] = { ...next[line.index], incomeSourceId, sourceAuto: false };
+  return next;
+}
+
 /** Confirms each of `lines` as it is. */
 export function confirmLines(lines: readonly PreviewLine[], choices: Record<number, Choice>): Record<number, Choice> {
   const next = { ...choices };
-  for (const line of lines) next[line.index] = { ...next[line.index], confirmed: true };
+  for (const line of lines) next[line.index] = { ...next[line.index], confirmed: true, remember: next[line.index]?.remember ?? true };
   return next;
 }
 
 /** Gives each of `lines` the same category, chosen by the person (so each counts as confirmed). */
 export function categoriseLines(lines: readonly PreviewLine[], choices: Record<number, Choice>, category: string): Record<number, Choice> {
   const next = { ...choices };
-  for (const line of lines) next[line.index] = { ...next[line.index], category, auto: false };
+  for (const line of lines) next[line.index] = { ...next[line.index], category, auto: false, remember: next[line.index]?.remember ?? true };
   return next;
 }
 
