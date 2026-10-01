@@ -11,6 +11,7 @@ import { runSubscriptionLifecycle } from "./lib/subscription-reminders";
 import { runAccountDeletions, sendAccountDeletionReminders } from "./lib/account-deletion";
 import { ensureReversalLinks } from "./lib/reversal-links";
 import { ensureImportTidyKept } from "./lib/import-tidy-kept";
+import { ensureBudgetMonths } from "./lib/budget-months";
 
 // Backfill removed — contributions are now derived from deposits + direct expense payments
 
@@ -67,6 +68,7 @@ async function startServer() {
   // not worth failing a boot for. See lib/reversal-links.ts.
   void ensureReversalLinks();
   void ensureImportTidyKept();
+  void ensureBudgetMonths();
 
   void ensureSubscriptionPlanCatalogue()
     .then(() => logger.info("Subscription plan catalogue is seeded"))

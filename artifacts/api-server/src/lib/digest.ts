@@ -11,6 +11,7 @@ import {
 import { sql, eq, desc, and } from "drizzle-orm";
 import { logger } from "./logger";
 import { sendEmail } from "./email";
+import { budgetHistoryFor, withMonthBudgets } from "./budget-months";
 import { effectiveBudgets } from "@workspace/category-tree";
 
 const UNCATEGORIZED_CATEGORY = "Uncategorized";
@@ -279,6 +280,8 @@ export async function sendMonthlyDigest(
     .where(
       sql`${budgetCategoriesTable.groupId} = ${groupId} AND (${budgetCategoriesTable.isRecurring} = true OR (${budgetCategoriesTable.activeMonth} = ${month} AND ${budgetCategoriesTable.activeYear} = ${year}))`,
     );
+  // The month's budget as it stood then (lib/budget-months), not today's.
+  const monthHistory = await budgetHistoryFor(groupId, year, month);
 
   const [categories, spentByCategory, top5, contribs, membershipRows] = await Promise.all([
     db
@@ -378,7 +381,12 @@ export async function sendMonthlyDigest(
 
   // ── Build HTML ────────────────────────────────────────────────────────────
   const totalSpent = Number(spentRow.total);
-  const totalBudget = Number(budgetRow.total);
+  // Today's total, moved by what any category had in this month instead.
+  const monthDifference = withMonthBudgets(categories, monthHistory, year, month).reduce((sum, cat, i) => {
+    const activeThisMonth = categories[i].isRecurring || (categories[i].activeMonth === month && categories[i].activeYear === year);
+    return activeThisMonth ? sum + Number(cat.budgetAmount) - Number(categories[i].budgetAmount) : sum;
+  }, 0);
+  const totalBudget = Number(budgetRow.total) + monthDifference;
   const remaining = totalBudget - totalSpent;
   const pctUsed = totalBudget > 0 ? Math.round((totalSpent / totalBudget) * 100) : 0;
   const spentMap = new Map(spentByCategory.map((s) => [s.category, Number(s.total)]));
@@ -391,7 +399,7 @@ export async function sendMonthlyDigest(
   // is the sum of its children's. Without this, a parent's digest row reads
   // as budgeted for KES 0 instead of its actual total.
   const effectiveBudgetById = effectiveBudgets(
-    categories.map((cat) => ({ id: cat.id, parentId: cat.parentId ?? null, budgetAmount: cat.budgetAmount })),
+    withMonthBudgets(categories, monthHistory, year, month).map((cat) => ({ id: cat.id, parentId: cat.parentId ?? null, budgetAmount: cat.budgetAmount })),
   );
   const categoriesWithEffectiveBudget = categories.map((cat) => ({
     ...cat,

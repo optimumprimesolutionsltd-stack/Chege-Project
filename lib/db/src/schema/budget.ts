@@ -605,3 +605,22 @@ export const importTidyKeptTable = pgTable("import_tidy_kept", {
 }, (table) => [
   index("import_tidy_kept_group_idx").on(table.groupId),
 ]);
+
+/**
+ * Budgets that change over time (migration 0050): the amount a category had
+ * until a change took effect, so earlier months keep it, and budgets for one
+ * month only. See artifacts/api-server/src/lib/budget-months.ts.
+ */
+export const budgetCategoryMonthsTable = pgTable("budget_category_months", {
+  id: serial("id").primaryKey(),
+  groupId: integer("group_id").notNull().references(() => groupsTable.id, { onDelete: "cascade" }),
+  categoryId: integer("category_id").notNull().references(() => budgetCategoriesTable.id, { onDelete: "cascade" }),
+  year: integer("year").notNull(),
+  month: integer("month").notNull(),
+  amount: integer("amount").notNull(),
+  onlyThisMonth: boolean("only_this_month").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("budget_category_months_category_month_idx").on(table.categoryId, table.year, table.month, table.onlyThisMonth),
+  index("budget_category_months_group_idx").on(table.groupId),
+]);

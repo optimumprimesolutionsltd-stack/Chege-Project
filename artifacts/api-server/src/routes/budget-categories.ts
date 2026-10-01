@@ -1,3 +1,4 @@
+import { budgetMonthsReady, keepEarlierMonths, nairobiMonth, setOnlyThisMonth } from "../lib/budget-months";
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { budgetCategoriesTable, expensesTable, expenseCategoryAllocationsTable, groupsTable, incomeSourcesTable, jointAccountTxTable } from "@workspace/db";
@@ -611,6 +612,9 @@ router.post("/budget-categories", async (req, res) => {
   }
 });
 
+const monthOf = z.object({ year: z.number().int().min(2000).max(2100), month: z.number().int().min(1).max(12) });
+const budgetReach = z.object({ budgetFrom: monthOf.optional(), onlyThisMonth: monthOf.optional() });
+
 router.put("/budget-categories/:id", async (req, res) => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
@@ -629,6 +633,19 @@ router.put("/budget-categories/:id", async (req, res) => {
     .where(and(eq(budgetCategoriesTable.id, id), eq(budgetCategoriesTable.groupId, groupId)))
     .limit(1);
   if (!existing) { res.status(404).json({ error: "Category not found" }); return; }
+  // Which months a new budget reaches (see lib/budget-months). Left out - the
+  // web, an older phone - a change applies from this month on and earlier
+  // months keep the budget they had.
+  const reach = budgetReach.safeParse(req.body);
+  if (!reach.success) { res.status(400).json({ error: "Invalid input", details: reach.error.flatten() }); return; }
+  const onlyMonth = reach.data.onlyThisMonth ?? null;
+  if (onlyMonth && parsed.data.budgetAmount !== undefined) {
+    if (!budgetMonthsReady()) { res.status(503).json({ error: "A budget for one month cannot be kept yet. Try again in a minute." }); return; }
+    if (!existing.isRecurring) { res.status(400).json({ error: "This category is already for one month only." }); return; }
+    await setOnlyThisMonth({ groupId, categoryId: id, year: onlyMonth.year, month: onlyMonth.month, amount: parsed.data.budgetAmount });
+    delete parsed.data.budgetAmount;
+  }
+  const keepsEarlier = parsed.data.budgetAmount !== undefined && parsed.data.budgetAmount !== existing.budgetAmount && existing.isRecurring;
   // A built-in charge category takes a budget, a colour or a priority like any
   // other, but keeps its name and place, and stays: imports file fees there.
   if (isBuiltInCategoryName(existing.name) && (
@@ -667,6 +684,9 @@ router.put("/budget-categories/:id", async (req, res) => {
         : "A category with this name already exists",
     });
     return;
+  }
+  if (keepsEarlier) {
+    await keepEarlierMonths({ groupId, categoryId: id, previous: existing.budgetAmount, from: reach.data.budgetFrom ?? nairobiMonth() });
   }
   try {
     const row = await db.transaction(async (tx) => {
