@@ -24,6 +24,8 @@ import SavingsGoals from '@/pages/savings-goals';
 import Bank from '@/pages/bank';
 import Parties from '@/pages/parties';
 import Statement from '@/pages/statement';
+import ExpenseLedger from '@/pages/expense-ledger';
+import IncomeLedger from '@/pages/income-ledger';
 import PassThrough from '@/pages/pass-through';
 import BankDay from '@/pages/bank-day';
 import MpesaImport from '@/pages/mpesa-import';
@@ -139,6 +141,8 @@ function AuthenticatedApp() {
         <Route path="/bank" component={Bank} />
         <Route path="/parties" component={Parties} />
         <Route path="/statement" component={Statement} />
+        <Route path="/expense-ledger" component={ExpenseLedger} />
+        <Route path="/income-ledger" component={IncomeLedger} />
         <Route path="/pass-through" component={PassThrough} />
         <Route path="/bank-day" component={BankDay} />
         <Route path="/mpesa-import" component={MpesaImport} />
