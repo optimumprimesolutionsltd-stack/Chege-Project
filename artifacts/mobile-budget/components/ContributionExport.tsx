@@ -8,6 +8,7 @@ import { useQuery } from '@tanstack/react-query';
 import { customFetch, useGetGroup } from '@workspace/api-client-react';
 import { writePdf } from '@/lib/savePdf';
 import { useColors } from '@/hooks/useColors';
+import { MonthStepper } from '@/components/MonthStepper';
 
 type GridMonth = { month: number; year: number; label: string };
 type GridRow = {
@@ -440,24 +441,27 @@ export function ContributionExport() {
           })}
         </View>
       ) : (
-        <View style={styles.dayRow}>
-          {(['from', 'to'] as const).map((which) => {
-            const value = which === 'from' ? dayFrom : dayTo;
-            return (
-              <Pressable
-                key={which}
-                onPress={() => setPicker(which)}
-                disabled={busy !== null}
-                style={[styles.dayField, { borderColor: colors.border }]}
-              >
-                <Text style={[styles.dayLabel, { color: colors.mutedForeground }]}>{which === 'from' ? 'From' : 'To'}</Text>
-                <View style={styles.dayValueRow}>
-                  <Feather name="calendar" size={13} color={colors.primary} />
-                  <Text style={[styles.dayValue, { color: colors.foreground }]}>{longDay(value)}</Text>
-                </View>
-              </Pressable>
-            );
-          })}
+        <View style={{ gap: 8 }}>
+          <MonthStepper from={dayFrom} to={dayTo} onChange={(nextFrom, nextTo) => { setDayFrom(nextFrom); setDayTo(nextTo); }} testID="contribution-export-month" />
+          <View style={styles.dayRow}>
+            {(['from', 'to'] as const).map((which) => {
+              const value = which === 'from' ? dayFrom : dayTo;
+              return (
+                <Pressable
+                  key={which}
+                  onPress={() => setPicker(which)}
+                  disabled={busy !== null}
+                  style={[styles.dayField, { borderColor: colors.border }]}
+                >
+                  <Text style={[styles.dayLabel, { color: colors.mutedForeground }]}>{which === 'from' ? 'From' : 'To'}</Text>
+                  <View style={styles.dayValueRow}>
+                    <Feather name="calendar" size={13} color={colors.primary} />
+                    <Text style={[styles.dayValue, { color: colors.foreground }]}>{longDay(value)}</Text>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
         </View>
       )}
 

@@ -50,6 +50,7 @@ import { getCategoryIcon } from '@/lib/categoryIcons';
 import { WorkspaceIdentityRow } from '@/components/WorkspaceIdentityRow';
 import { useHasBusiness } from '@/hooks/useHasBusiness';
 import { ScreenHint } from '@/components/ScreenHint';
+import { MonthStepper } from '@/components/MonthStepper';
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -642,23 +643,26 @@ export default function ReportsScreen() {
             <Text style={styles.customDatesToggleText}>Exact dates</Text>
           </Pressable>
           {customDates && (
-            <View style={styles.dayRow}>
-              {(['from', 'to'] as const).map((which) => (
-                <Pressable
-                  key={which}
-                  onPress={() => setPicker(which)}
-                  style={styles.dayField}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${which === 'from' ? 'Start' : 'End'} date for the report`}
-                  testID={`report-day-${which}`}
-                >
-                  <Text style={styles.dayLabel}>{which === 'from' ? 'From' : 'To'}</Text>
-                  <View style={styles.dayValueRow}>
-                    <Feather name="calendar" size={12} color="#FFFFFF" />
-                    <Text style={styles.dayValue}>{longDay(which === 'from' ? dayFrom : dayTo)}</Text>
-                  </View>
-                </Pressable>
-              ))}
+            <View style={{ gap: 8 }}>
+              <MonthStepper from={dayFrom} to={dayTo} onChange={(nextFrom, nextTo) => { setDayFrom(nextFrom); setDayTo(nextTo); }} testID="reports-month" color="#FFFFFF" />
+              <View style={styles.dayRow}>
+                {(['from', 'to'] as const).map((which) => (
+                  <Pressable
+                    key={which}
+                    onPress={() => setPicker(which)}
+                    style={styles.dayField}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${which === 'from' ? 'Start' : 'End'} date for the report`}
+                    testID={`report-day-${which}`}
+                  >
+                    <Text style={styles.dayLabel}>{which === 'from' ? 'From' : 'To'}</Text>
+                    <View style={styles.dayValueRow}>
+                      <Feather name="calendar" size={12} color="#FFFFFF" />
+                      <Text style={styles.dayValue}>{longDay(which === 'from' ? dayFrom : dayTo)}</Text>
+                    </View>
+                  </Pressable>
+                ))}
+              </View>
             </View>
           )}
           {customDates && picker && (

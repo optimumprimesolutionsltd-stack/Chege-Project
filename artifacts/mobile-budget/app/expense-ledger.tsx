@@ -29,6 +29,7 @@ import * as Sharing from 'expo-sharing';
 import { getDashboardMonthlyReportPdf } from '@workspace/api-client-react';
 import { writePdf } from '@/lib/savePdf';
 import { askPdfDetail, type PdfDetail } from '@/lib/pdfDetail';
+import { MonthStepper } from '@/components/MonthStepper';
 
 function formatKES(n?: number | null): string {
   if (n === undefined || n === null) return '—';
@@ -307,6 +308,7 @@ export default function ExpenseLedgerScreen() {
           ) : null}
         </View>
 
+        <MonthStepper from={from} to={to} onChange={(nextFrom, nextTo) => { setFrom(nextFrom); setTo(nextTo); }} testID="expense-ledger-month" />
         <View style={styles.dateRow}>
           {(['from', 'to'] as const).map((which) => (
             <Pressable

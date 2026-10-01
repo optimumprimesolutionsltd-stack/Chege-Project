@@ -26,6 +26,7 @@ import { askPdfDetail, type PdfDetail } from '@/lib/pdfDetail';
 import { isoDay, longDay, monthStartIso, orderedRange } from '@/lib/dayRange';
 import { useColors } from '@/hooks/useColors';
 import { ScrollerScrollView } from '@/components/PageScrollReset';
+import { MonthStepper } from '@/components/MonthStepper';
 
 function formatKES(n?: number | null): string {
   if (n === undefined || n === null) return '—';
@@ -275,6 +276,7 @@ export default function IncomeLedgerScreen() {
           ) : null}
         </View>
 
+        <MonthStepper from={from} to={to} onChange={(nextFrom, nextTo) => { setFrom(nextFrom); setTo(nextTo); }} testID="income-ledger-month" />
         <View style={styles.dateRow}>
           {(['from', 'to'] as const).map((which) => (
             <Pressable
