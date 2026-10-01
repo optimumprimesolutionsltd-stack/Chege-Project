@@ -547,6 +547,11 @@ export function notOnStatement(
     }
     if (row.mpesaReceipt && onStatement.has(row.mpesaReceipt)) continue;
     const fulizaPrefix = row.mpesaReceipt?.match(/^(FZ|FB)\d{12}$/)?.[1];
+    // An earlier overlapping statement's Fuliza line, which this statement's own
+    // line of the same kind was cut by ("less ... already recorded", or left
+    // out as already recorded): part of the total, not an extra. Asked before
+    // the last-day rule, since such a line is dated its statement's last day.
+    if (fulizaPrefix && ownFuliza.has(fulizaPrefix) && !savedWhole(fulizaPrefix)) continue;
     // A statement stops at the hour it was made: its last day's later entries
     // are real and not on it, so nothing from that day is a proven duplicate.
     if (day === last) {
