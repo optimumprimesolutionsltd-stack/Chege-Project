@@ -1243,6 +1243,20 @@ export default function MpesaImportScreen() {
     },
   };
 
+  // Throwing a statement away loses days of choices, so it is asked first -
+  // from the top of the screen or the bottom. What is already saved stays.
+  const confirmStartOver = () => {
+    const worked = confirmedCount;
+    Alert.alert(
+      'Start over with this statement?',
+      `${worked > 0 ? `The ${worked} ${worked === 1 ? 'entry' : 'entries'} you have confirmed or changed but not saved will be lost. ` : ''}Anything already saved stays in your budget. Then read a statement from the beginning.`,
+      [
+        { text: 'Keep it', style: 'cancel' },
+        { text: 'Start over', style: 'destructive', onPress: startOver },
+      ],
+    );
+  };
+
   const saveAll = () => {
     if (!lines || !accountId || saving) return;
     if (!statementReading) {
@@ -1651,6 +1665,11 @@ export default function MpesaImportScreen() {
               <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]} testID="mpesa-statement-note">
                 <Text style={[styles.hint, { color: colors.foreground, marginTop: 0 }]}>{statementNote}</Text>
               </View>
+            ) : null}
+            {statementReading ? (
+              <Pressable onPress={confirmStartOver} accessibilityRole="button" style={{ alignSelf: 'flex-start' }} hitSlop={8} testID="mpesa-statement-start-over">
+                <Text style={{ color: colors.destructive, fontFamily: 'Inter_600SemiBold' }}>Start over with this statement</Text>
+              </Pressable>
             ) : null}
 
             {statementReading && !balanceCheck ? (
@@ -2379,7 +2398,7 @@ export default function MpesaImportScreen() {
                 <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>Read my statement again (keeps your choices)</Text>
               </Pressable>
             ) : null}
-            <Pressable onPress={() => { setLines(null); setChoices({}); setStatementNote(null); setStatementReading(null); }} style={styles.secondary} accessibilityRole="button">
+            <Pressable onPress={statementReading ? confirmStartOver : () => { setLines(null); setChoices({}); setStatementNote(null); setStatementReading(null); }} style={styles.secondary} accessibilityRole="button">
               <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>Start again</Text>
             </Pressable>
           </>

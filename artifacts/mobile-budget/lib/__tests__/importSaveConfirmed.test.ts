@@ -107,3 +107,18 @@ describe('reading the statement again keeps the work in progress', () => {
     expect(screen).toContain('setChoices(built);\n      setRereading(false);'.replace(/\n/g, screen.includes('\r\n') ? '\r\n' : '\n'));
   });
 });
+
+// "Start again" sat below the whole list, past the first hundred entries.
+describe('a statement in progress can be started over from the top, after asking', () => {
+  const screen = readFileSync('app/mpesa-import.tsx', 'utf8');
+
+  it('offers Start over at the top of the statement', () => {
+    expect(screen).toContain('testID="mpesa-statement-start-over"');
+  });
+
+  it('asks first, from the top and from the bottom', () => {
+    expect(screen).toContain("{ text: 'Keep it', style: 'cancel' },");
+    expect(screen).toContain("{ text: 'Start over', style: 'destructive', onPress: startOver },");
+    expect(screen).toContain('onPress={statementReading ? confirmStartOver : () => {');
+  });
+});
