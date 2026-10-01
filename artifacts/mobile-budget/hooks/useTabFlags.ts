@@ -9,7 +9,10 @@ import { customFetch, useGetGroup } from '@workspace/api-client-react';
  */
 export function useTabFlags() {
   const { data: group } = useGetGroup();
-  const showReports = group?.isPrivate !== false;
+  // Reports are for a shared group as much as a Personal budget. Groups had
+  // none on the phone (an unexplained refactor turned them off) though the web
+  // always gave them Reports.
+  const showReports = true;
   // Debt earns its tab rather than being handed one. A budget that tracks no
   // debt gets no tab — an empty Debt tab on every household's phone would be
   // the opposite of making debt matter — and the moment a category is marked
