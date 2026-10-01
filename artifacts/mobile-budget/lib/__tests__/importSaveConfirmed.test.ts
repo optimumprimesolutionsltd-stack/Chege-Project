@@ -122,3 +122,14 @@ describe('a statement in progress can be started over from the top, after asking
     expect(screen).toContain('onPress={statementReading ? confirmStartOver : () => {');
   });
 });
+
+describe('reading the statement again asks first', () => {
+  const screen = readFileSync('app/mpesa-import.tsx', 'utf8');
+
+  it('both buttons go through the question', () => {
+    expect(screen).toContain('onPress={confirmReadAgain} accessibilityRole="button" testID="mpesa-balance-missing-read-again"');
+    expect(screen).toContain('<Pressable onPress={confirmReadAgain} style={styles.secondary} accessibilityRole="button" testID="mpesa-read-again">');
+    expect(screen).toContain("{ text: 'Read it again', onPress: () => setRereading(true) },");
+    expect(screen).not.toContain('onPress={() => setRereading(true)}');
+  });
+});
