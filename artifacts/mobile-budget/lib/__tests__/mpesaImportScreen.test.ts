@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 const read = (p: string) => readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
 
 // "Paste first": copy the M-Pesa messages, paste them, review, save.
-describe('the Paste M-Pesa messages screen', () => {
+describe('the Import M-Pesa screen', () => {
   const screen = read('app/mpesa-import.tsx');
 
   it('reads the paste through the API and records nothing until Save', () => {
@@ -44,7 +44,7 @@ describe('the screen can be reached', () => {
   it('from the bank actions in the footer', () => {
     const fab = read('components/GlobalFAB.tsx');
     expect(fab).toContain("route: '/mpesa-import'");
-    expect(fab).toContain("label: 'Paste M-Pesa'");
+    expect(fab).toContain("label: 'Import M-Pesa'");
   });
   it('from More', () => {
     expect(read('app/(tabs)/more.tsx')).toContain("href: '/mpesa-import'");

@@ -24,7 +24,7 @@ describe('the Home card for the M-Pesa import', () => {
   it('opens the import, and is done once something has been saved', () => {
     const card = read('components/MpesaImportCard.tsx');
     expect(card).toContain("router.push('/mpesa-import'");
-    expect(read('app/mpesa-import.tsx')).toContain("if (result.saved > 0) void rememberMpesaCard('done');");
+    expect(read('app/mpesa-import.tsx')).toContain("if (result.saved > 0) void rememberMpesaCard('done', group?.id);");
   });
 
   it('only says what is true: a statement is not uploaded', () => {
