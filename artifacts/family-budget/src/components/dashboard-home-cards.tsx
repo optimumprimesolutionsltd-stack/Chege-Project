@@ -134,9 +134,8 @@ export function DashboardSummaryCards({
     href: "/savings-goals",
   });
 
-  if (isShared) {
-    cards.push({ icon: FileText, label: "Reports", summary: "Monthly report and funding", href: "/reports" });
-  }
+  // Reports are for a Personal budget as much as a group.
+  cards.push({ icon: FileText, label: "Reports", summary: "Monthly report and funding", href: "/reports" });
 
   return (
     <section aria-label="Overview" className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">

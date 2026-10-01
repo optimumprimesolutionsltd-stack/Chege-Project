@@ -181,7 +181,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     ...(uses('bank') ? [{ href: '/statement', label: 'Statement', icon: FileText }] : []),
     ...(uses('bank') ? [{ href: '/pass-through', label: 'Paid through you', icon: Repeat }] : []),
     ...(uses('bank') ? [{ href: '/bank-day', label: 'Enter a whole day', icon: ListChecks }] : []),
-    ...(uses('bank') ? [{ href: '/mpesa-import', label: 'Paste M-Pesa messages', icon: MessageSquare }] : []),
+    ...(uses('bank') ? [{ href: '/mpesa-import', label: 'Import M-Pesa', icon: MessageSquare }] : []),
     ...(uses('reports') ? [{ href: '/reports', label: isSharedWorkspace ? 'Group Reports' : 'My Reports', icon: BarChart3 }] : []),
     // Search, Subscription and Settings are never hideable: Settings is how a
     // section gets switched back on, and Subscription is how the app keeps

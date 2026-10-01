@@ -2787,6 +2787,18 @@ export default function BankScreen() {
                   <Text numberOfLines={2} style={[styles.actionBtnText, { color: '#67e8f9' }]}>Between accounts</Text>
                 </TouchableOpacity>
               </View>
+              {/* The import, where money is: it was only behind More and the + menu,
+                  named for pasting messages, so a statement was hard to find. */}
+              <TouchableOpacity
+                onPress={() => router.push('/mpesa-import' as never)}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                testID="bank-import-mpesa"
+                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 10, paddingVertical: 8 }}
+              >
+                <Feather name="smartphone" size={15} color="#F4F8FF" />
+                <Text style={{ color: '#F4F8FF', fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>Import M-Pesa statement or messages</Text>
+              </TouchableOpacity>
             </>
           )}
         </LinearGradient>

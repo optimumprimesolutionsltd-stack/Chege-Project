@@ -11,13 +11,13 @@ describe('adding a category in the M-Pesa picker', () => {
 
   it('asks which group it goes under, or lets it stand on its own', () => {
     expect(sheet).toContain('Put it under');
-    expect(sheet).toContain("name: 'Its own (or a new group)'");
+    expect(sheet).toContain("name: 'Its own'");
     expect(sheet).toContain('testID="mpesa-category-parents"');
     expect(sheet).toContain('testID={`mpesa-category-parent-${choice.id ?? \'own\'}`}');
   });
 
   it('sends the chosen group as the parent, and only when one was chosen', () => {
-    expect(sheet).toContain('...(newParentId !== null ? { parentId: newParentId } : {}),');
+    expect(sheet).toContain('...(parentId !== null ? { parentId } : {}),');
     expect(sheet).toContain('const [newParentId, setNewParentId] = useState<number | null>(null);');
   });
 
@@ -26,7 +26,8 @@ describe('adding a category in the M-Pesa picker', () => {
   });
 
   it('starts each new category on its own again', () => {
-    expect(sheet).toContain('setNewParentId(null);\n    onPick(name);');
+    expect(sheet).toContain('setNewParentId(null);');
+    expect(sheet).toContain("setNewBudget('');\n    onPick(name);");
   });
 
   it('the day of banking already does the same, so the two agree', () => {

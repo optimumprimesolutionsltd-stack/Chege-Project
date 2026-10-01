@@ -1,12 +1,15 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
     <script>
+      // Before the app loads, so the first paint is already right. A choice of
+      // white or Jamvi night wins; otherwise this device's own light/dark.
       try {
         const appearance = localStorage.getItem("jamvi:appearance");
-        const isMidnight = appearance !== "white";
+        const deviceDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+        const isMidnight = appearance === "midnight" || (appearance !== "white" && deviceDark);
         document.documentElement.classList.toggle("dark", isMidnight);
         document.documentElement.dataset.appearance = isMidnight ? "midnight" : "white";
       } catch {}

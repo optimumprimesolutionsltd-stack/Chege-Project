@@ -2593,11 +2593,11 @@ export default function Dashboard() {
   const isSharedWorkspace = group?.isPrivate === false;
   const { data: breakdown, isLoading: isBreakdownLoading } = useGetDashboardCategoryBreakdown(
     { month, year },
-    { query: { enabled: isSharedWorkspace, queryKey: getGetDashboardCategoryBreakdownQueryKey({ month, year }) } },
+    { query: { enabled: Boolean(group), queryKey: getGetDashboardCategoryBreakdownQueryKey({ month, year }) } },
   );
   const { data: trends, isLoading: isTrendsLoading } = useGetDashboardTrends(
     { months: 6 },
-    { query: { enabled: isSharedWorkspace, queryKey: getGetDashboardTrendsQueryKey({ months: 6 }) } },
+    { query: { enabled: Boolean(group), queryKey: getGetDashboardTrendsQueryKey({ months: 6 }) } },
   );
   const { data: goals } = useGetSavingsGoals();
   const { data: bankAccount } = useGetJointAccount();
@@ -2714,10 +2714,10 @@ export default function Dashboard() {
 
   const percentSpent = summary.totalBudget > 0 ? (summary.totalSpent / summary.totalBudget) * 100 : 0;
   const isOverBudget = percentSpent > 100;
-  const overBudgetCategories = isSharedWorkspace
-    ? (breakdown ?? []).filter((category) => category.remaining < 0)
-    : [];
-  const chartData = isSharedWorkspace
+  // Over budget, top spending and the trend are the same for a Personal budget
+  // as for a shared group - they were shown to groups only.
+  const overBudgetCategories = (breakdown ?? []).filter((category) => category.remaining < 0);
+  const chartData = group
     ? (breakdown ?? [])
         .filter((category) => category.spentAmount > 0)
         .sort((a, b) => b.spentAmount - a.spentAmount)
@@ -2996,7 +2996,7 @@ export default function Dashboard() {
          </CardContent>
        </Card>}
 
-      {isSharedWorkspace && overBudgetCategories.length > 0 && (
+      {overBudgetCategories.length > 0 && (
         <div className="flex items-start gap-3 rounded-2xl border border-destructive/30 bg-destructive/10 p-4">
           <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-destructive/20">
             <span className="text-sm font-bold text-destructive">!</span>
@@ -3059,8 +3059,9 @@ export default function Dashboard() {
         </CardContent>
       </Card>
 
-      {isSharedWorkspace && (
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+      {group && (
+        <div className={`grid grid-cols-1 gap-8 ${isSharedWorkspace ? "lg:grid-cols-2" : ""}`}>
+          {isSharedWorkspace ? (
           <Card className="overflow-hidden border-none shadow-md">
             <CardHeader className="border-b border-border/50 bg-muted/30 pb-4">
               <div className="flex items-center gap-2">
@@ -3100,6 +3101,7 @@ export default function Dashboard() {
               </Link>
             </CardContent>
           </Card>
+          ) : null}
 
           <Card className="overflow-hidden border-none shadow-md">
             <CardHeader className="border-b border-border/50 bg-muted/30 pb-4">
@@ -3107,7 +3109,7 @@ export default function Dashboard() {
                 <TrendingUp className="h-5 w-5 text-secondary" />
                 <CardTitle className="text-xl">Top Spending</CardTitle>
               </div>
-              <CardDescription>Where the group money is going</CardDescription>
+              <CardDescription>{isSharedWorkspace ? "Where the group money is going" : "Where your money is going"}</CardDescription>
             </CardHeader>
             <CardContent className="p-4 sm:p-6">
               {isBreakdownLoading ? (
@@ -3244,7 +3246,7 @@ export default function Dashboard() {
         </Card>
       )}
 
-      {isSharedWorkspace && (
+      {group && (
         <>
           <Card className="overflow-hidden border-none shadow-md">
             <CardHeader className="border-b border-border/50 bg-muted/30 pb-4">
@@ -3252,7 +3254,7 @@ export default function Dashboard() {
                 <TrendingUp className="h-5 w-5 text-secondary" />
                 <CardTitle className="text-xl">6-Month Trend</CardTitle>
               </div>
-              <CardDescription>Monthly total group spending</CardDescription>
+              <CardDescription>{isSharedWorkspace ? "Monthly total group spending" : "Your monthly total spending"}</CardDescription>
             </CardHeader>
             <CardContent className="h-[280px] p-6">
               {isTrendsLoading ? (

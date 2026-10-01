@@ -21,7 +21,7 @@ export const insertBankAccountSchema = createInsertSchema(bankAccountsTable).omi
 export type InsertBankAccount = typeof bankAccountsTable.$inferInsert;
 export type BankAccount = typeof bankAccountsTable.$inferSelect;
 
-// Income sources — per-person named income streams (e.g. Lydiah–EISH, Chege–Salary)
+// Income sources — per-person named income streams (e.g. a salary, a business)
 export const incomeSourcesTable = pgTable("income_sources", {
   id: serial("id").primaryKey(),
   groupId: integer("group_id").references(() => groupsTable.id, { onDelete: "restrict" }),
@@ -174,7 +174,7 @@ export const expenseIncomeSplitsTable = pgTable("expense_income_splits", {
   // userId is null only when fromBank is true. label remains for readable
   // legacy history, while userId is the durable attribution used in reports.
   userId: text("user_id"),
-  label: text("label").notNull(),       // e.g. "Chege", "Joint bank"
+  label: text("label").notNull(),       // e.g. a member's name, "Joint bank"
   amount: integer("amount").notNull(),  // in KES
   incomeSourceId: integer("income_source_id"),
   fromBank: boolean("from_bank").notNull().default(false), // true = this portion is funded by the shared Joint bank
