@@ -18,13 +18,5 @@ export interface DashboardSummary {
   lentTotal?: number;
   totalSpent: number;
   remaining: number;
-  chegeContributed: number;
-  lydiahContributed: number;
-  chegeSpent: number;
-  lydiahSpent: number;
-  chegeNet: number;
-  lydiahNet: number;
-  chegeTarget: number;
-  lydiahTarget: number;
   expenseCount: number;
 }

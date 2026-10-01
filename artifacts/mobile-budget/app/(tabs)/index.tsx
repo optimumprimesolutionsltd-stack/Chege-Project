@@ -116,7 +116,11 @@ const SHARED_OVERVIEW_SHORTCUTS: Shortcut[] = [
   { icon: 'pie-chart',   label: 'Reports',       color: '#6C9FE6', bg: '#0A254E', route: '/(tabs)/reports',       description: 'Understand trends' },
   // What you owe and are owed - loans, Fuliza, people - one tap from Home.
   { icon: 'trending-down', label: 'Debt',        color: '#F87171', bg: '#3A1212', route: '/(tabs)/debt',          description: 'What you owe' },
+  { icon: 'smartphone',  label: 'M-Pesa',        color: '#3CDD62', bg: '#0D3428', route: '/mpesa-import',         description: 'Import a statement' },
 ];
+
+// A Personal budget has the same areas, less the group's contributions.
+const PERSONAL_OVERVIEW_SHORTCUTS: Shortcut[] = SHARED_OVERVIEW_SHORTCUTS.filter((shortcut) => shortcut.label !== 'Contributions');
 
 // Only reachable from Home through the setup guide's one-time "Invite a
 // member" step, which retires the moment setup is complete — leaving no way
@@ -295,7 +299,8 @@ export default function DashboardScreen() {
   // The group areas in the person's own order, per budget, hidden ones left out.
   const [areasArrangement, setAreasArrangement] = useArrangement(homeAreasKey(group?.id));
   const [arrangingAreas, setArrangingAreas] = useState(false);
-  const allShortcuts = (canManageAccess ? [...SHARED_OVERVIEW_SHORTCUTS, INVITE_SHORTCUT] : SHARED_OVERVIEW_SHORTCUTS)
+  const baseShortcuts = isSharedWorkspace ? SHARED_OVERVIEW_SHORTCUTS : PERSONAL_OVERVIEW_SHORTCUTS;
+  const allShortcuts = (canManageAccess ? [...baseShortcuts, INVITE_SHORTCUT] : baseShortcuts)
     .map((shortcut) => ({ ...shortcut, id: shortcut.label.toLowerCase() }));
   const overviewShortcuts = arrange(allShortcuts, areasArrangement);
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -487,18 +492,19 @@ export default function DashboardScreen() {
             hidden={isPrivate}
           />
 
-          {isSharedWorkspace && (
+          {/* On a Personal budget too: it was shown to groups only. */}
+          {group && (
             <View style={[styles.overviewNavCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Text style={[styles.overviewNavEyebrow, { color: colors.primary }]}>GROUP OVERVIEW</Text>
-                <Pressable onPress={() => setArrangingAreas(true)} hitSlop={8} accessibilityRole="button" accessibilityLabel="Arrange your group areas: reorder, hide or show them" testID="overview-arrange" style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Text style={[styles.overviewNavEyebrow, { color: colors.primary }]}>{isSharedWorkspace ? 'GROUP OVERVIEW' : 'OVERVIEW'}</Text>
+                <Pressable onPress={() => setArrangingAreas(true)} hitSlop={8} accessibilityRole="button" accessibilityLabel={`Arrange your ${isSharedWorkspace ? 'group' : 'budget'} areas: reorder, hide or show them`} testID="overview-arrange" style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                   <Feather name="move" size={13} color={colors.primary} />
                   <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>Arrange</Text>
                 </Pressable>
               </View>
-              <Text style={[styles.overviewNavTitle, { color: colors.foreground }]}>Your group areas</Text>
+              <Text style={[styles.overviewNavTitle, { color: colors.foreground }]}>{isSharedWorkspace ? 'Your group areas' : 'Your budget areas'}</Text>
               <Text style={[styles.overviewNavSubtitle, { color: colors.mutedForeground }]}>
-                Quickly see what each part of your group helps you manage. Tap Arrange to put them in your order or hide the ones you don't use.
+                Quickly see what each part of your {isSharedWorkspace ? 'group' : 'budget'} helps you manage. Tap Arrange to put them in your order or hide the ones you don't use.
               </Text>
               <View style={styles.overviewNavGrid}>
                 {overviewShortcuts.map((shortcut) => (
@@ -541,8 +547,8 @@ export default function DashboardScreen() {
               </View>
               <ArrangeSheet
                 visible={arrangingAreas}
-                title="Arrange your group areas"
-                hint="Put them in the order you use them, and hide any you never open. Kept on this phone, for this group."
+                title={`Arrange your ${isSharedWorkspace ? 'group' : 'budget'} areas`}
+                hint={`Put them in the order you use them, and hide any you never open. Kept on this phone, for this ${isSharedWorkspace ? 'group' : 'budget'}.`}
                 items={allShortcuts}
                 arrangement={areasArrangement}
                 onChange={setAreasArrangement}
@@ -558,7 +564,7 @@ export default function DashboardScreen() {
               asked: they could not act on it. */}
           <DebtSummaryCard canTrackDebt={canManageBudget} />
 
-          {isSharedWorkspace && (
+          {group && (
             <View style={styles.ringWrap}>
               <BudgetRing
                 percent={spentPercent}
