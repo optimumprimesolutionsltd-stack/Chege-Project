@@ -135,6 +135,8 @@ const CHARGE_CATEGORY_KEY = 'jamvi:last-charge-category';
 
 // Entries drawn at a time on the review screen (see shownCount).
 const LINES_PER_PAGE = 100;
+// "Put it under" a group that does not exist yet: made, then used.
+const NEW_GROUP = -1;
 const todayIso = () => new Date(Date.now() + 3 * 3_600_000).toISOString().slice(0, 10);
 
 /** A statement is kept this long, so it can be worked through over days. */
@@ -183,8 +185,12 @@ function CategorySheet({
   const [search, setSearch] = useState('');
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState('');
-  // null is a category (or a new group) of its own; a number is the group it goes under.
+  // null is a category (or a new group) of its own; a number is the group it goes
+  // under; NEW_GROUP makes a new group, named below, and puts it under that.
   const [newParentId, setNewParentId] = useState<number | null>(null);
+  const [newGroupName, setNewGroupName] = useState('');
+  // Its monthly budget, set here rather than in a second trip to Budget. Blank is none yet.
+  const [newBudget, setNewBudget] = useState('');
   const tree = useMemo(() => filterCategoryTree(buildCategoryTree(categories), search), [categories, search]);
   // Only a top-level category can be a group: the app keeps two levels, and the server refuses a third.
   const parentChoices = useMemo(
@@ -197,8 +203,17 @@ function CategorySheet({
     setAdding(false);
     setNewName('');
     setNewParentId(null);
+    setNewGroupName('');
+    setNewBudget('');
     onPick(name);
   };
+  const budgetOf = (row: CategoryRow) => Number((row as CategoryRow & { budgetAmount?: number | null }).budgetAmount ?? 0);
+  // A group's budget is its subcategories added up: the server clears a group's
+  // own figure when its first subcategory arrives. Said before it happens.
+  const chosenParent = typeof newParentId === 'number' && newParentId !== NEW_GROUP ? categories.find((row) => row.id === newParentId) ?? null : null;
+  const parentLosesOwnBudget = chosenParent !== null
+    && !categories.some((row) => row.parentId === chosenParent.id)
+    && budgetOf(chosenParent) > 0;
 
   const addCategory = async () => {
     const name = newName.trim();
@@ -211,16 +226,40 @@ function CategorySheet({
       pick(existing.name);
       return;
     }
+    const budgetAmount = newBudget.trim() === '' ? 0 : Math.round(Number(newBudget.replace(/[^0-9.]/g, '')));
+    if (!Number.isFinite(budgetAmount) || budgetAmount < 0) {
+      Alert.alert('Budget not valid', 'Enter a whole number of shillings, or leave it blank to budget it later.');
+      return;
+    }
+    const groupName = newGroupName.trim();
+    if (newParentId === NEW_GROUP && !groupName) {
+      Alert.alert('Name the group', 'Give the new group a name, such as Children or Household.');
+      return;
+    }
     try {
+      // A new group first, then this category inside it. An existing one of that name is used.
+      let parentId: number | null = newParentId;
+      if (newParentId === NEW_GROUP) {
+        const sameName = categories.find((row) => row.name.trim().toLocaleLowerCase() === groupName.toLocaleLowerCase());
+        if (sameName && sameName.parentId) {
+          Alert.alert('Already a subcategory', `"${sameName.name}" is inside another group, so it cannot hold categories. Pick another name.`);
+          return;
+        }
+        parentId = sameName
+          ? sameName.id
+          : (await createCategory({
+              data: { name: groupName, budgetAmount: 0, priority: 3, isRecurring: true, activeMonth: null, activeYear: null },
+            })).id;
+      }
       const created = await createCategory({
         data: {
           name,
-          budgetAmount: 0,
+          budgetAmount,
           priority: 3,
           isRecurring: true,
           activeMonth: null,
           activeYear: null,
-          ...(newParentId !== null ? { parentId: newParentId } : {}),
+          ...(parentId !== null ? { parentId } : {}),
         },
       });
       await queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
@@ -301,6 +340,16 @@ function CategorySheet({
                   style={[styles.pasteBox, { minHeight: 44, borderColor: colors.border, backgroundColor: colors.muted, color: colors.foreground }]}
                   testID="mpesa-category-new-name"
                 />
+                <TextInput
+                  value={newBudget}
+                  onChangeText={setNewBudget}
+                  placeholder="Monthly budget, KES (optional)"
+                  placeholderTextColor={colors.mutedForeground}
+                  keyboardType="number-pad"
+                  editable={!creating}
+                  style={[styles.pasteBox, { minHeight: 44, borderColor: colors.border, backgroundColor: colors.muted, color: colors.foreground }]}
+                  testID="mpesa-category-new-budget"
+                />
                 <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0 }]}>Put it under</Text>
                 <ScrollView
                   horizontal
@@ -309,7 +358,7 @@ function CategorySheet({
                   contentContainerStyle={{ gap: 8, paddingVertical: 2 }}
                   testID="mpesa-category-parents"
                 >
-                  {[{ id: null as number | null, name: 'Its own (or a new group)' }, ...parentChoices].map((choice) => {
+                  {[{ id: null as number | null, name: 'Its own' }, { id: NEW_GROUP as number | null, name: '＋ New group' }, ...parentChoices].map((choice) => {
                     const on = newParentId === choice.id;
                     return (
                       <Pressable
@@ -334,6 +383,23 @@ function CategorySheet({
                     );
                   })}
                 </ScrollView>
+                {newParentId === NEW_GROUP ? (
+                  <TextInput
+                    value={newGroupName}
+                    onChangeText={setNewGroupName}
+                    placeholder="Name the new group, such as Children"
+                    placeholderTextColor={colors.mutedForeground}
+                    autoCorrect={false}
+                    editable={!creating}
+                    style={[styles.pasteBox, { minHeight: 44, borderColor: colors.border, backgroundColor: colors.muted, color: colors.foreground }]}
+                    testID="mpesa-category-new-group"
+                  />
+                ) : null}
+                {parentLosesOwnBudget && chosenParent ? (
+                  <Text style={[styles.hint, { color: colors.destructive, marginTop: 0 }]} testID="mpesa-category-parent-budget-note">
+                    {chosenParent.name} has a budget of KES {budgetOf(chosenParent).toLocaleString('en-KE')} of its own. A group's budget is its subcategories added up, so it will become what you give this one.
+                  </Text>
+                ) : null}
                 <Pressable
                   onPress={addCategory}
                   disabled={creating}
