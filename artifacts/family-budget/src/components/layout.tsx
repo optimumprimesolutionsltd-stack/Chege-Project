@@ -179,6 +179,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
     // happen there and the balances they move live here.
     ...(uses('bank') ? [{ href: '/parties', label: 'Who owes who', icon: HandCoins }] : []),
     ...(uses('bank') ? [{ href: '/statement', label: 'Statement', icon: FileText }] : []),
+    // Every entry for a period, as the phone's All income and All expenses.
+    ...(uses('expenses') ? [{ href: '/expense-ledger', label: 'All expenses', icon: Receipt }] : []),
+    { href: '/income-ledger', label: 'All income', icon: FileText },
     ...(uses('bank') ? [{ href: '/pass-through', label: 'Paid through you', icon: Repeat }] : []),
     ...(uses('bank') ? [{ href: '/bank-day', label: 'Enter a whole day', icon: ListChecks }] : []),
     ...(uses('bank') ? [{ href: '/mpesa-import', label: 'Import M-Pesa', icon: MessageSquare }] : []),
