@@ -79,7 +79,8 @@ import { formatExact } from '@/lib/formatExact';
 import { READER_STOPPED, StatementReader, type ReaderJob } from '@/components/StatementReader';
 import { rememberMpesaCard } from '@/lib/mpesaCard';
 import { keepScreenAwakeWhileSaving, letScreenSleepAgain } from '@/lib/keepAwake';
-import { getImportProgress, setImportProgress } from '@/lib/importProgress';
+import { getImportProgress, setImportProgress, useImportProgress } from '@/lib/importProgress';
+import { clearSavePending, hasPendingSave, markSavePending } from '@/lib/importSaveJob';
 import { runPool, savePosting, SAVE_CONCURRENCY, type PostingApi } from '@/lib/savePosting';
 import { parseStoredRules, payeeKey, payeeName, ruleLabel, rulesStorageKey, withRule, withoutRule, type PayeeRules } from '@/lib/payeeLearning';
 import { saveDebtLinks } from '@/lib/debtReversal';
@@ -527,13 +528,38 @@ export default function MpesaImportScreen() {
       setStatementNote('Picked up where you left off with your statement. Anything saved since is marked as recorded.');
       // Some may have been saved from another screen since: ask again which are recorded.
       markRecorded(saved.reading.lines)
-        .then((checked) => {
+        .then(async (checked) => {
           setLines(checked);
           setStatementReading((current) => (current ? { ...current, lines: checked } : current));
+          // A save started before is either still running (left this screen,
+          // came back) or was cut short (the app was closed): wait for the
+          // first, finish the second. Either way nothing has to be redone.
+          if (getImportProgress()?.stage === 'saving') {
+            setWaitingForSave(true);
+          } else if (await hasPendingSave(group?.id)) {
+            setStatementNote('Carrying on with the save you started. Entries already saved are skipped.');
+            setResumeSave(true);
+          }
         })
         .catch(() => {});
     },
   });
+  // A save still running from before this screen opened: shown, not started twice,
+  // and the list brought up to date when it ends.
+  const [waitingForSave, setWaitingForSave] = useState(false);
+  const [resumeSave, setResumeSave] = useState(false);
+  const liveProgress = useImportProgress();
+  useEffect(() => {
+    if (!waitingForSave || liveProgress?.stage === 'saving' || !lines) return;
+    setWaitingForSave(false);
+    markRecorded(lines)
+      .then((checked) => {
+        setLines(checked);
+        setStatementReading((current) => (current ? { ...current, lines: checked } : current));
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [waitingForSave, liveProgress?.stage]);
 
   // Reading the same statement PDF again (an update reads it better) shows the
   // picker over the entries without clearing them: the work in progress and its
@@ -1303,6 +1329,10 @@ export default function MpesaImportScreen() {
 
   const saveAll = () => {
     if (!lines || !accountId || saving) return;
+    if (getImportProgress()?.stage === 'saving') {
+      Alert.alert('Still saving', 'Your earlier save is still going. This list updates when it finishes.');
+      return;
+    }
     if (!statementReading) {
       if (firstProblem) {
         Alert.alert('Not quite ready', firstProblem);
@@ -1332,11 +1362,28 @@ export default function MpesaImportScreen() {
     );
   };
 
+  // Finishes a save that was cut short, once the entries and the account are back.
+  useEffect(() => {
+    if (!resumeSave || !lines || !accountId || saving) return;
+    setResumeSave(false);
+    // Cut short after the last entry went: nothing is left, so only the note goes.
+    if (!lines.some((item) => isConfirmedToSave(item, choices[item.index]))) {
+      void clearSavePending(group?.id);
+      setStatementNote(null);
+      return;
+    }
+    void saveLines();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resumeSave, lines, accountId, saving]);
+
   const saveLines = async () => {
     if (!lines || !accountId || saving) return;
     const onlyConfirmed = statementReading !== null;
     setSaving(true);
     void keepScreenAwakeWhileSaving();
+    // Remembered until it finishes: closed part way, it is carried on next time.
+    const savingFor = group?.id;
+    void markSavePending(savingFor);
     const result: Outcome = { saved: 0, repeats: 0, failed: [] };
     const savedIndexes = new Set<number>();
     // Who each debt entry was for, kept so deleting it can offer to put that person's balance back.
@@ -1404,6 +1451,7 @@ export default function MpesaImportScreen() {
       setSaveProgress(null);
       setSaving(false);
       letScreenSleepAgain();
+      void clearSavePending(savingFor);
       if (statementReading) {
         const stamp = { date: todayIso(), description: 'Saved from your statement' };
         const marked = lines.map((item) => (savedIndexes.has(item.index) ? { ...item, alreadyRecorded: stamp } : item));
@@ -1708,6 +1756,13 @@ export default function MpesaImportScreen() {
             {statementNote ? (
               <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]} testID="mpesa-statement-note">
                 <Text style={[styles.hint, { color: colors.foreground, marginTop: 0 }]}>{statementNote}</Text>
+              </View>
+            ) : null}
+            {waitingForSave && liveProgress?.stage === 'saving' ? (
+              <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.primary }]} testID="mpesa-save-still-running">
+                <Text style={[styles.hint, { color: colors.foreground, marginTop: 0 }]}>
+                  Your save is still going: {liveProgress.done} of {liveProgress.total}. It carries on while you move around Jamvi, and this list updates when it finishes.
+                </Text>
               </View>
             ) : null}
             {statementReading ? (
