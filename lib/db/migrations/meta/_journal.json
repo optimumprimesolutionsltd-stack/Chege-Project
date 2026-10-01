@@ -365,6 +365,13 @@
       "when": 1790857260887,
       "tag": "0051_income_source_months",
       "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1790864326686,
+      "tag": "0052_mpesa_entry_names",
+      "breakpoints": true
     }
   ]
 }

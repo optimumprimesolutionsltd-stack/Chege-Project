@@ -1,3 +1,4 @@
+import { mpesaNamesReady } from "../lib/mpesa-names";
 import { monthExpected } from "../lib/income-months";
 import { monthBudgets } from "../lib/budget-months";
 import { Router } from "express";
@@ -441,6 +442,13 @@ router.get("/search", async (req, res): Promise<void> => {
               or(
                 ilike(jointAccountTxTable.description, pattern),
                 ilike(jointAccountTxTable.expenseCategory, pattern),
+                // A note, or the M-Pesa code from the message ("did I record this one?").
+                ilike(jointAccountTxTable.notes, pattern),
+                ilike(jointAccountTxTable.mpesaReceipt, pattern),
+                // The name M-Pesa gave an entry renamed at import (lib/mpesa-names).
+                ...(mpesaNamesReady()
+                  ? [sql`EXISTS (SELECT 1 FROM mpesa_entry_names named WHERE named.transaction_id = ${jointAccountTxTable.id} AND named.name ILIKE ${pattern})`]
+                  : []),
               ),
             ))
             .orderBy(desc(jointAccountTxTable.date), desc(jointAccountTxTable.id))
