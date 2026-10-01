@@ -1,3 +1,4 @@
+import { monthExpected } from "../lib/income-months";
 import { monthBudgets } from "../lib/budget-months";
 import { Router } from "express";
 import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
@@ -128,13 +129,15 @@ router.get("/ai/budget-summary", async (req, res): Promise<void> => {
           AND tx.date <= ${today}
       ), 0)`,
     }).from(bankAccountsTable).where(eq(bankAccountsTable.groupId, groupId)).orderBy(bankAccountsTable.name),
+    // Each expecting what was expected of it in this month (lib/income-months).
     db.select({
       id: incomeSourcesTable.id,
       name: incomeSourcesTable.name,
       expectedMonthlyAmount: incomeSourcesTable.expectedMonthlyAmount,
       isMain: incomeSourcesTable.isMain,
       userId: incomeSourcesTable.userId,
-    }).from(incomeSourcesTable).where(eq(incomeSourcesTable.groupId, groupId)).orderBy(incomeSourcesTable.name),
+    }).from(incomeSourcesTable).where(eq(incomeSourcesTable.groupId, groupId)).orderBy(incomeSourcesTable.name)
+      .then((rows) => monthExpected(groupId, rows, year, month)),
     db.select({
       id: contributionsTable.id,
       userId: contributionsTable.userId,

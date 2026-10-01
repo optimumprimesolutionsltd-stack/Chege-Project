@@ -35,6 +35,7 @@ import {
   GetDashboardMonthlyReportPdfQueryParams,
 } from "@workspace/api-zod";
 import { memberLedgerName } from "../lib/contributor-name";
+import { monthExpected } from "../lib/income-months";
 import { monthBudgets } from "../lib/budget-months";
 import { effectiveBudgets, totalBudget as sumBudget } from "@workspace/category-tree";
 import { getActiveGroupId, requireGroupManager } from "../lib/activeGroup";
@@ -1966,7 +1967,8 @@ router.get("/dashboard/income-streams", async (req, res): Promise<void> => {
       }];
     });
   };
-  const sources = await db
+  // Each expecting what was expected of it in this month (lib/income-months).
+  const sources = await monthExpected(groupId, await db
     .select({
       id: incomeSourcesTable.id,
       name: incomeSourcesTable.name,
@@ -1976,7 +1978,7 @@ router.get("/dashboard/income-streams", async (req, res): Promise<void> => {
     })
     .from(incomeSourcesTable)
     .leftJoin(usersTable, eq(usersTable.id, incomeSourcesTable.userId))
-    .where(eq(incomeSourcesTable.groupId, groupId));
+    .where(eq(incomeSourcesTable.groupId, groupId)), year, month);
 
   const actualBySource = new Map(rawRows
     .filter((row): row is typeof row & { incomeSourceId: number } => row.incomeSourceId !== null)
