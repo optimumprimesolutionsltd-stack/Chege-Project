@@ -141,6 +141,12 @@ const netOf = (row: StatementRow) => (row.paidIn ?? 0) - (row.withdrawn ?? 0);
  * The balance before the first entry and after the last. The rows of one payment
  * are not always listed in the same order, so a payment's closing balance is
  * whichever of its rows lines up with the balance before it plus what it moved.
+ *
+ * Safaricom sometimes misprints a balance for a line or two while the amounts
+ * stay right - the statement check already lets such a stretch through. Where
+ * no printed balance lines up, the balance the amounts give is carried on
+ * instead. Giving up there used to leave a full year's statement with no
+ * opening balance: no balance check, and no "Start this account at" offer.
  */
 function balancesOf(groups: readonly StatementRow[][]): { opening: number | null; closing: number | null } {
   if (groups.length === 0) return { opening: null, closing: null };
@@ -154,12 +160,11 @@ function balancesOf(groups: readonly StatementRow[][]): { opening: number | null
       return;
     }
     const before = steps[g - 1];
-    steps.push(
-      candidates.flatMap((value) => {
-        const from = before.findIndex((step) => Math.abs(step.value + cents(net) - value) <= 1);
-        return from >= 0 ? [{ value, from }] : [];
-      }),
-    );
+    const printed = candidates.flatMap((value) => {
+      const from = before.findIndex((step) => Math.abs(step.value + cents(net) - value) <= 1);
+      return from >= 0 ? [{ value, from }] : [];
+    });
+    steps.push(printed.length > 0 ? printed : before.map((step, from) => ({ value: step.value + cents(net), from })));
   });
   if (steps.some((step) => step.length === 0)) return { opening: null, closing: null };
   let at = steps[steps.length - 1].length - 1;
