@@ -848,3 +848,47 @@ export function throughMpesaHints(lines: readonly PreviewLine[]): Set<number> {
   }
   return hints;
 }
+/**
+ * Whether a line matches what was typed in the review's search: its payee (as
+ * shown or as M-Pesa named it), the kind of line, its code, till or amount.
+ * "bundle" finds every Safaricom bundle, so they can be confirmed together.
+ * `category` is the one chosen for the line, so a search for "Internet" finds
+ * everything filed there and a statement can be saved a category at a time.
+ */
+export function lineMatches(line: PreviewLine, query: string, category?: string): boolean {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return true;
+  const text = [line.description, line.original, line.type?.replace(/_/g, ' '), line.receipt, line.payeeNumber, line.amount === null ? null : String(line.amount), line.date, category]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+  return words.every((word) => text.includes(word));
+}
+
+/** Lines among `lines` that "Confirm all" would confirm: ticked, a suggestion, and nothing missing. */
+export function confirmableLines(lines: readonly PreviewLine[], choices: Record<number, Choice>): PreviewLine[] {
+  return lines.filter((line) => choices[line.index]?.include && reviewStatus(line, choices[line.index]) === 'suggested');
+}
+
+/** Lines among `lines` that one category can be given to: ticked money out, going to a category. */
+export function categorisableLines(lines: readonly PreviewLine[], choices: Record<number, Choice>): PreviewLine[] {
+  return lines.filter((line) => {
+    const choice = choices[line.index];
+    return Boolean(choice?.include) && isRecordable(line) && line.direction === 'out' && destinationOf(choice) === 'category' && !choice.debt;
+  });
+}
+
+/** Confirms each of `lines` as it is. */
+export function confirmLines(lines: readonly PreviewLine[], choices: Record<number, Choice>): Record<number, Choice> {
+  const next = { ...choices };
+  for (const line of lines) next[line.index] = { ...next[line.index], confirmed: true };
+  return next;
+}
+
+/** Gives each of `lines` the same category, chosen by the person (so each counts as confirmed). */
+export function categoriseLines(lines: readonly PreviewLine[], choices: Record<number, Choice>, category: string): Record<number, Choice> {
+  const next = { ...choices };
+  for (const line of lines) next[line.index] = { ...next[line.index], category, auto: false };
+  return next;
+}
+

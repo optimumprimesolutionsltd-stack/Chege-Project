@@ -97,6 +97,11 @@ import {
   chooseCategory as chooseLineCategory,
   carryChoices,
   isConfirmedToSave,
+  categorisableLines,
+  categoriseLines,
+  confirmLines,
+  confirmableLines,
+  lineMatches,
   chooseIncomeSource,
   canUseSavings,
   chooseContribution,
@@ -465,7 +470,10 @@ export default function MpesaImportScreen() {
   const [openMore, setOpenMore] = useState<Set<number>>(new Set());
   const [chargeCategory, setChargeCategory] = useState('');
   // A number is a line being categorised; 'charge' is the M-Pesa charges; 'recat:N' is an already-recorded entry whose category is being changed.
-  const [picking, setPicking] = useState<number | 'charge' | `recat:${number}` | null>(null);
+  const [picking, setPicking] = useState<number | 'charge' | 'bulk' | `recat:${number}` | null>(null);
+  // Search over the review ("bundle", "KPLC", a till): what is found can be
+  // confirmed, or given one category, all together.
+  const [find, setFind] = useState('');
   const [recat, setRecat] = useState<Record<number, string>>({});
   const [recategorising, setRecategorising] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -927,6 +935,18 @@ export default function MpesaImportScreen() {
       AsyncStorage.setItem(CHARGE_CATEGORY_KEY, name).catch(() => {});
     } else if (typeof picking === 'number') {
       setChoices((current) => chooseLineCategory(lines ?? [], current, picking, name));
+    } else if (picking === 'bulk') {
+      const targets = categorisableLines(inView, choices);
+      setPicking(null);
+      Alert.alert(
+        `Put ${targets.length} ${targets.length === 1 ? 'entry' : 'entries'} under ${name}?`,
+        `Every entry found for "${find.trim()}" that is money out, including any not shown yet below. They count as confirmed, and nothing is saved until you tap Save.`,
+        [
+          { text: 'Not now', style: 'cancel' },
+          { text: `Put under ${name}`, onPress: () => setChoices((current) => categoriseLines(targets, current, name)) },
+        ],
+      );
+      return;
     }
     setPicking(null);
   };
@@ -1170,12 +1190,24 @@ export default function MpesaImportScreen() {
   const confirmedLines = recordable.filter((item) => isConfirmedToSave(item, choices[item.index]));
   const confirmedCount = confirmedLines.length;
   const confirmedFees = confirmedLines.some((item) => (item.fee ?? 0) > 0);
-  const inView = recordable.filter((item) => view === 'all' || reviewStatus(item, choices[item.index]) === view);
+  const inView = recordable.filter((item) => (view === 'all' || reviewStatus(item, choices[item.index]) === view) && lineMatches(item, find, choices[item.index]?.category));
+  const toConfirm = find.trim() ? confirmableLines(inView, choices) : [];
+  const toCategorise = find.trim() ? categorisableLines(inView, choices) : [];
+  const confirmFound = () => {
+    Alert.alert(
+      `Confirm ${toConfirm.length} ${toConfirm.length === 1 ? 'entry' : 'entries'}?`,
+      `Every suggestion found for "${find.trim()}", including any not shown yet below, is kept as Jamvi suggested. Nothing is saved until you tap Save.`,
+      [
+        { text: 'Not now', style: 'cancel' },
+        { text: 'Confirm them', onPress: () => setChoices((current) => confirmLines(toConfirm, current)) },
+      ],
+    );
+  };
   // A new statement, or another view of it, starts again from the first page.
   useEffect(() => {
     setShownCount(LINES_PER_PAGE);
     setShownSkipped(LINES_PER_PAGE);
-  }, [view, lines?.length]);
+  }, [view, lines?.length, find]);
 
   // Changing the category of entries already recorded: nothing else about them is touched.
   const pendingChanges = useMemo(() => categoryChanges(lines ?? [], recat), [lines, recat]);
@@ -1890,6 +1922,43 @@ export default function MpesaImportScreen() {
                     );
                   })}
                 </View>
+                <TextInput
+                  value={find}
+                  onChangeText={setFind}
+                  placeholder="Find entries or a category, e.g. bundle"
+                  placeholderTextColor={colors.mutedForeground}
+                  autoCorrect={false}
+                  returnKeyType="search"
+                  style={[styles.pasteBox, { minHeight: 44, marginTop: 10, borderColor: colors.border, backgroundColor: colors.muted, color: colors.foreground }]}
+                  testID="mpesa-review-find"
+                />
+                {find.trim() ? (
+                  <View style={{ gap: 8, marginTop: 8 }}>
+                    <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0 }]} testID="mpesa-review-find-count">
+                      {inView.length} found
+                    </Text>
+                    {toConfirm.length > 0 ? (
+                      <Pressable
+                        onPress={confirmFound}
+                        style={[styles.secondary, { borderColor: colors.primary, borderWidth: 1, borderRadius: 12 }]}
+                        accessibilityRole="button"
+                        testID="mpesa-review-confirm-found"
+                      >
+                        <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>Confirm all {toConfirm.length} suggestions found</Text>
+                      </Pressable>
+                    ) : null}
+                    {toCategorise.length > 0 ? (
+                      <Pressable
+                        onPress={() => setPicking('bulk')}
+                        style={[styles.secondary, { borderColor: colors.border, borderWidth: 1, borderRadius: 12 }]}
+                        accessibilityRole="button"
+                        testID="mpesa-review-categorise-found"
+                      >
+                        <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>Choose one category for all {toCategorise.length}</Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                ) : null}
               </View>
             ) : null}
 
