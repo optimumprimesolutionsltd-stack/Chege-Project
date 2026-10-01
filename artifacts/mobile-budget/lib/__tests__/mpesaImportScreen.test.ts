@@ -59,7 +59,7 @@ describe('the web page matches the phone', () => {
   });
   it('reads through the API, saves only on Save, and keeps the same safeguards', () => {
     expect(web).toContain('"/api/mpesa/import/preview"');
-    expect(web).toContain('onClick={saveAll}');
+    expect(web).toContain('onClick={() => void saveAll()}');
     expect(web).toContain('problemWith(item, choices[item.index])');
     expect(web).toContain('/already recorded/i.test(message)');
     expect(web).toContain('savePosting(built, postingApi, accountId)');

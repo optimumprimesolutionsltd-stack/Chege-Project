@@ -1,3 +1,4 @@
+import { clearSavePending, hasPendingSave, markSavePending } from "@/lib/import-save-job";
 import { Input } from "@/components/ui/input";
 import { CategoryGroupPicker, resolveGroupChoice, type GroupChoice } from "@/components/category-group-picker";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -226,6 +227,11 @@ export default function MpesaImportPage() {
   // not just sit behind a spinner with no sign of life.
   const [saveProgress, setSaveProgress] = useState<{ done: number; total: number } | null>(null);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
+  // How the last save of part of a statement went, shown on the review itself:
+  // the whole-page result is only for when nothing is left to save (as on the phone).
+  const [lastSave, setLastSave] = useState<Outcome | null>(null);
+  // A save cut short (the tab closed part way) is finished when the import opens again.
+  const [resumeSave, setResumeSave] = useState(false);
   // Names the person gave payees, kept in this browser for this budget.
   const [nicknames, setNicknames] = useState<NicknameMap>({});
   const [naming, setNaming] = useState<{ index: number; original: string; text: string } | null>(null);
@@ -457,6 +463,10 @@ export default function MpesaImportPage() {
         .then((checked) => {
           setLines(checked);
           setStatementReading((current) => (current ? { ...current, lines: checked } : current));
+          if (hasPendingSave(group?.id)) {
+            setStatementNote("Carrying on with the save you started. Entries already saved are skipped.");
+            setResumeSave(true);
+          }
         })
         .catch(() => {});
     } catch {
@@ -716,12 +726,13 @@ export default function MpesaImportPage() {
     },
   };
 
-  const saveAll = async () => {
+  const saveAll = async (resuming = false) => {
     if (!lines || !accountId || saving) return;
     // A statement is worked through over days: only what has been confirmed
     // goes, and only after saying so. Pasted messages save everything ready.
+    // A save being finished after it was cut short was asked for already.
     const onlyConfirmed = statementReading !== null;
-    if (onlyConfirmed) {
+    if (onlyConfirmed && !resuming) {
       if (confirmedCount === 0) {
         toast({ title: "Nothing confirmed yet", description: "Tick Confirm on the entries you have checked, or change them, and they are saved. The rest stay here for later." });
         return;
@@ -738,6 +749,9 @@ export default function MpesaImportPage() {
     }
     setSaving(true);
     void keepScreenAwakeWhileSaving();
+    // Remembered until it finishes: closed part way, it is carried on next time.
+    const savingFor = group?.id;
+    markSavePending(savingFor);
     const result: Outcome = { saved: 0, repeats: 0, failed: [] };
     const savedIndexes = new Set<number>();
     // Who each debt entry was for, kept so deleting it can offer to put that person's balance back.
@@ -797,7 +811,11 @@ export default function MpesaImportPage() {
           savedIndexes.add(item.index);
         } catch (error) {
           const message = error instanceof Error ? error.message : "It was not saved.";
-          if (/already recorded/i.test(message)) result.repeats += 1;
+          if (/already recorded/i.test(message)) {
+            result.repeats += 1;
+            // Already on the server: shown as recorded, not left looking unsaved.
+            savedIndexes.add(item.index);
+          }
           else result.failed.push({ what: item.description ?? "A message", why: message });
         } finally {
           setSaveProgress((current) => (current ? { ...current, done: current.done + 1 } : current));
@@ -807,13 +825,22 @@ export default function MpesaImportPage() {
       setSaveProgress(null);
       setSaving(false);
       letScreenSleepAgain();
+      clearSavePending(savingFor);
+      let leftToSave = 0;
       if (statementReading) {
         const stamp = { date: todayIso(), description: "Saved from your statement" };
         const marked = lines.map((item) => (savedIndexes.has(item.index) ? { ...item, alreadyRecorded: stamp } : item));
         setLines(marked);
         setStatementReading((current) => (current ? { ...current, lines: marked } : current));
+        leftToSave = marked.filter(isRecordable).length;
       }
-      setOutcome(result);
+      // Part of a statement saved: stay on it, with how it went at the top.
+      if (leftToSave > 0) {
+        setLastSave(result);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      } else {
+        setOutcome(result);
+      }
       if (result.saved > 0) rememberMpesaCard("done");
     }
     {
@@ -858,6 +885,20 @@ export default function MpesaImportPage() {
       toast({ variant: "destructive", title: "Some balances did not update", description: error instanceof Error ? error.message : "Please try again." });
     }
   };
+
+  // Finishes a save that was cut short, once the entries and the account are back.
+  useEffect(() => {
+    if (!resumeSave || !lines || !accountId || saving) return;
+    setResumeSave(false);
+    // Cut short after the last entry went: nothing is left, so only the note goes.
+    if (!lines.some((item) => isConfirmedToSave(item, choices[item.index]))) {
+      clearSavePending(group?.id);
+      setStatementNote(null);
+      return;
+    }
+    void saveAll(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resumeSave, lines, accountId, saving]);
 
   if (outcome) {
     return (
@@ -959,8 +1000,8 @@ export default function MpesaImportPage() {
       </Dialog>
 
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Paste M-Pesa messages</h1>
-        <p className="text-sm text-muted-foreground">Turn your M-Pesa messages into entries, without typing.</p>
+        <h1 className="text-2xl font-bold text-foreground">Import M-Pesa</h1>
+        <p className="text-sm text-muted-foreground">Read your M-Pesa statement, or paste messages, into entries - without typing.</p>
         {/* Which budget these land in: the one switched to last, which may not be the one with the categories. */}
         <p className="mt-2 text-sm text-foreground" data-testid="mpesa-budget-row">
           These will be saved in <span className="font-semibold" data-testid="mpesa-budget-name">{group?.name ?? "…"}</span>. Use the budget switcher to change it.
@@ -1057,6 +1098,21 @@ export default function MpesaImportPage() {
           ) : null}
           {statementNote ? (
             <p className="rounded-xl border border-border bg-card p-3 text-sm text-foreground" data-testid="mpesa-statement-note">{statementNote}</p>
+          ) : null}
+          {lastSave ? (
+            <div className={`space-y-1 rounded-xl border bg-card p-3 text-sm ${lastSave.failed.length > 0 ? "border-destructive" : "border-success"}`} data-testid="mpesa-last-save">
+              <div className="flex items-center gap-2">
+                <p className="flex-1 font-semibold text-foreground">
+                  Saved {lastSave.saved}{lastSave.repeats > 0 ? ` · ${lastSave.repeats} already recorded` : ""}{lastSave.failed.length > 0 ? ` · ${lastSave.failed.length} not saved` : ""}
+                </p>
+                <button type="button" onClick={() => setLastSave(null)} className="text-xs font-semibold text-muted-foreground" data-testid="mpesa-last-save-dismiss">Dismiss</button>
+              </div>
+              {lastSave.failed.slice(0, 10).map((failure, index) => (
+                <p key={`${failure.what}-${index}`} className="text-xs text-destructive">{failure.what}: {failure.why}</p>
+              ))}
+              {lastSave.failed.length > 10 ? <p className="text-xs text-muted-foreground">and {lastSave.failed.length - 10} more. Save again to try them.</p> : null}
+              <p className="text-xs text-muted-foreground">The rest of your statement is below, as you left it.</p>
+            </div>
           ) : null}
           {statementReading ? (
             <div className="flex flex-wrap gap-4">
@@ -1702,7 +1758,7 @@ export default function MpesaImportPage() {
             ) : null}
             <div className="flex gap-3">
               <Button variant="outline" onClick={statementReading ? startOverStatement : () => { setLines(null); setChoices({}); setStatementNote(null); setStatementReading(null); }}>Start again</Button>
-              <Button onClick={saveAll} disabled={saving || !summary || summary.count === 0 || (statementReading !== null && confirmedCount === 0)} className="flex-1 gap-2" data-testid="mpesa-import-save">
+              <Button onClick={() => void saveAll()} disabled={saving || !summary || summary.count === 0 || (statementReading !== null && confirmedCount === 0)} className="flex-1 gap-2" data-testid="mpesa-import-save">
                 {saving ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
