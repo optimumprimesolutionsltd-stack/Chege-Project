@@ -40,6 +40,12 @@ export type Choice = {
   include: boolean;
   category: string;
   auto?: boolean;
+  /**
+   * The person has looked at this line and kept it as it is - Jamvi's suggestion
+   * included. A long statement is worked through over days, and only lines the
+   * person has confirmed or changed are saved.
+   */
+  confirmed?: boolean;
   debt?: DebtLink | null;
   /** For money in: which of the person's income sources it came from. Optional. */
   incomeSourceId?: number | null;
@@ -420,8 +426,40 @@ export function reviewStatus(line: PreviewLine, choice: Choice | undefined): Rev
   if (problemWith(line, choice)) return 'needs';
   const setByHand = Boolean(choice.category.trim()) && choice.auto === false;
   const sourceByHand = choice.incomeSourceId != null && choice.sourceAuto === false;
-  if (!choice.include || setByHand || sourceByHand || destinationOf(choice) !== 'category') return 'changed';
+  if (!choice.include || choice.confirmed || setByHand || sourceByHand || destinationOf(choice) !== 'category') return 'changed';
   return 'suggested';
+}
+
+/**
+ * Whether a line goes out with the next save: ticked, with nothing missing,
+ * and confirmed or changed by the person. Jamvi's untouched suggestions wait.
+ */
+export function isConfirmedToSave(line: PreviewLine, choice: Choice | undefined): boolean {
+  return Boolean(choice?.include) && isRecordable(line) && reviewStatus(line, choice) === 'changed';
+}
+
+/**
+ * Choices made on an earlier reading of the same statement, carried to a new
+ * reading by receipt - so reading the statement again (after an update that
+ * reads it better) keeps everything already worked through.
+ */
+export function carryChoices(
+  before: readonly PreviewLine[],
+  beforeChoices: Record<number, Choice>,
+  after: readonly PreviewLine[],
+  afterChoices: Record<number, Choice>,
+): Record<number, Choice> {
+  const byReceipt = new Map<string, Choice>();
+  for (const line of before) {
+    const choice = beforeChoices[line.index];
+    if (line.receipt && choice) byReceipt.set(`${line.receipt}|${line.direction}|${line.amount}`, choice);
+  }
+  const next = { ...afterChoices };
+  for (const line of after) {
+    const kept = line.receipt ? byReceipt.get(`${line.receipt}|${line.direction}|${line.amount}`) : undefined;
+    if (kept) next[line.index] = kept;
+  }
+  return next;
 }
 
 export type ReviewView = 'all' | ReviewStatus;

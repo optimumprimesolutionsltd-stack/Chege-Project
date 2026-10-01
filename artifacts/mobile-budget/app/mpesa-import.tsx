@@ -95,6 +95,8 @@ import {
   buildPostings,
   categoryPath,
   chooseCategory as chooseLineCategory,
+  carryChoices,
+  isConfirmedToSave,
   chooseIncomeSource,
   canUseSavings,
   chooseContribution,
@@ -869,7 +871,9 @@ export default function MpesaImportScreen() {
       );
       setLines(shown);
       setStatementReading({ ...reading, lines: shown });
-      const built = initialChoices(shown, history, categories.map((row) => row.name), effectiveChargeCategory, rules, canManageBudget);
+      const fresh = initialChoices(shown, history, categories.map((row) => row.name), effectiveChargeCategory, rules, canManageBudget);
+      // Reading the same statement again keeps what was already worked through.
+      const built = lines ? carryChoices(lines, choices, shown, fresh) : fresh;
       setChoices(built);
       setStatementPassword('');
       setShowStatementPassword(false);
@@ -903,6 +907,9 @@ export default function MpesaImportScreen() {
 
   const toggle = (index: number, include: boolean) =>
     setChoices((current) => ({ ...current, [index]: { ...current[index], include } }));
+  // Keeps Jamvi's suggestion as checked, or takes that back.
+  const confirm = (index: number, confirmed: boolean) =>
+    setChoices((current) => ({ ...current, [index]: { ...current[index], confirmed } }));
 
   const chooseCategory = (name: string) => {
     if (typeof picking === 'string' && picking.startsWith('recat:')) {
@@ -1152,6 +1159,9 @@ export default function MpesaImportScreen() {
 
   const recordable = lines?.filter(isRecordable) ?? [];
   const notImported = lines?.filter((item) => !isRecordable(item)) ?? [];
+  const confirmedLines = recordable.filter((item) => isConfirmedToSave(item, choices[item.index]));
+  const confirmedCount = confirmedLines.length;
+  const confirmedFees = confirmedLines.some((item) => (item.fee ?? 0) > 0);
   const inView = recordable.filter((item) => view === 'all' || reviewStatus(item, choices[item.index]) === view);
   // A new statement, or another view of it, starts again from the first page.
   useEffect(() => {
@@ -1225,12 +1235,40 @@ export default function MpesaImportScreen() {
     },
   };
 
-  const saveAll = async () => {
+  const saveAll = () => {
     if (!lines || !accountId || saving) return;
-    if (firstProblem) {
-      Alert.alert('Not quite ready', firstProblem);
+    if (!statementReading) {
+      if (firstProblem) {
+        Alert.alert('Not quite ready', firstProblem);
+        return;
+      }
+      void saveLines();
       return;
     }
+    // A statement is worked through over days: only what has been confirmed
+    // goes, and only after saying so - one stray tap must not save it all.
+    if (confirmedCount === 0) {
+      Alert.alert('Nothing confirmed yet', 'Tick Confirm on the entries you have checked, or change them, and they are saved. The rest stay here for later.');
+      return;
+    }
+    if (confirmedFees && !effectiveChargeCategory.trim()) {
+      Alert.alert('Not quite ready', 'Choose a category for the M-Pesa charges.');
+      return;
+    }
+    const left = recordable.length - confirmedCount;
+    Alert.alert(
+      `Save ${confirmedCount} ${confirmedCount === 1 ? 'entry' : 'entries'}?`,
+      `Only the ${confirmedCount === 1 ? 'entry' : 'entries'} you have confirmed or changed.${left > 0 ? ` The other ${left} stay here for later.` : ''}`,
+      [
+        { text: 'Not yet', style: 'cancel' },
+        { text: 'Save', onPress: () => void saveLines() },
+      ],
+    );
+  };
+
+  const saveLines = async () => {
+    if (!lines || !accountId || saving) return;
+    const onlyConfirmed = statementReading !== null;
     setSaving(true);
     void keepScreenAwakeWhileSaving();
     const result: Outcome = { saved: 0, repeats: 0, failed: [] };
@@ -1261,6 +1299,7 @@ export default function MpesaImportScreen() {
     const toSave = lines.flatMap((item) => {
       const choice = saveChoices[item.index];
       if (!choice?.include || !isRecordable(item)) return [];
+      if (onlyConfirmed && !isConfirmedToSave(item, choice)) return [];
       const built = buildPostings(item, choice, {
         accountId,
         userId: user?.id,
@@ -1765,7 +1804,7 @@ export default function MpesaImportScreen() {
                   {([
                     ['all', 'All'],
                     ['needs', 'Needs you'],
-                    ['changed', 'Changed by you'],
+                    ['changed', statementReading ? 'Confirmed by you' : 'Changed by you'],
                     ['suggested', 'Suggested'],
                   ] as Array<[ReviewView, string]>).map(([key, label]) => {
                     const on = view === key;
@@ -1806,8 +1845,24 @@ export default function MpesaImportScreen() {
                       style={[styles.hint, { marginTop: 0, fontFamily: 'Inter_600SemiBold', color: status === 'needs' ? colors.destructive : status === 'changed' ? colors.primary : colors.mutedForeground }]}
                       testID={`mpesa-line-status-${item.index}`}
                     >
-                      {status === 'needs' ? 'Needs you' : status === 'changed' ? 'You changed this' : 'Suggested by Jamvi'}
+                      {status === 'needs' ? 'Needs you' : status === 'changed' ? (choice?.confirmed ? 'Confirmed' : 'You changed this') : 'Suggested by Jamvi'}
                     </Text>
+                  ) : null}
+                  {statementReading && choice?.include && (status === 'suggested' || choice?.confirmed) ? (
+                    <Pressable
+                      onPress={() => confirm(item.index, !choice?.confirmed)}
+                      hitSlop={6}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: Boolean(choice?.confirmed) }}
+                      accessibilityLabel={choice?.confirmed ? 'Confirmed. Tap to take it back' : 'Confirm this as it is'}
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', marginTop: 4 }}
+                      testID={`mpesa-line-confirm-${item.index}`}
+                    >
+                      <Feather name={choice?.confirmed ? 'check-square' : 'square'} size={16} color={colors.primary} />
+                      <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>
+                        {choice?.confirmed ? 'Confirmed' : 'Confirm'}
+                      </Text>
+                    </Pressable>
                   ) : null}
                   <View style={styles.lineTop}>
                     <View style={{ flex: 1, minWidth: 0 }}>
@@ -2320,8 +2375,8 @@ export default function MpesaImportScreen() {
           ) : null}
           <Pressable
             onPress={saveAll}
-            disabled={saving || !summary || summary.count === 0}
-            style={[styles.primary, { backgroundColor: colors.primary, opacity: saving || !summary || summary.count === 0 ? 0.5 : 1 }]}
+            disabled={saving || !summary || summary.count === 0 || (statementReading !== null && confirmedCount === 0)}
+            style={[styles.primary, { backgroundColor: colors.primary, opacity: saving || !summary || summary.count === 0 || (statementReading !== null && confirmedCount === 0) ? 0.5 : 1 }]}
             accessibilityRole="button"
             testID="mpesa-import-save"
           >
@@ -2335,7 +2390,11 @@ export default function MpesaImportScreen() {
                 ) : null}
               </View>
             ) : (
-              <Text style={styles.primaryText}>Save {summary?.count ?? 0} {summary?.count === 1 ? 'entry' : 'entries'}</Text>
+              <Text style={styles.primaryText}>
+                {statementReading
+                  ? `Save ${confirmedCount} confirmed`
+                  : `Save ${summary?.count ?? 0} ${summary?.count === 1 ? 'entry' : 'entries'}`}
+              </Text>
             )}
           </Pressable>
         </View>
