@@ -56,6 +56,8 @@ export async function ensureBudgetMonths(): Promise<void> {
 }
 
 export type BudgetMonthRow = { categoryId: number; year: number; month: number; amount: number; onlyThisMonth: boolean };
+/** One recorded change, for anything with a monthly amount (budgets, expected income). */
+export type MonthChange = { year: number; month: number; amount: number; onlyThisMonth: boolean };
 
 const index = (year: number, month: number) => year * 12 + (month - 1);
 
@@ -64,11 +66,11 @@ const index = (year: number, month: number) => year * 12 + (month - 1);
  * amount recorded by the first change after it (what the budget was until
  * then); else `current`, the budget now.
  */
-export function amountForMonth(rows: readonly BudgetMonthRow[], current: number, year: number, month: number): number {
+export function amountForMonth(rows: readonly MonthChange[], current: number, year: number, month: number): number {
   const at = index(year, month);
   const only = rows.find((row) => row.onlyThisMonth && index(row.year, row.month) === at);
   if (only) return only.amount;
-  let next: BudgetMonthRow | undefined;
+  let next: MonthChange | undefined;
   for (const row of rows) {
     if (row.onlyThisMonth || index(row.year, row.month) <= at) continue;
     if (!next || index(row.year, row.month) < index(next.year, next.month)) next = row;

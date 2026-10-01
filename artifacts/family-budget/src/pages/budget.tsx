@@ -67,6 +67,7 @@ function IncomeSourceEditor({
   canEdit,
   canDelete,
   budgetName,
+  monthLabel,
   onSave,
   onDelete,
 }: {
@@ -74,7 +75,9 @@ function IncomeSourceEditor({
   canEdit: boolean;
   canDelete: boolean;
   budgetName: string;
-  onSave: (source: IncomeSource, name: string, expectedAmount: string) => Promise<void>;
+  /** The month on screen: `source` carries what was expected of it then. */
+  monthLabel: string;
+  onSave: (source: IncomeSource, name: string, expectedAmount: string, reach: "from" | "only") => Promise<void>;
   onDelete: (source: IncomeSource) => Promise<void>;
 }) {
   const [name, setName] = useState(source.name);
@@ -83,6 +86,9 @@ function IncomeSourceEditor({
   const [removing, setRemoving] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  // How far a changed expected amount reaches: this month on (suggested), or
+  // this month alone. Earlier months keep what was expected then either way.
+  const [reach, setReach] = useState<"from" | "only">("from");
 
   useEffect(() => {
     setName(source.name);
@@ -92,15 +98,18 @@ function IncomeSourceEditor({
   const hasChanges = name.trim() !== source.name
     || Math.max(0, Math.round(Number(expectedAmount) || 0)) !== source.expectedMonthlyAmount;
 
+  const amountChanges = Math.max(0, Math.round(Number(expectedAmount) || 0)) !== source.expectedMonthlyAmount;
+
   const handleSave = () => {
     if (!hasChanges) return;
+    setReach("from");
     setConfirmOpen(true);
   };
 
   const confirmSave = async () => {
     setSaving(true);
     try {
-      await onSave(source, name, expectedAmount);
+      await onSave(source, name, expectedAmount, reach);
       setConfirmOpen(false);
       setIsEditing(false);
     } catch {
@@ -216,9 +225,38 @@ function IncomeSourceEditor({
           <AlertDialogHeader>
             <AlertDialogTitle>Apply income source changes?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will change <strong>{source.name}</strong> from {formatKes(source.expectedMonthlyAmount)} expected per month to {formatKes(Math.max(0, Math.round(Number(expectedAmount) || 0)))}. Future budget comparisons and contribution reports will use the new figure; existing records will stay unchanged.
+              {amountChanges ? (
+                <>This will change <strong>{source.name}</strong> from {formatKes(source.expectedMonthlyAmount)} expected to {formatKes(Math.max(0, Math.round(Number(expectedAmount) || 0)))}. Months before {monthLabel} keep what was expected then; existing records stay unchanged.</>
+              ) : (
+                <>This will rename <strong>{source.name}</strong> to <strong>{name.trim()}</strong>. Existing records will stay unchanged.</>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {amountChanges ? (
+            <div className="space-y-2" role="radiogroup" aria-label="Which months this expected income is for" data-testid="income-reach">
+              {([
+                ["from", `From ${monthLabel} on`, "Expected this month and every month after."],
+                ["only", `Only ${monthLabel}`, "This month alone. Every other month keeps its figure."],
+              ] as const).map(([value, label, hint]) => (
+                <label key={value} className={`flex items-start gap-3 rounded-lg border p-3 cursor-pointer ${reach === value ? "border-primary bg-primary/5" : "border-border"}`}>
+                  <input
+                    type="radio"
+                    name={`income-reach-${source.id}`}
+                    value={value}
+                    checked={reach === value}
+                    onChange={() => setReach(value)}
+                    disabled={saving}
+                    className="mt-1"
+                    data-testid={`income-reach-${value}`}
+                  />
+                  <span>
+                    <span className="block text-sm font-semibold">{label}</span>
+                    <span className="block text-xs text-muted-foreground">{hint}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          ) : null}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={saving}>Cancel</AlertDialogCancel>
             <AlertDialogAction
@@ -687,9 +725,10 @@ export default function Budget() {
   const [recurringSetup, setRecurringSetup] = useState<{ category: string; expenseAmount: string; returnTo: "expenses" | "dashboard"; categorySetup: "recurring" | "other" } | null>(null);
   const [recurringSetupHandled, setRecurringSetupHandled] = useState(false);
   const { data: incomeSources = [], refetch: refetchIncomeSources } = useQuery<IncomeSource[]>({
-    queryKey: ["income-sources", "budget-report"],
+    // What each source was expected to bring in, in the month on screen.
+    queryKey: ["income-sources", "budget-report", year, month],
     queryFn: async () => {
-      const res = await fetch("/api/income-sources", { credentials: "include" });
+      const res = await fetch(`/api/income-sources?year=${year}&month=${month}`, { credentials: "include" });
       if (!res.ok) throw new Error("Could not load income streams");
       return res.json();
     },
@@ -954,7 +993,7 @@ export default function Budget() {
       setAddingIncomeSource(false);
     }
   };
-  const saveIncomeSource = async (source: IncomeSource, rawName: string, rawAmount: string) => {
+  const saveIncomeSource = async (source: IncomeSource, rawName: string, rawAmount: string, reach: "from" | "only" = "from") => {
     const name = rawName.trim();
     if (!name) {
       toast({ variant: "destructive", title: "Income source name required", description: "Enter a name before saving." });
@@ -965,7 +1004,14 @@ export default function Budget() {
       method: "PUT",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, isMain: source.isMain, expectedMonthlyAmount }),
+      body: JSON.stringify({
+        name,
+        isMain: source.isMain,
+        expectedMonthlyAmount,
+        ...(expectedMonthlyAmount !== source.expectedMonthlyAmount
+          ? reach === "only" ? { onlyThisMonth: { year, month } } : { expectedFrom: { year, month } }
+          : {}),
+      }),
     });
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
@@ -1434,6 +1480,7 @@ export default function Budget() {
                           canEdit={canManageShared || source.userId === user?.id}
                           canDelete={canManageShared || source.userId === user?.id}
                           budgetName={budgetName}
+                          monthLabel={formatMonthYear(month, year)}
                           onSave={saveIncomeSource}
                           onDelete={deleteIncomeSource}
                         />

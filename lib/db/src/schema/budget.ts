@@ -624,3 +624,21 @@ export const budgetCategoryMonthsTable = pgTable("budget_category_months", {
   uniqueIndex("budget_category_months_category_month_idx").on(table.categoryId, table.year, table.month, table.onlyThisMonth),
   index("budget_category_months_group_idx").on(table.groupId),
 ]);
+
+/**
+ * Expected income that changes over time (migration 0051): the same model as
+ * budgetCategoryMonthsTable. See artifacts/api-server/src/lib/income-months.ts.
+ */
+export const incomeSourceMonthsTable = pgTable("income_source_months", {
+  id: serial("id").primaryKey(),
+  groupId: integer("group_id").notNull().references(() => groupsTable.id, { onDelete: "cascade" }),
+  incomeSourceId: integer("income_source_id").notNull().references(() => incomeSourcesTable.id, { onDelete: "cascade" }),
+  year: integer("year").notNull(),
+  month: integer("month").notNull(),
+  amount: integer("amount").notNull(),
+  onlyThisMonth: boolean("only_this_month").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("income_source_months_source_month_idx").on(table.incomeSourceId, table.year, table.month, table.onlyThisMonth),
+  index("income_source_months_group_idx").on(table.groupId),
+]);

@@ -1,3 +1,5 @@
+import { incomeMonthsReady, keepEarlierIncomeMonths, monthExpected, setIncomeOnlyThisMonth } from "../lib/income-months";
+import { nairobiMonth } from "../lib/budget-months";
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { groupMembershipsTable, incomeSourcesTable } from "@workspace/db";
@@ -41,7 +43,14 @@ router.get("/income-sources", async (req, res) => {
         .where(eq(incomeSourcesTable.groupId, groupId))
         .orderBy(incomeSourcesTable.userId, incomeSourcesTable.isMain, incomeSourcesTable.id);
 
-  res.json(dedupeIncomeSources(rows));
+  // ?year=&month=: each source with what was expected of it in that month
+  // (lib/income-months), for the Budget page showing a month. Without them,
+  // the amount expected now.
+  const year = Number(req.query.year);
+  const month = Number(req.query.month);
+  const forMonth = Number.isInteger(year) && Number.isInteger(month) && month >= 1 && month <= 12 && year >= 2000 && year <= 2100;
+  const sources = dedupeIncomeSources(rows);
+  res.json(forMonth ? await monthExpected(groupId, sources, year, month) : sources);
 });
 
 // POST /api/income-sources — create a new source
@@ -89,14 +98,21 @@ router.put("/income-sources/:id", async (req, res) => {
   if (groupId === null) return;
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const monthOf = z.object({ year: z.number().int().min(2000).max(2100), month: z.number().int().min(1).max(12) });
   const schema = z.object({
     name: z.string().min(1).max(80),
     isMain: z.boolean().optional(),
     expectedMonthlyAmount: z.number().int().min(0).optional(),
+    // Which months a new expected amount reaches (lib/income-months). Left
+    // out, it applies from this month on and earlier months keep theirs.
+    expectedFrom: monthOf.optional(),
+    onlyThisMonth: monthOf.optional(),
   });
-  const parsed = schema.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: "Invalid input" }); return; }
-  const [existing] = await db.select({ userId: incomeSourcesTable.userId }).from(incomeSourcesTable)
+  const parsedAll = schema.safeParse(req.body);
+  if (!parsedAll.success) { res.status(400).json({ error: "Invalid input" }); return; }
+  const { expectedFrom, onlyThisMonth, ...fields } = parsedAll.data;
+  const parsed = { data: fields };
+  const [existing] = await db.select({ userId: incomeSourcesTable.userId, expectedMonthlyAmount: incomeSourcesTable.expectedMonthlyAmount }).from(incomeSourcesTable)
     .where(and(eq(incomeSourcesTable.id, id), eq(incomeSourcesTable.groupId, groupId))).limit(1);
   if (!existing) { res.status(404).json({ error: "Not found" }); return; }
   if (!isGroupManager(req) && existing.userId !== req.user!.id) {
@@ -116,6 +132,13 @@ router.put("/income-sources/:id", async (req, res) => {
   if (duplicate) {
     res.status(409).json({ error: "An income source with this name already exists for this member." });
     return;
+  }
+  if (onlyThisMonth && parsed.data.expectedMonthlyAmount !== undefined) {
+    if (!incomeMonthsReady()) { res.status(503).json({ error: "Expected income for one month cannot be kept yet. Try again in a minute." }); return; }
+    await setIncomeOnlyThisMonth({ groupId, sourceId: id, year: onlyThisMonth.year, month: onlyThisMonth.month, amount: parsed.data.expectedMonthlyAmount });
+    delete parsed.data.expectedMonthlyAmount;
+  } else if (parsed.data.expectedMonthlyAmount !== undefined && parsed.data.expectedMonthlyAmount !== existing.expectedMonthlyAmount) {
+    await keepEarlierIncomeMonths({ groupId, sourceId: id, previous: existing.expectedMonthlyAmount, from: expectedFrom ?? nairobiMonth() });
   }
   const [row] = await db.update(incomeSourcesTable).set(parsed.data)
     .where(and(eq(incomeSourcesTable.id, id), eq(incomeSourcesTable.groupId, groupId)))

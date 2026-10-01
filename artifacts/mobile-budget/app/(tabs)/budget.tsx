@@ -125,8 +125,9 @@ export default function BudgetScreen() {
     staleTime: 30_000,
   });
   const { data: incomeSources = [], refetch: refetchIncomeSources } = useQuery<IncomeSource[]>({
-    queryKey: ['income-sources', 'budget-report'],
-    queryFn: () => customFetch<IncomeSource[]>('/api/income-sources'),
+    // What each source was expected to bring in, in the month on screen.
+    queryKey: ['income-sources', 'budget-report', year, month],
+    queryFn: () => customFetch<IncomeSource[]>(`/api/income-sources?year=${year}&month=${month}`),
     staleTime: 30_000,
   });
   const { data: members = [], refetch: refetchMembers } = useQuery<Member[]>({
@@ -572,6 +573,31 @@ export default function BudgetScreen() {
       Alert.alert('Name required', `Give "${unnamed.name}" a name, or put the old one back, before saving.`);
       return;
     }
+    const amountChanged = changedIncome.some((source) => incomeDrafts[source.id] !== undefined && incomeAmount(incomeDrafts[source.id]) !== (source.expectedMonthlyAmount ?? 0));
+    if (!amountChanged) {
+      void writeIncomeAmounts(null);
+      return;
+    }
+    askIncomeReach((reach) => void writeIncomeAmounts(reach));
+  };
+  /**
+   * Changing what a source is expected to bring in asks how far it reaches:
+   * this month on (suggested), or this month alone. Earlier months keep what
+   * was expected then either way.
+   */
+  const askIncomeReach = (go: (reach: { expectedFrom: { year: number; month: number } } | { onlyThisMonth: { year: number; month: number } }) => void) => {
+    const label = `${MONTHS_LONG[month - 1]} ${year}`;
+    Alert.alert(
+      'Change expected income?',
+      `Months before ${label} keep what was expected then.`,
+      [
+        { text: `From ${label} on`, onPress: () => go({ expectedFrom: { year, month } }) },
+        { text: `Only ${label}`, onPress: () => go({ onlyThisMonth: { year, month } }) },
+        { text: 'Cancel', style: 'cancel' },
+      ],
+    );
+  };
+  const writeIncomeAmounts = async (reach: { expectedFrom: { year: number; month: number } } | { onlyThisMonth: { year: number; month: number } } | null) => {
     setSavingIncomeAmounts(true);
     const failed: string[] = [];
     for (const source of changedIncome) {
@@ -585,6 +611,7 @@ export default function BudgetScreen() {
             expectedMonthlyAmount: incomeDrafts[source.id] !== undefined
               ? incomeAmount(incomeDrafts[source.id])
               : source.expectedMonthlyAmount ?? 0,
+            ...(reach && incomeDrafts[source.id] !== undefined && incomeAmount(incomeDrafts[source.id]) !== (source.expectedMonthlyAmount ?? 0) ? reach : {}),
           }),
         });
       } catch {
@@ -606,16 +633,18 @@ export default function BudgetScreen() {
   const handleSaveExpectedIncome = async (source: IncomeSource, rawAmount: string) => {
     const expectedMonthlyAmount = Math.max(0, Math.round(Number(rawAmount) || 0));
     if (expectedMonthlyAmount === source.expectedMonthlyAmount) return;
-    try {
-      await customFetch(`/api/income-sources/${source.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: source.name, isMain: source.isMain, expectedMonthlyAmount }),
-      });
-      await refreshIncomeSources();
-    } catch {
-      Alert.alert('Could not save expected income', 'Enter a whole amount in KES.');
-    }
+    askIncomeReach(async (reach) => {
+      try {
+        await customFetch(`/api/income-sources/${source.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: source.name, isMain: source.isMain, expectedMonthlyAmount, ...reach }),
+        });
+        await refreshIncomeSources();
+      } catch {
+        Alert.alert('Could not save expected income', 'Enter a whole amount in KES.');
+      }
+    });
   };
   const handleDeleteIncomeSource = (source: IncomeSource) => {
     Alert.alert(

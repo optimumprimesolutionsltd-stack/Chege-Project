@@ -1,3 +1,4 @@
+import { ensureIncomeMonths } from "./lib/income-months";
 import app from "./app";
 import { logger } from "./lib/logger";
 import { schedule as cronSchedule } from "node-cron";
@@ -69,6 +70,7 @@ async function startServer() {
   void ensureReversalLinks();
   void ensureImportTidyKept();
   void ensureBudgetMonths();
+  void ensureIncomeMonths();
 
   void ensureSubscriptionPlanCatalogue()
     .then(() => logger.info("Subscription plan catalogue is seeded"))
