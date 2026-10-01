@@ -1,3 +1,5 @@
+import { useQuery } from '@tanstack/react-query';
+import { customFetch } from '@workspace/api-client-react';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -35,6 +37,14 @@ export function WorkspaceSetupGuide() {
       member.userId === user?.id && (member.role === 'owner' || member.role === 'admin'),
     );
   const workspaceId = group?.id;
+  // Asked of the server, so an import made on the web ticks it here too. Never
+  // holds up the rest of the checklist: until it answers, the step is open.
+  const mpesaQuery = useQuery({
+    queryKey: ['mpesa-import-status', workspaceId],
+    queryFn: () => customFetch<{ imported: boolean }>('/api/mpesa/import/status'),
+    enabled: workspaceId != null,
+    staleTime: 60_000,
+  });
   const storageKey = workspaceId == null ? null : workspaceSetupStorageKey(workspaceId);
   const [collapsed, setCollapsed] = useState(false);
   const [storageReady, setStorageReady] = useState(false);
@@ -61,8 +71,9 @@ export function WorkspaceSetupGuide() {
     bankAccounts: accountsQuery.data,
     goals: goalsQuery.data,
     members: membersQuery.data,
+    mpesaImported: mpesaQuery.data?.imported === true,
     isShared,
-  }), [accountsQuery.data, categoriesQuery.data, goalsQuery.data, incomeQuery.data, isShared, membersQuery.data]);
+  }), [accountsQuery.data, categoriesQuery.data, goalsQuery.data, incomeQuery.data, isShared, membersQuery.data, mpesaQuery.data?.imported]);
   const nextStep = firstIncompleteWorkspaceSetupStep(steps);
   const completed = steps.filter((step) => step.complete).length;
   const nextStepIndex = steps.findIndex((step) => step.id === nextStep?.id);

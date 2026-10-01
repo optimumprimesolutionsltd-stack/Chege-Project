@@ -1,4 +1,4 @@
-export type WorkspaceSetupStepId = 'budget' | 'income' | 'bank' | 'goals' | 'invite';
+export type WorkspaceSetupStepId = 'budget' | 'income' | 'bank' | 'mpesa' | 'goals' | 'invite';
 
 export type SetupCategory = { name?: string | null; budgetAmount?: number | null };
 
@@ -8,6 +8,8 @@ export type WorkspaceSetupData = {
   bankAccounts?: unknown[];
   goals?: unknown[];
   members?: unknown[];
+  /** Something has been saved from M-Pesa in this workspace. */
+  mpesaImported?: boolean;
   isShared: boolean;
 };
 
@@ -15,7 +17,7 @@ export type WorkspaceSetupStep = {
   id: WorkspaceSetupStepId;
   title: string;
   action: string;
-  route: '/(tabs)/budget' | '/(tabs)/bank' | '/(tabs)/goals' | '/(tabs)/settings?openInvite=1';
+  route: '/(tabs)/budget' | '/(tabs)/bank' | '/mpesa-import' | '/(tabs)/goals' | '/(tabs)/settings?openInvite=1';
   complete: boolean;
 };
 
@@ -32,6 +34,9 @@ export function deriveWorkspaceSetup(data: WorkspaceSetupData): WorkspaceSetupSt
     { id: 'budget', title: 'Plan your monthly budget', action: 'Set up your budget', route: '/(tabs)/budget', complete: hasPlannedCategory },
     { id: 'income', title: 'Add an income source', action: 'Add income source', route: '/(tabs)/budget', complete: (data.incomeSources?.length ?? 0) > 0 },
     { id: 'bank', title: 'Add a bank account', action: 'Add bank account', route: '/(tabs)/bank', complete: (data.bankAccounts?.length ?? 0) > 0 },
+    // Jamvi's headline: a month of M-Pesa filled in, not typed. After the bank
+    // step, since an import saves into an account.
+    { id: 'mpesa', title: 'Import your M-Pesa', action: 'Import M-Pesa', route: '/mpesa-import', complete: Boolean(data.mpesaImported) },
     { id: 'goals', title: 'Create a savings goal', action: 'Create a savings goal', route: '/(tabs)/goals', complete: (data.goals?.length ?? 0) > 0 },
   ];
   if (data.isShared) {
