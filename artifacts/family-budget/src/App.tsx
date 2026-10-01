@@ -1,3 +1,4 @@
+import SpendingByItem from '@/pages/spending-by-item';
 import { Route, Switch, Router as WouterRouter } from 'wouter';
 import { MutationCache, QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { Toaster } from '@/components/ui/toaster';
@@ -143,6 +144,7 @@ function AuthenticatedApp() {
         <Route path="/mpesa-import" component={MpesaImport} />
         <Route path="/reports" component={IncomeStreamsReport} />
         <Route path="/search" component={SearchPage} />
+        <Route path="/spending-by-item" component={SpendingByItem} />
         <Route path="/subscription" component={Subscription} />
         <Route path="/groups" component={MyGroups} />
         <Route path="/settings" component={Settings} />

@@ -183,6 +183,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
     ...(uses('bank') ? [{ href: '/bank-day', label: 'Enter a whole day', icon: ListChecks }] : []),
     ...(uses('bank') ? [{ href: '/mpesa-import', label: 'Import M-Pesa', icon: MessageSquare }] : []),
     ...(uses('reports') ? [{ href: '/reports', label: isSharedWorkspace ? 'Group Reports' : 'My Reports', icon: BarChart3 }] : []),
+    // What each named thing has cost, as the phone's Spending by item.
+    ...(uses('expenses') ? [{ href: '/spending-by-item', label: 'Spending by item', icon: Receipt }] : []),
     // Search, Subscription and Settings are never hideable: Settings is how a
     // section gets switched back on, and Subscription is how the app keeps
     // being paid for. Hiding either strands an admin outside their own budget.

@@ -1,3 +1,4 @@
+import { IncomeTrendCard } from "@/components/income-trend-card";
 import { MonthStepper } from "@/components/month-stepper";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -853,6 +854,8 @@ export default function IncomeStreamsReport() {
           )}
         </>
       ) : null}
+      {/* Each stream month by month, as on the phone's Reports. */}
+      <IncomeTrendCard />
     </div>
   );
 }
