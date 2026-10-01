@@ -86,3 +86,24 @@ describe('the import screen saves a statement only after asking', () => {
     expect(screen).toContain('const built = lines ? carryChoices(lines, choices, shown, fresh) : fresh;');
   });
 });
+
+// The starting balance came back only from a fresh reading, and the only way to
+// one was Start over - which threw away days of choices and the copy on the phone.
+describe('reading the statement again keeps the work in progress', () => {
+  const screen = readFileSync('app/mpesa-import.tsx', 'utf8');
+
+  it('shows the picker over the entries without clearing them', () => {
+    expect(screen).toContain('{!lines || rereading ? (');
+    expect(screen).toContain('{lines && !rereading ? (');
+    expect(screen).toContain('testID="mpesa-rereading-back"');
+  });
+
+  it('offers it where the balance check is missing, and at the end of the list', () => {
+    expect(screen).toContain('testID="mpesa-balance-missing-read-again"');
+    expect(screen).toContain('testID="mpesa-read-again"');
+  });
+
+  it('leaves the reading mode only once the new reading is in, with choices carried', () => {
+    expect(screen).toContain('setChoices(built);\n      setRereading(false);'.replace(/\n/g, screen.includes('\r\n') ? '\r\n' : '\n'));
+  });
+});
