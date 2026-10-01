@@ -4,7 +4,7 @@ import { LayoutDashboard, Receipt, PieChart, Activity, LogOut, Menu, X, Settings
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { useGetGroup, useGetMembers } from '@workspace/api-client-react';
+import { useGetBudgetCategories, useGetGroup, useGetMembers } from '@workspace/api-client-react';
 import { WorkspaceSwitcher } from '@/components/workspace-switcher';
 import { workspaceLabel } from '@/lib/workspace-identity';
 import { ProfileAvatar } from '@/components/profile-avatar';
@@ -98,6 +98,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
   }, [location, navigate]);
 
   const isSharedWorkspace = group?.isPrivate === false;
+  // Business shows once a category is a side hustle's cost (linked to an income stream), as on the phone.
+  const { data: navCategories = [] } = useGetBudgetCategories();
+  const hasBusiness = navCategories.some((category) => category.reducesIncomeSourceId != null);
   const workspaceContextLabel = group ? (isSharedWorkspace ? 'Shared group' : 'Personal budget') : 'Select a budget';
   const activeWorkspaceRole = group?.role ?? (group?.isPrivate ? 'owner' : 'member');
   const activeWorkspaceRoleLabel = activeWorkspaceRole === 'owner'
@@ -188,6 +191,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     ...(uses('reports') ? [{ href: '/reports', label: isSharedWorkspace ? 'Group Reports' : 'My Reports', icon: BarChart3 }] : []),
     // What each named thing has cost, as the phone's Spending by item.
     ...(uses('expenses') ? [{ href: '/spending-by-item', label: 'Spending by item', icon: Receipt }] : []),
+    ...(hasBusiness ? [{ href: '/business', label: 'Business', icon: BarChart3 }] : []),
     // Search, Subscription and Settings are never hideable: Settings is how a
     // section gets switched back on, and Subscription is how the app keeps
     // being paid for. Hiding either strands an admin outside their own budget.
