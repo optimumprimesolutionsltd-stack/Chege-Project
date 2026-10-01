@@ -658,14 +658,6 @@ export const GetDashboardSummaryResponse = zod.object({
   "lentTotal": zod.number().optional().describe('Money lent out this month. Not spending — you expect it back.'),
   "totalSpent": zod.number(),
   "remaining": zod.number(),
-  "chegeContributed": zod.number(),
-  "lydiahContributed": zod.number(),
-  "chegeSpent": zod.number(),
-  "lydiahSpent": zod.number(),
-  "chegeNet": zod.number(),
-  "lydiahNet": zod.number(),
-  "chegeTarget": zod.number(),
-  "lydiahTarget": zod.number(),
   "expenseCount": zod.number()
 })
 

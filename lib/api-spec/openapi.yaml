@@ -2947,22 +2947,6 @@ components:
           type: number
         remaining:
           type: number
-        chegeContributed:
-          type: number
-        lydiahContributed:
-          type: number
-        chegeSpent:
-          type: number
-        lydiahSpent:
-          type: number
-        chegeNet:
-          type: number
-        lydiahNet:
-          type: number
-        chegeTarget:
-          type: number
-        lydiahTarget:
-          type: number
         expenseCount:
           type: number
       required:
@@ -2971,14 +2955,6 @@ components:
         - totalBudget
         - totalSpent
         - remaining
-        - chegeContributed
-        - lydiahContributed
-        - chegeSpent
-        - lydiahSpent
-        - chegeNet
-        - lydiahNet
-        - chegeTarget
-        - lydiahTarget
         - expenseCount
 
     ActivityItem:
