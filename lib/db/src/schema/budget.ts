@@ -642,3 +642,16 @@ export const incomeSourceMonthsTable = pgTable("income_source_months", {
   uniqueIndex("income_source_months_source_month_idx").on(table.incomeSourceId, table.year, table.month, table.onlyThisMonth),
   index("income_source_months_group_idx").on(table.groupId),
 ]);
+
+/**
+ * The name M-Pesa gave an imported entry the person renamed, for Search
+ * (migration 0052). See artifacts/api-server/src/lib/mpesa-names.ts.
+ */
+export const mpesaEntryNamesTable = pgTable("mpesa_entry_names", {
+  transactionId: integer("transaction_id").primaryKey().references(() => jointAccountTxTable.id, { onDelete: "cascade" }),
+  groupId: integer("group_id").notNull().references(() => groupsTable.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("mpesa_entry_names_group_idx").on(table.groupId),
+]);

@@ -1,3 +1,4 @@
+import { ensureMpesaNames } from "./lib/mpesa-names";
 import { ensureIncomeMonths } from "./lib/income-months";
 import app from "./app";
 import { logger } from "./lib/logger";
@@ -71,6 +72,7 @@ async function startServer() {
   void ensureImportTidyKept();
   void ensureBudgetMonths();
   void ensureIncomeMonths();
+  void ensureMpesaNames();
 
   void ensureSubscriptionPlanCatalogue()
     .then(() => logger.info("Subscription plan catalogue is seeded"))

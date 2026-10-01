@@ -106,6 +106,7 @@ import { keepScreenAwakeWhileSaving, letScreenSleepAgain } from "@/lib/keep-awak
 import { runPool, savePosting, SAVE_CONCURRENCY, type PostingApi } from "@/lib/save-posting";
 import { parseStoredRules, payeeKey, payeeName, ruleLabel, rulesStorageKey, withRule, withoutRule, type PayeeRules } from "@/lib/payee-learning";
 import { saveDebtLinks } from "@/lib/debt-reversal";
+import { mpesaNameFor, saveMpesaNames, type MpesaName } from "@/lib/mpesa-names";
 import type { DebtEntryLink } from "@/lib/debt-links";
 import { fulizaOwedBefore, reconcile, statementLines, withoutRecordedFuliza, type RecordedRow, type StatementReading } from "@/lib/statement-import";
 import { checkRunningBalance, readStatementRows, resolveDirections } from "@/lib/statement-table";
@@ -729,6 +730,8 @@ export default function MpesaImportPage() {
     const savedIndexes = new Set<number>();
     // Who each debt entry was for, kept so deleting it can offer to put that person's balance back.
     const debtLinks: DebtEntryLink[] = [];
+    // M-Pesa's own name for each entry saved under a nickname, for Search.
+    const mpesaNames: MpesaName[] = [];
     // Fuliza still owed, or repaid, is a debt to Fuliza in Who owes who: found
     // there, or added once, and both lines linked to it.
     let saveChoices = choices;
@@ -775,6 +778,8 @@ export default function MpesaImportPage() {
         try {
           const posted = await savePosting(built, postingApi, accountId);
           if (choice.debt && posted.id) debtLinks.push({ transactionId: posted.id, partyId: choice.debt.partyId, kind: choice.debt.kind });
+          const named = mpesaNameFor(posted.id, item.original, item.description);
+          if (named) mpesaNames.push(named);
           if (posted.feeFailed) result.failed.push({ what: `${item.description} charge`, why: "The entry saved, but its charge did not." });
           result.saved += 1;
           savedIndexes.add(item.index);
@@ -810,6 +815,7 @@ export default function MpesaImportPage() {
       if (kept !== rules) keepRules(kept);
     }
     void saveDebtLinks(debtLinks);
+    void saveMpesaNames(mpesaNames);
     void offerBalanceChanges(lines.filter((item) => savedIndexes.has(item.index)), saveChoices, saveParties);
   };
 
