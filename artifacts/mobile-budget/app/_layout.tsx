@@ -25,7 +25,6 @@ import {
 } from '@expo-google-fonts/inter';
 import { Stack, router, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEntitlements } from '@/hooks/useEntitlements';
 import { readPlanChoice, shouldShowPlanChoice } from '@/lib/planChoice';
@@ -39,7 +38,8 @@ import {
   useGetWorkspaces,
 } from '@workspace/api-client-react';
 import { ApiError } from '@workspace/api-client-react';
-import { AuthProvider, useAuth, AUTH_TOKEN_KEY } from '@/lib/auth';
+import { AuthProvider, useAuth } from '@/lib/auth';
+import { clearSessionToken, readSessionToken, sessionHasEnded } from '@/lib/sessionToken';
 import { useSharedText } from '@/lib/shareIntent';
 import { looksLikeMpesa, queueSharedMessages } from '@/lib/sharedMessages';
 import { AppearanceProvider } from '@/hooks/useAppearance';
@@ -111,8 +111,9 @@ function useUpdatePrompt() {
 // store release.
 const PRODUCTION_API_BASE = 'https://jamvi.co.ke';
 const domain = process.env.EXPO_PUBLIC_DOMAIN;
-setBaseUrl(domain ? `https://${domain}` : PRODUCTION_API_BASE);
-setAuthTokenGetter(() => SecureStore.getItemAsync(AUTH_TOKEN_KEY));
+const API_BASE = domain ? `https://${domain}` : PRODUCTION_API_BASE;
+setBaseUrl(API_BASE);
+setAuthTokenGetter(readSessionToken);
 setWorkspaceIdGetter(() => AsyncStorage.getItem(ACTIVE_WORKSPACE_STORAGE_KEY));
 
 SplashScreen.preventAutoHideAsync();
@@ -128,11 +129,13 @@ const queryClient: QueryClient = new QueryClient({
   mutationCache: new MutationCache({ onSuccess: () => refreshEverything() }),
   queryCache: new QueryCache({
     onError: async (error) => {
-      // When any query gets a 401, the session has expired.
-      // Clear the stored token and redirect to login so the user is never
-      // left staring at a form with missing fields (e.g. no PAID BY section).
-      if (error instanceof ApiError && error.status === 401) {
-        await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
+      // A 401 may mean the session has ended - then clear the token and go to
+      // sign-in, so nobody is left on a form with missing fields (e.g. no PAID
+      // BY section). But one 401 is not proof: during a long statement import
+      // a single request sent without its token signed people out. The server
+      // is asked first, and only a session it no longer knows ends here.
+      if (error instanceof ApiError && error.status === 401 && (await sessionHasEnded(API_BASE))) {
+        await clearSessionToken();
         router.replace('/login');
       }
     },
