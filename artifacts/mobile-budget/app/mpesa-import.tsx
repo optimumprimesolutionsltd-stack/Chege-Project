@@ -527,7 +527,14 @@ export default function MpesaImportScreen() {
     },
   });
 
+  // Reading the same statement PDF again (an update reads it better) shows the
+  // picker over the entries without clearing them: the work in progress and its
+  // copy on this phone stay exactly as they are until the new reading arrives,
+  // and that reading keeps every choice (carryChoices).
+  const [rereading, setRereading] = useState(false);
+
   const startOver = () => {
+    setRereading(false);
     discardStatementDraft();
     setStatementNote(null);
     setStatementReading(null);
@@ -875,6 +882,7 @@ export default function MpesaImportScreen() {
       // Reading the same statement again keeps what was already worked through.
       const built = lines ? carryChoices(lines, choices, shown, fresh) : fresh;
       setChoices(built);
+      setRereading(false);
       setStatementPassword('');
       setShowStatementPassword(false);
     } catch (error: unknown) {
@@ -1505,8 +1513,18 @@ export default function MpesaImportScreen() {
             </View>
           </View>
         ) : null}
-        {!lines ? (
+        {!lines || rereading ? (
           <>
+            {rereading ? (
+              <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, gap: 8 }]} testID="mpesa-rereading">
+                <Text style={[styles.hint, { color: colors.foreground, marginTop: 0 }]}>
+                  Choose the same statement PDF and read it again. Everything you have confirmed or changed is kept.
+                </Text>
+                <Pressable onPress={() => setRereading(false)} accessibilityRole="button" testID="mpesa-rereading-back">
+                  <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>Back to my entries</Text>
+                </Pressable>
+              </View>
+            ) : null}
             <View style={[styles.steps, { backgroundColor: colors.card, borderColor: colors.border }]}>
               {['Open your Messages app and hold on an M-Pesa message.', 'Select the ones you want (as many as you like), then tap Copy.', 'Come back here and paste them in the box.'].map((step, index) => (
                 <View key={step} style={styles.step}>
@@ -1635,6 +1653,16 @@ export default function MpesaImportScreen() {
               </View>
             ) : null}
 
+            {statementReading && !balanceCheck ? (
+              <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, gap: 8 }]} testID="mpesa-balance-missing">
+                <Text style={[styles.hint, { color: colors.foreground, marginTop: 0 }]}>
+                  Jamvi could not work out this statement's starting and closing balance, so it cannot check them or set this account's starting balance. Reading it again with the latest Jamvi fixes that, and keeps your choices.
+                </Text>
+                <Pressable onPress={() => setRereading(true)} accessibilityRole="button" testID="mpesa-balance-missing-read-again">
+                  <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>Read my statement again</Text>
+                </Pressable>
+              </View>
+            ) : null}
             {balanceCheck ? (
               <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]} testID="mpesa-statement-balance">
                 <Text style={[styles.summaryLine, { color: colors.foreground }]}>
@@ -2346,6 +2374,11 @@ export default function MpesaImportScreen() {
               </View>
             ) : null}
 
+            {statementReading ? (
+              <Pressable onPress={() => setRereading(true)} style={styles.secondary} accessibilityRole="button" testID="mpesa-read-again">
+                <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>Read my statement again (keeps your choices)</Text>
+              </Pressable>
+            ) : null}
             <Pressable onPress={() => { setLines(null); setChoices({}); setStatementNote(null); setStatementReading(null); }} style={styles.secondary} accessibilityRole="button">
               <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>Start again</Text>
             </Pressable>
@@ -2355,7 +2388,7 @@ export default function MpesaImportScreen() {
       {/* Warmed as soon as a statement is chosen, so reading starts at once. */}
       <StatementReader job={readerJob} warm={statementFile !== null} onDone={onStatementRead} />
 
-      {lines ? (
+      {lines && !rereading ? (
         <View style={[styles.footer, { paddingBottom: insets.bottom + 12, backgroundColor: colors.card, borderColor: colors.border }]}>
           {firstProblem ? (
             <Pressable onPress={showProblem} accessibilityRole="button" accessibilityHint="Shows the entry that needs attention" testID="mpesa-first-problem">
