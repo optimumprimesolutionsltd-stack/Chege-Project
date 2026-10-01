@@ -37,8 +37,9 @@ window.__read = async (base64, password) => {
     const data = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i += 1) data[i] = binary.charCodeAt(i);
     let doc;
+    const loadingTask = pdfjs.getDocument({ data, password: password || undefined });
     try {
-      doc = await pdfjs.getDocument({ data, password: password || undefined }).promise;
+      doc = await loadingTask.promise;
     } catch (error) {
       post({ type: 'error', name: error && error.name, code: error && error.code, message: String((error && error.message) || error) });
       return;
@@ -49,7 +50,9 @@ window.__read = async (base64, password) => {
       const content = await page.getTextContent();
       // Let go of the page once its text is out: kept, a long statement's
       // pages filled the phone's memory and the reader was killed.
-      page.cleanup();
+      try {
+        page.cleanup();
+      } catch {}
       pages.push(
         content.items
           .filter((item) => typeof item.str === 'string' && item.str.trim() !== '')
@@ -57,7 +60,12 @@ window.__read = async (base64, password) => {
       );
       post({ type: 'progress', page: number, of: doc.numPages });
     }
-    doc.destroy();
+    // Free the worker's copy too. pdf.js 6 ends a document through its loading
+    // task (doc.destroy no longer exists - calling it failed every read), and
+    // tidying up must never cost the read, so a failure here is ignored.
+    try {
+      loadingTask.destroy().catch(() => {});
+    } catch {}
     post({ type: 'pages', pages });
   } catch (error) {
     post({ type: 'error', message: String((error && error.message) || error) });

@@ -22,7 +22,8 @@ describe('a long statement does not run the phone out of memory', () => {
 
   it('lets go of each PDF page once its text is read', () => {
     expect(reader).toContain('page.cleanup();');
-    expect(reader).toContain('doc.destroy();');
+    expect(reader).toContain('loadingTask.destroy().catch(() => {});');
+    expect(reader).not.toContain('doc.destroy(');
   });
 
   it('says so at once when the phone stops the reader, and makes a new one', () => {
