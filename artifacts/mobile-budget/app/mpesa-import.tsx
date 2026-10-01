@@ -549,6 +549,9 @@ export default function MpesaImportScreen() {
   // not just sit behind a spinner with no sign of life.
   const [saveProgress, setSaveProgress] = useState<{ done: number; total: number } | null>(null);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
+  // How the last save of part of a statement went, shown on the review itself:
+  // the whole-screen result is only for when nothing is left to save.
+  const [lastSave, setLastSave] = useState<Outcome | null>(null);
   // Seen here, the result needs no bar elsewhere: cleared on leaving once it
   // is done. Left while still saving, it stays for the bar to report.
   useEffect(() => () => {
@@ -1512,7 +1515,11 @@ export default function MpesaImportScreen() {
           savedIndexes.add(item.index);
         } catch (error: unknown) {
           const message = error instanceof Error ? error.message : 'It was not saved.';
-          if (/already recorded/i.test(message)) result.repeats += 1;
+          if (/already recorded/i.test(message)) {
+            result.repeats += 1;
+            // Already on the server: shown as recorded, not left looking unsaved.
+            savedIndexes.add(item.index);
+          }
           else result.failed.push({ what: item.description ?? 'A message', why: message });
         } finally {
           setSaveProgress((current) => (current ? { ...current, done: current.done + 1 } : current));
@@ -1525,13 +1532,21 @@ export default function MpesaImportScreen() {
       setSaving(false);
       letScreenSleepAgain();
       void clearSavePending(savingFor);
+      let leftToSave = 0;
       if (statementReading) {
         const stamp = { date: todayIso(), description: 'Saved from your statement' };
         const marked = lines.map((item) => (savedIndexes.has(item.index) ? { ...item, alreadyRecorded: stamp } : item));
         setLines(marked);
         setStatementReading((current) => (current ? { ...current, lines: marked } : current));
+        leftToSave = marked.filter(isRecordable).length;
       }
-      setOutcome(result);
+      // Part of a statement saved: stay on it, with how it went at the top.
+      if (leftToSave > 0) {
+        setLastSave(result);
+        scrollRef.current?.scrollTo({ y: 0, animated: true });
+      } else {
+        setOutcome(result);
+      }
       setImportProgress({ stage: 'done', saved: result.saved, repeats: result.repeats, failed: result.failed.length });
       if (result.saved > 0) void rememberMpesaCard('done', group?.id);
       // A reversal just saved is matched to the payment it undid when only one
@@ -1829,6 +1844,28 @@ export default function MpesaImportScreen() {
             {statementNote ? (
               <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]} testID="mpesa-statement-note">
                 <Text style={[styles.hint, { color: colors.foreground, marginTop: 0 }]}>{statementNote}</Text>
+              </View>
+            ) : null}
+            {lastSave ? (
+              <View style={[styles.card, { backgroundColor: colors.card, borderColor: lastSave.failed.length > 0 ? colors.destructive : colors.success }]} testID="mpesa-last-save">
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Feather name={lastSave.failed.length > 0 ? 'alert-circle' : 'check-circle'} size={18} color={lastSave.failed.length > 0 ? colors.destructive : colors.success} />
+                  <Text style={[styles.lineTitle, { color: colors.foreground, flex: 1 }]}>
+                    Saved {lastSave.saved}{lastSave.repeats > 0 ? ` · ${lastSave.repeats} already recorded` : ''}{lastSave.failed.length > 0 ? ` · ${lastSave.failed.length} not saved` : ''}
+                  </Text>
+                  <Pressable onPress={() => setLastSave(null)} hitSlop={10} accessibilityRole="button" accessibilityLabel="Dismiss" testID="mpesa-last-save-dismiss">
+                    <Feather name="x" size={18} color={colors.mutedForeground} />
+                  </Pressable>
+                </View>
+                {lastSave.failed.slice(0, 10).map((failure, index) => (
+                  <Text key={`${failure.what}-${index}`} style={[styles.hint, { color: colors.destructive, marginTop: 2 }]}>
+                    {failure.what}: {failure.why}
+                  </Text>
+                ))}
+                {lastSave.failed.length > 10 ? (
+                  <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 2 }]}>and {lastSave.failed.length - 10} more. Save again to try them.</Text>
+                ) : null}
+                <Text style={[styles.hint, { color: colors.mutedForeground }]}>The rest of your statement is below, as you left it.</Text>
               </View>
             ) : null}
             {waitingForSave && liveProgress?.stage === 'saving' ? (

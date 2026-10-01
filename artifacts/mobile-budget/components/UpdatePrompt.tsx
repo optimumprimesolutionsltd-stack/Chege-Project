@@ -23,6 +23,7 @@ import * as Updates from 'expo-updates';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { usePathname } from 'expo-router';
 import { saveResumePoint } from '@/lib/resumeAfterUpdate';
+import { useImportProgress } from '@/lib/importProgress';
 import { hasUnsavedWork } from '@/lib/unsavedWork';
 
 interface Props {
@@ -71,7 +72,13 @@ export function UpdatePrompt({ notes, onDismiss }: Props) {
     ]).start(() => onDismiss());
   }
 
+  // Restarting for an update in the middle of an M-Pesa save would cut it
+  // off: the update waits until the save is done.
+  const importProgress = useImportProgress();
+  const importSaving = importProgress?.stage === 'saving';
+
   async function applyUpdate() {
+    if (importSaving) return;
     setInstalling(true);
     setError(null);
     try {
@@ -138,14 +145,19 @@ export function UpdatePrompt({ notes, onDismiss }: Props) {
         <Pressable
           style={({ pressed }) => [styles.primaryBtn, pressed && styles.primaryBtnPressed, installing && styles.primaryBtnLoading]}
           onPress={applyUpdate}
-          disabled={installing}
+          disabled={installing || importSaving}
+          testID="update-now"
         >
           {installing ? (
             <ActivityIndicator color="#fff" size="small" />
           ) : (
             <>
               <Feather name="refresh-cw" size={16} color="#fff" style={{ marginRight: 8 }} />
-              <Text style={styles.primaryBtnText}>Update now</Text>
+              <Text style={styles.primaryBtnText}>
+                {importSaving && importProgress?.stage === 'saving'
+                  ? `Update after your save (${importProgress.done} of ${importProgress.total})`
+                  : 'Update now'}
+              </Text>
             </>
           )}
         </Pressable>

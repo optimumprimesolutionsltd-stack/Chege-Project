@@ -16,6 +16,9 @@ const RESUMABLE = new Set([
   '/budget', '/bank', '/history', '/goals', '/contributions', '/reports', '/settings', '/debt', '/search',
   '/subscription', '/spending-by-item', '/bank-statement', '/bank-day', '/record-contributions',
   '/contribution-plan', '/parties', '/pass-through', '/expense-ledger', '/income-ledger', '/budget-report', '/budget-plan', '/business', '/help',
+  // Its statement in progress is kept on the phone and comes back by itself,
+  // so an update in the middle of one returns to it rather than to Home.
+  '/mpesa-import',
 ]);
 
 export function isResumable(pathname: string | null | undefined): pathname is string {
