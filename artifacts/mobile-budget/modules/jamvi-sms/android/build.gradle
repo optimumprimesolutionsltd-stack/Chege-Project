@@ -1,0 +1,15 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'ke.co.optimumprimesolutions.jamvi'
+version = '0.1.0'
+
+android {
+  namespace "expo.modules.jamvisms"
+  defaultConfig {
+    versionCode 1
+    versionName '0.1.0'
+  }
+}

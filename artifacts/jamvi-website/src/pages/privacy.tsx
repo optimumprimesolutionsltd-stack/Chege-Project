@@ -37,6 +37,20 @@ export default function Privacy() {
         to hold anything that could move it.
       </p>
 
+      <h3>M-Pesa messages and statements</h3>
+      <p>
+        If you ask it to, the Android app can read the <strong>M-Pesa text
+        messages</strong> on your phone, and you can give it an <strong>M-Pesa
+        statement</strong>. Jamvi reads only M-Pesa&rsquo;s own messages, only
+        for the dates you choose (or, if you turn it on, only the new ones each
+        time you open the app), and only after Android asks you for permission.
+        A statement is read on your phone. Messages are sent to Jamvi only to be
+        turned into a list for you to review, and are <strong>not kept</strong>:
+        only the entries you review and save are stored, like any record you
+        type in. You can turn this off at
+        any time, or withdraw the permission in Android&rsquo;s settings.
+      </p>
+
       <h3>What is created automatically</h3>
       <ul>
         <li>a session record, so you stay signed in;</li>

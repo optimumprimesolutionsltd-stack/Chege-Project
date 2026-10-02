@@ -20,6 +20,16 @@
           "EXPO_PUBLIC_DOMAIN": "jamvi.co.ke"
         }
       }
+    },
+    "play": {
+      "channel": "production",
+      "android": {
+        "buildType": "app-bundle",
+        "env": {
+          "EXPO_PUBLIC_DOMAIN": "jamvi.co.ke",
+          "JAMVI_PLAY_STORE": "1"
+        }
+      }
     }
   },
   "submit": {

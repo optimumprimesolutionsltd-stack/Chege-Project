@@ -1,0 +1,9 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!--
+      Reading M-Pesa's own messages, only when the person taps "Read my M-Pesa
+      messages" and only between the dates they choose. A Play Store build
+      removes this (app.config.js, JAMVI_PLAY_STORE) until Google approves the
+      SMS declaration; the button then hides itself (isAvailable).
+    -->
+    <uses-permission android:name="android.permission.READ_SMS"/>
+</manifest>

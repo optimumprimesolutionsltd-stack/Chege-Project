@@ -17,6 +17,7 @@ const pageContent = {
           "When you sign in, Jamvi receives basic account information from Google, such as your name, email address, and profile image. We use this information to create and secure your Jamvi account.",
           "You may also provide budget information, including income, expenses, savings goals, bank activity, workspace details, member names, invitations, and uploaded workspace or profile photos.",
           "We collect limited technical information needed to keep Jamvi working, such as session identifiers, browser information, security events, and service logs.",
+          "If you ask it to, the Android app reads the M-Pesa text messages on your phone: only M-Pesa's own messages, only for the dates you choose (or the new ones each time you open the app, if you turn that on), and only after Android asks your permission. A statement is read on your device; messages are sent to Jamvi only to be turned into a list for you to review, and are not kept. Only the entries you review and save are stored.",
         ],
       },
       {
