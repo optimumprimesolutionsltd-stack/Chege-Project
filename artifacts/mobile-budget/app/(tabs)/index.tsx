@@ -28,6 +28,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { DebtSummaryCard } from '@/components/DebtSummaryCard';
 import { useColors } from '@/hooks/useColors';
+import { useEntitlements } from '@/hooks/useEntitlements';
+import { mayStartGroup } from '@/lib/groupStart';
 import { PageScrollView } from '@/components/PageScrollReset';
 import { useAuth } from '@/lib/auth';
 import BudgetRing from '@/components/BudgetRing';
@@ -131,6 +133,13 @@ const PERSONAL_OVERVIEW_SHORTCUTS: Shortcut[] = SHARED_OVERVIEW_SHORTCUTS.filter
 const INVITE_SHORTCUT: Shortcut = {
   icon: 'user-plus', label: 'Invite', color: '#F97AC6', bg: '#3A0F2E',
   route: '/(tabs)/settings?openInvite=1', description: 'Add a member',
+};
+
+// Starting a group used to be reachable only from Settings. Shown only while
+// the person's own trial or subscription is active (lib/groupStart).
+const NEW_GROUP_SHORTCUT: Shortcut = {
+  icon: 'users', label: 'New group', color: '#F59E0B', bg: '#3A2A08',
+  route: '/(tabs)/settings?openCreateGroup=1', description: 'Start a chama or club',
 };
 
 import { ArrangeSheet } from '@/components/ArrangeSheet';
@@ -300,8 +309,12 @@ export default function DashboardScreen() {
   const [areasArrangement, setAreasArrangement] = useArrangement(homeAreasKey(group?.id));
   const [arrangingAreas, setArrangingAreas] = useState(false);
   const baseShortcuts = isSharedWorkspace ? SHARED_OVERVIEW_SHORTCUTS : PERSONAL_OVERVIEW_SHORTCUTS;
-  const allShortcuts = (canManageAccess ? [...baseShortcuts, INVITE_SHORTCUT] : baseShortcuts)
-    .map((shortcut) => ({ ...shortcut, id: shortcut.label.toLowerCase() }));
+  const { data: entitlements } = useEntitlements();
+  const allShortcuts = [
+    ...baseShortcuts,
+    ...(canManageAccess ? [INVITE_SHORTCUT] : []),
+    ...(mayStartGroup(entitlements) ? [NEW_GROUP_SHORTCUT] : []),
+  ].map((shortcut) => ({ ...shortcut, id: shortcut.label.toLowerCase() }));
   const overviewShortcuts = arrange(allShortcuts, areasArrangement);
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   const editableUncategorizedExpenses = (expenses as HomeExpense[])

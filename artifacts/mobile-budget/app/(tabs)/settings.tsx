@@ -45,6 +45,7 @@ import { useAppearance, type Appearance } from '@/hooks/useAppearance';
 import { useEntitlements } from '@/hooks/useEntitlements';
 import { statusChip } from '@/lib/subscription-status';
 import { handleLapsedError } from '@/lib/lapsedError';
+import { mayStartGroup, START_GROUP_NEEDS_SUBSCRIPTION } from '@/lib/groupStart';
 import { PageScrollView } from '@/components/PageScrollReset';
 import { useAuth } from '@/lib/auth';
 import { getDisplayName } from '@/utils/avatarHelper';
@@ -144,7 +145,7 @@ export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const { user, logout, saveDisplayName, saveProfilePhoto } = useAuth();
-  const params = useLocalSearchParams<{ openInvite?: string }>();
+  const params = useLocalSearchParams<{ openInvite?: string; openCreateGroup?: string }>();
   // The setup guide's "Invite a member" step used to land here and stop —
   // the invite form lives inside GROUP ACCESS, folded shut until Edit is
   // tapped, several sections down a page nothing pointed at. This opens it
@@ -228,6 +229,18 @@ export default function SettingsScreen() {
         cancelAnimationFrame(second);
       };
     }, [params.openInvite, group]),
+  );
+
+  // Home's "New group" lands here and opens the form straight away. Focus,
+  // not mount, for the same reason as openInvite above. Cleared after, so
+  // coming back to Settings later does not open it again.
+  useFocusEffect(
+    React.useCallback(() => {
+      if (params.openCreateGroup !== '1') return;
+      openCreateGroup();
+      router.setParams({ openCreateGroup: undefined });
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [params.openCreateGroup]),
   );
 
   const {
@@ -533,6 +546,18 @@ export default function SettingsScreen() {
       ],
     );
   };
+  // Only while the person's own trial or subscription is active: a group
+  // started after it ends would be read-only to them (lib/groupStart).
+  function openCreateGroup() {
+    if (entitlements && !mayStartGroup(entitlements)) {
+      Alert.alert('Subscription needed', START_GROUP_NEEDS_SUBSCRIPTION, [
+        { text: 'Not now', style: 'cancel' },
+        { text: 'Subscribe', onPress: () => router.push('/subscription') },
+      ]);
+      return;
+    }
+    setCreateGroupOpen(true);
+  }
   const handleCreateSharedGroup = async () => {
     const name = newGroupName.trim();
     if (name.length < 2) {
@@ -554,6 +579,10 @@ export default function SettingsScreen() {
       Alert.alert('Shared group created', 'Your budget records stayed private and separate.');
       router.replace('/(tabs)/');
     } catch (error) {
+      if (handleLapsedError(error)) {
+        setCreateGroupOpen(false);
+        return;
+      }
       Alert.alert('Could not create group', error instanceof Error ? error.message : 'Please try again.');
     }
   };
@@ -1124,7 +1153,7 @@ export default function SettingsScreen() {
               </Text>
               <Pressable
                 testID="create-private-group"
-                onPress={() => setCreateGroupOpen(true)}
+                onPress={openCreateGroup}
                 style={[styles.createGroupButton, { borderColor: colors.primary }]}
               >
                 <Feather name="plus" size={16} color={colors.primary} />

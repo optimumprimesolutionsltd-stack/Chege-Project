@@ -9,7 +9,7 @@ const settings = readFileSync('app/(tabs)/settings.tsx', 'utf8');
 // Reported as: "invite a member does not take me there."
 describe('opening straight to the invite section from ?openInvite=1', () => {
   it('reads the param and opens GROUP ACCESS editing, not just Settings generally', () => {
-    expect(settings).toContain("useLocalSearchParams<{ openInvite?: string }>()");
+    expect(settings).toContain("useLocalSearchParams<{ openInvite?: string; openCreateGroup?: string }>()");
     expect(settings).toContain("if (params.openInvite !== '1' || !group || group.isPrivate) return;");
     expect(settings).toContain('setEditingAccess(true);');
   });
