@@ -93,6 +93,13 @@ export type Choice = {
     category?: string;
     incomeSourceId?: number | null;
   } | null;
+  /**
+   * True while `otherBudget` is only Jamvi"s suggestion, from a payee the person
+   * asked it to remember as belonging to that budget: it waits for them to
+   * confirm, like a suggested category. False once the person chose (or chose
+   * "No") themselves, so a remembered budget is never put back over their answer.
+   */
+  otherBudgetAuto?: boolean;
 };
 
 /**
@@ -431,7 +438,10 @@ export function reviewStatus(line: PreviewLine, choice: Choice | undefined): Rev
   if (problemWith(line, choice)) return "needs";
   const setByHand = Boolean(choice.category.trim()) && choice.auto === false;
   const sourceByHand = choice.incomeSourceId != null && choice.sourceAuto === false;
-  if (!choice.include || choice.confirmed || setByHand || sourceByHand || destinationOf(choice) !== "category") return "changed";
+  if (!choice.include || choice.confirmed) return "changed";
+  // Another budget Jamvi remembered for this payee is a suggestion until confirmed.
+  if (destinationOf(choice) === "other-budget") return choice.otherBudgetAuto ? "suggested" : "changed";
+  if (setByHand || sourceByHand || destinationOf(choice) !== "category") return "changed";
   return "suggested";
 }
 
@@ -794,7 +804,7 @@ export function categoryChanges(
 }
 
 // Choosing one place for a line un-chooses the others, so a line is only ever in one.
-const noOtherPlace = { debt: null, incomeSourceId: null, sourceAuto: false, transferTo: null, savingsGoalId: null, contributorId: null, otherBudget: null } as const;
+const noOtherPlace = { debt: null, incomeSourceId: null, sourceAuto: false, transferTo: null, savingsGoalId: null, contributorId: null, otherBudget: null, otherBudgetAuto: false } as const;
 
 /** Sets, or with null clears, the other account of a move between the person"s own accounts. */
 export function chooseTransfer(choices: Record<number, Choice>, index: number, accountId: number | null): Record<number, Choice> {
@@ -822,7 +832,53 @@ export function chooseContribution(choices: Record<number, Choice>, index: numbe
 export function chooseOtherBudget(choices: Record<number, Choice>, index: number, otherBudget: Choice["otherBudget"] | null): Record<number, Choice> {
   const current = choices[index];
   if (!current) return choices;
-  return { ...choices, [index]: otherBudget ? { ...current, ...noOtherPlace, otherBudget } : { ...current, otherBudget: null } };
+  return {
+    ...choices,
+    [index]: otherBudget
+      ? { ...current, ...noOtherPlace, otherBudget, otherBudgetAuto: false, remember: current.remember ?? true }
+      : { ...current, otherBudget: null, otherBudgetAuto: false },
+  };
+}
+
+/**
+ * Lines among `lines` that can be sent to another budget together - a chama"s
+ * contributions and payouts found by searching its name, say. Ticked, going to
+ * a category or already to another budget; not a debt, a member"s
+ * contribution, a move between the person"s own accounts, savings, Fuliza or
+ * an M-Pesa charge, which all have a place of their own here.
+ */
+export function sendableLines(lines: readonly PreviewLine[], choices: Record<number, Choice>): PreviewLine[] {
+  return lines.filter((line) => {
+    const choice = choices[line.index];
+    if (!choice?.include || !isRecordable(line) || choice.debt || line.type?.startsWith("fuliza_") || line.type === "transaction_charge") return false;
+    const destination = destinationOf(choice);
+    return destination === "category" || destination === "other-budget";
+  });
+}
+
+/**
+ * Sends each of `lines` to the same other budget and account, chosen by the
+ * person (so each counts as confirmed, and is remembered unless unticked). Money
+ * out takes `category`, a category in that budget; money in takes the optional
+ * `incomeSourceId`, one of its income sources.
+ */
+export function sendLinesToOtherBudget(
+  lines: readonly PreviewLine[],
+  choices: Record<number, Choice>,
+  target: { groupId: number; groupName: string; accountId: number; accountName: string; category?: string; incomeSourceId?: number | null },
+): Record<number, Choice> {
+  let next = choices;
+  for (const line of lines) {
+    const otherBudget = {
+      groupId: target.groupId,
+      groupName: target.groupName,
+      accountId: target.accountId,
+      accountName: target.accountName,
+      ...(line.direction === "out" ? { category: target.category ?? "" } : { incomeSourceId: target.incomeSourceId ?? null }),
+    };
+    next = chooseOtherBudget(next, line.index, otherBudget);
+  }
+  return next;
 }
 
 /** Savings transfers take whole shillings only, and only a payment that could be recorded at all. */
