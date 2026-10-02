@@ -45,6 +45,15 @@ describe('the build', () => {
     expect(readFileSync('modules/jamvi-sms/expo-module.config.json', 'utf8')).toContain('expo.modules.jamvisms.JamviSmsModule');
   });
 
+  // The ignore rule once read "android/" at any depth, which kept the module's
+  // Kotlin out of git and so out of the cloud build.
+  it('keeps the module in git and the cloud build', () => {
+    const ignore = readFileSync('.gitignore', 'utf8').split(/?
+/);
+    expect(ignore).toContain('/android/');
+    expect(ignore).not.toContain('android/');
+  });
+
   it('leaves SMS out of a Play Store build until Google approves it', () => {
     const config = readFileSync('app.config.js', 'utf8');
     expect(config).toContain("const playStore = process.env.JAMVI_PLAY_STORE === '1';");

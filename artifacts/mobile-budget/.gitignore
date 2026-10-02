@@ -12,7 +12,8 @@ expo-env.d.ts
 
 # Native
 ios/
-android/
+# The app's own generated native folder only - not a local module's (modules/*/android).
+/android/
 *.orig.*
 *.jks
 *.p8
