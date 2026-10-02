@@ -23,7 +23,7 @@ module.exports = ({ config }) => {
     ...config,
     android: {
       ...config.android,
-      ...(playStore ? { blockedPermissions: [...(config.android?.blockedPermissions ?? []), 'android.permission.READ_SMS'] } : {}),
+      ...(playStore ? { blockedPermissions: [...(config.android?.blockedPermissions ?? []), 'android.permission.READ_SMS', 'android.permission.RECEIVE_SMS'] } : {}),
     },
     extra: { ...config.extra, ...(note ? { updateNote: note } : {}) },
   };

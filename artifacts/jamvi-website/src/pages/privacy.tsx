@@ -48,7 +48,9 @@ export default function Privacy() {
         turned into a list for you to review, and are <strong>not kept</strong>:
         only the entries you review and save are stored, like any record you
         type in. You can turn this off at
-        any time, or withdraw the permission in Android&rsquo;s settings.
+        any time, or withdraw the permission in Android&rsquo;s settings. If you
+        also turn on the notification, your phone shows one when M-Pesa texts
+        you; that check happens on the phone and sends nothing.
       </p>
 
       <h3>What is created automatically</h3>

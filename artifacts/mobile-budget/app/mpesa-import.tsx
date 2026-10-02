@@ -93,7 +93,7 @@ import { isLapsedRefusal, lapsedSaveMessage } from '@/lib/lapsedSave';
 import { useEntitlements } from '@/hooks/useEntitlements';
 import type { DebtEntryLink } from '@/lib/debtLinks';
 import { canReadStatements, chooseStatement, statementBase64, type ChosenStatement } from '@/lib/statementFile';
-import { canReadSms, newMpesaSms, parseSmsAuto, readMpesaSms, smsAutoKey, smsBatches, smsRefusal, type SmsAuto } from '@/lib/mpesaSms';
+import { canNotifySms, canReadSms, newMpesaSms, parseSmsAuto, readMpesaSms, setSmsNotify, smsAutoKey, smsBatches, smsNotifyOn, smsRefusal, type SmsAuto } from '@/lib/mpesaSms';
 import { isoDay, monthStartIso } from '@/lib/dayRange';
 import { MonthStepper } from '@/components/MonthStepper';
 import { shownFileName } from '@/lib/shownFileName';
@@ -968,6 +968,18 @@ export default function MpesaImportScreen() {
   const keepSmsAuto = (next: SmsAuto) => {
     setSmsAuto(next);
     AsyncStorage.setItem(autoKey, JSON.stringify(next)).catch(() => {});
+    // The notification opens "new since you last looked", so it goes off with it.
+    if (!next.on && smsNotify) void setSmsNotify(false).then((result) => setSmsNotifyState(result.on));
+  };
+  // A notification the moment M-Pesa texts, from a build that carries it.
+  const smsNotifiable = canNotifySms();
+  const [smsNotify, setSmsNotifyState] = useState<boolean>(() => smsNotifyOn());
+  const toggleSmsNotify = async () => {
+    const result = await setSmsNotify(!smsNotify);
+    setSmsNotifyState(result.on);
+    if (result.reason) Alert.alert('Could not turn it on', smsRefusal(result.reason));
+    // Tapping the notification opens the messages since Jamvi last looked, so that is on too.
+    else if (result.on && !smsAuto.on) keepSmsAuto({ on: true, since: smsAuto.since || Date.now() });
   };
   // The messages read through the same reader as pasted ones, a batch at a time.
   const readSmsMessages = async (messages: string[]) => {
@@ -2084,6 +2096,18 @@ export default function MpesaImportScreen() {
                   >
                     <Feather name={smsAuto.on ? 'check-square' : 'square'} size={18} color={smsAuto.on ? colors.primary : colors.mutedForeground} />
                     <Text style={{ color: colors.foreground, fontSize: 13, flexShrink: 1 }}>Look for new M-Pesa messages each time I open Jamvi</Text>
+                  </Pressable>
+                ) : null}
+                {smsNotifiable ? (
+                  <Pressable
+                    onPress={() => void toggleSmsNotify()}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: smsNotify }}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 }}
+                    testID="mpesa-sms-notify"
+                  >
+                    <Feather name={smsNotify ? 'check-square' : 'square'} size={18} color={smsNotify ? colors.primary : colors.mutedForeground} />
+                    <Text style={{ color: colors.foreground, fontSize: 13, flexShrink: 1 }}>Tell me when an M-Pesa message arrives, even when Jamvi is closed</Text>
                   </Pressable>
                 ) : null}
               </View>
