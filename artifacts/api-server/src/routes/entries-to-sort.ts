@@ -69,7 +69,8 @@ router.get("/entries-to-sort", async (req, res): Promise<void> => {
       sql`((${jointAccountTxTable.type} = 'disbursement' AND lower(${jointAccountTxTable.expenseCategory}) = lower(${NOT_SURE_CATEGORY})) ${marked})`,
     ))
     .orderBy(asc(jointAccountTxTable.date), asc(jointAccountTxTable.id))
-    .limit(500);
+    // A whole year's statement saved as Not sure is well over a thousand.
+    .limit(5000);
   res.json({
     notSureCategory: NOT_SURE_CATEGORY,
     entries: rows.map((row) => ({ ...row, amount: Number(row.amount), direction: row.type === "deposit" ? "in" : "out" })),

@@ -1,4 +1,4 @@
-import { destinationOf, type Choice, type PreviewLine } from "./mpesa-import";
+import { destinationOf, isRecordable, reviewStatus, type Choice, type PreviewLine } from "./mpesa-import";
 
 /**
  * Saving an entry as "Not sure" and sorting it out later.
@@ -59,6 +59,39 @@ export function toMarkAfterSave(
     ids.push(id);
   }
   return ids;
+}
+
+/**
+ * Lines "Put them all under Not sure" changes: ticked, still Jamvi"s
+ * suggestion or still needing a choice, going to a category. Anything the
+ * person set themselves - a category, a debt, a move, a contribution,
+ * another budget - is left as they set it, and so are Fuliza, charges and
+ * reversals, which have places of their own.
+ */
+export function notSureableLines(lines: readonly PreviewLine[], choices: Record<number, Choice>): PreviewLine[] {
+  return lines.filter((line) => {
+    const choice = choices[line.index];
+    if (!choice?.include || !isRecordable(line)) return false;
+    if (line.type?.startsWith("fuliza_") || line.type === "transaction_charge" || line.type === "reversal") return false;
+    if (destinationOf(choice) !== "category" || choice.debt || choice.contributorId) return false;
+    return reviewStatus(line, choice) !== "changed";
+  });
+}
+
+/**
+ * Puts each of `lines` under Not sure, confirmed, so a long statement can be
+ * saved in one go and sorted out slowly from Sort them out: money out to
+ * "Not sure yet", money in with no income source. Nothing is remembered.
+ */
+export function putUnderNotSure(lines: readonly PreviewLine[], choices: Record<number, Choice>): Record<number, Choice> {
+  const next = { ...choices };
+  for (const line of lines) {
+    const current = next[line.index];
+    next[line.index] = line.direction === "out"
+      ? { ...current, category: NOT_SURE_CATEGORY, auto: false, confirmed: true, remember: false }
+      : { ...current, incomeSourceId: null, sourceAuto: false, confirmed: true, remember: false };
+  }
+  return next;
 }
 
 /** "3 entries to sort out" - the words for Home. */

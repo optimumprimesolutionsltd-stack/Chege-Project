@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { isNotSure, type EntryToSort } from "@/lib/entries-to-sort";
+import { inMonth, monthsOf } from "@/lib/mpesa-import";
 import { plainSaveError } from "@/lib/save-retry";
 import { formatDate } from "@/lib/utils";
 
@@ -44,6 +45,11 @@ export default function SortEntries() {
     return categoryList.filter((row) => !parents.has(row.id) && !isNotSure(row.name)).map((row) => row.name).sort((a, b) => a.localeCompare(b));
   }, [categoryList]);
   const entries = data?.entries ?? [];
+  // A month at a time, and a page at a time: a whole year is over a thousand.
+  const [month, setMonth] = useState<string | null>(null);
+  const [shownCount, setShownCount] = useState(50);
+  const months = useMemo(() => monthsOf(entries), [entries]);
+  const inView = useMemo(() => entries.filter((entry) => inMonth(entry, month)), [entries, month]);
 
   const done = () => Promise.all([
     queryClient.invalidateQueries({ queryKey: ["entries-to-sort"] }),
@@ -74,11 +80,21 @@ export default function SortEntries() {
         <h1 className="text-2xl font-bold text-foreground">Sort them out</h1>
         <p className="text-sm text-muted-foreground">Entries you saved as Not sure.</p>
       </div>
+      {months.length > 1 ? (
+        <div className="flex flex-wrap gap-2" data-testid="sort-entries-months">
+          {[{ key: null as string | null, label: "All months", count: entries.length }, ...months].map((option) => (
+            <button key={option.key ?? "all"} type="button" onClick={() => { setMonth(option.key); setShownCount(50); }} aria-pressed={month === option.key}
+              className={`rounded-full border px-3 py-1 text-xs font-semibold ${month === option.key ? "border-primary bg-primary/10 text-primary" : "border-border bg-muted"}`}>
+              {option.label} ({option.count})
+            </button>
+          ))}
+        </div>
+      ) : null}
       {isLoading ? (
         <div className="flex justify-center py-8 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /></div>
       ) : isError ? (
         <button type="button" onClick={() => void refetch()} className="w-full rounded-xl border p-4 text-sm text-muted-foreground">Couldn’t load these. Click to try again.</button>
-      ) : entries.length === 0 ? (
+      ) : inView.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center gap-1 p-6 text-center" data-testid="sort-entries-empty">
             <CheckCircle2 className="h-8 w-8 text-success" />
@@ -87,7 +103,7 @@ export default function SortEntries() {
           </CardContent>
         </Card>
       ) : (
-        entries.map((entry) => (
+        inView.slice(0, shownCount).map((entry) => (
           <Card key={entry.id} className={busy === entry.id ? "opacity-60" : ""} data-testid={`sort-entry-${entry.id}`}>
             <CardContent className="space-y-3 p-4">
               <div className="flex items-center gap-3">
@@ -123,6 +139,11 @@ export default function SortEntries() {
           </Card>
         ))
       )}
+      {inView.length > shownCount ? (
+        <Button variant="outline" className="w-full" onClick={() => setShownCount((count) => count + 50)} data-testid="sort-entries-more">
+          Show 50 more ({inView.length - shownCount} left)
+        </Button>
+      ) : null}
     </div>
   );
 }

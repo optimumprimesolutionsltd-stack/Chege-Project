@@ -996,7 +996,7 @@ const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Se
  * The months a statement"s entries fall in, oldest first, with how many of
  * each - for working through a long statement a month at a time.
  */
-export function monthsOf(lines: readonly PreviewLine[]): Array<{ key: string; label: string; count: number }> {
+export function monthsOf(lines: readonly { date: string | null }[]): Array<{ key: string; label: string; count: number }> {
   const counts = new Map<string, number>();
   for (const line of lines) {
     const key = line.date?.slice(0, 7);
@@ -1013,4 +1013,4 @@ export function monthsOf(lines: readonly PreviewLine[]): Array<{ key: string; la
 }
 
 /** Whether a line falls in `month` ("2026-01"), or `null` for every month. */
-export const inMonth = (line: PreviewLine, month: string | null): boolean => month === null || line.date?.slice(0, 7) === month;
+export const inMonth = (line: { date: string | null }, month: string | null): boolean => month === null || line.date?.slice(0, 7) === month;

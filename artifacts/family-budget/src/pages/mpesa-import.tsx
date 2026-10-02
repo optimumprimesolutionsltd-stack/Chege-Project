@@ -118,7 +118,7 @@ import { saveDebtLinks } from "@/lib/debt-reversal";
 import { mpesaNameFor, saveMpesaNames, type MpesaName } from "@/lib/mpesa-names";
 import { isLapsedRefusal, lapsedSaveMessage } from "@/lib/lapsed-save";
 import { plainSaveError, retrySave, withRetries } from "@/lib/save-retry";
-import { isNotSure, needsNotSureCategory, NOT_SURE_CATEGORY, toMarkAfterSave } from "@/lib/entries-to-sort";
+import { isNotSure, needsNotSureCategory, NOT_SURE_CATEGORY, notSureableLines, putUnderNotSure, toMarkAfterSave } from "@/lib/entries-to-sort";
 import { useEntitlements } from "@/hooks/use-entitlements";
 import type { DebtEntryLink } from "@/lib/debt-links";
 import { fulizaOwedBefore, reconcile, statementLines, withoutRecordedFuliza, type RecordedRow, type StatementReading } from "@/lib/statement-import";
@@ -654,6 +654,13 @@ export default function MpesaImportPage() {
   };
   // Found entries that can go to another budget together: "Umoja" finds the chama's.
   const toSend = filtering ? sendableLines(inView, choices) : [];
+  // Everything still on Jamvi's suggestion (or needing a choice) under Not sure,
+  // so a long statement can be saved now and sorted out slowly from Home.
+  const toNotSure = notSureableLines(filtering ? inView : recordable, choices);
+  const allUnderNotSure = () => {
+    if (!window.confirm(`Put ${toNotSure.length} ${toNotSure.length === 1 ? "entry" : "entries"} under Not sure?\n\nEvery entry ${filtering ? `found ${foundFor}` : "in this statement"} that is still Jamvi's suggestion or still needs you, including any not shown yet. Money out goes to Not sure yet and money in to no income source; anything you chose yourself stays as it is. They count as confirmed, so Save takes them all, and Home's "to sort out" brings each one back to you.`)) return;
+    setChoices((current) => putUnderNotSure(toNotSure, current));
+  };
   const [sendFound, setSendFound] = useState<{ groupId: number | null; accountId: number; category: string; incomeSourceId: number | null }>({ groupId: null, accountId: 0, category: "", incomeSourceId: null });
   const sendFoundTo = (groupName: string, accountName: string) => {
     if (sendFound.groupId === null) return;
@@ -1374,6 +1381,11 @@ export default function MpesaImportPage() {
                     </button>
                   ))}
                 </div>
+                {toNotSure.length > 0 && canManageBudget ? (
+                  <Button variant="outline" className="mt-2 w-full" onClick={allUnderNotSure} data-testid="mpesa-review-all-not-sure">
+                    Put {filtering ? `all ${toNotSure.length} found` : `the other ${toNotSure.length}`} under Not sure - sort them out later
+                  </Button>
+                ) : null}
                 {months.length > 1 ? (
                   <div className="mt-2 flex flex-wrap gap-2" data-testid="mpesa-review-months">
                     {[{ key: null as string | null, label: "All months", count: recordable.length }, ...months].map((option) => (
