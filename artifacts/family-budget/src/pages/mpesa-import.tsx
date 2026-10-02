@@ -4,7 +4,7 @@ import { CategoryGroupPicker, resolveGroupChoice, type GroupChoice } from "@/com
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { CheckCircle2, Loader2, Pencil } from "lucide-react";
+import { CheckCircle2, Loader2, Lock, Pencil } from "lucide-react";
 import {
   createDeposit as createDepositInOtherBudget,
   createDisbursement as createDisbursementInOtherBudget,
@@ -101,7 +101,8 @@ const ADD_CATEGORY = "__add_category__";
 const LINES_PER_PAGE = 100;
 const todayIso = () => new Date(Date.now() + 3 * 3_600_000).toISOString().slice(0, 10);
 
-type Outcome = { saved: number; repeats: number; failed: Array<{ what: string; why: string }> };
+/** `lapsed`: the trial or subscription had ended, so the save stopped; `waiting` were left unsaved. */
+type Outcome = { saved: number; repeats: number; failed: Array<{ what: string; why: string }>; lapsed?: { waiting: number } };
 
 import { readStatementPages, StatementPasswordError } from "@/lib/statement-file";
 import { rememberMpesaCard } from "@/lib/mpesa-card";
@@ -110,6 +111,7 @@ import { runPool, savePosting, SAVE_CONCURRENCY, type PostingApi } from "@/lib/s
 import { parseStoredRules, payeeKey, payeeName, ruleLabel, rulesStorageKey, withRule, withoutRule, type PayeeRules } from "@/lib/payee-learning";
 import { saveDebtLinks } from "@/lib/debt-reversal";
 import { mpesaNameFor, saveMpesaNames, type MpesaName } from "@/lib/mpesa-names";
+import { isLapsedRefusal, lapsedSaveMessage } from "@/lib/lapsed-save";
 import type { DebtEntryLink } from "@/lib/debt-links";
 import { fulizaOwedBefore, reconcile, statementLines, withoutRecordedFuliza, type RecordedRow, type StatementReading } from "@/lib/statement-import";
 import { checkRunningBalance, readStatementRows, resolveDirections } from "@/lib/statement-table";
@@ -594,6 +596,33 @@ export default function MpesaImportPage() {
   };
   const confirmedLines = recordable.filter((item) => isConfirmedToSave(item, choices[item.index]));
   const confirmedCount = confirmedLines.length;
+
+  // The same subscription the menu reads, for whether a trial or a paid
+  // subscription is what ended. Read defensively: the wording is all it sets.
+  const { data: entitlements } = useQuery<{ status?: string | null; member?: { status?: string | null } }>({
+    queryKey: ["member-entitlements"],
+    queryFn: async () => {
+      const response = await fetch("/api/subscription-plans/entitlements", { credentials: "include" });
+      if (!response.ok) throw new Error("Could not load your subscription.");
+      return response.json();
+    },
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  });
+  // One plain message when the trial or subscription has ended, with the way
+  // to pay, in place of the same 402 listed under every entry.
+  const lapsedCard = (waiting: number) => {
+    const words = lapsedSaveMessage(entitlements?.status ?? entitlements?.member?.status, waiting, isShared);
+    return (
+      <div className="space-y-2 rounded-xl border border-primary bg-card p-4 text-sm" data-testid="mpesa-save-lapsed">
+        <p className="flex items-center gap-2 font-semibold text-foreground"><Lock className="h-4 w-4 text-primary" /> {words.title}</p>
+        <p className="text-muted-foreground">{words.body.replace("tap Save", "click Save")}</p>
+        <Link href="/subscription" className="inline-flex h-10 items-center rounded-md bg-primary px-4 font-semibold text-primary-foreground" data-testid="mpesa-save-lapsed-pay">
+          {words.action}
+        </Link>
+      </div>
+    );
+  };
   const confirmedFees = confirmedLines.some((item) => (item.fee ?? 0) > 0);
   // A new statement starts again from the first page. Changing the view or
   // the search does too - in their handlers, not here, so that going to a
@@ -799,8 +828,12 @@ export default function MpesaImportPage() {
       return built ? [{ item, choice, built }] : [];
     });
     setSaveProgress({ done: 0, total: toSave.length });
+    // Set by the first refusal for a lapsed trial or subscription: the rest
+    // would be refused the same way, so they are not sent.
+    let lapsed = false;
     try {
       await runPool(toSave, SAVE_CONCURRENCY, async ({ item, choice, built }) => {
+        if (lapsed) return;
         try {
           const posted = await savePosting(built, postingApi, accountId);
           if (choice.debt && posted.id) debtLinks.push({ transactionId: posted.id, partyId: choice.debt.partyId, kind: choice.debt.kind });
@@ -810,6 +843,10 @@ export default function MpesaImportPage() {
           result.saved += 1;
           savedIndexes.add(item.index);
         } catch (error) {
+          if (isLapsedRefusal(error)) {
+            lapsed = true;
+            return;
+          }
           const message = error instanceof Error ? error.message : "It was not saved.";
           if (/already recorded/i.test(message)) {
             result.repeats += 1;
@@ -826,6 +863,7 @@ export default function MpesaImportPage() {
       setSaving(false);
       letScreenSleepAgain();
       clearSavePending(savingFor);
+      if (lapsed) result.lapsed = { waiting: toSave.length - result.saved - result.repeats };
       let leftToSave = 0;
       if (statementReading) {
         const stamp = { date: todayIso(), description: "Saved from your statement" };
@@ -903,6 +941,7 @@ export default function MpesaImportPage() {
   if (outcome) {
     return (
       <div className="mx-auto max-w-xl space-y-4 p-4 sm:p-6" data-testid="mpesa-import-done">
+        {outcome.lapsed ? lapsedCard(outcome.lapsed.waiting) : null}
         <Card>
           <CardContent className="space-y-2 p-6 text-center">
             <CheckCircle2 className="mx-auto h-9 w-9 text-success" />
@@ -1099,7 +1138,8 @@ export default function MpesaImportPage() {
           {statementNote ? (
             <p className="rounded-xl border border-border bg-card p-3 text-sm text-foreground" data-testid="mpesa-statement-note">{statementNote}</p>
           ) : null}
-          {lastSave ? (
+          {lastSave?.lapsed ? lapsedCard(confirmedCount) : null}
+          {lastSave && !(lastSave.lapsed && lastSave.saved === 0 && lastSave.failed.length === 0) ? (
             <div className={`space-y-1 rounded-xl border bg-card p-3 text-sm ${lastSave.failed.length > 0 ? "border-destructive" : "border-success"}`} data-testid="mpesa-last-save">
               <div className="flex items-center gap-2">
                 <p className="flex-1 font-semibold text-foreground">

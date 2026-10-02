@@ -86,6 +86,8 @@ import { runPool, savePosting, SAVE_CONCURRENCY, type PostingApi } from '@/lib/s
 import { parseStoredRules, payeeKey, payeeName, ruleLabel, rulesStorageKey, withRule, withoutRule, type PayeeRules } from '@/lib/payeeLearning';
 import { saveDebtLinks } from '@/lib/debtReversal';
 import { mpesaNameFor, saveMpesaNames, type MpesaName } from '@/lib/mpesaNames';
+import { isLapsedRefusal, lapsedSaveMessage } from '@/lib/lapsedSave';
+import { useEntitlements } from '@/hooks/useEntitlements';
 import type { DebtEntryLink } from '@/lib/debtLinks';
 import { canReadStatements, chooseStatement, statementBase64, type ChosenStatement } from '@/lib/statementFile';
 import { shownFileName } from '@/lib/shownFileName';
@@ -156,7 +158,8 @@ const STATEMENT_DRAFT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
  */
 const PRESS_RETENTION_OFFSET = { top: 20, left: 20, right: 20, bottom: 20 };
 
-type Outcome = { saved: number; repeats: number; failed: Array<{ what: string; why: string }> };
+/** `lapsed`: the trial or subscription had ended, so the save stopped; `waiting` were left unsaved. */
+type Outcome = { saved: number; repeats: number; failed: Array<{ what: string; why: string }>; lapsed?: { waiting: number } };
 
 /**
  * A category picked from the tree, in a sheet with a search box.
@@ -452,6 +455,7 @@ export default function MpesaImportScreen() {
   const queryClient = useQueryClient();
   const { data: group } = useGetGroup();
   const isShared = group?.isPrivate === false;
+  const { data: entitlements } = useEntitlements();
   // In a shared group only an owner or admin can record payments out, moves between accounts and savings.
   const canManageBudget = !isShared || group?.role === 'owner' || group?.role === 'admin';
 
@@ -583,6 +587,29 @@ export default function MpesaImportScreen() {
   // A statement is worked through at the person's own pace: what is still to do is kept
   // on this phone (never the PDF or its password) and picked up again where it was left.
   const statementLeft = (statementReading?.lines ?? []).filter(isRecordable).length;
+
+  // One plain message when the trial or subscription has ended, with the way
+  // to pay, in place of the same 402 listed under every entry.
+  const lapsedCard = (waiting: number) => {
+    const words = lapsedSaveMessage(entitlements?.status, waiting, isShared);
+    return (
+      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.primary }]} testID="mpesa-save-lapsed">
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Feather name="lock" size={18} color={colors.primary} />
+          <Text style={[styles.lineTitle, { color: colors.foreground, flex: 1 }]}>{words.title}</Text>
+        </View>
+        <Text style={[styles.hint, { color: colors.mutedForeground }]}>{words.body}</Text>
+        <Pressable
+          onPress={() => router.push('/subscription')}
+          style={[styles.primary, { backgroundColor: colors.primary, marginTop: 10 }]}
+          accessibilityRole="button"
+          testID="mpesa-save-lapsed-pay"
+        >
+          <Text style={styles.primaryText}>{words.action}</Text>
+        </Pressable>
+      </View>
+    );
+  };
   const { discard: discardStatementDraft } = useDraft<{
     reading: StatementReading;
     choices: Record<number, Choice>;
@@ -1522,9 +1549,13 @@ export default function MpesaImportScreen() {
     // The same count for the bar the rest of the app shows, so the person can
     // leave this screen while it saves and still see how it went.
     let doneCount = 0;
+    // Set by the first refusal for a lapsed trial or subscription: the rest
+    // would be refused the same way, so they are not sent.
+    let lapsed = false;
     setImportProgress({ stage: 'saving', done: 0, total: toSave.length });
     try {
       await runPool(toSave, SAVE_CONCURRENCY, async ({ item, choice, built }) => {
+        if (lapsed) return;
         try {
           // Waits while Jamvi is behind another app, and tries again an entry whose
           // request the phone cut off (lib/saveWhileAway).
@@ -1536,6 +1567,10 @@ export default function MpesaImportScreen() {
           result.saved += 1;
           savedIndexes.add(item.index);
         } catch (error: unknown) {
+          if (isLapsedRefusal(error)) {
+            lapsed = true;
+            return;
+          }
           const message = error instanceof Error ? error.message : 'It was not saved.';
           if (/already recorded/i.test(message)) {
             result.repeats += 1;
@@ -1554,6 +1589,7 @@ export default function MpesaImportScreen() {
       setSaving(false);
       letScreenSleepAgain();
       void clearSavePending(savingFor);
+      if (lapsed) result.lapsed = { waiting: toSave.length - result.saved - result.repeats };
       let leftToSave = 0;
       if (statementReading) {
         const stamp = { date: todayIso(), description: 'Saved from your statement' };
@@ -1632,6 +1668,7 @@ export default function MpesaImportScreen() {
   if (outcome) {
     return (
       <PageScrollView style={{ backgroundColor: colors.background }} contentContainerStyle={[styles.body, { paddingTop: insets.top + 24 }]}>
+        {outcome.lapsed ? lapsedCard(outcome.lapsed.waiting) : null}
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]} testID="mpesa-import-done">
           <Feather name="check-circle" size={34} color={colors.success} />
           <Text style={[styles.title, { color: colors.foreground, marginTop: 10 }]}>
@@ -1869,7 +1906,8 @@ export default function MpesaImportScreen() {
                 <Text style={[styles.hint, { color: colors.foreground, marginTop: 0 }]}>{statementNote}</Text>
               </View>
             ) : null}
-            {lastSave ? (
+            {lastSave?.lapsed ? lapsedCard(confirmedCount) : null}
+            {lastSave && !(lastSave.lapsed && lastSave.saved === 0 && lastSave.failed.length === 0) ? (
               <View style={[styles.card, { backgroundColor: colors.card, borderColor: lastSave.failed.length > 0 ? colors.destructive : colors.success }]} testID="mpesa-last-save">
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <Feather name={lastSave.failed.length > 0 ? 'alert-circle' : 'check-circle'} size={18} color={lastSave.failed.length > 0 ? colors.destructive : colors.success} />

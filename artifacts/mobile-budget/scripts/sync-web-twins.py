@@ -23,6 +23,7 @@ TWINS = {
     'payeeLearning.ts': ('payee-learning.ts', {}),
     'savePosting.ts': ('save-posting.ts', {'./mpesaImport': './mpesa-import'}),
     'otherBudgetOptions.ts': ('other-budget-options.ts', {}),
+    'lapsedSave.ts': ('lapsed-save.ts', {}),
 }
 
 
