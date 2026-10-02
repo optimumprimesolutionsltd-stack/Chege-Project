@@ -15,7 +15,7 @@ import {
   Keyboard,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -93,6 +93,9 @@ import { isLapsedRefusal, lapsedSaveMessage } from '@/lib/lapsedSave';
 import { useEntitlements } from '@/hooks/useEntitlements';
 import type { DebtEntryLink } from '@/lib/debtLinks';
 import { canReadStatements, chooseStatement, statementBase64, type ChosenStatement } from '@/lib/statementFile';
+import { canReadSms, newMpesaSms, parseSmsAuto, readMpesaSms, smsAutoKey, smsBatches, smsRefusal, type SmsAuto } from '@/lib/mpesaSms';
+import { isoDay, monthStartIso } from '@/lib/dayRange';
+import { MonthStepper } from '@/components/MonthStepper';
 import { shownFileName } from '@/lib/shownFileName';
 import { readPercent } from '@/lib/statementProgress';
 import { balanceAtEndOf, dayBefore, missingInJamvi, notOnStatement, withoutRecordedFuliza, type RecordedRow, fulizaChargeOverlap, fulizaCharges, fulizaOwedBefore, reconcile, statementLines, type StatementReading } from '@/lib/statementImport';
@@ -853,7 +856,7 @@ export default function MpesaImportScreen() {
   const [reported, setReported] = useState<Set<number>>(new Set());
 
   const openReport = (index: number) => {
-    const message = messageFor(text, index);
+    const message = smsMessages ? smsMessages[index] ?? null : messageFor(text, index);
     if (message) setReporting({ index, text: redactForReport(message) });
   };
 
@@ -919,6 +922,7 @@ export default function MpesaImportScreen() {
       return;
     }
     setReading(true);
+    setSmsMessages(null);
     try {
       const response = await customFetch<{ lines: PreviewLine[] }>('/api/mpesa/import/preview', {
         method: 'POST',
@@ -943,6 +947,87 @@ export default function MpesaImportScreen() {
       setReading(false);
     }
   };
+
+
+  // Reading M-Pesa's messages straight from the phone (lib/mpesaSms): Android,
+  // in a build that carries it. The texts are kept here only so a line can be
+  // matched back to its message; they are never saved.
+  const smsReadable = canReadSms();
+  const [smsMessages, setSmsMessages] = useState<string[] | null>(null);
+  const [smsFrom, setSmsFrom] = useState<string>(monthStartIso);
+  const [smsTo, setSmsTo] = useState<string>(() => isoDay(new Date()));
+  const [smsAuto, setSmsAuto] = useState<SmsAuto>({ on: false, since: 0 });
+  // The newest message taken in by "new since you last looked", so a save moves the mark on.
+  const smsNewestRef = React.useRef<number | null>(null);
+  const autoKey = smsAutoKey(user?.id);
+  useEffect(() => {
+    let active = true;
+    AsyncStorage.getItem(autoKey).then((raw) => { if (active) setSmsAuto(parseSmsAuto(raw)); }).catch(() => {});
+    return () => { active = false; };
+  }, [autoKey]);
+  const keepSmsAuto = (next: SmsAuto) => {
+    setSmsAuto(next);
+    AsyncStorage.setItem(autoKey, JSON.stringify(next)).catch(() => {});
+  };
+  // The messages read through the same reader as pasted ones, a batch at a time.
+  const readSmsMessages = async (messages: string[]) => {
+    if (messages.length === 0) {
+      Alert.alert('No M-Pesa messages', 'There are no M-Pesa messages on this phone for those dates.');
+      return;
+    }
+    setReading(true);
+    try {
+      const all: PreviewLine[] = [];
+      for (const batch of smsBatches(messages)) {
+        const response = await customFetch<{ lines: PreviewLine[] }>('/api/mpesa/import/preview', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: batch.join('\n\n') }),
+        });
+        const offset = all.length;
+        all.push(...response.lines.map((line) => ({ ...line, index: line.index + offset })));
+      }
+      const known = parseStoredNicknames(await AsyncStorage.getItem(nicknamesKey).catch(() => null));
+      setNicknames(known);
+      const shown = applyNicknames(all, known);
+      setText('');
+      setSmsMessages(messages);
+      setLines(shown);
+      setChoices(initialChoices(shown, history, categories.map((row) => row.name), effectiveChargeCategory, rules, canManageBudget));
+    } catch (error: unknown) {
+      Alert.alert('Could not read them', plainSaveError(error));
+    } finally {
+      setReading(false);
+    }
+  };
+  const readSmsRange = async () => {
+    try {
+      const result = await readMpesaSms(smsFrom, smsTo);
+      if (!result.ok) {
+        Alert.alert('Could not read your messages', smsRefusal(result.reason));
+        return;
+      }
+      // The first time it is allowed, new messages are looked for from now on.
+      if (!smsAuto.on && smsAuto.since === 0) keepSmsAuto({ on: true, since: Date.now() });
+      smsNewestRef.current = null;
+      await readSmsMessages(result.messages);
+    } catch (error: unknown) {
+      Alert.alert('Could not read your messages', plainSaveError(error));
+    }
+  };
+  // Opened from Home's "new M-Pesa messages": everything since Jamvi last looked.
+  const params = useLocalSearchParams<{ fromSms?: string }>();
+  const openedForNew = React.useRef(false);
+  useEffect(() => {
+    if (params.fromSms !== 'new' || openedForNew.current || !smsAuto.on || lines) return;
+    openedForNew.current = true;
+    void newMpesaSms(smsAuto.since).then((found) => {
+      if (!found) return;
+      smsNewestRef.current = found.newest;
+      return readSmsMessages(found.messages);
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.fromSms, smsAuto.on, smsAuto.since]);
 
   // Which of a statement's entries this budget already has: asked with the receipt codes only.
   const markRecorded = async (all: PreviewLine[]): Promise<PreviewLine[]> => {
@@ -1707,6 +1792,12 @@ export default function MpesaImportScreen() {
       setSaving(false);
       letScreenSleepAgain();
       void clearSavePending(savingFor);
+      // New messages taken in and saved: the next check starts after them.
+      if (smsNewestRef.current !== null && result.saved + result.repeats > 0) {
+        keepSmsAuto({ on: true, since: smsNewestRef.current });
+        smsNewestRef.current = null;
+        void queryClient.invalidateQueries({ queryKey: ['new-mpesa-sms'] });
+      }
       if (lapsed) result.lapsed = { waiting: toSave.length - result.saved - result.repeats };
       let leftToSave = 0;
       if (statementReading) {
@@ -1955,6 +2046,37 @@ export default function MpesaImportScreen() {
             >
               {reading && !readerJob ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Read my messages</Text>}
             </Pressable>
+
+            {smsReadable ? (
+              <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.primary }]} testID="mpesa-sms">
+                <Text style={[styles.summaryLine, { color: colors.foreground }]}>Read my M-Pesa messages</Text>
+                <Text style={[styles.hint, { color: colors.mutedForeground }]}>
+                  Only M-Pesa's messages, only for these dates, only when you ask. They are read into the list below and not kept.
+                </Text>
+                <MonthStepper from={smsFrom} to={smsTo} onChange={(nextFrom, nextTo) => { setSmsFrom(nextFrom); setSmsTo(nextTo); }} testID="mpesa-sms-month" />
+                <Pressable
+                  onPress={() => void readSmsRange()}
+                  disabled={reading}
+                  style={[styles.primary, { backgroundColor: colors.primary, opacity: reading ? 0.6 : 1 }]}
+                  accessibilityRole="button"
+                  testID="mpesa-sms-read"
+                >
+                  {reading && !readerJob ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Read M-Pesa messages for these dates</Text>}
+                </Pressable>
+                {smsAuto.since > 0 ? (
+                  <Pressable
+                    onPress={() => keepSmsAuto({ ...smsAuto, on: !smsAuto.on })}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: smsAuto.on }}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 }}
+                    testID="mpesa-sms-auto"
+                  >
+                    <Feather name={smsAuto.on ? 'check-square' : 'square'} size={18} color={smsAuto.on ? colors.primary : colors.mutedForeground} />
+                    <Text style={{ color: colors.foreground, fontSize: 13, flexShrink: 1 }}>Look for new M-Pesa messages each time I open Jamvi</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            ) : null}
 
             {canReadStatements ? (
               <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]} testID="mpesa-statement">
@@ -2512,7 +2634,7 @@ export default function MpesaImportScreen() {
                       style={[styles.hint, { marginTop: 0, fontFamily: 'Inter_600SemiBold', color: status === 'needs' ? colors.destructive : status === 'changed' ? colors.primary : colors.mutedForeground }]}
                       testID={`mpesa-line-status-${item.index}`}
                     >
-                      {status === 'needs' ? 'Needs you' : status === 'changed' ? (choice?.confirmed ? 'Confirmed' : 'You changed this') : 'Suggested by Jamvi'}
+                      {status === 'needs' ? 'Needs you' : status === 'changed' ? (choice?.confirmed ? 'Confirmed' : 'You changed this - confirmed, it saves with the next Save') : 'Suggested by Jamvi'}
                     </Text>
                   ) : null}
                   {statementReading && choice?.include && (status === 'suggested' || choice?.confirmed) ? (

@@ -1526,7 +1526,7 @@ export default function MpesaImportPage() {
                       className={`text-xs font-semibold ${status === "needs" ? "text-destructive" : status === "changed" ? "text-primary" : "text-muted-foreground"}`}
                       data-testid={`mpesa-line-status-${item.index}`}
                     >
-                      {status === "needs" ? "Needs you" : status === "changed" ? (choice?.confirmed ? "Confirmed" : "You changed this") : "Suggested by Jamvi"}
+                      {status === "needs" ? "Needs you" : status === "changed" ? (choice?.confirmed ? "Confirmed" : "You changed this - confirmed, it saves with the next Save") : "Suggested by Jamvi"}
                     </p>
                   ) : null}
                   {statementReading && choice?.include && (status === "suggested" || choice?.confirmed) ? (

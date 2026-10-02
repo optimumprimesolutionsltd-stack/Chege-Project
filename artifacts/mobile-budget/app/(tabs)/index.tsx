@@ -11,6 +11,7 @@ import {
   Modal,
   TextInput,
   ScrollView as AskScroll,
+  AppState,
 } from 'react-native';
 import Animated, {
   cancelAnimation,
@@ -32,6 +33,7 @@ import { useEntitlements } from '@/hooks/useEntitlements';
 import { mayStartGroup } from '@/lib/groupStart';
 import { toSortTitle, type EntryToSort } from '@/lib/entriesToSort';
 import { useQuery } from '@tanstack/react-query';
+import { canReadSms, newMpesaSms, newSmsTitle, parseSmsAuto, smsAutoKey } from '@/lib/mpesaSms';
 import { PageScrollView } from '@/components/PageScrollReset';
 import { useAuth } from '@/lib/auth';
 import BudgetRing from '@/components/BudgetRing';
@@ -320,6 +322,26 @@ export default function DashboardScreen() {
     retry: false,
   });
   const toSortCount = toSort?.entries.length ?? 0;
+  // New M-Pesa messages since Jamvi last took them in, when the person turned
+  // that on (lib/mpesaSms): looked for each time Home is shown, and each time
+  // Jamvi comes back to the front.
+  const { data: newSms = 0, refetch: recheckSms } = useQuery<number>({
+    queryKey: ['new-mpesa-sms', user?.id],
+    queryFn: async () => {
+      const auto = parseSmsAuto(await AsyncStorage.getItem(smsAutoKey(user?.id)).catch(() => null));
+      if (!auto.on) return 0;
+      return (await newMpesaSms(auto.since))?.messages.length ?? 0;
+    },
+    enabled: canReadSms(),
+    staleTime: 30_000,
+    retry: false,
+  });
+  useFocusEffect(React.useCallback(() => { if (canReadSms()) void recheckSms(); }, [recheckSms]));
+  useEffect(() => {
+    if (!canReadSms()) return;
+    const subscription = AppState.addEventListener('change', (state) => { if (state === 'active') void recheckSms(); });
+    return () => subscription.remove();
+  }, [recheckSms]);
   const allShortcuts = [
     ...baseShortcuts,
     ...(canManageAccess ? [INVITE_SHORTCUT] : []),
@@ -706,6 +728,30 @@ export default function DashboardScreen() {
             </View>
           </View>
         )}
+
+        {newSms > 0 && canManageBudget ? (
+          <Pressable
+            testID="new-mpesa-sms-cta"
+            accessibilityRole="button"
+            accessibilityLabel={`${newSmsTitle(newSms)}. Open them to review`}
+            onPress={() => router.push('/mpesa-import?fromSms=new' as never)}
+            style={({ pressed }) => [styles.uncategorizedCtaCard, { backgroundColor: colors.card, borderColor: colors.primary, opacity: pressed ? 0.85 : 1 }]}
+          >
+            <View style={styles.groupCtaHeader}>
+              <View style={[styles.groupCtaIcon, { backgroundColor: `${colors.primary}22` }]}>
+                <Feather name="message-square" size={20} color={colors.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.groupCtaEyebrow, { color: colors.primary }]}>FROM YOUR MESSAGES</Text>
+                <Text style={[styles.groupCtaTitle, { color: colors.foreground }]}>{newSmsTitle(newSms)}</Text>
+              </View>
+              <Feather name="chevron-right" size={18} color={colors.primary} />
+            </View>
+            <Text style={[styles.groupCtaText, { color: colors.mutedForeground }]}>
+              Review them and save what is right. Nothing is saved until you do.
+            </Text>
+          </Pressable>
+        ) : null}
 
         {toSortCount > 0 && canManageBudget ? (
           <Pressable

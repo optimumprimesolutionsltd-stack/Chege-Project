@@ -14,8 +14,17 @@
  */
 module.exports = ({ config }) => {
   const note = (process.env.JAMVI_UPDATE_NOTE ?? '').trim();
+  // A Play Store build (eas.json "play") leaves out reading SMS until Google
+  // approves the SMS declaration: the permission the jamvi-sms module asks for
+  // is removed, and the "Read my M-Pesa messages" button then hides itself.
+  // Approved, delete JAMVI_PLAY_STORE from that profile and it is on.
+  const playStore = process.env.JAMVI_PLAY_STORE === '1';
   return {
     ...config,
+    android: {
+      ...config.android,
+      ...(playStore ? { blockedPermissions: [...(config.android?.blockedPermissions ?? []), 'android.permission.READ_SMS'] } : {}),
+    },
     extra: { ...config.extra, ...(note ? { updateNote: note } : {}) },
   };
 };
