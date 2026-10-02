@@ -48,8 +48,7 @@ describe('the build', () => {
   // The ignore rule once read "android/" at any depth, which kept the module's
   // Kotlin out of git and so out of the cloud build.
   it('keeps the module in git and the cloud build', () => {
-    const ignore = readFileSync('.gitignore', 'utf8').split(/?
-/);
+    const ignore = readFileSync('.gitignore', 'utf8').split(/\r?\n/);
     expect(ignore).toContain('/android/');
     expect(ignore).not.toContain('android/');
   });
