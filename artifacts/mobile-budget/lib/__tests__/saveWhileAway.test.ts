@@ -45,24 +45,35 @@ describe('an entry whose request was cut off is tried again', () => {
 
   it('tries again after a cut, and saves', async () => {
     const task = vi.fn().mockRejectedValueOnce(new TypeError('Network request failed')).mockResolvedValueOnce({ id: 7 });
-    await expect(retryWhenCutOff(task, 3, now, noPause)).resolves.toEqual({ id: 7 });
+    await expect(retryWhenCutOff(task, now, noPause)).resolves.toEqual({ id: 7 });
     expect(task).toHaveBeenCalledTimes(2);
   });
 
   it('never repeats a refusal such as already recorded', async () => {
     const refused = apiError(409);
     const task = vi.fn().mockRejectedValue(refused);
-    await expect(retryWhenCutOff(task, 3, now, noPause)).rejects.toBe(refused);
+    await expect(retryWhenCutOff(task, now, noPause)).rejects.toBe(refused);
     expect(task).toHaveBeenCalledTimes(1);
   });
 
-  it('gives up after the last attempt', async () => {
-    const task = vi.fn().mockRejectedValue(new TypeError('Network request failed'));
-    await expect(retryWhenCutOff(task, 3, now, noPause)).rejects.toThrow('Network request failed');
+  it('waits out a server restart for about a minute before giving up', async () => {
+    const waits: number[] = [];
+    const restarting = apiError(502);
+    const task = vi.fn().mockRejectedValue(restarting);
+    await expect(retryWhenCutOff(task, now, async (ms) => { waits.push(ms); })).rejects.toBe(restarting);
+    expect(task).toHaveBeenCalledTimes(6);
+    expect(waits.reduce((sum, ms) => sum + ms, 0)).toBe(59_000);
+  });
+
+  it('tries a plain server error only briefly', async () => {
+    const task = vi.fn().mockRejectedValue(apiError(500));
+    await expect(retryWhenCutOff(task, now, noPause)).rejects.toBeDefined();
     expect(task).toHaveBeenCalledTimes(3);
   });
 
-  it('is what the import save uses', () => {
-    expect(readFileSync('app/mpesa-import.tsx', 'utf8')).toContain('const posted = await retryWhenCutOff(() => savePosting(built, postingApi, accountId));');
+  it('is what the import save uses, on the entry and its charge alike', () => {
+    const screen = readFileSync('app/mpesa-import.tsx', 'utf8');
+    expect(screen).toContain('const postingApi: PostingApi = withRetries(rawPostingApi, (task) => retryWhenCutOff(task));');
+    expect(screen).toContain('const posted = await savePosting(built, postingApi, accountId);');
   });
 });

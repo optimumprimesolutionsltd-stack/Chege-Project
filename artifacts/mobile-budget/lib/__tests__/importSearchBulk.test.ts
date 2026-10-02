@@ -69,7 +69,7 @@ describe('the review screen wires it up, asking before any change', () => {
   const screen = readFileSync('app/mpesa-import.tsx', 'utf8');
 
   it('filters the list by the search', () => {
-    expect(screen).toContain('&& lineMatches(item, find, choices[item.index]?.category));');
+    expect(screen).toContain('&& lineMatches(item, find, choices[item.index]?.category) && inMonth(item, month));');
     expect(screen).toContain('testID="mpesa-review-find"');
   });
 

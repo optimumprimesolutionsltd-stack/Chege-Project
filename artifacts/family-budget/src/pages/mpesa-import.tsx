@@ -64,6 +64,8 @@ import {
   confirmLines,
   categoriseLines,
   lineMatches,
+  monthsOf,
+  inMonth,
   streamableLines,
   streamLines,
   type ReviewView,
@@ -115,6 +117,8 @@ import { applyOtherBudgetRules, otherBudgetRuleFor, otherBudgetRuleLabel, otherB
 import { saveDebtLinks } from "@/lib/debt-reversal";
 import { mpesaNameFor, saveMpesaNames, type MpesaName } from "@/lib/mpesa-names";
 import { isLapsedRefusal, lapsedSaveMessage } from "@/lib/lapsed-save";
+import { plainSaveError, retrySave, withRetries } from "@/lib/save-retry";
+import { isNotSure, needsNotSureCategory, NOT_SURE_CATEGORY, toMarkAfterSave } from "@/lib/entries-to-sort";
 import { useEntitlements } from "@/hooks/use-entitlements";
 import type { DebtEntryLink } from "@/lib/debt-links";
 import { fulizaOwedBefore, reconcile, statementLines, withoutRecordedFuliza, type RecordedRow, type StatementReading } from "@/lib/statement-import";
@@ -568,6 +572,35 @@ export default function MpesaImportPage() {
     [categoryList],
   );
   const [debtEditing, setDebtEditing] = useState<{ index: number; partyId: string; kind: DebtKind | "" } | null>(null);
+  // Somebody not yet in Who owes who, added from the debt editor itself.
+  const [newParty, setNewParty] = useState<{ name: string; kind: "person" | "institution" } | null>(null);
+  const [addingParty, setAddingParty] = useState(false);
+  useEffect(() => {
+    if (debtEditing === null) setNewParty(null);
+  }, [debtEditing === null]);
+  const addParty = async () => {
+    const name = newParty?.name.trim() ?? "";
+    if (!newParty || !debtEditing || name.length < 2 || addingParty) return;
+    setAddingParty(true);
+    try {
+      const response = await fetch("/api/contributors", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, kind: newParty.kind }),
+      });
+      const body = (await response.json().catch(() => ({}))) as PartyLite & { error?: string };
+      if (!response.ok) throw Object.assign(new Error(body.error ?? "Could not add them."), { status: response.status, data: body });
+      queryClient.setQueryData<PartyLite[]>(["parties"], (current) => [...(current ?? []), body]);
+      void queryClient.invalidateQueries({ queryKey: ["parties"] });
+      setDebtEditing({ ...debtEditing, partyId: String(body.id) });
+      setNewParty(null);
+    } catch (error) {
+      toast({ variant: "destructive", title: "Could not add them", description: plainSaveError(error) });
+    } finally {
+      setAddingParty(false);
+    }
+  };
   const setDebt = (index: number, debt: { kind: DebtKind; partyId: number } | null) =>
     setChoices((current) => ({ ...current, [index]: { ...current[index], debt } }));
 
@@ -601,24 +634,30 @@ export default function MpesaImportPage() {
   };
   const recordable = lines?.filter(isRecordable) ?? [];
   const notImported = lines?.filter((item) => !isRecordable(item)) ?? [];
-  const inView = recordable.filter((item) => (view === "all" || reviewStatus(item, choices[item.index]) === view) && lineMatches(item, find, choices[item.index]?.category));
-  const toConfirm = find.trim() ? confirmableLines(inView, choices) : [];
-  const toCategorise = find.trim() ? categorisableLines(inView, choices) : [];
+  // A month at a time, for a statement that runs January to September.
+  const [month, setMonth] = useState<string | null>(null);
+  const months = useMemo(() => monthsOf(recordable), [lines]);
+  const monthLabel = months.find((option) => option.key === month)?.label;
+  const filtering = Boolean(find.trim()) || month !== null;
+  const foundFor = [monthLabel ? `in ${monthLabel}` : "", find.trim() ? `for "${find.trim()}"` : ""].filter(Boolean).join(" ") || "here";
+  const inView = recordable.filter((item) => (view === "all" || reviewStatus(item, choices[item.index]) === view) && lineMatches(item, find, choices[item.index]?.category) && inMonth(item, month));
+  const toConfirm = filtering ? confirmableLines(inView, choices) : [];
+  const toCategorise = filtering ? categorisableLines(inView, choices) : [];
   // Money in that was found: one income stream for all of it ("in 50,000" is salary).
-  const toStream = find.trim() ? streamableLines(inView, choices) : [];
+  const toStream = filtering ? streamableLines(inView, choices) : [];
   const [bulkStream, setBulkStream] = useState("");
   const streamFound = () => {
     const source = incomeSources.find((row) => String(row.id) === bulkStream);
     if (!source) return;
-    if (!window.confirm(`Put ${toStream.length} ${toStream.length === 1 ? "entry" : "entries"} under ${source.name}?\n\nEvery entry of money in found for "${find.trim()}", including any not shown yet. They count as confirmed, and nothing is saved until you click Save.`)) return;
+    if (!window.confirm(`Put ${toStream.length} ${toStream.length === 1 ? "entry" : "entries"} under ${source.name}?\n\nEvery entry of money in found for ${foundFor}, including any not shown yet. They count as confirmed, and nothing is saved until you click Save.`)) return;
     setChoices((current) => streamLines(toStream, current, source.id));
   };
   // Found entries that can go to another budget together: "Umoja" finds the chama's.
-  const toSend = find.trim() ? sendableLines(inView, choices) : [];
+  const toSend = filtering ? sendableLines(inView, choices) : [];
   const [sendFound, setSendFound] = useState<{ groupId: number | null; accountId: number; category: string; incomeSourceId: number | null }>({ groupId: null, accountId: 0, category: "", incomeSourceId: null });
   const sendFoundTo = (groupName: string, accountName: string) => {
     if (sendFound.groupId === null) return;
-    if (!window.confirm(`Send ${toSend.length} ${toSend.length === 1 ? "entry" : "entries"} to ${groupName}?\n\nEvery entry found for "${find.trim()}", including any not shown yet, is recorded in ${groupName}'s ${accountName} instead of here. They count as confirmed, and Jamvi remembers these payees go there unless you untick it. Nothing is saved until you click Save.`)) return;
+    if (!window.confirm(`Send ${toSend.length} ${toSend.length === 1 ? "entry" : "entries"} to ${groupName}?\n\nEvery entry found for ${foundFor}, including any not shown yet, is recorded in ${groupName}'s ${accountName} instead of here. They count as confirmed, and Jamvi remembers these payees go there unless you untick it. Nothing is saved until you click Save.`)) return;
     const target = { groupId: sendFound.groupId, groupName, accountId: sendFound.accountId, accountName, category: sendFound.category, incomeSourceId: sendFound.incomeSourceId };
     setChoices((current) => sendLinesToOtherBudget(toSend, current, target));
     setSendFound({ groupId: null, accountId: 0, category: "", incomeSourceId: null });
@@ -667,13 +706,13 @@ export default function MpesaImportPage() {
   const confirm = (index: number, confirmed: boolean) =>
     setChoices((current) => ({ ...current, [index]: { ...current[index], confirmed, ...(confirmed ? { remember: current[index]?.remember ?? true } : {}) } }));
   const confirmFound = () => {
-    if (!window.confirm(`Confirm ${toConfirm.length} ${toConfirm.length === 1 ? "entry" : "entries"}?\n\nEvery suggestion found for "${find.trim()}", including any not shown yet, is kept as Jamvi suggested. Nothing is saved until you click Save.`)) return;
+    if (!window.confirm(`Confirm ${toConfirm.length} ${toConfirm.length === 1 ? "entry" : "entries"}?\n\nEvery suggestion found for ${foundFor}, including any not shown yet, is kept as Jamvi suggested. Nothing is saved until you click Save.`)) return;
     setChoices((current) => confirmLines(toConfirm, current));
   };
   const categoriseFound = () => {
     const name = bulkCategory.trim();
     if (!name) return;
-    if (!window.confirm(`Put ${toCategorise.length} ${toCategorise.length === 1 ? "entry" : "entries"} under ${name}?\n\nEvery entry found for "${find.trim()}" that is money out, including any not shown yet. They count as confirmed, and nothing is saved until you click Save.`)) return;
+    if (!window.confirm(`Put ${toCategorise.length} ${toCategorise.length === 1 ? "entry" : "entries"} under ${name}?\n\nEvery entry found for ${foundFor} that is money out, including any not shown yet. They count as confirmed, and nothing is saved until you click Save.`)) return;
     setChoices((current) => categoriseLines(toCategorise, current, name));
   };
   const readAgain = () => {
@@ -771,7 +810,7 @@ export default function MpesaImportPage() {
   };
 
   // The calls that record things, handed to the one function that saves a line.
-  const postingApi: PostingApi = {
+  const rawPostingApi: PostingApi = {
     deposit: (data) => createDeposit.mutateAsync({ data: data as never }) as Promise<{ id: number }>,
     disbursement: (data) => createDisbursement.mutateAsync({ data: data as never }) as Promise<{ id: number }>,
     bankToBank: (data) => transferBankToBank.mutateAsync({ data: data as never }) as Promise<{ outgoing: { id: number }; incoming: { id: number } }>,
@@ -786,6 +825,9 @@ export default function MpesaImportPage() {
         : createDisbursementInOtherBudget(data as never, options);
     },
   };
+  // Each request tried again through a server restart or a cut - the M-Pesa
+  // charge as much as the entry it came with (lib/save-retry).
+  const postingApi: PostingApi = withRetries(rawPostingApi, (task) => retrySave(task));
 
   const saveAll = async (resuming = false) => {
     if (!lines || !accountId || saving) return;
@@ -815,6 +857,8 @@ export default function MpesaImportPage() {
     markSavePending(savingFor);
     const result: Outcome = { saved: 0, repeats: 0, failed: [] };
     const savedIndexes = new Set<number>();
+    // What each saved line became, for marking money in left on "Not sure".
+    const depositIds = new Map<number, number>();
     // Who each debt entry was for, kept so deleting it can offer to put that person's balance back.
     const debtLinks: DebtEntryLink[] = [];
     // M-Pesa's own name for each entry saved under a nickname, for Search.
@@ -840,6 +884,16 @@ export default function MpesaImportPage() {
         setChoices(saveChoices);
       } catch {
         // Saved unlinked: the borrowing still is not income; a repayment says why it failed.
+      }
+    }
+    // "Not sure yet" is a real category, made the first time it is needed, so
+    // the entry still counts as spending (lib/entriesToSort).
+    if (needsNotSureCategory(lines, choices, categoryList.map((row) => row.name))) {
+      try {
+        await createCategory.mutateAsync({ data: { name: NOT_SURE_CATEGORY, budgetAmount: 0, priority: 3, isRecurring: true, activeMonth: null, activeYear: null } });
+        void queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
+      } catch {
+        // Already there, or it fails each entry with a reason of its own.
       }
     }
     // Worked out once, so a handful of these can travel to the server together instead of
@@ -871,15 +925,16 @@ export default function MpesaImportPage() {
           if (choice.debt && posted.id) debtLinks.push({ transactionId: posted.id, partyId: choice.debt.partyId, kind: choice.debt.kind });
           const named = mpesaNameFor(posted.id, item.original, item.description);
           if (named) mpesaNames.push(named);
-          if (posted.feeFailed) result.failed.push({ what: `${item.description} charge`, why: "The entry saved, but its charge did not." });
+          if (posted.feeFailed) result.failed.push({ what: `${item.description} charge`, why: `The entry saved, but its M-Pesa charge${item.fee ? ` of KES ${item.fee}` : ""} did not. Add it on Bank accounts as money out.` });
           result.saved += 1;
           savedIndexes.add(item.index);
+          if (posted.id !== undefined && item.direction === "in") depositIds.set(item.index, posted.id);
         } catch (error) {
           if (isLapsedRefusal(error)) {
             lapsed = true;
             return;
           }
-          const message = error instanceof Error ? error.message : "It was not saved.";
+          const message = plainSaveError(error);
           if (/already recorded/i.test(message)) {
             result.repeats += 1;
             // Already on the server: shown as recorded, not left looking unsaved.
@@ -926,7 +981,7 @@ export default function MpesaImportPage() {
         }
         // Kept here this time: a budget remembered for it before no longer applies.
         keptOther = withoutOtherBudgetRule(keptOther, item);
-        if (choice.category.trim() && item.description) {
+        if (choice.category.trim() && item.description && !isNotSure(choice.category)) {
           kept = withRule(kept, item.description, choice.category, item.payeeNumber);
         }
       }
@@ -934,6 +989,19 @@ export default function MpesaImportPage() {
       if (keptOther !== otherRules) keepOtherRules(keptOther);
     }
     void saveDebtLinks(debtLinks);
+    // Money in left on "Not sure" is kept to sort out later; Home says so.
+    {
+      const toMark = toMarkAfterSave(lines, choices, depositIds, incomeSources.length > 0);
+      if (toMark.length > 0) {
+        void fetch("/api/entries-to-sort", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ transactionIds: toMark }),
+        }).then(() => queryClient.invalidateQueries({ queryKey: ["entries-to-sort"] })).catch(() => {});
+      }
+      void queryClient.invalidateQueries({ queryKey: ["entries-to-sort"] });
+    }
     void saveMpesaNames(mpesaNames);
     void offerBalanceChanges(lines.filter((item) => savedIndexes.has(item.index)), saveChoices, saveParties);
   };
@@ -1306,6 +1374,22 @@ export default function MpesaImportPage() {
                     </button>
                   ))}
                 </div>
+                {months.length > 1 ? (
+                  <div className="mt-2 flex flex-wrap gap-2" data-testid="mpesa-review-months">
+                    {[{ key: null as string | null, label: "All months", count: recordable.length }, ...months].map((option) => (
+                      <button
+                        key={option.key ?? "all"}
+                        type="button"
+                        onClick={() => { setMonth(option.key); setShownCount(LINES_PER_PAGE); }}
+                        aria-pressed={month === option.key}
+                        className={`rounded-full border px-3 py-1 text-xs font-semibold ${month === option.key ? "border-primary bg-primary/10 text-primary" : "border-border bg-muted"}`}
+                        data-testid={`mpesa-review-month-${option.key ?? "all"}`}
+                      >
+                        {option.label} ({option.count})
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
                 <Input
                   value={find}
                   onChange={(event) => { setFind(event.target.value); setShownCount(LINES_PER_PAGE); }}
@@ -1313,7 +1397,7 @@ export default function MpesaImportPage() {
                   className="mt-2"
                   data-testid="mpesa-review-find"
                 />
-                {find.trim() ? (
+                {filtering ? (
                   <div className="space-y-2">
                     <p className="text-xs text-muted-foreground" data-testid="mpesa-review-find-count">{inView.length} found</p>
                     {toConfirm.length > 0 ? (
@@ -1493,6 +1577,7 @@ export default function MpesaImportPage() {
                       data-testid={`mpesa-line-category-${item.index}`}
                     >
                       <option value="">Choose what it was for</option>
+                      {canManageBudget && !categoryList.some((row) => isNotSure(row.name)) ? <option value={NOT_SURE_CATEGORY}>Not sure yet - sort it out later</option> : null}
                       {search.visible(choice.category).map((group) =>
                         group.children.length > 0 ? (
                           <optgroup key={group.name} label={group.name}>
@@ -1739,7 +1824,7 @@ export default function MpesaImportPage() {
                       Money to or from a company you own? Add it in Who owes who, then come back and choose it here.
                     </Link>
                   ) : null}
-                  {choice?.include && !isMove(choice) && !choice.contributorId && canLinkDebt(item, parties) && parties.length > 0 ? (
+                  {choice?.include && !isMove(choice) && !choice.contributorId && canLinkDebt(item, parties) ? (
                     (() => {
                       const linked = choice.debt ? parties.find((party) => party.id === choice.debt!.partyId) : undefined;
                       const guess = !choice.debt && item.direction ? matchParty(item.original ?? item.description, parties) : null;
@@ -1754,14 +1839,34 @@ export default function MpesaImportPage() {
                             </p>
                             <select
                               className={SELECT_CLASS}
-                              value={debtEditing.partyId}
-                              onChange={(event) => setDebtEditing({ ...debtEditing, partyId: event.target.value })}
+                              value={newParty ? "__new" : debtEditing.partyId}
+                              onChange={(event) => {
+                                if (event.target.value === "__new") {
+                                  setNewParty({ name: payeeName(item.original ?? item.description ?? ""), kind: "person" });
+                                  return;
+                                }
+                                setNewParty(null);
+                                setDebtEditing({ ...debtEditing, partyId: event.target.value });
+                              }}
                               aria-label="Who is it?"
                               data-testid={`mpesa-debt-party-${item.index}`}
                             >
                               <option value="">Who is it?</option>
                               {parties.map((party) => <option key={party.id} value={party.id}>{party.name}</option>)}
+                              <option value="__new">＋ Someone new</option>
                             </select>
+                            {newParty ? (
+                              <div className="flex flex-wrap gap-2" data-testid={`mpesa-debt-new-party-${item.index}`}>
+                                <Input value={newParty.name} onChange={(event) => setNewParty({ ...newParty, name: event.target.value })} placeholder="Their name, or the company's" className="h-10 min-w-[12rem] flex-1" autoFocus />
+                                <select value={newParty.kind} onChange={(event) => setNewParty({ ...newParty, kind: event.target.value as "person" | "institution" })} className="h-10 rounded-md border border-input bg-background px-2 text-sm" aria-label="A person or a company">
+                                  <option value="person">A person</option>
+                                  <option value="institution">A company or bank</option>
+                                </select>
+                                <Button size="sm" className="h-10" onClick={() => void addParty()} disabled={addingParty || newParty.name.trim().length < 2} data-testid={`mpesa-debt-new-party-add-${item.index}`}>
+                                  {addingParty ? "Adding…" : `Add ${newParty.name.trim() || "them"}`}
+                                </Button>
+                              </div>
+                            ) : null}
                             <select
                               className={SELECT_CLASS}
                               value={debtEditing.kind}

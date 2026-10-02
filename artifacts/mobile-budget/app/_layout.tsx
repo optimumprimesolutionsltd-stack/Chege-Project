@@ -455,6 +455,7 @@ function RootLayoutNav() {
       <Stack.Screen name="expense-ledger" options={{ headerShown: false }} />
       <Stack.Screen name="budget-report" options={{ headerShown: false }} />
       <Stack.Screen name="budget-plan" options={{ headerShown: false }} />
+      <Stack.Screen name="sort-entries" options={{ headerShown: false }} />
       <Stack.Screen name="business" options={{ headerShown: false }} />
       <Stack.Screen name="subscription" options={{ headerShown: false }} />
       <Stack.Screen name="help" options={{ headerShown: false, presentation: "modal" }} />

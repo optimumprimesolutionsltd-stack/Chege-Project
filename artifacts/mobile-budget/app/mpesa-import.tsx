@@ -82,6 +82,9 @@ import { keepScreenAwakeWhileSaving, letScreenSleepAgain } from '@/lib/keepAwake
 import { getImportProgress, setImportProgress, useImportProgress } from '@/lib/importProgress';
 import { clearSavePending, hasPendingSave, markSavePending } from '@/lib/importSaveJob';
 import { retryWhenCutOff } from '@/lib/saveWhileAway';
+import { plainSaveError, withRetries } from '@/lib/saveRetry';
+import { isNotSure, needsNotSureCategory, NOT_SURE_CATEGORY, toMarkAfterSave } from '@/lib/entriesToSort';
+import { handleLapsedError } from '@/lib/lapsedError';
 import { runPool, savePosting, SAVE_CONCURRENCY, type PostingApi } from '@/lib/savePosting';
 import { parseStoredRules, payeeKey, payeeName, ruleLabel, rulesStorageKey, withRule, withoutRule, type PayeeRules } from '@/lib/payeeLearning';
 import { saveDebtLinks } from '@/lib/debtReversal';
@@ -108,6 +111,8 @@ import {
   confirmLines,
   confirmableLines,
   lineMatches,
+  monthsOf,
+  inMonth,
   streamableLines,
   streamLines,
   chooseIncomeSource,
@@ -466,6 +471,7 @@ export default function MpesaImportScreen() {
   const accounts = accountList as unknown as Array<{ id: number; name: string }>;
   const { data: categoryList = [] } = useGetBudgetCategories();
   const categories = categoryList as unknown as CategoryRow[];
+  const { mutateAsync: createNotSureCategory } = useCreateBudgetCategory();
   const { mutateAsync: createDeposit } = useCreateDeposit();
   const { mutateAsync: createDisbursement } = useCreateDisbursement();
   const { mutateAsync: transferBankToBank } = useTransferBankToBank();
@@ -1089,7 +1095,7 @@ export default function MpesaImportScreen() {
       setPicking(null);
       Alert.alert(
         `Put ${targets.length} ${targets.length === 1 ? 'entry' : 'entries'} under ${name}?`,
-        `Every entry found for "${find.trim()}" that is money out, including any not shown yet below. They count as confirmed, and nothing is saved until you tap Save.`,
+        `Every entry found for ${foundFor} that is money out, including any not shown yet below. They count as confirmed, and nothing is saved until you tap Save.`,
         [
           { text: 'Not now', style: 'cancel' },
           { text: `Put under ${name}`, onPress: () => setChoices((current) => categoriseLines(targets, current, name)) },
@@ -1332,6 +1338,33 @@ export default function MpesaImportScreen() {
     [categoryList],
   );
   const [debtFor, setDebtFor] = useState<{ index: number; partyId: number | null; kind: DebtKind | null } | null>(null);
+  // Somebody not yet in Who owes who, added from the debt sheet itself.
+  const [newParty, setNewParty] = useState<{ name: string; kind: 'person' | 'institution' } | null>(null);
+  const [addingParty, setAddingParty] = useState(false);
+  // A name half-typed for one line is not carried to the next one opened.
+  useEffect(() => {
+    if (debtFor === null) setNewParty(null);
+  }, [debtFor === null]);
+  const addParty = async () => {
+    const name = newParty?.name.trim() ?? '';
+    if (!newParty || name.length < 2 || addingParty) return;
+    setAddingParty(true);
+    try {
+      const created = await customFetch<PartyLite>('/api/contributors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, kind: newParty.kind }),
+      });
+      queryClient.setQueryData<PartyLite[]>(['parties'], (current) => [...(current ?? []), created]);
+      void queryClient.invalidateQueries({ queryKey: ['parties'] });
+      setDebtFor((current) => (current ? { ...current, partyId: created.id } : current));
+      setNewParty(null);
+    } catch (error: unknown) {
+      if (!handleLapsedError(error)) Alert.alert('Could not add them', plainSaveError(error));
+    } finally {
+      setAddingParty(false);
+    }
+  };
   const setDebt = (index: number, debt: { kind: DebtKind; partyId: number } | null) =>
     setChoices((current) => ({ ...current, [index]: { ...current[index], debt } }));
 
@@ -1340,20 +1373,26 @@ export default function MpesaImportScreen() {
   const confirmedLines = recordable.filter((item) => isConfirmedToSave(item, choices[item.index]));
   const confirmedCount = confirmedLines.length;
   const confirmedFees = confirmedLines.some((item) => (item.fee ?? 0) > 0);
-  const inView = recordable.filter((item) => (view === 'all' || reviewStatus(item, choices[item.index]) === view) && lineMatches(item, find, choices[item.index]?.category));
-  const toConfirm = find.trim() ? confirmableLines(inView, choices) : [];
-  const toCategorise = find.trim() ? categorisableLines(inView, choices) : [];
+  // A month at a time, for a statement that runs January to September.
+  const [month, setMonth] = useState<string | null>(null);
+  const months = useMemo(() => monthsOf(recordable), [lines]);
+  const monthLabel = months.find((option) => option.key === month)?.label;
+  const filtering = Boolean(find.trim()) || month !== null;
+  const foundFor = [monthLabel ? `in ${monthLabel}` : '', find.trim() ? `for '${find.trim()}'` : ''].filter(Boolean).join(' ') || 'here';
+  const inView = recordable.filter((item) => (view === 'all' || reviewStatus(item, choices[item.index]) === view) && lineMatches(item, find, choices[item.index]?.category) && inMonth(item, month));
+  const toConfirm = filtering ? confirmableLines(inView, choices) : [];
+  const toCategorise = filtering ? categorisableLines(inView, choices) : [];
   // Money in that was found: one income stream for all of it ("in 50,000" is salary).
-  const toStream = find.trim() ? streamableLines(inView, choices) : [];
+  const toStream = filtering ? streamableLines(inView, choices) : [];
   // Found entries that can go to another budget together: "Umoja" finds the chama's.
-  const toSend = find.trim() ? sendableLines(inView, choices) : [];
+  const toSend = filtering ? sendableLines(inView, choices) : [];
   const [sendFound, setSendFound] = useState<{ groupId: number | null; accountId: number; category: string; incomeSourceId: number | null } | null>(null);
   const sendFoundTo = (groupName: string, accountName: string) => {
     if (!sendFound || sendFound.groupId === null) return;
     const target = { groupId: sendFound.groupId, groupName, accountId: sendFound.accountId, accountName, category: sendFound.category, incomeSourceId: sendFound.incomeSourceId };
     Alert.alert(
       `Send ${toSend.length} ${toSend.length === 1 ? 'entry' : 'entries'} to ${groupName}?`,
-      `Every entry found for "${find.trim()}", including any not shown yet below, is recorded in ${groupName}'s ${accountName} instead of here. They count as confirmed, and Jamvi remembers these payees go there unless you untick it. Nothing is saved until you tap Save.`,
+      `Every entry found for ${foundFor}, including any not shown yet below, is recorded in ${groupName}'s ${accountName} instead of here. They count as confirmed, and Jamvi remembers these payees go there unless you untick it. Nothing is saved until you tap Save.`,
       [
         { text: 'Not now', style: 'cancel' },
         { text: `Send to ${groupName}`, onPress: () => { setChoices((current) => sendLinesToOtherBudget(toSend, current, target)); setSendFound(null); } },
@@ -1378,7 +1417,7 @@ export default function MpesaImportScreen() {
     setStreamPickerOpen(false);
     Alert.alert(
       `Put ${toStream.length} ${toStream.length === 1 ? 'entry' : 'entries'} under ${source.name}?`,
-      `Every entry of money in found for "${find.trim()}", including any not shown yet below. They count as confirmed, and nothing is saved until you tap Save.`,
+      `Every entry of money in found for ${foundFor}, including any not shown yet below. They count as confirmed, and nothing is saved until you tap Save.`,
       [
         { text: 'Not now', style: 'cancel' },
         { text: `Put under ${source.name}`, onPress: () => setChoices((current) => streamLines(toStream, current, source.id)) },
@@ -1388,7 +1427,7 @@ export default function MpesaImportScreen() {
   const confirmFound = () => {
     Alert.alert(
       `Confirm ${toConfirm.length} ${toConfirm.length === 1 ? 'entry' : 'entries'}?`,
-      `Every suggestion found for "${find.trim()}", including any not shown yet below, is kept as Jamvi suggested. Nothing is saved until you tap Save.`,
+      `Every suggestion found for ${foundFor}, including any not shown yet below, is kept as Jamvi suggested. Nothing is saved until you tap Save.`,
       [
         { text: 'Not now', style: 'cancel' },
         { text: 'Confirm them', onPress: () => setChoices((current) => confirmLines(toConfirm, current)) },
@@ -1454,7 +1493,7 @@ export default function MpesaImportScreen() {
   };
 
   // The calls that record things, handed to the one function that saves a line.
-  const postingApi: PostingApi = {
+  const rawPostingApi: PostingApi = {
     deposit: (data) => createDeposit({ data: data as never }) as Promise<{ id: number }>,
     disbursement: (data) => createDisbursement({ data: data as never }) as Promise<{ id: number }>,
     bankToBank: (data) => transferBankToBank({ data: data as never }) as Promise<{ outgoing: { id: number }; incoming: { id: number } }>,
@@ -1469,6 +1508,9 @@ export default function MpesaImportScreen() {
         : createDisbursementInOtherBudget(data as never, options);
     },
   };
+  // Each request tried again through a server restart or a cut - the M-Pesa
+  // charge as much as the entry it came with (lib/saveRetry).
+  const postingApi: PostingApi = withRetries(rawPostingApi, (task) => retryWhenCutOff(task));
 
   // Throwing a statement away loses days of choices, so it is asked first -
   // from the top of the screen or the bottom. What is already saved stays.
@@ -1555,6 +1597,8 @@ export default function MpesaImportScreen() {
     void markSavePending(savingFor);
     const result: Outcome = { saved: 0, repeats: 0, failed: [] };
     const savedIndexes = new Set<number>();
+    // What each saved line became, for marking money in left on "Not sure".
+    const depositIds = new Map<number, number>();
     // Who each debt entry was for, kept so deleting it can offer to put that person's balance back.
     const debtLinks: DebtEntryLink[] = [];
     // M-Pesa's own name for each entry saved under a nickname, for Search.
@@ -1576,6 +1620,16 @@ export default function MpesaImportScreen() {
         setChoices(saveChoices);
       } catch {
         // Saved unlinked: the borrowing still is not income; a repayment says why it failed.
+      }
+    }
+    // "Not sure yet" is a real category, made the first time it is needed, so
+    // the entry still counts as spending (lib/entriesToSort).
+    if (needsNotSureCategory(lines, choices, categories.map((row) => row.name))) {
+      try {
+        await createNotSureCategory({ data: { name: NOT_SURE_CATEGORY, budgetAmount: 0, priority: 3, isRecurring: true, activeMonth: null, activeYear: null } });
+        void queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
+      } catch {
+        // Already there, or it fails each entry with a reason of its own.
       }
     }
     // Worked out once, so a handful of these can travel to the server together instead of
@@ -1609,19 +1663,20 @@ export default function MpesaImportScreen() {
         try {
           // Waits while Jamvi is behind another app, and tries again an entry whose
           // request the phone cut off (lib/saveWhileAway).
-          const posted = await retryWhenCutOff(() => savePosting(built, postingApi, accountId));
+          const posted = await savePosting(built, postingApi, accountId);
           if (choice.debt && posted.id) debtLinks.push({ transactionId: posted.id, partyId: choice.debt.partyId, kind: choice.debt.kind });
           const named = mpesaNameFor(posted.id, item.original, item.description);
           if (named) mpesaNames.push(named);
-          if (posted.feeFailed) result.failed.push({ what: `${item.description} charge`, why: 'The entry saved, but its charge did not.' });
+          if (posted.feeFailed) result.failed.push({ what: `${item.description} charge`, why: `The entry saved, but its M-Pesa charge${item.fee ? ` of KES ${item.fee}` : ''} did not. Add it on the Bank tab as money out.` });
           result.saved += 1;
           savedIndexes.add(item.index);
+          if (posted.id !== undefined && item.direction === 'in') depositIds.set(item.index, posted.id);
         } catch (error: unknown) {
           if (isLapsedRefusal(error)) {
             lapsed = true;
             return;
           }
-          const message = error instanceof Error ? error.message : 'It was not saved.';
+          const message = plainSaveError(error);
           if (/already recorded/i.test(message)) {
             result.repeats += 1;
             // Already on the server: shown as recorded, not left looking unsaved.
@@ -1679,7 +1734,7 @@ export default function MpesaImportScreen() {
         }
         // Kept here this time: a budget remembered for it before no longer applies.
         keptOther = withoutOtherBudgetRule(keptOther, item);
-        if (choice.category.trim() && item.description) {
+        if (choice.category.trim() && item.description && !isNotSure(choice.category)) {
           kept = withRule(kept, item.description, choice.category, item.payeeNumber);
         }
       }
@@ -1687,6 +1742,18 @@ export default function MpesaImportScreen() {
       if (keptOther !== otherRules) keepOtherRules(keptOther);
     }
     void saveDebtLinks(debtLinks);
+    // Money in left on "Not sure" is kept to sort out later; Home says so.
+    {
+      const toMark = toMarkAfterSave(lines, choices, depositIds, incomeSources.length > 0);
+      if (toMark.length > 0) {
+        void customFetch('/api/entries-to-sort', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ transactionIds: toMark }),
+        }).then(() => queryClient.invalidateQueries({ queryKey: ['entries-to-sort'] })).catch(() => {});
+      }
+      void queryClient.invalidateQueries({ queryKey: ['entries-to-sort'] });
+    }
     void saveMpesaNames(mpesaNames);
     offerBalanceChanges(lines.filter((item) => savedIndexes.has(item.index)), saveChoices, saveParties);
   };
@@ -2208,6 +2275,25 @@ export default function MpesaImportScreen() {
                     );
                   })}
                 </View>
+                {months.length > 1 ? (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 8, paddingVertical: 2, marginTop: 10 }} testID="mpesa-review-months">
+                    {[{ key: null as string | null, label: 'All months', count: recordable.length }, ...months].map((option) => {
+                      const on = month === option.key;
+                      return (
+                        <Pressable
+                          key={option.key ?? 'all'}
+                          onPress={() => { setMonth(option.key); setShownCount(LINES_PER_PAGE); }}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: on }}
+                          testID={`mpesa-review-month-${option.key ?? 'all'}`}
+                          style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, borderWidth: 1, borderColor: on ? colors.primary : colors.border, backgroundColor: on ? `${colors.primary}22` : colors.muted }}
+                        >
+                          <Text style={{ color: on ? colors.primary : colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>{option.label} ({option.count})</Text>
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+                ) : null}
                 <TextInput
                   value={find}
                   onChangeText={(value) => { setFind(value); setShownCount(LINES_PER_PAGE); }}
@@ -2218,7 +2304,7 @@ export default function MpesaImportScreen() {
                   style={[styles.pasteBox, { minHeight: 44, marginTop: 10, borderColor: colors.border, backgroundColor: colors.muted, color: colors.foreground }]}
                   testID="mpesa-review-find"
                 />
-                {find.trim() ? (
+                {filtering ? (
                   <View style={{ gap: 8, marginTop: 8 }}>
                     <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0 }]} testID="mpesa-review-find-count">
                       {inView.length} found
@@ -2463,6 +2549,22 @@ export default function MpesaImportScreen() {
                       </Text>
                       <Feather name="chevron-down" size={16} color={colors.mutedForeground} />
                     </Pressable>
+                  ) : null}
+                  {out && choice?.include && choice.debt?.kind !== 'lend' && !isMove(choice) && !isNotSure(choice.category) && canManageBudget ? (
+                    <Pressable
+                      onPress={() => setChoices((current) => ({ ...current, [item.index]: { ...current[item.index], category: NOT_SURE_CATEGORY, auto: false, remember: false } }))}
+                      accessibilityRole="button"
+                      testID={`mpesa-line-not-sure-${item.index}`}
+                      hitSlop={6}
+                      style={{ alignSelf: 'flex-start', paddingVertical: 4 }}
+                    >
+                      <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>Not sure yet - save it and sort it out later</Text>
+                    </Pressable>
+                  ) : null}
+                  {out && choice?.include && isNotSure(choice.category) ? (
+                    <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0 }]} testID={`mpesa-line-not-sure-note-${item.index}`}>
+                      Saved under Not sure yet. Home will remind you to sort it out.
+                    </Text>
                   ) : null}
                   {out && choice?.include && !isMove(choice) && choice.category && item.description && rules[payeeKey(item.description)] !== choice.category ? (
                     <Pressable
@@ -2751,7 +2853,7 @@ export default function MpesaImportScreen() {
                       </Text>
                     </Pressable>
                   ) : null}
-                  {choice?.include && !isMove(choice) && !choice.contributorId && canLinkDebt(item, parties) && parties.length > 0 ? (
+                  {choice?.include && !isMove(choice) && !choice.contributorId && canLinkDebt(item, parties) ? (
                     (() => {
                       const linked = choice.debt ? parties.find((party) => party.id === choice.debt!.partyId) : undefined;
                       const guess = !choice.debt && item.direction ? matchParty(item.original ?? item.description, parties) : null;
@@ -3040,6 +3142,51 @@ export default function MpesaImportScreen() {
                 );
               })}
             </ScrollView>
+            {newParty ? (
+              <View style={{ gap: 8 }} testID="mpesa-debt-new-party">
+                <TextInput
+                  value={newParty.name}
+                  onChangeText={(name) => setNewParty({ ...newParty, name })}
+                  placeholder="Their name, or the company's"
+                  placeholderTextColor={colors.mutedForeground}
+                  autoFocus
+                  style={[styles.pasteBox, { minHeight: 44, borderColor: colors.border, backgroundColor: colors.muted, color: colors.foreground }]}
+                  testID="mpesa-debt-new-party-name"
+                />
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  {(['person', 'institution'] as const).map((kind) => {
+                    const on = newParty.kind === kind;
+                    return (
+                      <Pressable key={kind} onPress={() => setNewParty({ ...newParty, kind })} accessibilityRole="button" accessibilityState={{ selected: on }} testID={`mpesa-debt-new-party-${kind}`}
+                        style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, borderWidth: 1, borderColor: on ? colors.primary : colors.border, backgroundColor: on ? `${colors.primary}22` : colors.muted }}>
+                        <Text style={{ color: on ? colors.primary : colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>{kind === 'person' ? 'A person' : 'A company or bank'}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <Pressable onPress={() => void addParty()} disabled={addingParty || newParty.name.trim().length < 2} accessibilityRole="button" testID="mpesa-debt-new-party-add"
+                    style={[styles.categoryButton, { flex: 1, justifyContent: 'center', borderColor: colors.primary, backgroundColor: `${colors.primary}18`, opacity: newParty.name.trim().length < 2 ? 0.5 : 1 }]}>
+                    {addingParty ? <ActivityIndicator size="small" color={colors.primary} /> : <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>Add {newParty.name.trim() || 'them'}</Text>}
+                  </Pressable>
+                  <Pressable onPress={() => setNewParty(null)} accessibilityRole="button" style={[styles.categoryButton, { justifyContent: 'center', borderColor: colors.border, backgroundColor: colors.muted }]}>
+                    <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold' }}>Cancel</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : (
+              <Pressable
+                onPress={() => {
+                  const line = lines?.find((candidate) => candidate.index === debtFor?.index);
+                  setNewParty({ name: line ? payeeName(line.original ?? line.description ?? '') : '', kind: 'person' });
+                }}
+                style={styles.option}
+                accessibilityRole="button"
+                testID="mpesa-debt-new-party-open"
+              >
+                <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>＋ Someone new</Text>
+              </Pressable>
+            )}
             {(() => {
               const line = lines?.find((candidate) => candidate.index === debtFor?.index);
               if (!line?.direction) return null;

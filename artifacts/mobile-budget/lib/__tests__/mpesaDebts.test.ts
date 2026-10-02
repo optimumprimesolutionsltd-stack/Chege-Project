@@ -36,10 +36,14 @@ const parties: PartyLite[] = [
 
 // "Yes, add the debt step": a payment to or from a person can be a debt or a loan.
 describe('which lines can be a debt', () => {
-  it('only a payment to or from a person', () => {
-    expect(canLinkDebt(line({ type: 'person_payment' }))).toBe(true);
+  // Widened 2 Oct 2026: on a cash withdrawal the option was missing, which read as
+  // Jamvi's suggested category having removed it.
+  it('any payment that could be a loan or a repayment - not airtime, Fuliza, charges or reversals', () => {
+    for (const type of ['person_payment', 'merchant_payment', 'paybill_payment', 'cash_withdrawal']) {
+      expect(canLinkDebt(line({ type }))).toBe(true);
+    }
     expect(canLinkDebt(line({ type: 'person_receipt', direction: 'in' }))).toBe(true);
-    for (const type of ['merchant_payment', 'paybill_payment', 'airtime_purchase', 'cash_withdrawal', 'fuliza_fee']) {
+    for (const type of ['airtime_purchase', 'fuliza_fee', 'fuliza_repaid', 'transaction_charge', 'reversal']) {
       expect(canLinkDebt(line({ type }))).toBe(false);
     }
     expect(canLinkDebt(line({ status: 'skipped' }))).toBe(false);
@@ -51,10 +55,10 @@ describe('which lines can be a debt', () => {
     expect(canLinkDebt(line({ type: 'bank_receipt', direction: 'in' }))).toBe(true);
   });
 
-  it('a paybill or till payment can be one when it names a bank or somebody in Who owes who, and not otherwise', () => {
+  it('a paybill or till payment can be one, whoever it names', () => {
     const company = [{ id: 5, name: 'Sample Holdings Ltd', owedToUs: 0, owedByUs: 0 }];
     expect(canLinkDebt(line({ type: 'paybill_payment', description: 'Sample Kcb Bank (Acc 1)' }))).toBe(true);
-    expect(canLinkDebt(line({ type: 'paybill_payment', description: 'Sample Electricity Company' }))).toBe(false);
+    expect(canLinkDebt(line({ type: 'paybill_payment', description: 'Sample Electricity Company' }))).toBe(true);
     expect(canLinkDebt(line({ type: 'paybill_payment', description: 'Sample Holdings Ltd' }), company)).toBe(true);
     expect(canLinkDebt(line({ type: 'merchant_payment', description: 'Sample Holdings Ltd' }), company)).toBe(true);
     expect(canLinkDebt(line({ type: 'airtime_purchase', description: 'Sample Holdings Ltd' }), company)).toBe(false);
