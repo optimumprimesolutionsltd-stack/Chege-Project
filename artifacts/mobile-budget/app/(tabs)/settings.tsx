@@ -40,6 +40,7 @@ import {
   type WorkspaceNameStyle,
 } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
+import { SubcategorySuggestions } from '@/components/SubcategorySuggestions';
 import { useAppearance, type Appearance } from '@/hooks/useAppearance';
 import { useEntitlements } from '@/hooks/useEntitlements';
 import { statusChip } from '@/lib/subscription-status';
@@ -1451,6 +1452,10 @@ export default function SettingsScreen() {
              </View>
            </>
          ) : null}
+         {/* As on the web's Settings: shows itself only when there is something to tidy. */}
+         <View style={{ marginTop: 12 }}>
+           <SubcategorySuggestions canManage={group?.isPrivate === true || canManageShared} />
+         </View>
          <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>
            {group?.isPrivate ? 'PERSONAL BUDGET IDENTITY' : 'SHARED GROUP IDENTITY'}
          </Text>

@@ -24,6 +24,9 @@ TWINS = {
     'savePosting.ts': ('save-posting.ts', {'./mpesaImport': './mpesa-import'}),
     'otherBudgetOptions.ts': ('other-budget-options.ts', {}),
     'lapsedSave.ts': ('lapsed-save.ts', {}),
+    'budgetPlan.ts': ('budget-plan-rows.ts', {}),
+    'budgetReport.ts': ('budget-report.ts', {}),
+    'debtSummary.ts': ('debt-summary.ts', {}),
 }
 
 

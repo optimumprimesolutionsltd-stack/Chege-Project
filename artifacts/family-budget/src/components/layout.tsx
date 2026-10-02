@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@workspace/replit-auth-web';
-import { LayoutDashboard, Receipt, PieChart, Activity, LogOut, Menu, X, Settings, Target, Landmark, BarChart3, Plus, Search, CreditCard, HandCoins, UsersRound, FileText, Repeat, ListChecks, ChevronDown, MessageSquare } from 'lucide-react';
+import { LayoutDashboard, Receipt, PieChart, Activity, LogOut, Menu, X, Settings, Target, Landmark, BarChart3, Plus, Search, CreditCard, HandCoins, UsersRound, FileText, Repeat, ListChecks, ChevronDown, MessageSquare, TrendingDown, HelpCircle, ClipboardList } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -101,6 +101,28 @@ export function Layout({ children }: { children: React.ReactNode }) {
   // Business shows once a category is a side hustle's cost (linked to an income stream), as on the phone.
   const { data: navCategories = [] } = useGetBudgetCategories();
   const hasBusiness = navCategories.some((category) => category.reducesIncomeSourceId != null);
+  // Debt shows once there is one, as the phone's Debt tab does: a category
+  // marked as a debt, or somebody this budget owes. Neither field is in the
+  // generated category type, so both are read plainly.
+  const { data: debtCategories = [] } = useQuery<Array<{ debtBalance?: number | null }>>({
+    queryKey: ['budget-categories-full'],
+    queryFn: async () => {
+      const response = await fetch('/api/budget-categories', { credentials: 'include' });
+      return response.ok ? response.json() : [];
+    },
+    staleTime: 60_000,
+  });
+  const { data: debtParties = [] } = useQuery<Array<{ owedByUs?: number | null }>>({
+    queryKey: ['parties'],
+    queryFn: async () => {
+      const response = await fetch('/api/contributors', { credentials: 'include' });
+      return response.ok ? response.json() : [];
+    },
+    staleTime: 60_000,
+  });
+  const hasDebt =
+    debtCategories.some((row) => row.debtBalance !== null && row.debtBalance !== undefined) ||
+    debtParties.some((party) => typeof party.owedByUs === 'number');
   const workspaceContextLabel = group ? (isSharedWorkspace ? 'Shared group' : 'Personal budget') : 'Select a budget';
   const activeWorkspaceRole = group?.role ?? (group?.isPrivate ? 'owner' : 'member');
   const activeWorkspaceRoleLabel = activeWorkspaceRole === 'owner'
@@ -192,6 +214,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
     // What each named thing has cost, as the phone's Spending by item.
     ...(uses('expenses') ? [{ href: '/spending-by-item', label: 'Spending by item', icon: Receipt }] : []),
     ...(hasBusiness ? [{ href: '/business', label: 'Business', icon: BarChart3 }] : []),
+    ...(hasDebt ? [{ href: '/debt', label: 'Debt', icon: TrendingDown }] : []),
+    // The plan on its own, and the plan against what was spent, as on the phone.
+    ...(uses('budget') ? [{ href: '/budget-plan', label: 'Budget plan', icon: ClipboardList }] : []),
+    ...(uses('budget') ? [{ href: '/budget-report', label: 'Budget report', icon: ClipboardList }] : []),
     // Search, Subscription and Settings are never hideable: Settings is how a
     // section gets switched back on, and Subscription is how the app keeps
     // being paid for. Hiding either strands an admin outside their own budget.
@@ -200,6 +226,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: '/groups', label: 'My budget & groups', icon: UsersRound },
     { href: '/subscription', label: payLabel, icon: CreditCard },
     { href: '/search', label: 'Search', icon: Search },
+    { href: '/help', label: 'How do I…', icon: HelpCircle },
     { href: '/settings', label: 'Settings', icon: Settings },
   ];
 
