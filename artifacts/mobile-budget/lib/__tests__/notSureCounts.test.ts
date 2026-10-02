@@ -51,3 +51,17 @@ describe('Not sure on money sent to another budget', () => {
     expect(readFileSync('../family-budget/src/pages/mpesa-import.tsx', 'utf8')).toContain('<option value={NOT_SURE_SOURCE}>Not sure - sort it out later</option>');
   });
 });
+
+// Asked for 2 Oct 2026: "anything Jamvi has not preselected to be under not sure yet".
+describe('money out Jamvi cannot place starts on Not sure yet', () => {
+  it('as a suggestion that waits to be confirmed, and Fuliza is left alone', async () => {
+    const { initialChoices } = await import('@/lib/mpesaImport');
+    const out = line(1, { direction: 'out', type: 'paybill_payment', description: 'Nobody known' });
+    const fuliza = line(2, { direction: 'out', type: 'fuliza_repaid', description: 'Fuliza' });
+    const choices = initialChoices([out, fuliza], [], ['Food']);
+    expect(choices[1]).toMatchObject({ category: 'Not sure yet', auto: true });
+    expect(reviewStatus(out, choices[1])).toBe('suggested');
+    expect(isConfirmedToSave(out, choices[1])).toBe(false);
+    expect(choices[2].category).toBe('');
+  });
+});

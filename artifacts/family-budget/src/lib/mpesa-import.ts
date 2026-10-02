@@ -254,7 +254,7 @@ export function initialChoices(
 ): Record<number, Choice> {
   const choices: Record<number, Choice> = {};
   for (const line of lines) {
-    const suggested = suggestionFor(line, history, categoryNames, chargeCategory, rules);
+    const suggested = notSureIfNothing(line, suggestionFor(line, history, categoryNames, chargeCategory, rules));
     choices[line.index] = { include: isRecordable(line) && (canRecordOut || line.direction !== "out"), category: suggested, auto: suggested !== "" };
     if (line.direction === "in") {
       // Fuliza still owed is borrowed, never income, so it is offered no source.
@@ -263,6 +263,20 @@ export function initialChoices(
     }
   }
   return choices;
+}
+
+/** The category money out is filed under when nobody can yet say what it was for (lib/entriesToSort). */
+export const NOT_SURE_CATEGORY = "Not sure yet";
+
+/**
+ * Money out Jamvi has nothing to suggest for starts on "Not sure yet" - asked
+ * for 2 Oct 2026 - as a suggestion like any other: it waits for the person to
+ * confirm it (one at a time or with the bulk buttons), and Home brings it back
+ * to sort once saved. Fuliza is left alone: repaying it needs no category.
+ */
+function notSureIfNothing(line: PreviewLine, suggested: string): string {
+  if (suggested || line.direction !== "out" || line.type?.startsWith("fuliza_")) return suggested;
+  return NOT_SURE_CATEGORY;
 }
 
 function suggestionFor(
@@ -325,7 +339,7 @@ export function refreshSuggestions(
       continue;
     }
     if (current.category && !current.auto) continue;
-    const suggested = suggestionFor(line, history, categoryNames, chargeCategory, rules);
+    const suggested = notSureIfNothing(line, suggestionFor(line, history, categoryNames, chargeCategory, rules));
     next[line.index] = { ...current, category: suggested, auto: suggested !== "" };
   }
   return next;
@@ -379,7 +393,9 @@ export function chooseCategory(
   for (const line of lines) {
     if (line.index === index || line.direction !== "out" || !line.description) continue;
     if (clean(line.description) !== payee) continue;
-    if (choices[line.index]?.category) continue;
+    // Jamvi"s own "Not sure yet" is no answer: the payee"s choice replaces it.
+    const other = choices[line.index];
+    if (other?.category && !(other.auto && other.category === NOT_SURE_CATEGORY)) continue;
     next[line.index] = { ...choices[line.index], category, auto: true };
   }
   return next;

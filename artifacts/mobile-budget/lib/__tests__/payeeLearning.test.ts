@@ -86,7 +86,7 @@ describe('the order they are tried in when a list is read', () => {
 
   it('does not learn from a line that named nobody', () => {
     expect(initialChoices([line({ named: false, description: 'M-Pesa payment' })], [past('M-Pesa payment', 'Misc'), past('M-Pesa payment', 'Misc')], NAMES, '')[0].category).toBe('Misc');
-    expect(initialChoices([line({ named: false, description: 'Sample Hotel' })], history, NAMES, '')[0].category).toBe('');
+    expect(initialChoices([line({ named: false, description: 'Sample Hotel' })], history, NAMES, '')[0].category).toBe('Not sure yet');
   });
 });
 
@@ -179,7 +179,7 @@ describe('a fee never teaches its payment where to go', () => {
   };
   it('suggests nothing rather than Bank charges', () => {
     expect(fuzzyCategory(payee, history, ['Bank charges'])).toBe('');
-    expect(initialChoices([line], history, ['Bank charges'], 'Bank charges')[0].category).toBe('');
+    expect(initialChoices([line], history, ['Bank charges'], 'Bank charges')[0].category).toBe('Not sure yet');
   });
   it('still learns from real spending to the same payee', () => {
     const paid = [...history, { type: 'disbursement', description: payee, expenseCategory: 'Hermda traders' }];

@@ -1,4 +1,4 @@
-import { destinationOf, isRecordable, reviewStatus, type Choice, type PreviewLine } from './mpesaImport';
+import { destinationOf, isRecordable, NOT_SURE_CATEGORY, reviewStatus, type Choice, type PreviewLine } from './mpesaImport';
 
 /**
  * Saving an entry as "Not sure" and sorting it out later.
@@ -13,7 +13,7 @@ import { destinationOf, isRecordable, reviewStatus, type Choice, type PreviewLin
  *
  * Shared with the web (sync-web-twins.py).
  */
-export const NOT_SURE_CATEGORY = 'Not sure yet';
+export { NOT_SURE_CATEGORY };
 
 export type EntryToSort = {
   id: number;
