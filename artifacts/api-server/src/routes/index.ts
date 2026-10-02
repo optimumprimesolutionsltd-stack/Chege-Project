@@ -26,6 +26,7 @@ import parserRouter from "./parser";
 import mpesaImportRouter from "./mpesa-import";
 import debtLinksRouter from "./debt-links";
 import mpesaNamesRouter from "./mpesa-names";
+import entriesToSortRouter from "./entries-to-sort";
 import {
   publicSubscriptionPlansRouter,
   subscriptionPlansRouter,
@@ -73,6 +74,7 @@ router.use(jointAccountRouter);
 router.use(mpesaImportRouter);
 router.use(debtLinksRouter);
 router.use(mpesaNamesRouter);
+router.use(entriesToSortRouter);
 router.use(incomeSourcesRouter);
 router.use(invitationsRouter);
 router.use(inviteLinksRouter);

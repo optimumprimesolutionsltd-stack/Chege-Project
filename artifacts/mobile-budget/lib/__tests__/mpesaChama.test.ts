@@ -98,7 +98,7 @@ describe('the import screens offer both, phone and web', () => {
 
   it('sends everything found to a budget the person runs, after asking', () => {
     for (const screen of [phone, web]) {
-      expect(screen).toContain('const toSend = find.trim() ? sendableLines(inView, choices) : [];');
+      expect(screen).toContain('const toSend = filtering ? sendableLines(inView, choices) : [];');
       expect(screen).toContain('sendLinesToOtherBudget(toSend, current, target)');
       expect(screen).toContain('mpesa-review-send-go');
     }

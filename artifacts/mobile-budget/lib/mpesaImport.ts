@@ -989,3 +989,28 @@ export function categoriseLines(lines: readonly PreviewLine[], choices: Record<n
   return next;
 }
 
+
+const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/**
+ * The months a statement's entries fall in, oldest first, with how many of
+ * each - for working through a long statement a month at a time.
+ */
+export function monthsOf(lines: readonly PreviewLine[]): Array<{ key: string; label: string; count: number }> {
+  const counts = new Map<string, number>();
+  for (const line of lines) {
+    const key = line.date?.slice(0, 7);
+    if (key && /^\d{4}-\d{2}$/.test(key)) counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  const years = new Set([...counts.keys()].map((key) => key.slice(0, 4)));
+  return [...counts.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, count]) => {
+      const name = MONTH_SHORT[Number(key.slice(5, 7)) - 1] ?? key;
+      // The year only when the statement spans more than one.
+      return { key, label: years.size > 1 ? `${name} ${key.slice(0, 4)}` : name, count };
+    });
+}
+
+/** Whether a line falls in `month` ("2026-01"), or `null` for every month. */
+export const inMonth = (line: PreviewLine, month: string | null): boolean => month === null || line.date?.slice(0, 7) === month;

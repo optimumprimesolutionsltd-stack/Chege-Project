@@ -30,6 +30,8 @@ import { DebtSummaryCard } from '@/components/DebtSummaryCard';
 import { useColors } from '@/hooks/useColors';
 import { useEntitlements } from '@/hooks/useEntitlements';
 import { mayStartGroup } from '@/lib/groupStart';
+import { toSortTitle, type EntryToSort } from '@/lib/entriesToSort';
+import { useQuery } from '@tanstack/react-query';
 import { PageScrollView } from '@/components/PageScrollReset';
 import { useAuth } from '@/lib/auth';
 import BudgetRing from '@/components/BudgetRing';
@@ -310,6 +312,14 @@ export default function DashboardScreen() {
   const [arrangingAreas, setArrangingAreas] = useState(false);
   const baseShortcuts = isSharedWorkspace ? SHARED_OVERVIEW_SHORTCUTS : PERSONAL_OVERVIEW_SHORTCUTS;
   const { data: entitlements } = useEntitlements();
+  // Entries saved as "Not sure" in any month, waiting to be sorted out.
+  const { data: toSort } = useQuery<{ entries: EntryToSort[] }>({
+    queryKey: ['entries-to-sort'],
+    queryFn: () => customFetch('/api/entries-to-sort'),
+    staleTime: 60_000,
+    retry: false,
+  });
+  const toSortCount = toSort?.entries.length ?? 0;
   const allShortcuts = [
     ...baseShortcuts,
     ...(canManageAccess ? [INVITE_SHORTCUT] : []),
@@ -696,6 +706,30 @@ export default function DashboardScreen() {
             </View>
           </View>
         )}
+
+        {toSortCount > 0 && canManageBudget ? (
+          <Pressable
+            testID="entries-to-sort-cta"
+            accessibilityRole="button"
+            accessibilityLabel={`${toSortTitle(toSortCount)}. Open Sort them out`}
+            onPress={() => router.push('/sort-entries' as never)}
+            style={({ pressed }) => [styles.uncategorizedCtaCard, { backgroundColor: colors.card, borderColor: '#F59E0B', opacity: pressed ? 0.85 : 1 }]}
+          >
+            <View style={styles.groupCtaHeader}>
+              <View style={[styles.groupCtaIcon, { backgroundColor: '#F59E0B22' }]}>
+                <Feather name="help-circle" size={20} color="#D97706" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.groupCtaEyebrow, { color: '#D97706' }]}>SAVED AS NOT SURE</Text>
+                <Text style={[styles.groupCtaTitle, { color: colors.foreground }]}>{toSortTitle(toSortCount)}</Text>
+              </View>
+              <Feather name="chevron-right" size={18} color={colors.primary} />
+            </View>
+            <Text style={[styles.groupCtaText, { color: colors.mutedForeground }]}>
+              Say what each one was for, or where it came from, whenever you remember.
+            </Text>
+          </Pressable>
+        ) : null}
 
         {!summaryLoading && summary && summary.totalBudget === 0 && (
           <View style={[styles.budgetCtaCard, { backgroundColor: colors.card, borderColor: `${colors.primary}55` }]}>

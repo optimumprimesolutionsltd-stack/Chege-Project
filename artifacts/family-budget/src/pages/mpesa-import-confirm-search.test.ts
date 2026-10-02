@@ -13,7 +13,7 @@ describe("the web statement import saves only what was confirmed, after asking",
   });
 
   it("finds entries or a category, and confirms or categorises them together after asking", () => {
-    expect(page).toContain("&& lineMatches(item, find, choices[item.index]?.category));");
+    expect(page).toContain("&& lineMatches(item, find, choices[item.index]?.category) && inMonth(item, month));");
     expect(page).toContain("setChoices((current) => confirmLines(toConfirm, current));");
     expect(page).toContain("setChoices((current) => categoriseLines(toCategorise, current, name));");
   });

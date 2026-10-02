@@ -1,5 +1,6 @@
 import { AppState, type AppStateStatus } from 'react-native';
 import { ApiError } from '@workspace/api-client-react';
+import { retrySave } from './saveRetry';
 
 /**
  * Keeping a long save going when the person switches to another app.
@@ -34,27 +35,16 @@ export function wasCutOff(error: unknown): boolean {
 }
 
 /**
- * Runs `task`, and if the connection was cut off, waits for Jamvi to be in
- * front again and tries once more - up to `attempts` times in all. A request
- * that did reach the server before the cut is refused the second time as
- * already recorded, so nothing is saved twice.
+ * Runs `task`, and if the connection was cut off or the server was briefly
+ * not there (a restart answers 502 for a minute), waits for Jamvi to be in
+ * front again and tries again on lib/saveRetry's schedule. A request that did
+ * reach the server before the cut is refused the second time as already
+ * recorded, so nothing is saved twice.
  */
-export async function retryWhenCutOff<T>(
+export function retryWhenCutOff<T>(
   task: () => Promise<T>,
-  attempts = 3,
   waitForApp: () => Promise<void> = whenAppActive,
-  pause: (ms: number) => Promise<void> = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  pause?: (ms: number) => Promise<void>,
 ): Promise<T> {
-  let lastError: unknown;
-  for (let attempt = 1; attempt <= attempts; attempt += 1) {
-    await waitForApp();
-    try {
-      return await task();
-    } catch (error) {
-      lastError = error;
-      if (!wasCutOff(error) || attempt === attempts) throw error;
-      await pause(1_000 * attempt);
-    }
-  }
-  throw lastError;
+  return retrySave(task, { before: waitForApp, pause });
 }

@@ -1,4 +1,4 @@
-import { BANK_WORDS, type Choice, type PreviewLine } from './mpesaImport';
+import { type Choice, type PreviewLine } from './mpesaImport';
 
 /** A person or institution in "Who owes who", with what stands between you. */
 export type PartyLite = { id: number; name: string; owedToUs?: number | null; owedByUs?: number | null };
@@ -34,15 +34,16 @@ export const debtKindsFor = (direction: 'out' | 'in'): DebtKind[] =>
  * about. A paybill or till payment is asked about only when it names a bank, or a
  * person or company already in Who owes who, so everyday bills stay uncluttered.
  */
-export const canLinkDebt = (line: PreviewLine, parties: readonly PartyLite[] = []): boolean => {
+export const canLinkDebt = (line: PreviewLine, _parties: readonly PartyLite[] = []): boolean => {
   if (line.status !== 'ready') return false;
-  if (line.type === 'person_payment' || line.type === 'person_receipt' || line.type === 'bank_receipt') return true;
-  if (line.type === 'paybill_payment' || line.type === 'merchant_payment') {
-    const name = line.original ?? line.description ?? '';
-    return BANK_WORDS.test(name) || matchParty(name, parties) !== null;
-  }
-  return false;
+  // Asked for 2 Oct 2026: cash taken out at an agent, a till or a paybill can
+  // be a loan or a repayment as much as a payment to a person, and the option
+  // vanishing from those read as Jamvi's suggestion removing it. Only what is
+  // never a debt stays without it: airtime, Fuliza (its own debt already), an
+  // M-Pesa charge and a reversal.
+  return !NEVER_A_DEBT.has(line.type ?? '') && !(line.type ?? '').startsWith('fuliza_');
 };
+const NEVER_A_DEBT = new Set(['airtime_purchase', 'transaction_charge', 'reversal']);
 
 const clean = (value: string) => value.trim().replace(/\s+/g, ' ').toLocaleLowerCase('en-KE');
 const words = (value: string) => clean(value).split(' ').filter((word) => word.length > 1);

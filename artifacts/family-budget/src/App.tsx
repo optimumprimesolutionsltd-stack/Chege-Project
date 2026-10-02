@@ -1,4 +1,5 @@
 import Business from '@/pages/business';
+import SortEntries from '@/pages/sort-entries';
 import Debt from '@/pages/debt';
 import Help from '@/pages/help';
 import BudgetPlanPage from '@/pages/budget-plan-page';
@@ -155,6 +156,7 @@ function AuthenticatedApp() {
         <Route path="/search" component={SearchPage} />
         <Route path="/spending-by-item" component={SpendingByItem} />
         <Route path="/business" component={Business} />
+        <Route path="/sort-entries" component={SortEntries} />
         <Route path="/debt" component={Debt} />
         <Route path="/help" component={Help} />
         <Route path="/budget-plan" component={BudgetPlanPage} />

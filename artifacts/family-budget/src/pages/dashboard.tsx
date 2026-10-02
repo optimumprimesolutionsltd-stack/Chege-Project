@@ -82,6 +82,7 @@ import { HomeAnswersCard } from "@/components/home-answers-card";
 import { DEFAULT_WORKSPACE_ACCENT } from "@/lib/workspace-accent";
 import { useEntitlements } from "@/hooks/use-entitlements";
 import { mayStartGroup } from "@/lib/group-start";
+import { toSortTitle, type EntryToSort } from "@/lib/entries-to-sort";
 
 type QuickAction = "none" | "income" | "expense" | "goal";
 const RECURRING_DASHBOARD_DRAFT_KEY = "jamvi-recurring-dashboard-draft";
@@ -2622,6 +2623,18 @@ export default function Dashboard() {
   const canManageShared = isSharedWorkspace && canManageSetup;
   const canManageCategories = group?.isPrivate === true || canManageShared;
   const canManageExpenses = group?.isPrivate === true || canManageShared;
+  // Entries saved as "Not sure" in any month, waiting to be sorted out.
+  const { data: toSort } = useQuery<{ entries: EntryToSort[] }>({
+    queryKey: ["entries-to-sort"],
+    queryFn: async () => {
+      const response = await fetch("/api/entries-to-sort", { credentials: "include" });
+      if (!response.ok) throw new Error("Could not load entries to sort.");
+      return response.json();
+    },
+    staleTime: 60_000,
+    retry: false,
+  });
+  const toSortCount = toSort?.entries.length ?? 0;
   const canManageBank = canManageBankAccount(group);
   const budgetName = group?.isPrivate ? "Personal budget" : group ? workspaceLabel(group) : "Shared group";
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
@@ -2840,6 +2853,14 @@ export default function Dashboard() {
       <WorkspaceSetupGuide userId={user?.id} />
 
       <AskJamviPanel month={month} year={year} workspaceName={group?.name ?? undefined} />
+
+      {toSortCount > 0 && canManageExpenses ? (
+        <Link href="/sort-entries" className="block rounded-2xl border border-amber-300 bg-amber-50 p-4 shadow-sm hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-950/35 sm:p-5" data-testid="entries-to-sort-cta">
+          <p className="text-xs font-bold uppercase tracking-[0.15em] text-amber-800 dark:text-amber-200">Saved as Not sure</p>
+          <p className="mt-1 font-display text-lg font-bold text-foreground">{toSortTitle(toSortCount)}</p>
+          <p className="text-sm text-muted-foreground">Say what each one was for, or where it came from, whenever you remember. Sort them out →</p>
+        </Link>
+      ) : null}
 
       {editableUncategorizedExpenses.length > 0 && (
         <section
