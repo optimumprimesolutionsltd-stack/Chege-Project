@@ -1,4 +1,8 @@
 import Business from '@/pages/business';
+import Debt from '@/pages/debt';
+import Help from '@/pages/help';
+import BudgetPlanPage from '@/pages/budget-plan-page';
+import BudgetReportPage from '@/pages/budget-report';
 import SpendingByItem from '@/pages/spending-by-item';
 import { Route, Switch, Router as WouterRouter } from 'wouter';
 import { MutationCache, QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
@@ -151,6 +155,10 @@ function AuthenticatedApp() {
         <Route path="/search" component={SearchPage} />
         <Route path="/spending-by-item" component={SpendingByItem} />
         <Route path="/business" component={Business} />
+        <Route path="/debt" component={Debt} />
+        <Route path="/help" component={Help} />
+        <Route path="/budget-plan" component={BudgetPlanPage} />
+        <Route path="/budget-report" component={BudgetReportPage} />
         <Route path="/subscription" component={Subscription} />
         <Route path="/groups" component={MyGroups} />
         <Route path="/settings" component={Settings} />

@@ -22,7 +22,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams } from 'expo-router';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useColors } from '@/hooks/useColors';
@@ -48,6 +48,7 @@ import {
   getGetDashboardSummaryQueryKey,
   useGetMembers,
   useGetGroup,
+  customFetch,
   type SavingsGoalContribution,
 } from '@workspace/api-client-react';
 import { formatDisplayDate as formatDate } from '@/lib/displayFormat';
@@ -285,6 +286,15 @@ export default function GoalsScreen() {
   const handledShortcut = useRef<string | null>(null);
 
   const { data: goals = [], isLoading, refetch } = useGetSavingsGoals();
+  // A goal whose saved amount no longer matches the contributions behind it -
+  // the web's "Balance mismatch" warning, which the phone did not show.
+  const { data: consistency } = useQuery<{ ok: boolean; inconsistentGoals: Array<{ id: number; name: string; currentAmount: number; contributionTotal: number; discrepancy: number }> }>({
+    queryKey: ['savings-goals-consistency'],
+    queryFn: () => customFetch('/api/savings-goals/consistency-check'),
+    staleTime: 60_000,
+    retry: false,
+  });
+  const inconsistentGoals = consistency?.inconsistentGoals ?? [];
 
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = useCallback(async () => {
@@ -1091,6 +1101,24 @@ export default function GoalsScreen() {
             </View>
           </View>
         </LinearGradient>
+
+        {inconsistentGoals.length > 0 ? (
+          <View style={{ marginHorizontal: 16, marginTop: 14, borderWidth: 1, borderColor: '#f59e0b55', backgroundColor: '#f59e0b18', borderRadius: 12, padding: 12, gap: 4 }} testID="goals-balance-mismatch">
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Feather name="alert-triangle" size={15} color="#d97706" />
+              <Text style={{ color: '#d97706', fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>
+                Balance mismatch on {inconsistentGoals.length} goal{inconsistentGoals.length !== 1 ? 's' : ''}
+              </Text>
+            </View>
+            {inconsistentGoals.map((goal) => (
+              <Text key={goal.id} style={{ color: colors.mutedForeground, fontSize: 12, paddingLeft: 21 }}>
+                <Text style={{ fontFamily: 'Inter_600SemiBold', color: colors.foreground }}>{goal.name}</Text>
+                {` — shows KES ${formatKES(goal.currentAmount)}, contributions add up to KES ${formatKES(goal.contributionTotal)} (off by KES ${formatKES(Math.abs(goal.discrepancy))})`}
+              </Text>
+            ))}
+            <Text style={{ color: colors.mutedForeground, fontSize: 11.5, paddingLeft: 21 }}>Edit the goal and set its saved amount to correct it.</Text>
+          </View>
+        ) : null}
 
         {isLoading ? (
           <ActivityIndicator color={colors.primary} style={{ marginTop: 60 }} size="large" />

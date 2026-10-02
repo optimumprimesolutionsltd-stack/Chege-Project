@@ -336,6 +336,11 @@ export default function IncomeStreamsReport() {
           <p className="mt-1 max-w-2xl text-muted-foreground">
             Review your money by day, week, month, or a custom range. Monthly income-stream detail remains below.
           </p>
+          {/* The budget's own two reports, as the phone's Reports links them. */}
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Link href="/budget-plan" className="rounded-full border border-border px-3 py-1 text-sm font-semibold text-primary" data-testid="reports-open-budget-plan">Budget plan</Link>
+            <Link href="/budget-report" className="rounded-full border border-border px-3 py-1 text-sm font-semibold text-primary" data-testid="reports-open-budget-report">Budget report</Link>
+          </div>
         </div>
           <div className="flex w-full min-w-0 flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
           <div className="flex w-full items-center justify-between gap-1 rounded-xl border bg-card p-1 shadow-sm sm:w-auto">

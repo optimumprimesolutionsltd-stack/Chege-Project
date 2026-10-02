@@ -2,6 +2,9 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { MonthStepper } from "@/components/month-stepper";
+import { isoDay } from "@/lib/month-range";
 import { formatKes } from "@/lib/utils";
 import { ChevronDown, ChevronUp, Loader2, Scale } from "lucide-react";
 import type { ContributionGrid } from "@/components/contributions-grid";
@@ -15,6 +18,10 @@ import {
 } from "@/components/contributor-editor";
 
 const RANGES = [1, 3, 6, 12] as const;
+
+type VarianceRow = { contributorId: number; name: string; expected: number | null; given: number; variance: number | null };
+type VarianceResponse = { periodLabel: string; rows: VarianceRow[]; totalExpected: number; totalGiven: number };
+const monthStart = () => `${isoDay(new Date()).slice(0, 8)}01`;
 
 /**
  * Expected versus what actually came in, over a chosen stretch of months.
@@ -30,7 +37,14 @@ export function ContributionVariance({ canManage = false }: { canManage?: boolea
   const editor = useContributorEditor();
   const { open, toggle } = useCollapsed("expected-vs-actual");
 
-  const { data, isLoading, isError } = useQuery<ContributionGrid>({
+  // Exact dates, as on the phone: an "are we on track so far" check rather
+  // than only ever whole months.
+  const [isCustom, setIsCustom] = useState(false);
+  const [dayFrom, setDayFrom] = useState(monthStart);
+  const [dayTo, setDayTo] = useState(() => isoDay(new Date()));
+  const [rangeFrom, rangeTo] = dayFrom <= dayTo ? [dayFrom, dayTo] : [dayTo, dayFrom];
+
+  const { data: grid, isLoading: gridLoading, isError: gridError } = useQuery<ContributionGrid>({
     queryKey: ["contribution-grid", months],
     queryFn: async () => {
       const response = await fetch(`/api/contributions/grid?months=${months}`, { credentials: "include" });
@@ -38,16 +52,31 @@ export function ContributionVariance({ canManage = false }: { canManage?: boolea
       return response.json() as Promise<ContributionGrid>;
     },
     retry: false,
+    enabled: !isCustom,
   });
+  const { data: custom, isLoading: customLoading, isError: customError } = useQuery<VarianceResponse>({
+    queryKey: ["contribution-variance", rangeFrom, rangeTo],
+    queryFn: async () => {
+      const response = await fetch(`/api/contributions/variance?from=${rangeFrom}&to=${rangeTo}`, { credentials: "include" });
+      if (!response.ok) throw new Error("Could not load the contribution figures.");
+      return response.json() as Promise<VarianceResponse>;
+    },
+    retry: false,
+    enabled: isCustom,
+  });
+  const data = isCustom ? custom : grid;
+  const isLoading = isCustom ? customLoading : gridLoading;
+  const isError = isCustom ? customError : gridError;
 
-  const monthCount = data?.months.length ?? 0;
-  const periodLabel =
-    monthCount === 0
+  const monthCount = isCustom ? 0 : grid?.months.length ?? 0;
+  const periodLabel = isCustom
+    ? custom?.periodLabel ?? ""
+    : monthCount === 0
       ? ""
       : monthCount === 1
-        ? data!.months[0].label
-        : `${data!.months[0].label} – ${data!.months[monthCount - 1].label}`;
-  const rows = (data?.rows ?? []).map((row) => {
+        ? grid!.months[0].label
+        : `${grid!.months[0].label} – ${grid!.months[monthCount - 1].label}`;
+  const rows: VarianceRow[] = isCustom ? custom?.rows ?? [] : (grid?.rows ?? []).map((row) => {
     const given = row.amounts.reduce((sum, amount) => sum + amount, 0);
     const expected = row.monthlyTarget != null ? row.monthlyTarget * monthCount : null;
     return {
@@ -58,8 +87,8 @@ export function ContributionVariance({ canManage = false }: { canManage?: boolea
       variance: expected != null ? given - expected : null,
     };
   });
-  const totalExpected = rows.reduce((sum, row) => sum + (row.expected ?? 0), 0);
-  const totalGiven = rows.reduce((sum, row) => sum + row.given, 0);
+  const totalExpected = isCustom ? custom?.totalExpected ?? 0 : rows.reduce((sum, row) => sum + (row.expected ?? 0), 0);
+  const totalGiven = isCustom ? custom?.totalGiven ?? 0 : rows.reduce((sum, row) => sum + row.given, 0);
   const groupVariance = totalExpected > 0 ? totalGiven - totalExpected : null;
   const summary =
     rows.length === 0
@@ -137,17 +166,30 @@ export function ContributionVariance({ canManage = false }: { canManage?: boolea
               {RANGES.map((range) => (
                 <Button
                   key={range}
-                  variant={months === range ? "default" : "outline"}
+                  variant={!isCustom && months === range ? "default" : "outline"}
                   size="sm"
-                  onClick={() => setMonths(range)}
+                  onClick={() => { setIsCustom(false); setMonths(range); }}
                   data-testid={`variance-range-${range}`}
                 >
                   {range}m
                 </Button>
               ))}
+              <Button variant={isCustom ? "default" : "outline"} size="sm" onClick={() => setIsCustom(true)} data-testid="variance-range-custom">
+                Dates
+              </Button>
             </div>
           ) : null}
         </div>
+
+        {open && isCustom ? (
+          <div className="space-y-2" data-testid="variance-custom-dates">
+            <MonthStepper from={dayFrom} to={dayTo} onChange={(nextFrom, nextTo) => { setDayFrom(nextFrom); setDayTo(nextTo); }} testId="variance-month" />
+            <div className="grid grid-cols-2 gap-3">
+              <label className="space-y-1 text-sm"><span className="font-semibold">From</span><Input type="date" value={dayFrom} max={isoDay(new Date())} onChange={(event) => setDayFrom(event.target.value)} className="h-10" /></label>
+              <label className="space-y-1 text-sm"><span className="font-semibold">To</span><Input type="date" value={dayTo} max={isoDay(new Date())} onChange={(event) => setDayTo(event.target.value)} className="h-10" /></label>
+            </div>
+          </div>
+        ) : null}
 
         {!open ? null : isLoading ? (
           <div className="flex min-h-32 items-center justify-center text-muted-foreground">
