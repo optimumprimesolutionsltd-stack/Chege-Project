@@ -115,6 +115,7 @@ import { applyOtherBudgetRules, otherBudgetRuleFor, otherBudgetRuleLabel, otherB
 import { saveDebtLinks } from "@/lib/debt-reversal";
 import { mpesaNameFor, saveMpesaNames, type MpesaName } from "@/lib/mpesa-names";
 import { isLapsedRefusal, lapsedSaveMessage } from "@/lib/lapsed-save";
+import { plainSaveError, retrySave, withRetries } from "@/lib/save-retry";
 import { useEntitlements } from "@/hooks/use-entitlements";
 import type { DebtEntryLink } from "@/lib/debt-links";
 import { fulizaOwedBefore, reconcile, statementLines, withoutRecordedFuliza, type RecordedRow, type StatementReading } from "@/lib/statement-import";
@@ -568,6 +569,35 @@ export default function MpesaImportPage() {
     [categoryList],
   );
   const [debtEditing, setDebtEditing] = useState<{ index: number; partyId: string; kind: DebtKind | "" } | null>(null);
+  // Somebody not yet in Who owes who, added from the debt editor itself.
+  const [newParty, setNewParty] = useState<{ name: string; kind: "person" | "institution" } | null>(null);
+  const [addingParty, setAddingParty] = useState(false);
+  useEffect(() => {
+    if (debtEditing === null) setNewParty(null);
+  }, [debtEditing === null]);
+  const addParty = async () => {
+    const name = newParty?.name.trim() ?? "";
+    if (!newParty || !debtEditing || name.length < 2 || addingParty) return;
+    setAddingParty(true);
+    try {
+      const response = await fetch("/api/contributors", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, kind: newParty.kind }),
+      });
+      const body = (await response.json().catch(() => ({}))) as PartyLite & { error?: string };
+      if (!response.ok) throw Object.assign(new Error(body.error ?? "Could not add them."), { status: response.status, data: body });
+      queryClient.setQueryData<PartyLite[]>(["parties"], (current) => [...(current ?? []), body]);
+      void queryClient.invalidateQueries({ queryKey: ["parties"] });
+      setDebtEditing({ ...debtEditing, partyId: String(body.id) });
+      setNewParty(null);
+    } catch (error) {
+      toast({ variant: "destructive", title: "Could not add them", description: plainSaveError(error) });
+    } finally {
+      setAddingParty(false);
+    }
+  };
   const setDebt = (index: number, debt: { kind: DebtKind; partyId: number } | null) =>
     setChoices((current) => ({ ...current, [index]: { ...current[index], debt } }));
 
@@ -771,7 +801,7 @@ export default function MpesaImportPage() {
   };
 
   // The calls that record things, handed to the one function that saves a line.
-  const postingApi: PostingApi = {
+  const rawPostingApi: PostingApi = {
     deposit: (data) => createDeposit.mutateAsync({ data: data as never }) as Promise<{ id: number }>,
     disbursement: (data) => createDisbursement.mutateAsync({ data: data as never }) as Promise<{ id: number }>,
     bankToBank: (data) => transferBankToBank.mutateAsync({ data: data as never }) as Promise<{ outgoing: { id: number }; incoming: { id: number } }>,
@@ -786,6 +816,9 @@ export default function MpesaImportPage() {
         : createDisbursementInOtherBudget(data as never, options);
     },
   };
+  // Each request tried again through a server restart or a cut - the M-Pesa
+  // charge as much as the entry it came with (lib/save-retry).
+  const postingApi: PostingApi = withRetries(rawPostingApi, (task) => retrySave(task));
 
   const saveAll = async (resuming = false) => {
     if (!lines || !accountId || saving) return;
@@ -871,7 +904,7 @@ export default function MpesaImportPage() {
           if (choice.debt && posted.id) debtLinks.push({ transactionId: posted.id, partyId: choice.debt.partyId, kind: choice.debt.kind });
           const named = mpesaNameFor(posted.id, item.original, item.description);
           if (named) mpesaNames.push(named);
-          if (posted.feeFailed) result.failed.push({ what: `${item.description} charge`, why: "The entry saved, but its charge did not." });
+          if (posted.feeFailed) result.failed.push({ what: `${item.description} charge`, why: `The entry saved, but its M-Pesa charge${item.fee ? ` of KES ${item.fee}` : ""} did not. Add it on Bank accounts as money out.` });
           result.saved += 1;
           savedIndexes.add(item.index);
         } catch (error) {
@@ -879,7 +912,7 @@ export default function MpesaImportPage() {
             lapsed = true;
             return;
           }
-          const message = error instanceof Error ? error.message : "It was not saved.";
+          const message = plainSaveError(error);
           if (/already recorded/i.test(message)) {
             result.repeats += 1;
             // Already on the server: shown as recorded, not left looking unsaved.
@@ -1739,7 +1772,7 @@ export default function MpesaImportPage() {
                       Money to or from a company you own? Add it in Who owes who, then come back and choose it here.
                     </Link>
                   ) : null}
-                  {choice?.include && !isMove(choice) && !choice.contributorId && canLinkDebt(item, parties) && parties.length > 0 ? (
+                  {choice?.include && !isMove(choice) && !choice.contributorId && canLinkDebt(item, parties) ? (
                     (() => {
                       const linked = choice.debt ? parties.find((party) => party.id === choice.debt!.partyId) : undefined;
                       const guess = !choice.debt && item.direction ? matchParty(item.original ?? item.description, parties) : null;
@@ -1754,14 +1787,34 @@ export default function MpesaImportPage() {
                             </p>
                             <select
                               className={SELECT_CLASS}
-                              value={debtEditing.partyId}
-                              onChange={(event) => setDebtEditing({ ...debtEditing, partyId: event.target.value })}
+                              value={newParty ? "__new" : debtEditing.partyId}
+                              onChange={(event) => {
+                                if (event.target.value === "__new") {
+                                  setNewParty({ name: payeeName(item.original ?? item.description ?? ""), kind: "person" });
+                                  return;
+                                }
+                                setNewParty(null);
+                                setDebtEditing({ ...debtEditing, partyId: event.target.value });
+                              }}
                               aria-label="Who is it?"
                               data-testid={`mpesa-debt-party-${item.index}`}
                             >
                               <option value="">Who is it?</option>
                               {parties.map((party) => <option key={party.id} value={party.id}>{party.name}</option>)}
+                              <option value="__new">＋ Someone new</option>
                             </select>
+                            {newParty ? (
+                              <div className="flex flex-wrap gap-2" data-testid={`mpesa-debt-new-party-${item.index}`}>
+                                <Input value={newParty.name} onChange={(event) => setNewParty({ ...newParty, name: event.target.value })} placeholder="Their name, or the company's" className="h-10 min-w-[12rem] flex-1" autoFocus />
+                                <select value={newParty.kind} onChange={(event) => setNewParty({ ...newParty, kind: event.target.value as "person" | "institution" })} className="h-10 rounded-md border border-input bg-background px-2 text-sm" aria-label="A person or a company">
+                                  <option value="person">A person</option>
+                                  <option value="institution">A company or bank</option>
+                                </select>
+                                <Button size="sm" className="h-10" onClick={() => void addParty()} disabled={addingParty || newParty.name.trim().length < 2} data-testid={`mpesa-debt-new-party-add-${item.index}`}>
+                                  {addingParty ? "Adding…" : `Add ${newParty.name.trim() || "them"}`}
+                                </Button>
+                              </div>
+                            ) : null}
                             <select
                               className={SELECT_CLASS}
                               value={debtEditing.kind}

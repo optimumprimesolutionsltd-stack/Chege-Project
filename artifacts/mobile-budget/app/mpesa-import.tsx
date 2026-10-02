@@ -82,6 +82,8 @@ import { keepScreenAwakeWhileSaving, letScreenSleepAgain } from '@/lib/keepAwake
 import { getImportProgress, setImportProgress, useImportProgress } from '@/lib/importProgress';
 import { clearSavePending, hasPendingSave, markSavePending } from '@/lib/importSaveJob';
 import { retryWhenCutOff } from '@/lib/saveWhileAway';
+import { plainSaveError, withRetries } from '@/lib/saveRetry';
+import { handleLapsedError } from '@/lib/lapsedError';
 import { runPool, savePosting, SAVE_CONCURRENCY, type PostingApi } from '@/lib/savePosting';
 import { parseStoredRules, payeeKey, payeeName, ruleLabel, rulesStorageKey, withRule, withoutRule, type PayeeRules } from '@/lib/payeeLearning';
 import { saveDebtLinks } from '@/lib/debtReversal';
@@ -1332,6 +1334,33 @@ export default function MpesaImportScreen() {
     [categoryList],
   );
   const [debtFor, setDebtFor] = useState<{ index: number; partyId: number | null; kind: DebtKind | null } | null>(null);
+  // Somebody not yet in Who owes who, added from the debt sheet itself.
+  const [newParty, setNewParty] = useState<{ name: string; kind: 'person' | 'institution' } | null>(null);
+  const [addingParty, setAddingParty] = useState(false);
+  // A name half-typed for one line is not carried to the next one opened.
+  useEffect(() => {
+    if (debtFor === null) setNewParty(null);
+  }, [debtFor === null]);
+  const addParty = async () => {
+    const name = newParty?.name.trim() ?? '';
+    if (!newParty || name.length < 2 || addingParty) return;
+    setAddingParty(true);
+    try {
+      const created = await customFetch<PartyLite>('/api/contributors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, kind: newParty.kind }),
+      });
+      queryClient.setQueryData<PartyLite[]>(['parties'], (current) => [...(current ?? []), created]);
+      void queryClient.invalidateQueries({ queryKey: ['parties'] });
+      setDebtFor((current) => (current ? { ...current, partyId: created.id } : current));
+      setNewParty(null);
+    } catch (error: unknown) {
+      if (!handleLapsedError(error)) Alert.alert('Could not add them', plainSaveError(error));
+    } finally {
+      setAddingParty(false);
+    }
+  };
   const setDebt = (index: number, debt: { kind: DebtKind; partyId: number } | null) =>
     setChoices((current) => ({ ...current, [index]: { ...current[index], debt } }));
 
@@ -1454,7 +1483,7 @@ export default function MpesaImportScreen() {
   };
 
   // The calls that record things, handed to the one function that saves a line.
-  const postingApi: PostingApi = {
+  const rawPostingApi: PostingApi = {
     deposit: (data) => createDeposit({ data: data as never }) as Promise<{ id: number }>,
     disbursement: (data) => createDisbursement({ data: data as never }) as Promise<{ id: number }>,
     bankToBank: (data) => transferBankToBank({ data: data as never }) as Promise<{ outgoing: { id: number }; incoming: { id: number } }>,
@@ -1469,6 +1498,9 @@ export default function MpesaImportScreen() {
         : createDisbursementInOtherBudget(data as never, options);
     },
   };
+  // Each request tried again through a server restart or a cut - the M-Pesa
+  // charge as much as the entry it came with (lib/saveRetry).
+  const postingApi: PostingApi = withRetries(rawPostingApi, (task) => retryWhenCutOff(task));
 
   // Throwing a statement away loses days of choices, so it is asked first -
   // from the top of the screen or the bottom. What is already saved stays.
@@ -1609,11 +1641,11 @@ export default function MpesaImportScreen() {
         try {
           // Waits while Jamvi is behind another app, and tries again an entry whose
           // request the phone cut off (lib/saveWhileAway).
-          const posted = await retryWhenCutOff(() => savePosting(built, postingApi, accountId));
+          const posted = await savePosting(built, postingApi, accountId);
           if (choice.debt && posted.id) debtLinks.push({ transactionId: posted.id, partyId: choice.debt.partyId, kind: choice.debt.kind });
           const named = mpesaNameFor(posted.id, item.original, item.description);
           if (named) mpesaNames.push(named);
-          if (posted.feeFailed) result.failed.push({ what: `${item.description} charge`, why: 'The entry saved, but its charge did not.' });
+          if (posted.feeFailed) result.failed.push({ what: `${item.description} charge`, why: `The entry saved, but its M-Pesa charge${item.fee ? ` of KES ${item.fee}` : ''} did not. Add it on the Bank tab as money out.` });
           result.saved += 1;
           savedIndexes.add(item.index);
         } catch (error: unknown) {
@@ -1621,7 +1653,7 @@ export default function MpesaImportScreen() {
             lapsed = true;
             return;
           }
-          const message = error instanceof Error ? error.message : 'It was not saved.';
+          const message = plainSaveError(error);
           if (/already recorded/i.test(message)) {
             result.repeats += 1;
             // Already on the server: shown as recorded, not left looking unsaved.
@@ -2751,7 +2783,7 @@ export default function MpesaImportScreen() {
                       </Text>
                     </Pressable>
                   ) : null}
-                  {choice?.include && !isMove(choice) && !choice.contributorId && canLinkDebt(item, parties) && parties.length > 0 ? (
+                  {choice?.include && !isMove(choice) && !choice.contributorId && canLinkDebt(item, parties) ? (
                     (() => {
                       const linked = choice.debt ? parties.find((party) => party.id === choice.debt!.partyId) : undefined;
                       const guess = !choice.debt && item.direction ? matchParty(item.original ?? item.description, parties) : null;
@@ -3040,6 +3072,51 @@ export default function MpesaImportScreen() {
                 );
               })}
             </ScrollView>
+            {newParty ? (
+              <View style={{ gap: 8 }} testID="mpesa-debt-new-party">
+                <TextInput
+                  value={newParty.name}
+                  onChangeText={(name) => setNewParty({ ...newParty, name })}
+                  placeholder="Their name, or the company's"
+                  placeholderTextColor={colors.mutedForeground}
+                  autoFocus
+                  style={[styles.pasteBox, { minHeight: 44, borderColor: colors.border, backgroundColor: colors.muted, color: colors.foreground }]}
+                  testID="mpesa-debt-new-party-name"
+                />
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  {(['person', 'institution'] as const).map((kind) => {
+                    const on = newParty.kind === kind;
+                    return (
+                      <Pressable key={kind} onPress={() => setNewParty({ ...newParty, kind })} accessibilityRole="button" accessibilityState={{ selected: on }} testID={`mpesa-debt-new-party-${kind}`}
+                        style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, borderWidth: 1, borderColor: on ? colors.primary : colors.border, backgroundColor: on ? `${colors.primary}22` : colors.muted }}>
+                        <Text style={{ color: on ? colors.primary : colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>{kind === 'person' ? 'A person' : 'A company or bank'}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <Pressable onPress={() => void addParty()} disabled={addingParty || newParty.name.trim().length < 2} accessibilityRole="button" testID="mpesa-debt-new-party-add"
+                    style={[styles.categoryButton, { flex: 1, justifyContent: 'center', borderColor: colors.primary, backgroundColor: `${colors.primary}18`, opacity: newParty.name.trim().length < 2 ? 0.5 : 1 }]}>
+                    {addingParty ? <ActivityIndicator size="small" color={colors.primary} /> : <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>Add {newParty.name.trim() || 'them'}</Text>}
+                  </Pressable>
+                  <Pressable onPress={() => setNewParty(null)} accessibilityRole="button" style={[styles.categoryButton, { justifyContent: 'center', borderColor: colors.border, backgroundColor: colors.muted }]}>
+                    <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold' }}>Cancel</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : (
+              <Pressable
+                onPress={() => {
+                  const line = lines?.find((candidate) => candidate.index === debtFor?.index);
+                  setNewParty({ name: line ? payeeName(line.original ?? line.description ?? '') : '', kind: 'person' });
+                }}
+                style={styles.option}
+                accessibilityRole="button"
+                testID="mpesa-debt-new-party-open"
+              >
+                <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>＋ Someone new</Text>
+              </Pressable>
+            )}
             {(() => {
               const line = lines?.find((candidate) => candidate.index === debtFor?.index);
               if (!line?.direction) return null;

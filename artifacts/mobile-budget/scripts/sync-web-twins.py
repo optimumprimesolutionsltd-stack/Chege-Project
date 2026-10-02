@@ -25,6 +25,7 @@ TWINS = {
     'otherBudgetOptions.ts': ('other-budget-options.ts', {}),
     'lapsedSave.ts': ('lapsed-save.ts', {}),
     'groupStart.ts': ('group-start.ts', {}),
+    'saveRetry.ts': ('save-retry.ts', {'./savePosting': './save-posting'}),
     'otherBudgetRules.ts': ('other-budget-rules.ts', {'./mpesaImport': './mpesa-import', './payeeLearning': './payee-learning'}),
     'budgetPlan.ts': ('budget-plan-rows.ts', {}),
     'budgetReport.ts': ('budget-report.ts', {}),
