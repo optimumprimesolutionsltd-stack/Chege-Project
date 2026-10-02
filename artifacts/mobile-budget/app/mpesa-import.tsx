@@ -96,6 +96,7 @@ import { balanceAtEndOf, dayBefore, missingInJamvi, notOnStatement, withoutRecor
 import { checkRunningBalance, readStatementRows, resolveDirections } from '@/lib/statementTable';
 import type { ReaderMessage } from '@/lib/statementReaderHtml';
 import { fetchOtherBudgetOptions, type OtherBudgetOptions } from '@/lib/otherBudgetOptions';
+import { applyOtherBudgetRules, otherBudgetRuleFor, otherBudgetRuleLabel, otherBudgetRulesKey, parseOtherBudgetRules, rememberOtherBudgetLabel, withOtherBudgetRule, withoutOtherBudgetRule, type OtherBudgetRules } from '@/lib/otherBudgetRules';
 import {
   buildPostings,
   categoryPath,
@@ -113,6 +114,8 @@ import {
   canUseSavings,
   chooseContribution,
   chooseOtherBudget,
+  sendableLines,
+  sendLinesToOtherBudget,
   chooseSavings,
   chooseTransfer,
   destinationOf,
@@ -783,6 +786,25 @@ export default function MpesaImportScreen() {
     setRules(next);
     AsyncStorage.setItem(rulesKey, JSON.stringify(next)).catch(() => {});
   };
+  // Payees remembered as another budget's - the chama's paybill, say - kept the
+  // same way, so the next statement suggests that budget for them.
+  const otherRulesKey = otherBudgetRulesKey(group?.id);
+  const [otherRules, setOtherRules] = useState<OtherBudgetRules>({});
+  useEffect(() => {
+    let active = true;
+    AsyncStorage.getItem(otherRulesKey)
+      .then((stored) => {
+        if (active) setOtherRules(parseOtherBudgetRules(stored));
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [otherRulesKey]);
+  const keepOtherRules = (next: OtherBudgetRules) => {
+    setOtherRules(next);
+    AsyncStorage.setItem(otherRulesKey, JSON.stringify(next)).catch(() => {});
+  };
 
   const nicknamesKey = nicknameStorageKey(group?.id);
   useEffect(() => {
@@ -1323,6 +1345,34 @@ export default function MpesaImportScreen() {
   const toCategorise = find.trim() ? categorisableLines(inView, choices) : [];
   // Money in that was found: one income stream for all of it ("in 50,000" is salary).
   const toStream = find.trim() ? streamableLines(inView, choices) : [];
+  // Found entries that can go to another budget together: "Umoja" finds the chama's.
+  const toSend = find.trim() ? sendableLines(inView, choices) : [];
+  const [sendFound, setSendFound] = useState<{ groupId: number | null; accountId: number; category: string; incomeSourceId: number | null } | null>(null);
+  const sendFoundTo = (groupName: string, accountName: string) => {
+    if (!sendFound || sendFound.groupId === null) return;
+    const target = { groupId: sendFound.groupId, groupName, accountId: sendFound.accountId, accountName, category: sendFound.category, incomeSourceId: sendFound.incomeSourceId };
+    Alert.alert(
+      `Send ${toSend.length} ${toSend.length === 1 ? 'entry' : 'entries'} to ${groupName}?`,
+      `Every entry found for "${find.trim()}", including any not shown yet below, is recorded in ${groupName}'s ${accountName} instead of here. They count as confirmed, and Jamvi remembers these payees go there unless you untick it. Nothing is saved until you tap Save.`,
+      [
+        { text: 'Not now', style: 'cancel' },
+        { text: `Send to ${groupName}`, onPress: () => { setChoices((current) => sendLinesToOtherBudget(toSend, current, target)); setSendFound(null); } },
+      ],
+    );
+  };
+  // A payee remembered as another budget's is suggested there, waiting to be
+  // confirmed. Only lines still on Jamvi's suggestion; returns the same choices
+  // when nothing changes, so this settles at once.
+  const managedIds = useMemo(() => otherManagedBudgets.map((option) => option.id), [otherManagedBudgets]);
+  useEffect(() => {
+    if (!lines || Object.keys(otherRules).length === 0) return;
+    setChoices((current) => applyOtherBudgetRules(lines, current, otherRules, managedIds));
+    // Read what each remembered budget offers, so its account and category show on the line.
+    for (const groupId of new Set(lines.map((item) => otherBudgetRuleFor(item, otherRules)?.rule.groupId).filter((id): id is number => id != null && managedIds.includes(id)))) {
+      if (!otherBudgetOptions[groupId]) void fetchOtherBudgetOptions(groupId).then((options) => setOtherBudgetOptions((current) => ({ ...current, [groupId]: options }))).catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lines, otherRules, managedIds.join(',')]);
   const [streamPickerOpen, setStreamPickerOpen] = useState(false);
   const streamFound = (source: { id: number; name: string }) => {
     setStreamPickerOpen(false);
@@ -1618,13 +1668,23 @@ export default function MpesaImportScreen() {
     }
     {
       let kept = rules;
+      let keptOther = otherRules;
       for (const item of lines) {
         const choice = choices[item.index];
-        if (savedIndexes.has(item.index) && choice?.remember && choice.category.trim() && item.description) {
+        if (!savedIndexes.has(item.index) || !choice?.remember) continue;
+        if (choice.otherBudget) {
+          // This payee belongs to that budget: remembered there, not as a category here.
+          keptOther = withOtherBudgetRule(keptOther, item, choice.otherBudget);
+          continue;
+        }
+        // Kept here this time: a budget remembered for it before no longer applies.
+        keptOther = withoutOtherBudgetRule(keptOther, item);
+        if (choice.category.trim() && item.description) {
           kept = withRule(kept, item.description, choice.category, item.payeeNumber);
         }
       }
       if (kept !== rules) keepRules(kept);
+      if (keptOther !== otherRules) keepOtherRules(keptOther);
     }
     void saveDebtLinks(debtLinks);
     void saveMpesaNames(mpesaNames);
@@ -2105,10 +2165,10 @@ export default function MpesaImportScreen() {
               </View>
             ) : null}
 
-            {Object.keys(rules).length > 0 ? (
+            {Object.keys(rules).length + Object.keys(otherRules).length > 0 ? (
               <Pressable onPress={() => setRulesOpen(true)} accessibilityRole="button" testID="mpesa-rules-open" style={{ alignSelf: 'flex-start' }}>
                 <Text style={[styles.hint, { color: colors.primary, fontFamily: 'Inter_600SemiBold', marginTop: 0 }]}>
-                  What Jamvi remembers ({Object.keys(rules).length})
+                  What Jamvi remembers ({Object.keys(rules).length + Object.keys(otherRules).length})
                 </Text>
               </Pressable>
             ) : null}
@@ -2207,6 +2267,123 @@ export default function MpesaImportScreen() {
                           </Pressable>
                         ))}
                       </ScrollView>
+                    ) : null}
+                    {toSend.length > 0 && canManageBudget && otherManagedBudgets.length > 0 ? (
+                      <Pressable
+                        onPress={() => setSendFound((current) => (current ? null : { groupId: null, accountId: 0, category: '', incomeSourceId: null }))}
+                        style={[styles.secondary, { borderColor: colors.border, borderWidth: 1, borderRadius: 12 }]}
+                        accessibilityRole="button"
+                        testID="mpesa-review-send-found"
+                      >
+                        <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>
+                          {otherManagedBudgets.length === 1 ? `Send all ${toSend.length} to ${otherManagedBudgets[0].name}` : `Send all ${toSend.length} to another budget`}
+                        </Text>
+                      </Pressable>
+                    ) : null}
+                    {sendFound && toSend.length > 0 ? (
+                      <View style={{ gap: 6 }} testID="mpesa-review-send-choices">
+                        <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0 }]}>Which budget?</Text>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
+                          {otherManagedBudgets.map((option) => {
+                            const on = sendFound.groupId === option.id;
+                            return (
+                              <Pressable
+                                key={option.id}
+                                disabled={loadingOtherBudget !== null}
+                                onPress={async () => {
+                                  const options = await loadOtherBudgetOptions(option.id);
+                                  if (!options) return;
+                                  setSendFound({ groupId: option.id, accountId: options.accounts[0]?.id ?? 0, category: '', incomeSourceId: null });
+                                }}
+                                accessibilityRole="button"
+                                accessibilityState={{ selected: on }}
+                                testID={`mpesa-review-send-budget-${option.id}`}
+                                style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, borderWidth: 1, borderColor: on ? colors.primary : colors.border, backgroundColor: on ? `${colors.primary}22` : colors.muted }}
+                              >
+                                {option.id !== null && loadingOtherBudget === option.id ? <ActivityIndicator size="small" color={colors.primary} /> : <Text style={{ color: on ? colors.primary : colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>{option.name}</Text>}
+                              </Pressable>
+                            );
+                          })}
+                        </ScrollView>
+                        {(() => {
+                          if (sendFound.groupId === null) return null;
+                          const options = otherBudgetOptions[sendFound.groupId];
+                          const target = otherManagedBudgets.find((option) => option.id === sendFound.groupId);
+                          if (!options || !target) return null;
+                          const outCount = toSend.filter((line) => line.direction === 'out').length;
+                          const inCount = toSend.length - outCount;
+                          const account = options.accounts.find((option) => option.id === sendFound.accountId);
+                          const ready = Boolean(account) && (outCount === 0 || Boolean(sendFound.category));
+                          return (
+                            <View style={{ gap: 6 }}>
+                              {options.accounts.length === 0 ? (
+                                <Text style={[styles.hint, { color: colors.destructive, marginTop: 0 }]}>{target.name} has no bank account yet. Add one there first.</Text>
+                              ) : (
+                                <>
+                                  <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0 }]}>Which account in {target.name}?</Text>
+                                  <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
+                                    {options.accounts.map((option) => {
+                                      const on = sendFound.accountId === option.id;
+                                      return (
+                                        <Pressable key={option.id} onPress={() => setSendFound({ ...sendFound, accountId: option.id })} accessibilityRole="button" accessibilityState={{ selected: on }} testID={`mpesa-review-send-account-${option.id}`} style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, borderWidth: 1, borderColor: on ? colors.primary : colors.border, backgroundColor: on ? `${colors.primary}22` : colors.muted }}>
+                                          <Text style={{ color: on ? colors.primary : colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>{option.name}</Text>
+                                        </Pressable>
+                                      );
+                                    })}
+                                  </ScrollView>
+                                </>
+                              )}
+                              {outCount > 0 ? (
+                                <>
+                                  <Text style={[styles.hint, { color: sendFound.category ? colors.mutedForeground : colors.destructive, marginTop: 0 }]}>
+                                    {inCount > 0 ? `What the ${outCount} paid out ${outCount === 1 ? 'was' : 'were'} for in ${target.name}` : `Which category in ${target.name}?`}
+                                  </Text>
+                                  {options.categories.length === 0 ? (
+                                    <Text style={[styles.hint, { color: colors.destructive, marginTop: 0 }]}>{target.name} has no categories yet. Add one there first.</Text>
+                                  ) : (
+                                    <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
+                                      {options.categories.map((category) => {
+                                        const on = sendFound.category === category;
+                                        return (
+                                          <Pressable key={category} onPress={() => setSendFound({ ...sendFound, category })} accessibilityRole="button" accessibilityState={{ selected: on }} testID={`mpesa-review-send-category-${category}`} style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, borderWidth: 1, borderColor: on ? colors.primary : colors.border, backgroundColor: on ? `${colors.primary}22` : colors.muted }}>
+                                            <Text style={{ color: on ? colors.primary : colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>{category}</Text>
+                                          </Pressable>
+                                        );
+                                      })}
+                                    </ScrollView>
+                                  )}
+                                </>
+                              ) : null}
+                              {inCount > 0 && options.incomeSources.length > 0 ? (
+                                <>
+                                  <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0 }]}>
+                                    {outCount > 0 ? `Income source in ${target.name} for the ${inCount} received (optional)` : `Which income source in ${target.name}? (optional)`}
+                                  </Text>
+                                  <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
+                                    {[{ id: null as number | null, name: 'Not sure' }, ...options.incomeSources.map((source) => ({ id: source.id as number | null, name: source.name }))].map((option) => {
+                                      const on = sendFound.incomeSourceId === option.id;
+                                      return (
+                                        <Pressable key={option.id ?? 'no'} onPress={() => setSendFound({ ...sendFound, incomeSourceId: option.id })} accessibilityRole="button" accessibilityState={{ selected: on }} testID={`mpesa-review-send-income-${option.id ?? 'no'}`} style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, borderWidth: 1, borderColor: on ? colors.primary : colors.border, backgroundColor: on ? `${colors.primary}22` : colors.muted }}>
+                                          <Text style={{ color: on ? colors.primary : colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>{option.name}</Text>
+                                        </Pressable>
+                                      );
+                                    })}
+                                  </ScrollView>
+                                </>
+                              ) : null}
+                              <Pressable
+                                disabled={!ready}
+                                onPress={() => sendFoundTo(target.name, account!.name)}
+                                style={[styles.primary, { backgroundColor: colors.primary, opacity: ready ? 1 : 0.5 }]}
+                                accessibilityRole="button"
+                                testID="mpesa-review-send-go"
+                              >
+                                <Text style={styles.primaryText}>Send {toSend.length} to {target.name}</Text>
+                              </Pressable>
+                            </View>
+                          );
+                        })()}
+                      </View>
                     ) : null}
                   </View>
                 ) : null}
@@ -2530,6 +2707,18 @@ export default function MpesaImportScreen() {
                             </View>
                           );
                         })()
+                      ) : null}
+                      {choice.otherBudget && item.description ? (
+                        <Pressable
+                          onPress={() => setChoices((current) => ({ ...current, [item.index]: { ...current[item.index], remember: !current[item.index]?.remember } }))}
+                          accessibilityRole="checkbox"
+                          accessibilityState={{ checked: choice.remember === true }}
+                          style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 }}
+                          testID={`mpesa-line-remember-other-${item.index}`}
+                        >
+                          <Feather name={choice.remember ? 'check-square' : 'square'} size={18} color={choice.remember ? colors.primary : colors.mutedForeground} />
+                          <Text style={{ color: colors.foreground, fontSize: 13, flexShrink: 1 }}>{rememberOtherBudgetLabel(item, choice.otherBudget.groupName)}</Text>
+                        </Pressable>
                       ) : null}
                     </View>
                   ) : null}
@@ -2912,13 +3101,21 @@ export default function MpesaImportScreen() {
           <View style={[styles.sheet, { backgroundColor: colors.card, borderColor: colors.border, padding: 16, paddingBottom: 16 + Math.max(insets.bottom, 24), gap: 10 }]}>
             <Text style={[styles.sheetTitle, { color: colors.foreground }]}>What Jamvi remembers</Text>
             <Text style={[styles.hint, { color: colors.mutedForeground }]}>
-              Categories you asked Jamvi to keep for a payee. Forget one and it goes back to being suggested from your history.
+              Categories you asked Jamvi to keep for a payee, and payees that belong to another budget. Forget one and it goes back to being suggested from your history.
             </Text>
             <ScrollView style={{ maxHeight: 280 }}>
               {Object.entries(rules).map(([key, category]) => (
                 <View key={key} style={[styles.option, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }]}>
                   <Text style={{ color: colors.foreground, flexShrink: 1 }}>{ruleLabel(key)} → {category}</Text>
                   <Pressable onPress={() => keepRules(withoutRule(rules, key))} accessibilityRole="button" accessibilityLabel={`Forget ${key}`} hitSlop={8} testID={`mpesa-rule-forget-${key}`}>
+                    <Feather name="x" size={18} color={colors.mutedForeground} />
+                  </Pressable>
+                </View>
+              ))}
+              {Object.entries(otherRules).map(([key, rule]) => (
+                <View key={`other-${key}`} style={[styles.option, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }]}>
+                  <Text style={{ color: colors.foreground, flexShrink: 1 }}>{otherBudgetRuleLabel(key)} → {rule.groupName}{rule.category ? ` · ${rule.category}` : ''}</Text>
+                  <Pressable onPress={() => keepOtherRules(withoutOtherBudgetRule(otherRules, key))} accessibilityRole="button" accessibilityLabel={`Forget ${key} going to ${rule.groupName}`} hitSlop={8} testID={`mpesa-other-rule-forget-${key}`}>
                     <Feather name="x" size={18} color={colors.mutedForeground} />
                   </Pressable>
                 </View>

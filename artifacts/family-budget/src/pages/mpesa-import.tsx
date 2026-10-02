@@ -40,6 +40,8 @@ import {
   canUseSavings,
   chooseContribution,
   chooseOtherBudget,
+  sendableLines,
+  sendLinesToOtherBudget,
   chooseSavings,
   chooseTransfer,
   destinationOf,
@@ -109,6 +111,7 @@ import { rememberMpesaCard } from "@/lib/mpesa-card";
 import { keepScreenAwakeWhileSaving, letScreenSleepAgain } from "@/lib/keep-awake";
 import { runPool, savePosting, SAVE_CONCURRENCY, type PostingApi } from "@/lib/save-posting";
 import { parseStoredRules, payeeKey, payeeName, ruleLabel, rulesStorageKey, withRule, withoutRule, type PayeeRules } from "@/lib/payee-learning";
+import { applyOtherBudgetRules, otherBudgetRuleFor, otherBudgetRuleLabel, otherBudgetRulesKey, parseOtherBudgetRules, rememberOtherBudgetLabel, withOtherBudgetRule, withoutOtherBudgetRule, type OtherBudgetRules } from "@/lib/other-budget-rules";
 import { saveDebtLinks } from "@/lib/debt-reversal";
 import { mpesaNameFor, saveMpesaNames, type MpesaName } from "@/lib/mpesa-names";
 import { isLapsedRefusal, lapsedSaveMessage } from "@/lib/lapsed-save";
@@ -252,6 +255,21 @@ export default function MpesaImportPage() {
   const keepRules = (next: PayeeRules) => {
     setRules(next);
     try { window.localStorage.setItem(rulesKey, JSON.stringify(next)); } catch { /* kept only when storage allows */ }
+  };
+  // Payees remembered as another budget's - the chama's paybill, say - kept the
+  // same way, so the next statement suggests that budget for them.
+  const otherRulesKey = otherBudgetRulesKey(group?.id);
+  const [otherRules, setOtherRules] = useState<OtherBudgetRules>({});
+  useEffect(() => {
+    try {
+      setOtherRules(parseOtherBudgetRules(window.localStorage.getItem(otherRulesKey)));
+    } catch {
+      setOtherRules({});
+    }
+  }, [otherRulesKey]);
+  const keepOtherRules = (next: OtherBudgetRules) => {
+    setOtherRules(next);
+    try { window.localStorage.setItem(otherRulesKey, JSON.stringify(next)); } catch { /* kept only when storage allows */ }
   };
 
   const nicknamesKey = nicknameStorageKey(group?.id);
@@ -595,6 +613,28 @@ export default function MpesaImportPage() {
     if (!window.confirm(`Put ${toStream.length} ${toStream.length === 1 ? "entry" : "entries"} under ${source.name}?\n\nEvery entry of money in found for "${find.trim()}", including any not shown yet. They count as confirmed, and nothing is saved until you click Save.`)) return;
     setChoices((current) => streamLines(toStream, current, source.id));
   };
+  // Found entries that can go to another budget together: "Umoja" finds the chama's.
+  const toSend = find.trim() ? sendableLines(inView, choices) : [];
+  const [sendFound, setSendFound] = useState<{ groupId: number | null; accountId: number; category: string; incomeSourceId: number | null }>({ groupId: null, accountId: 0, category: "", incomeSourceId: null });
+  const sendFoundTo = (groupName: string, accountName: string) => {
+    if (sendFound.groupId === null) return;
+    if (!window.confirm(`Send ${toSend.length} ${toSend.length === 1 ? "entry" : "entries"} to ${groupName}?\n\nEvery entry found for "${find.trim()}", including any not shown yet, is recorded in ${groupName}'s ${accountName} instead of here. They count as confirmed, and Jamvi remembers these payees go there unless you untick it. Nothing is saved until you click Save.`)) return;
+    const target = { groupId: sendFound.groupId, groupName, accountId: sendFound.accountId, accountName, category: sendFound.category, incomeSourceId: sendFound.incomeSourceId };
+    setChoices((current) => sendLinesToOtherBudget(toSend, current, target));
+    setSendFound({ groupId: null, accountId: 0, category: "", incomeSourceId: null });
+  };
+  // A payee remembered as another budget's is suggested there, waiting to be
+  // confirmed. Only lines still on Jamvi's suggestion; returns the same choices
+  // when nothing changes, so this settles at once.
+  const managedIds = otherManagedBudgets.map((workspace) => workspace.id);
+  useEffect(() => {
+    if (!lines || Object.keys(otherRules).length === 0) return;
+    setChoices((current) => applyOtherBudgetRules(lines, current, otherRules, managedIds));
+    for (const groupId of new Set(lines.map((item) => otherBudgetRuleFor(item, otherRules)?.rule.groupId).filter((id): id is number => id != null && managedIds.includes(id)))) {
+      if (!otherBudgetOptions[groupId]) void fetchOtherBudgetOptions(groupId).then((options) => setOtherBudgetOptions((current) => ({ ...current, [groupId]: options }))).catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lines, otherRules, managedIds.join(",")]);
   const confirmedLines = recordable.filter((item) => isConfirmedToSave(item, choices[item.index]));
   const confirmedCount = confirmedLines.length;
 
@@ -875,13 +915,23 @@ export default function MpesaImportPage() {
     }
     {
       let kept = rules;
+      let keptOther = otherRules;
       for (const item of lines) {
         const choice = choices[item.index];
-        if (savedIndexes.has(item.index) && choice?.remember && choice.category.trim() && item.description) {
+        if (!savedIndexes.has(item.index) || !choice?.remember) continue;
+        if (choice.otherBudget) {
+          // This payee belongs to that budget: remembered there, not as a category here.
+          keptOther = withOtherBudgetRule(keptOther, item, choice.otherBudget);
+          continue;
+        }
+        // Kept here this time: a budget remembered for it before no longer applies.
+        keptOther = withoutOtherBudgetRule(keptOther, item);
+        if (choice.category.trim() && item.description) {
           kept = withRule(kept, item.description, choice.category, item.payeeNumber);
         }
       }
       if (kept !== rules) keepRules(kept);
+      if (keptOther !== otherRules) keepOtherRules(keptOther);
     }
     void saveDebtLinks(debtLinks);
     void saveMpesaNames(mpesaNames);
@@ -968,13 +1018,19 @@ export default function MpesaImportPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>What Jamvi remembers</DialogTitle>
-            <DialogDescription>Categories you asked Jamvi to keep for a payee. Forget one and it goes back to being suggested from your history.</DialogDescription>
+            <DialogDescription>Categories you asked Jamvi to keep for a payee, and payees that belong to another budget. Forget one and it goes back to being suggested from your history.</DialogDescription>
           </DialogHeader>
           <div className="max-h-72 space-y-2 overflow-y-auto">
             {Object.entries(rules).map(([key, category]) => (
               <div key={key} className="flex items-center justify-between gap-2 rounded-lg border border-border p-2 text-sm">
                 <span>{ruleLabel(key)} → {category}</span>
                 <Button variant="ghost" size="sm" onClick={() => keepRules(withoutRule(rules, key))} aria-label={`Forget ${key}`} data-testid={`mpesa-rule-forget-${key}`}>Forget</Button>
+              </div>
+            ))}
+            {Object.entries(otherRules).map(([key, rule]) => (
+              <div key={`other-${key}`} className="flex items-center justify-between gap-2 rounded-lg border border-border p-2 text-sm">
+                <span>{otherBudgetRuleLabel(key)} → {rule.groupName}{rule.category ? ` · ${rule.category}` : ""}</span>
+                <Button variant="ghost" size="sm" onClick={() => keepOtherRules(withoutOtherBudgetRule(otherRules, key))} aria-label={`Forget ${key} going to ${rule.groupName}`} data-testid={`mpesa-other-rule-forget-${key}`}>Forget</Button>
               </div>
             ))}
           </div>
@@ -1220,9 +1276,9 @@ export default function MpesaImportPage() {
 
           {recordable.length > 0 ? <CategorySearchInput query={search.query} onChange={search.setQuery} testId="mpesa-category-search" /> : null}
 
-          {Object.keys(rules).length > 0 ? (
+          {Object.keys(rules).length + Object.keys(otherRules).length > 0 ? (
             <button type="button" onClick={() => setRulesOpen(true)} className="text-left text-sm font-semibold text-primary" data-testid="mpesa-rules-open">
-              What Jamvi remembers ({Object.keys(rules).length})
+              What Jamvi remembers ({Object.keys(rules).length + Object.keys(otherRules).length})
             </button>
           ) : null}
           {review && review.all > 0 ? (
@@ -1293,6 +1349,67 @@ export default function MpesaImportPage() {
                           {incomeSources.map((source) => <option key={source.id} value={String(source.id)}>{source.name}</option>)}
                         </select>
                         <Button onClick={streamFound} disabled={!bulkStream} data-testid="mpesa-review-stream-found">Apply</Button>
+                      </div>
+                    ) : null}
+                    {toSend.length > 0 && canManageBudget && otherManagedBudgets.length > 0 ? (
+                      <div className="space-y-2 rounded-lg border border-border p-3" data-testid="mpesa-review-send-choices">
+                        <p className="text-sm font-semibold text-foreground">Send all {toSend.length} found to another budget</p>
+                        <select
+                          value={sendFound.groupId ?? ""}
+                          onChange={async (event) => {
+                            const groupId = event.target.value ? Number(event.target.value) : null;
+                            if (groupId === null) { setSendFound({ groupId: null, accountId: 0, category: "", incomeSourceId: null }); return; }
+                            const options = await loadOtherBudgetOptions(groupId);
+                            if (!options) return;
+                            setSendFound({ groupId, accountId: options.accounts[0]?.id ?? 0, category: "", incomeSourceId: null });
+                          }}
+                          className={SELECT_CLASS}
+                          aria-label="Budget to send every entry found to"
+                          data-testid="mpesa-review-send-budget"
+                        >
+                          <option value="">Which budget?</option>
+                          {otherManagedBudgets.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}
+                        </select>
+                        {(() => {
+                          if (sendFound.groupId === null) return null;
+                          const options = otherBudgetOptions[sendFound.groupId];
+                          const target = otherManagedBudgets.find((workspace) => workspace.id === sendFound.groupId);
+                          if (!options || !target) return null;
+                          const outCount = toSend.filter((line) => line.direction === "out").length;
+                          const inCount = toSend.length - outCount;
+                          const account = options.accounts.find((option) => option.id === sendFound.accountId);
+                          const ready = Boolean(account) && (outCount === 0 || Boolean(sendFound.category));
+                          return (
+                            <div className="space-y-2">
+                              {options.accounts.length === 0 ? (
+                                <p className="text-xs text-destructive">{target.name} has no bank account yet. Add one there first.</p>
+                              ) : (
+                                <select value={sendFound.accountId} onChange={(event) => setSendFound({ ...sendFound, accountId: Number(event.target.value) })} className={SELECT_CLASS} aria-label={`Account in ${target.name}`} data-testid="mpesa-review-send-account">
+                                  {options.accounts.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
+                                </select>
+                              )}
+                              {outCount > 0 ? (
+                                options.categories.length === 0 ? (
+                                  <p className="text-xs text-destructive">{target.name} has no categories yet. Add one there first.</p>
+                                ) : (
+                                  <select value={sendFound.category} onChange={(event) => setSendFound({ ...sendFound, category: event.target.value })} className={SELECT_CLASS} aria-label={`Category in ${target.name}`} data-testid="mpesa-review-send-category">
+                                    <option value="">{inCount > 0 ? `What the ${outCount} paid out ${outCount === 1 ? "was" : "were"} for in ${target.name}` : `Which category in ${target.name}?`}</option>
+                                    {options.categories.map((category) => <option key={category} value={category}>{category}</option>)}
+                                  </select>
+                                )
+                              ) : null}
+                              {inCount > 0 && options.incomeSources.length > 0 ? (
+                                <select value={sendFound.incomeSourceId ?? ""} onChange={(event) => setSendFound({ ...sendFound, incomeSourceId: event.target.value ? Number(event.target.value) : null })} className={SELECT_CLASS} aria-label={`Income source in ${target.name}`} data-testid="mpesa-review-send-income">
+                                  <option value="">{outCount > 0 ? `Income source for the ${inCount} received (optional)` : "Income source (optional)"}</option>
+                                  {options.incomeSources.map((source) => <option key={source.id} value={source.id}>{source.name}</option>)}
+                                </select>
+                              ) : null}
+                              <Button onClick={() => sendFoundTo(target.name, account!.name)} disabled={!ready} data-testid="mpesa-review-send-go">
+                                Send {toSend.length} to {target.name}
+                              </Button>
+                            </div>
+                          );
+                        })()}
                       </div>
                     ) : null}
                   </div>
@@ -1588,6 +1705,17 @@ export default function MpesaImportPage() {
                             </div>
                           );
                         })()
+                      ) : null}
+                      {choice.otherBudget && item.description ? (
+                        <label className="flex items-center gap-2 text-sm text-foreground" data-testid={`mpesa-line-remember-other-${item.index}`}>
+                          <input
+                            type="checkbox"
+                            checked={choice.remember === true}
+                            onChange={() => setChoices((current) => ({ ...current, [item.index]: { ...current[item.index], remember: !current[item.index]?.remember } }))}
+                            className="h-4 w-4 accent-primary"
+                          />
+                          {rememberOtherBudgetLabel(item, choice.otherBudget.groupName)}
+                        </label>
                       ) : null}
                     </div>
                   ) : null}
