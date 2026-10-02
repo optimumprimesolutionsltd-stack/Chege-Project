@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -13,6 +13,7 @@ import {
 } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
 import { isNotSure, type EntryToSort } from '@/lib/entriesToSort';
+import { inMonth, monthsOf } from '@/lib/mpesaImport';
 import { plainSaveError } from '@/lib/saveRetry';
 import { formatDisplayDate } from '@/lib/displayFormat';
 
@@ -44,6 +45,10 @@ export default function SortEntriesScreen() {
     return categoryList.filter((row) => !parents.has(row.id) && !isNotSure(row.name)).map((row) => row.name).sort((a, b) => a.localeCompare(b));
   }, [categoryList]);
   const entries = data?.entries ?? [];
+  // A month at a time, as in the import.
+  const [month, setMonth] = useState<string | null>(null);
+  const months = useMemo(() => monthsOf(entries), [entries]);
+  const shown = useMemo(() => entries.filter((entry) => inMonth(entry, month)), [entries, month]);
 
   const done = async () => {
     await Promise.all([
@@ -87,22 +92,43 @@ export default function SortEntriesScreen() {
           <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>Entries you saved as Not sure</Text>
         </View>
       </View>
-      <ScrollView contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 32 }]} keyboardShouldPersistTaps="handled">
-        {isLoading ? (
-          <ActivityIndicator color={colors.primary} style={{ marginTop: 24 }} />
-        ) : isError ? (
-          <Pressable onPress={() => refetch()} accessibilityRole="button">
-            <Text style={{ color: colors.mutedForeground }}>Couldn’t load these. Tap to try again.</Text>
-          </Pressable>
-        ) : entries.length === 0 ? (
-          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, alignItems: 'center' }]} testID="sort-entries-empty">
-            <Feather name="check-circle" size={28} color={colors.success} />
-            <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold', marginTop: 8 }}>All sorted</Text>
-            <Text style={{ color: colors.mutedForeground, fontSize: 13, textAlign: 'center' }}>Nothing saved as Not sure is waiting.</Text>
-          </View>
-        ) : (
-          entries.map((entry) => (
-            <View key={entry.id} style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, opacity: busy === entry.id ? 0.6 : 1 }]} testID={`sort-entry-${entry.id}`}>
+      {isLoading ? (
+        <ActivityIndicator color={colors.primary} style={{ marginTop: 24 }} />
+      ) : isError ? (
+        <Pressable onPress={() => refetch()} accessibilityRole="button" style={styles.body}>
+          <Text style={{ color: colors.mutedForeground }}>Couldn’t load these. Tap to try again.</Text>
+        </Pressable>
+      ) : (
+        // A whole year saved as Not sure is over a thousand: drawn as it scrolls.
+        <FlatList
+          data={shown}
+          keyExtractor={(entry) => String(entry.id)}
+          contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 32 }]}
+          keyboardShouldPersistTaps="handled"
+          initialNumToRender={12}
+          windowSize={7}
+          ListHeaderComponent={months.length > 1 ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 2 }} testID="sort-entries-months">
+              {[{ key: null as string | null, label: 'All months', count: entries.length }, ...months].map((option) => {
+                const on = month === option.key;
+                return (
+                  <Pressable key={option.key ?? 'all'} onPress={() => setMonth(option.key)} accessibilityRole="button" accessibilityState={{ selected: on }} testID={`sort-entries-month-${option.key ?? 'all'}`}
+                    style={{ ...chip, borderColor: on ? colors.primary : colors.border, backgroundColor: on ? `${colors.primary}22` : colors.muted }}>
+                    <Text style={{ color: on ? colors.primary : colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>{option.label} ({option.count})</Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          ) : null}
+          ListEmptyComponent={(
+            <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, alignItems: 'center' }]} testID="sort-entries-empty">
+              <Feather name="check-circle" size={28} color={colors.success} />
+              <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold', marginTop: 8 }}>All sorted</Text>
+              <Text style={{ color: colors.mutedForeground, fontSize: 13, textAlign: 'center' }}>Nothing saved as Not sure is waiting.</Text>
+            </View>
+          )}
+          renderItem={({ item: entry }) => (
+            <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, opacity: busy === entry.id ? 0.6 : 1 }]} testID={`sort-entry-${entry.id}`}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold' }} numberOfLines={1}>{entry.description}</Text>
@@ -132,9 +158,9 @@ export default function SortEntriesScreen() {
                 </Pressable>
               ) : null}
             </View>
-          ))
-        )}
-      </ScrollView>
+          )}
+        />
+      )}
     </View>
   );
 }

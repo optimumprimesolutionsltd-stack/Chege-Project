@@ -83,7 +83,7 @@ import { getImportProgress, setImportProgress, useImportProgress } from '@/lib/i
 import { clearSavePending, hasPendingSave, markSavePending } from '@/lib/importSaveJob';
 import { retryWhenCutOff } from '@/lib/saveWhileAway';
 import { plainSaveError, withRetries } from '@/lib/saveRetry';
-import { isNotSure, needsNotSureCategory, NOT_SURE_CATEGORY, toMarkAfterSave } from '@/lib/entriesToSort';
+import { isNotSure, needsNotSureCategory, NOT_SURE_CATEGORY, notSureableLines, putUnderNotSure, toMarkAfterSave } from '@/lib/entriesToSort';
 import { handleLapsedError } from '@/lib/lapsedError';
 import { runPool, savePosting, SAVE_CONCURRENCY, type PostingApi } from '@/lib/savePosting';
 import { parseStoredRules, payeeKey, payeeName, ruleLabel, rulesStorageKey, withRule, withoutRule, type PayeeRules } from '@/lib/payeeLearning';
@@ -1386,6 +1386,19 @@ export default function MpesaImportScreen() {
   const toStream = filtering ? streamableLines(inView, choices) : [];
   // Found entries that can go to another budget together: "Umoja" finds the chama's.
   const toSend = filtering ? sendableLines(inView, choices) : [];
+  // Everything still on Jamvi's suggestion (or needing a choice) under Not sure,
+  // so a long statement can be saved now and sorted out slowly from Home.
+  const toNotSure = notSureableLines(filtering ? inView : recordable, choices);
+  const allUnderNotSure = () => {
+    Alert.alert(
+      `Put ${toNotSure.length} ${toNotSure.length === 1 ? 'entry' : 'entries'} under Not sure?`,
+      `Every entry ${filtering ? `found ${foundFor}` : 'in this statement'} that is still Jamvi's suggestion or still needs you, including any not shown yet. Money out goes to Not sure yet and money in to no income source; anything you chose yourself stays as it is. They count as confirmed, so Save takes them all, and Home's "to sort out" brings each one back to you.`,
+      [
+        { text: 'Not now', style: 'cancel' },
+        { text: 'Put them under Not sure', onPress: () => setChoices((current) => putUnderNotSure(toNotSure, current)) },
+      ],
+    );
+  };
   const [sendFound, setSendFound] = useState<{ groupId: number | null; accountId: number; category: string; incomeSourceId: number | null } | null>(null);
   const sendFoundTo = (groupName: string, accountName: string) => {
     if (!sendFound || sendFound.groupId === null) return;
@@ -2275,6 +2288,18 @@ export default function MpesaImportScreen() {
                     );
                   })}
                 </View>
+                {toNotSure.length > 0 && canManageBudget ? (
+                  <Pressable
+                    onPress={allUnderNotSure}
+                    style={[styles.secondary, { borderColor: colors.border, borderWidth: 1, borderRadius: 12, marginTop: 10 }]}
+                    accessibilityRole="button"
+                    testID="mpesa-review-all-not-sure"
+                  >
+                    <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', textAlign: 'center' }}>
+                      Put {filtering ? `all ${toNotSure.length} found` : `the other ${toNotSure.length}`} under Not sure - sort them out later
+                    </Text>
+                  </Pressable>
+                ) : null}
                 {months.length > 1 ? (
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 8, paddingVertical: 2, marginTop: 10 }} testID="mpesa-review-months">
                     {[{ key: null as string | null, label: 'All months', count: recordable.length }, ...months].map((option) => {
