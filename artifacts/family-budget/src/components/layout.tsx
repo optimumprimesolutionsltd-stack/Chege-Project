@@ -13,6 +13,7 @@ import { useQuery } from '@tanstack/react-query';
 import { daysUntil, type MemberEntitlements } from '@/lib/subscription-status';
 import { ViewerBanner } from '@/components/viewer-banner';
 import { readSimpleNav, SIMPLE_NAV_KEY, splitNav } from '@/lib/nav-plan';
+import { useEntitlements } from '@/hooks/use-entitlements';
 
 export type QuickLogAction = 'contribution' | 'expense' | 'income' | 'budget' | 'goal';
 
@@ -172,16 +173,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   // The same entitlements the Subscription page reads. Shown in the nav so a
   // trial running out is visible where people already look, rather than only
   // to somebody who thought to go and check.
-  const { data: entitlements } = useQuery<MemberEntitlements>({
-    queryKey: ['member-entitlements'],
-    queryFn: async () => {
-      const response = await fetch('/api/subscription-plans/entitlements', { credentials: 'include' });
-      if (!response.ok) throw new Error('Could not load your subscription.');
-      return response.json() as Promise<MemberEntitlements>;
-    },
-    retry: false,
-    staleTime: 5 * 60 * 1000,
-  });
+  const { data: entitlements } = useEntitlements();
   const trialDaysLeft = entitlements?.status === 'trial' ? daysUntil(entitlements.trialEndsAt ?? null) : null;
   const payLabel = trialDaysLeft !== null && trialDaysLeft >= 0
     ? `Pay · ${trialDaysLeft} ${trialDaysLeft === 1 ? 'day' : 'days'} left`

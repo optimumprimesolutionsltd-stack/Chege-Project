@@ -112,6 +112,7 @@ import { parseStoredRules, payeeKey, payeeName, ruleLabel, rulesStorageKey, with
 import { saveDebtLinks } from "@/lib/debt-reversal";
 import { mpesaNameFor, saveMpesaNames, type MpesaName } from "@/lib/mpesa-names";
 import { isLapsedRefusal, lapsedSaveMessage } from "@/lib/lapsed-save";
+import { useEntitlements } from "@/hooks/use-entitlements";
 import type { DebtEntryLink } from "@/lib/debt-links";
 import { fulizaOwedBefore, reconcile, statementLines, withoutRecordedFuliza, type RecordedRow, type StatementReading } from "@/lib/statement-import";
 import { checkRunningBalance, readStatementRows, resolveDirections } from "@/lib/statement-table";
@@ -598,21 +599,12 @@ export default function MpesaImportPage() {
   const confirmedCount = confirmedLines.length;
 
   // The same subscription the menu reads, for whether a trial or a paid
-  // subscription is what ended. Read defensively: the wording is all it sets.
-  const { data: entitlements } = useQuery<{ status?: string | null; member?: { status?: string | null } }>({
-    queryKey: ["member-entitlements"],
-    queryFn: async () => {
-      const response = await fetch("/api/subscription-plans/entitlements", { credentials: "include" });
-      if (!response.ok) throw new Error("Could not load your subscription.");
-      return response.json();
-    },
-    retry: false,
-    staleTime: 5 * 60 * 1000,
-  });
+  // subscription is what ended.
+  const { data: entitlements } = useEntitlements();
   // One plain message when the trial or subscription has ended, with the way
   // to pay, in place of the same 402 listed under every entry.
   const lapsedCard = (waiting: number) => {
-    const words = lapsedSaveMessage(entitlements?.status ?? entitlements?.member?.status, waiting, isShared);
+    const words = lapsedSaveMessage(entitlements?.status, waiting, isShared);
     return (
       <div className="space-y-2 rounded-xl border border-primary bg-card p-4 text-sm" data-testid="mpesa-save-lapsed">
         <p className="flex items-center gap-2 font-semibold text-foreground"><Lock className="h-4 w-4 text-primary" /> {words.title}</p>

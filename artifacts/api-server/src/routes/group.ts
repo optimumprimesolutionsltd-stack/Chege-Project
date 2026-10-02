@@ -25,6 +25,7 @@ import {
   setActiveWorkspaceCookie,
 } from "../lib/activeGroup";
 import { resolvePhotoUrl, verifyPhotoObject } from "../lib/photoStorage";
+import { refuseStartingGroup } from "../lib/group-start";
 import {
   confirmGroupDeletionCode,
   eraseGroupData,
@@ -73,6 +74,12 @@ async function hasAccessibleSharedBudgetWithName(
 }
 
 router.post("/groups", async (req, res): Promise<void> => {
+  // Only while the person's own trial or subscription is active (lib/group-start).
+  const refusal = await refuseStartingGroup(req.user!.id);
+  if (refusal) {
+    res.status(402).json({ error: refusal });
+    return;
+  }
   const parsed = CreateSharedGroupBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Use a group name between 2 and 60 characters." });

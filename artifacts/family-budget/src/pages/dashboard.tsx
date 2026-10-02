@@ -80,6 +80,8 @@ import { CategorySearchInput, useCategorySearch } from "@/components/category-se
 import { AmountField } from "@/components/amount-field";
 import { HomeAnswersCard } from "@/components/home-answers-card";
 import { DEFAULT_WORKSPACE_ACCENT } from "@/lib/workspace-accent";
+import { useEntitlements } from "@/hooks/use-entitlements";
+import { mayStartGroup } from "@/lib/group-start";
 
 type QuickAction = "none" | "income" | "expense" | "goal";
 const RECURRING_DASHBOARD_DRAFT_KEY = "jamvi-recurring-dashboard-draft";
@@ -420,10 +422,12 @@ function CreateSharedGroupCard({ hasExistingSharedBudget = false }: { hasExistin
       await createSharedGroup.mutateAsync({ data: { name: name.trim(), kind: kind as GroupKind } });
       window.location.assign(appPath("/", import.meta.env.BASE_URL));
     } catch (error) {
+      // A refusal for an ended subscription says so plainly, without its code.
+      const refusal = (error as { data?: { error?: string } } | null)?.data?.error;
       toast({
         variant: "destructive",
         title: "Could not create group",
-        description: error instanceof Error ? error.message : "Please try again.",
+        description: refusal ?? (error instanceof Error ? error.message : "Please try again."),
       });
     }
   };
@@ -517,8 +521,11 @@ function CreateSharedGroupCard({ hasExistingSharedBudget = false }: { hasExistin
 function SharedGroupsFooter() {
   const { data: workspaces = [], isLoading } = useGetWorkspaces();
   const sharedWorkspaces = workspaces.filter((workspace) => !workspace.isPrivate);
+  // Only while the person's own trial or subscription is active: a group
+  // started after it ends would be read-only to them (lib/group-start).
+  const { data: entitlements } = useEntitlements();
 
-  if (isLoading) return null;
+  if (isLoading || !mayStartGroup(entitlements)) return null;
   return <CreateSharedGroupCard hasExistingSharedBudget={sharedWorkspaces.length > 0} />;
 }
 
