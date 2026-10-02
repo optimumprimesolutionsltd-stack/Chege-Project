@@ -43,7 +43,8 @@ describe('automatic suggestions', () => {
     const choices = initialChoices(lines, [{ type: 'disbursement', description: 'Kenya Power', expenseCategory: 'Electricity' }], NAMES);
     expect(choices[0]).toMatchObject({ category: 'Electricity', auto: true });
     expect(choices[1]).toMatchObject({ category: 'Airtime & Data', auto: true });
-    expect(choices[2]).toMatchObject({ category: '', auto: false });
+    // Nothing to go on: "Not sure yet", as Jamvi's suggestion (asked for 2 Oct 2026).
+    expect(choices[2]).toMatchObject({ category: 'Not sure yet', auto: true });
     expect(choices[3]).toMatchObject({ category: '', auto: false });
   });
 });
@@ -71,13 +72,13 @@ describe('choosing by hand', () => {
     expect(next[0]).toMatchObject({ category: 'Data', auto: false });
     expect(next[1]).toMatchObject({ category: 'Data', auto: true });
     expect(next[2]).toMatchObject({ category: 'Fun', auto: false });
-    expect(next[3]).toMatchObject({ category: '' });
+    expect(next[3]).toMatchObject({ category: 'Not sure yet', auto: true });
   });
 
   it('does not touch anything else when a category is cleared', () => {
     const start = initialChoices(lines, [], []);
     const next = chooseCategory(lines, start, 0, '');
-    expect(next[1].category).toBe('');
+    expect(next[1]).toEqual(start[1]);
   });
 });
 
