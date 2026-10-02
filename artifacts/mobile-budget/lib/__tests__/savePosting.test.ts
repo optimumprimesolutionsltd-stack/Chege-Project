@@ -144,7 +144,7 @@ describe('a line recorded in a different budget entirely', () => {
     expect(calls[0][1]).toMatchObject({ groupId: 5, direction: 'out', accountId: 3, expenseCategory: 'Stock' });
     expect(calls[1][1]).toMatchObject({ amount: 25 });
     expect(calls[1][1]).not.toHaveProperty('chargeForTransactionId');
-    expect(posted).toEqual({ id: undefined, feeFailed: false });
+    expect(posted).toEqual({ id: undefined, otherBudget: { groupId: 5, id: 101 }, feeFailed: false });
   });
 
   it('records money in there, with an income source when one was chosen, and no charge', async () => {
@@ -163,6 +163,6 @@ describe('a line recorded in a different budget entirely', () => {
     const { api } = fakeApi();
     const broken: PostingApi = { ...api, disbursement: async () => { throw new Error('nope'); } };
     const built = buildPostings(line({}), { include: true, category: '', otherBudget }, ctx)!;
-    expect(await savePosting(built, broken, 9)).toEqual({ id: undefined, feeFailed: true });
+    expect(await savePosting(built, broken, 9)).toEqual({ id: undefined, otherBudget: { groupId: 5, id: 101 }, feeFailed: true });
   });
 });

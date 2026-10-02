@@ -343,7 +343,12 @@ export function chooseIncomeSource(
   sourceId: number | null,
 ): Record<number, Choice> {
   const chosen = lines.find((line) => line.index === index);
-  const next: Record<number, Choice> = { ...choices, [index]: { ...choices[index], incomeSourceId: sourceId, sourceAuto: false } };
+  // "Not sure" is the person"s answer as much as a source is: it confirms the
+  // line, so it saves and is brought back to sort out, with no Confirm tick.
+  const next: Record<number, Choice> = {
+    ...choices,
+    [index]: { ...choices[index], incomeSourceId: sourceId, sourceAuto: false, ...(sourceId === null ? { confirmed: true } : {}) },
+  };
   if (!chosen?.description || sourceId === null) return next;
   const sender = clean(chosen.description);
   for (const line of lines) {

@@ -83,7 +83,7 @@ import { getImportProgress, setImportProgress, useImportProgress } from '@/lib/i
 import { clearSavePending, hasPendingSave, markSavePending } from '@/lib/importSaveJob';
 import { retryWhenCutOff } from '@/lib/saveWhileAway';
 import { plainSaveError, withRetries } from '@/lib/saveRetry';
-import { isNotSure, needsNotSureCategory, NOT_SURE_CATEGORY, notSureableLines, putUnderNotSure, toMarkAfterSave } from '@/lib/entriesToSort';
+import { isNotSure, needsNotSureCategory, NOT_SURE_CATEGORY, notSureableLines, otherBudgetToMark, putUnderNotSure, toMarkAfterSave } from '@/lib/entriesToSort';
 import { handleLapsedError } from '@/lib/lapsedError';
 import { runPool, savePosting, SAVE_CONCURRENCY, type PostingApi } from '@/lib/savePosting';
 import { parseStoredRules, payeeKey, payeeName, ruleLabel, rulesStorageKey, withRule, withoutRule, type PayeeRules } from '@/lib/payeeLearning';
@@ -1697,6 +1697,8 @@ export default function MpesaImportScreen() {
     const savedIndexes = new Set<number>();
     // What each saved line became, for marking money in left on "Not sure".
     const depositIds = new Map<number, number>();
+    // And what each line sent to another budget became there.
+    const otherBudgetMade = new Map<number, { groupId: number; id: number }>();
     // Who each debt entry was for, kept so deleting it can offer to put that person's balance back.
     const debtLinks: DebtEntryLink[] = [];
     // M-Pesa's own name for each entry saved under a nickname, for Search.
@@ -1769,6 +1771,7 @@ export default function MpesaImportScreen() {
           result.saved += 1;
           savedIndexes.add(item.index);
           if (posted.id !== undefined && item.direction === 'in') depositIds.set(item.index, posted.id);
+          if (posted.otherBudget) otherBudgetMade.set(item.index, posted.otherBudget);
         } catch (error: unknown) {
           if (isLapsedRefusal(error)) {
             lapsed = true;
@@ -1857,6 +1860,14 @@ export default function MpesaImportScreen() {
         }).then(() => queryClient.invalidateQueries({ queryKey: ['entries-to-sort'] })).catch(() => {});
       }
       void queryClient.invalidateQueries({ queryKey: ['entries-to-sort'] });
+      // Sent to another budget on "Not sure": kept to sort out there, on its own Home.
+      for (const [groupId, ids] of otherBudgetToMark(lines, choices, otherBudgetMade)) {
+        void customFetch('/api/entries-to-sort', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-jamvi-workspace': String(groupId) },
+          body: JSON.stringify({ transactionIds: ids }),
+        }).catch(() => {});
+      }
     }
     void saveMpesaNames(mpesaNames);
     offerBalanceChanges(lines.filter((item) => savedIndexes.has(item.index)), saveChoices, saveParties);

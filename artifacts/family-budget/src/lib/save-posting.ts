@@ -23,6 +23,8 @@ export type PostingApi = {
 export type Posted = {
   /** The main entry that was created (for a transfer, its M-Pesa side), when there was one. */
   id: number | undefined;
+  /** For a line recorded in another budget: which, and the entry made there. */
+  otherBudget?: { groupId: number; id: number };
   /** The M-Pesa charge did not save, though the entry itself did. */
   feeFailed: boolean;
 };
@@ -38,16 +40,17 @@ export type Posted = {
  */
 export async function savePosting(built: Built, api: PostingApi, mpesaAccountId: number): Promise<Posted> {
   if (built.kind === "other-budget") {
-    await api.otherBudget(built.groupId, built.direction, built.main);
+    const made = await api.otherBudget(built.groupId, built.direction, built.main);
+    const otherBudget = made?.id !== undefined ? { groupId: built.groupId, id: made.id } : undefined;
     // The charge, when there is one, is a real cost on this budget"s own account, so it is
     // still recorded here — but it cannot be tied to the entry it came with, which now lives
     // in a different budget"s own history.
-    if (!built.fee) return { id: undefined, feeFailed: false };
+    if (!built.fee) return { id: undefined, otherBudget, feeFailed: false };
     try {
       await api.disbursement(built.fee);
-      return { id: undefined, feeFailed: false };
+      return { id: undefined, otherBudget, feeFailed: false };
     } catch {
-      return { id: undefined, feeFailed: true };
+      return { id: undefined, otherBudget, feeFailed: true };
     }
   }
 

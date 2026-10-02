@@ -94,5 +94,25 @@ export function putUnderNotSure(lines: readonly PreviewLine[], choices: Record<n
   return next;
 }
 
+/**
+ * Money in sent to another budget (a chama, say) with its income source left
+ * on "Not sure": marked in that budget, so its own Home brings them back.
+ * Grouped by budget, each its own request.
+ */
+export function otherBudgetToMark(
+  lines: readonly PreviewLine[],
+  choices: Record<number, Choice>,
+  made: ReadonlyMap<number, { groupId: number; id: number }>,
+): Map<number, number[]> {
+  const byBudget = new Map<number, number[]>();
+  for (const line of lines) {
+    const entry = made.get(line.index);
+    const target = choices[line.index]?.otherBudget;
+    if (!entry || !target || line.direction !== "in" || target.incomeSourceId != null) continue;
+    byBudget.set(entry.groupId, [...(byBudget.get(entry.groupId) ?? []), entry.id]);
+  }
+  return byBudget;
+}
+
 /** "3 entries to sort out" - the words for Home. */
 export const toSortTitle = (count: number): string => `${count} ${count === 1 ? "entry" : "entries"} to sort out`;

@@ -102,6 +102,8 @@ const CHARGE_CATEGORY_KEY = "jamvi:last-charge-category";
 // The category list's "+ Add a category..." entry: opens the form, never a category.
 const ADD_CATEGORY = "__add_category__";
 // Entries drawn at a time on the review (see shownCount).
+/** The web's "Not sure" in the income source picker: the blank option cannot be chosen as an answer. */
+const NOT_SURE_SOURCE = "__not_sure";
 const LINES_PER_PAGE = 100;
 const todayIso = () => new Date(Date.now() + 3 * 3_600_000).toISOString().slice(0, 10);
 
@@ -118,7 +120,7 @@ import { saveDebtLinks } from "@/lib/debt-reversal";
 import { mpesaNameFor, saveMpesaNames, type MpesaName } from "@/lib/mpesa-names";
 import { isLapsedRefusal, lapsedSaveMessage } from "@/lib/lapsed-save";
 import { plainSaveError, retrySave, withRetries } from "@/lib/save-retry";
-import { isNotSure, needsNotSureCategory, NOT_SURE_CATEGORY, notSureableLines, putUnderNotSure, toMarkAfterSave } from "@/lib/entries-to-sort";
+import { isNotSure, needsNotSureCategory, NOT_SURE_CATEGORY, notSureableLines, otherBudgetToMark, putUnderNotSure, toMarkAfterSave } from "@/lib/entries-to-sort";
 import { useEntitlements } from "@/hooks/use-entitlements";
 import type { DebtEntryLink } from "@/lib/debt-links";
 import { fulizaOwedBefore, reconcile, statementLines, withoutRecordedFuliza, type RecordedRow, type StatementReading } from "@/lib/statement-import";
@@ -866,6 +868,8 @@ export default function MpesaImportPage() {
     const savedIndexes = new Set<number>();
     // What each saved line became, for marking money in left on "Not sure".
     const depositIds = new Map<number, number>();
+    // And what each line sent to another budget became there.
+    const otherBudgetMade = new Map<number, { groupId: number; id: number }>();
     // Who each debt entry was for, kept so deleting it can offer to put that person's balance back.
     const debtLinks: DebtEntryLink[] = [];
     // M-Pesa's own name for each entry saved under a nickname, for Search.
@@ -936,6 +940,7 @@ export default function MpesaImportPage() {
           result.saved += 1;
           savedIndexes.add(item.index);
           if (posted.id !== undefined && item.direction === "in") depositIds.set(item.index, posted.id);
+          if (posted.otherBudget) otherBudgetMade.set(item.index, posted.otherBudget);
         } catch (error) {
           if (isLapsedRefusal(error)) {
             lapsed = true;
@@ -1008,6 +1013,15 @@ export default function MpesaImportPage() {
         }).then(() => queryClient.invalidateQueries({ queryKey: ["entries-to-sort"] })).catch(() => {});
       }
       void queryClient.invalidateQueries({ queryKey: ["entries-to-sort"] });
+      // Sent to another budget on "Not sure": kept to sort out there, on its own Home.
+      for (const [groupId, ids] of otherBudgetToMark(lines, choices, otherBudgetMade)) {
+        void fetch("/api/entries-to-sort", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json", "x-jamvi-workspace": String(groupId) },
+          body: JSON.stringify({ transactionIds: ids }),
+        }).catch(() => {});
+      }
     }
     void saveMpesaNames(mpesaNames);
     void offerBalanceChanges(lines.filter((item) => savedIndexes.has(item.index)), saveChoices, saveParties);
@@ -1659,14 +1673,15 @@ export default function MpesaImportPage() {
                     <div className="space-y-1" data-testid={`mpesa-line-source-${item.index}`}>
                       <select
                         className={SELECT_CLASS}
-                        value={choice.incomeSourceId ?? ""}
+                        value={choice.incomeSourceId ?? (choice.confirmed ? NOT_SURE_SOURCE : "")}
                         onChange={(event) =>
-                          setChoices((current) => chooseIncomeSource(lines ?? [], current, item.index, event.target.value ? Number(event.target.value) : null))
+                          setChoices((current) => chooseIncomeSource(lines ?? [], current, item.index, event.target.value && event.target.value !== NOT_SURE_SOURCE ? Number(event.target.value) : null))
                         }
                         aria-label="Where did this come from?"
                         data-testid={`mpesa-line-source-select-${item.index}`}
                       >
                         <option value="">Where did this come from? (optional)</option>
+                        <option value={NOT_SURE_SOURCE}>Not sure - sort it out later</option>
                         {incomeSources.map((source) => <option key={source.id} value={source.id}>{source.name}</option>)}
                       </select>
                       {choice.sourceAuto && choice.incomeSourceId ? (
