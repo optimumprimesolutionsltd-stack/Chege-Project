@@ -34,6 +34,26 @@ class JamviSmsModule : Module() {
       info.requestedPermissions?.contains(Manifest.permission.READ_SMS) == true
     }
 
+    // Whether this build can tell the person when M-Pesa texts (RECEIVE_SMS is
+    // in its manifest), and the switch for it, read by MpesaSmsReceiver.
+    Function("canNotify") {
+      val info = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        context.packageManager.getPackageInfo(context.packageName, PackageManager.PackageInfoFlags.of(PackageManager.GET_PERMISSIONS.toLong()))
+      } else {
+        @Suppress("DEPRECATION")
+        context.packageManager.getPackageInfo(context.packageName, PackageManager.GET_PERMISSIONS)
+      }
+      info.requestedPermissions?.contains(Manifest.permission.RECEIVE_SMS) == true
+    }
+
+    Function("setNotify") { on: Boolean, senders: List<String> ->
+      JamviSmsPrefs.set(context, on, senders)
+    }
+
+    Function("notifyOn") {
+      JamviSmsPrefs.notifyOn(context)
+    }
+
     AsyncFunction("readMessages") { senders: List<String>, fromMs: Double, toMs: Double, limit: Int ->
       if (context.checkSelfPermission(Manifest.permission.READ_SMS) != PackageManager.PERMISSION_GRANTED) {
         throw CodedException("NO_PERMISSION", "Jamvi has not been allowed to read messages.", null)

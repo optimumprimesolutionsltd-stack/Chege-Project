@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('expo', () => ({ requireOptionalNativeModule: () => null }));
 vi.mock('react-native', () => ({ Platform: { OS: 'android' }, PermissionsAndroid: {} }));
 
-import { canReadSms, MPESA_SENDERS, newSmsTitle, parseSmsAuto, smsBatches, smsBodies, smsRefusal } from '@/lib/mpesaSms';
+import { canNotifySms, canReadSms, MPESA_SENDERS, newSmsTitle, parseSmsAuto, smsBatches, smsBodies, smsRefusal } from '@/lib/mpesaSms';
 
 // Asked for 2 Oct 2026: read M-Pesa's messages on request, and each time Jamvi
 // opens, from an APK now and the Play Store later.
@@ -53,10 +53,25 @@ describe('the build', () => {
     expect(ignore).not.toContain('android/');
   });
 
+  // Asked for 2 Oct 2026: "add the notification when mpesa message arrives".
+  it('tells the person when M-Pesa texts, only if they turned it on, opening the review', () => {
+    const manifest = readFileSync('modules/jamvi-sms/android/src/main/AndroidManifest.xml', 'utf8');
+    expect(manifest).toContain('android.permission.RECEIVE_SMS');
+    expect(manifest).toContain('android:permission="android.permission.BROADCAST_SMS"');
+    expect(manifest).toContain('android.provider.Telephony.SMS_RECEIVED');
+    const receiver = readFileSync('modules/jamvi-sms/android/src/main/java/expo/modules/jamvisms/MpesaSmsReceiver.kt', 'utf8');
+    expect(receiver).toContain('if (!JamviSmsPrefs.notifyOn(context)) return');
+    expect(receiver).toContain('if (sender !in JamviSmsPrefs.senders(context)) return');
+    expect(receiver).toContain('mobile-budget://mpesa-import?fromSms=new');
+    const screen = readFileSync('app/mpesa-import.tsx', 'utf8');
+    expect(screen).toContain('{smsNotifiable ? (');
+    expect(screen).toContain('Tell me when an M-Pesa message arrives, even when Jamvi is closed');
+  });
+
   it('leaves SMS out of a Play Store build until Google approves it', () => {
     const config = readFileSync('app.config.js', 'utf8');
     expect(config).toContain("const playStore = process.env.JAMVI_PLAY_STORE === '1';");
-    expect(config).toContain("'android.permission.READ_SMS'");
+    expect(config).toContain("'android.permission.READ_SMS', 'android.permission.RECEIVE_SMS'");
     const eas = JSON.parse(readFileSync('eas.json', 'utf8'));
     expect(eas.build.play.android).toMatchObject({ buildType: 'app-bundle', env: { JAMVI_PLAY_STORE: '1' } });
     expect(eas.build.preview.android.env.JAMVI_PLAY_STORE).toBeUndefined();
@@ -68,7 +83,7 @@ describe('the build', () => {
   it('is a new APK build that leaves the update runtime alone', () => {
     const app = JSON.parse(readFileSync('app.json', 'utf8')).expo;
     expect(app.version).toBe('1.0.0');
-    expect(app.android.versionCode).toBe(5);
+    expect(app.android.versionCode).toBe(6);
     expect(readFileSync('lib/mpesaSms.ts', 'utf8')).toContain("requireOptionalNativeModule<NativeSms>('JamviSms')");
   });
 

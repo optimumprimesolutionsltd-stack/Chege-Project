@@ -1,9 +1,23 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!--
       Reading M-Pesa's own messages, only when the person taps "Read my M-Pesa
-      messages" and only between the dates they choose. A Play Store build
-      removes this (app.config.js, JAMVI_PLAY_STORE) until Google approves the
-      SMS declaration; the button then hides itself (isAvailable).
+      messages" (or has asked Jamvi to look for new ones each time it opens),
+      and a notification when M-Pesa texts, only if they turned that on. A Play
+      Store build removes the SMS permissions (app.config.js, JAMVI_PLAY_STORE)
+      until Google approves the SMS declaration; the options then hide.
     -->
     <uses-permission android:name="android.permission.READ_SMS"/>
+    <uses-permission android:name="android.permission.RECEIVE_SMS"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+
+    <application>
+        <receiver
+            android:name="expo.modules.jamvisms.MpesaSmsReceiver"
+            android:exported="true"
+            android:permission="android.permission.BROADCAST_SMS">
+            <intent-filter>
+                <action android:name="android.provider.Telephony.SMS_RECEIVED"/>
+            </intent-filter>
+        </receiver>
+    </application>
 </manifest>

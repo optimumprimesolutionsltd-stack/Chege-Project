@@ -15,6 +15,10 @@ import { requireOptionalNativeModule } from 'expo';
 type NativeSms = {
   isAvailable(): boolean;
   readMessages(senders: string[], fromMs: number, toMs: number, limit: number): Promise<Array<{ address: string; body: string; date: number }>>;
+  // From versionCode 6: the notification when M-Pesa texts (MpesaSmsReceiver).
+  canNotify?(): boolean;
+  setNotify?(on: boolean, senders: string[]): void;
+  notifyOn?(): boolean;
 };
 
 const native: NativeSms | null = Platform.OS === 'android' ? requireOptionalNativeModule<NativeSms>('JamviSms') : null;
@@ -127,6 +131,43 @@ export async function newMpesaSms(since: number, now = Date.now()): Promise<{ me
   if (!(await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.READ_SMS))) return null;
   const rows = await native.readMessages(MPESA_SENDERS, since + 1, now + 1, MAX_SMS);
   return { messages: smsBodies(rows), newest: rows.reduce((max, row) => Math.max(max, row.date), since) };
+}
+
+/**
+ * "Tell me when an M-Pesa message arrives": a notification from Android the
+ * moment M-Pesa texts, even with Jamvi closed; tapping it opens the new ones
+ * in the import (mobile-budget://mpesa-import?fromSms=new). Only builds that
+ * carry the receiver and RECEIVE_SMS offer it.
+ */
+export function canNotifySms(): boolean {
+  try {
+    return canReadSms() && typeof native?.canNotify === 'function' && native.canNotify() === true;
+  } catch {
+    return false;
+  }
+}
+
+export function smsNotifyOn(): boolean {
+  try {
+    return native?.notifyOn?.() === true;
+  } catch {
+    return false;
+  }
+}
+
+/** Turns the notification on (asking Android first) or off. Says whether it ended up on. */
+export async function setSmsNotify(on: boolean): Promise<{ on: boolean; reason?: 'denied' | 'blocked' }> {
+  if (!native?.setNotify || !canNotifySms()) return { on: false };
+  if (on) {
+    const wanted = [PermissionsAndroid.PERMISSIONS.READ_SMS, PermissionsAndroid.PERMISSIONS.RECEIVE_SMS];
+    if (Platform.OS === 'android' && Number(Platform.Version) >= 33) wanted.push(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
+    const answers = await PermissionsAndroid.requestMultiple(wanted);
+    const values = Object.values(answers);
+    if (values.some((answer) => answer === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN)) return { on: false, reason: 'blocked' };
+    if (values.some((answer) => answer !== PermissionsAndroid.RESULTS.GRANTED)) return { on: false, reason: 'denied' };
+  }
+  native.setNotify(on, MPESA_SENDERS);
+  return { on };
 }
 
 /** "3 new M-Pesa messages" - for Home. */
