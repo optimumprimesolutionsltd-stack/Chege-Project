@@ -124,7 +124,9 @@ import { plainSaveError, retrySave, withRetries } from "@/lib/save-retry";
 import { isNotSure, needsNotSureCategory, NOT_SURE_CATEGORY, notSureableLines, otherBudgetToMark, putUnderNotSure, toMarkAfterSave } from "@/lib/entries-to-sort";
 import { useEntitlements } from "@/hooks/use-entitlements";
 import type { DebtEntryLink } from "@/lib/debt-links";
-import { fulizaOwedBefore, reconcile, statementLines, withoutRecordedFuliza, type RecordedRow, type StatementReading } from "@/lib/statement-import";
+import { balanceAtEndOf, dayBefore, fulizaOwedBefore, missingInJamvi, notOnStatement, reconcile, statementLines, withoutRecordedFuliza, type RecordedRow, type StatementReading } from "@/lib/statement-import";
+import { useUndoableDelete } from "@/hooks/use-undoable-delete";
+import { deletedLabel } from "@/lib/undo-delete";
 import { checkRunningBalance, readStatementRows, resolveDirections } from "@/lib/statement-table";
 import { fetchOtherBudgetOptions, type OtherBudgetOptions } from "@/lib/other-budget-options";
 
@@ -526,6 +528,169 @@ export default function MpesaImportPage() {
     }
     return undefined;
   }, [draftChecked, statementDraftKey, statementReading, statementLeft, choices, selectedAccountId]);
+
+  // ── Comparing with the statement, and sorting each difference out where it
+  // is shown - the phone's (app/mpesa-import.tsx), brought to the web 3 Oct 2026.
+  type AccountRows = Array<{ id: number; date: string; type: string; amount: number; mpesaReceipt?: string | null }>;
+  const accountRows = (account?.transactions ?? []) as unknown as AccountRows;
+  const accountOpening = Number((account as { openingBalance?: number | null } | undefined)?.openingBalance ?? 0);
+  // Setting the account's opening balance to the statement's, when nothing is
+  // recorded in it before the statement starts - the one case where that is
+  // certainly right. Anything recorded earlier and the difference is only shown.
+  const [openingSaving, setOpeningSaving] = useState(false);
+  const openingFix = useMemo(() => {
+    const first = statementReading?.firstDate;
+    const opening = statementReading?.opening;
+    if (!first || opening == null || !account || !accountId) return null;
+    if (accountRows.some((row) => String(row.date).slice(0, 10) < first)) return null;
+    if (Math.abs(accountOpening - opening) < 0.005) return null;
+    return { current: accountOpening, to: opening, date: dayBefore(first) };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statementReading, account, accountId]);
+  const fixOpeningBalance = async () => {
+    if (!openingFix || !accountId || openingSaving) return;
+    setOpeningSaving(true);
+    try {
+      const response = await fetch("/api/joint-account/opening-balance", {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ openingBalance: openingFix.to, openingBalanceDate: openingFix.date, accountId }),
+      });
+      if (!response.ok) throw new Error(((await response.json().catch(() => ({}))) as { error?: string }).error ?? "Please try again.");
+      await queryClient.invalidateQueries();
+    } catch (error) {
+      toast({ variant: "destructive", title: "Could not set the opening balance", description: error instanceof Error ? error.message : "Please try again." });
+    } finally {
+      setOpeningSaving(false);
+    }
+  };
+  // Jamvi's own balance the day before the statement starts and on its last
+  // day, beside M-Pesa's. A difference at the start is from before the statement.
+  const balanceSides = useMemo(() => {
+    const first = statementReading?.firstDate;
+    const last = statementReading?.lastDate;
+    if (!first || !last || statementReading?.opening == null || statementReading?.closing == null || !account) return null;
+    const startDay = dayBefore(first);
+    return {
+      startDay,
+      jamviStart: balanceAtEndOf(startDay, accountOpening, accountRows),
+      mpesaStart: statementReading.opening,
+      endDay: last,
+      jamviEnd: balanceAtEndOf(last, accountOpening, accountRows),
+      mpesaEnd: statementReading.closing,
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statementReading, account]);
+  const statementUndo = useUndoableDelete();
+  const sendJson = async (url: string, method: string, body?: unknown) => {
+    const response = await fetch(url, {
+      method,
+      credentials: "include",
+      headers: body === undefined ? undefined : { "Content-Type": "application/json" },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    if (!response.ok) throw new Error(((await response.json().catch(() => ({}))) as { error?: string }).error ?? "Please try again.");
+  };
+  // What this account has for the statement's days that the statement does not.
+  const extras = useMemo(() => {
+    const found = statementReading && account ? notOnStatement(statementReading, accountRows as unknown as RecordedRow[]) : null;
+    if (!found) return null;
+    const rows = found.rows.filter((row) => !statementUndo.isHidden(`extra:${row.id}`));
+    return { rows, net: Math.round(rows.reduce((sum, row) => sum + row.effect, 0) * 100) / 100 };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statementReading, account, statementUndo.isHidden]);
+  const removeExtra = (row: { id: number; date: string; description?: string | null; effect: number; why: string }) => {
+    if (!window.confirm(`Remove it from Jamvi?\n\n${String(row.date).slice(0, 10)} · ${row.description ?? ""} · ${formatKes(Math.abs(row.effect))}\n\nYour M-Pesa statement has no record of it (${row.why}). Remove it if it did not happen, or was recorded twice.`)) return;
+    statementUndo.schedule(`extra:${row.id}`, deletedLabel(row.description, Math.abs(row.effect)), async () => {
+      try {
+        await sendJson(`/api/joint-account/${row.id}`, "DELETE");
+      } catch (error) {
+        toast({ variant: "destructive", title: "Could not remove it", description: error instanceof Error ? error.message : "Please try again." });
+      }
+      await queryClient.invalidateQueries();
+    });
+  };
+  // "Fix these for me": the entries the check can prove are duplicates.
+  const [fixingExtras, setFixingExtras] = useState(false);
+  const fixableExtras = (extras?.rows ?? []).filter((row) => row.fixable);
+  const fixExtras = async () => {
+    if (fixableExtras.length === 0 || fixingExtras) return;
+    const total = Math.round(fixableExtras.reduce((sum, row) => sum + row.effect, 0) * 100) / 100;
+    if (!window.confirm(`Remove ${fixableExtras.length} ${fixableExtras.length === 1 ? "duplicate" : "duplicates"}?\n\n${fixableExtras.map((row) => `· ${String(row.date).slice(0, 10)} · ${row.description ?? ""} · ${formatKes(Math.abs(row.effect))}`).join("\n")}\n\nThese are already counted by this statement. Removing them moves the balance by ${formatKes(-total)}.`)) return;
+    setFixingExtras(true);
+    let failed = 0;
+    for (const row of fixableExtras) {
+      try { await sendJson(`/api/joint-account/${row.id}`, "DELETE"); } catch { failed += 1; }
+    }
+    await queryClient.invalidateQueries();
+    setFixingExtras(false);
+    if (failed > 0) toast({ variant: "destructive", title: "Some were not removed", description: `${failed} could not be removed. Delete them on Bank accounts.` });
+  };
+  // And the other way: what the statement has that this account does not.
+  const missing = useMemo(
+    () => (statementReading && account ? missingInJamvi(statementReading, accountRows as unknown as RecordedRow[]) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [statementReading, account],
+  );
+  const [addingMissing, setAddingMissing] = useState(false);
+  const addMissingCharges = async () => {
+    if (!missing || missing.charges.length === 0 || addingMissing || !accountId) return;
+    const total = missing.charges.reduce((sum, charge) => sum + charge.amount, 0);
+    if (!window.confirm(`Add ${missing.charges.length} missing ${missing.charges.length === 1 ? "charge" : "charges"}?\n\n${missing.charges.map((charge) => `· ${charge.date} · ${charge.description} · ${formatKes(charge.amount)}`).join("\n")}\n\nOn the statement, but never saved here. They go under ${effectiveChargeCategory || "the charges category"}, each beside its payment, and move the balance by ${formatKes(-total)}.`)) return;
+    setAddingMissing(true);
+    let failed = 0;
+    for (const charge of missing.charges) {
+      try {
+        await createDisbursement.mutateAsync({
+          data: {
+            amount: charge.amount,
+            description: charge.description,
+            date: charge.date,
+            madeById: user?.id ?? null,
+            expenseCategory: effectiveChargeCategory,
+            destinationKind: "category",
+            accountId,
+            chargeForTransactionId: charge.parentId,
+          } as never,
+        });
+      } catch {
+        failed += 1;
+      }
+    }
+    await queryClient.invalidateQueries();
+    setAddingMissing(false);
+    if (failed > 0) toast({ variant: "destructive", title: "Some were not added", description: `${failed} could not be added. Record them on Bank accounts.` });
+  };
+  // This statement's own Fuliza lines saved from an earlier download of the same days.
+  const fulizaUpdates = (missing?.amounts ?? []).filter((row) => row.fixable);
+  const [updatingFuliza, setUpdatingFuliza] = useState(false);
+  const updateFuliza = async () => {
+    if (fulizaUpdates.length === 0 || updatingFuliza) return;
+    if (!window.confirm(`Update to this statement?\n\n${fulizaUpdates.map((row) => `· ${row.description}: ${formatKes(row.recorded)} → ${formatKes(row.statement)}`).join("\n")}\n\nThis statement covers more of the same days, so its Fuliza figures are the ones to keep.`)) return;
+    setUpdatingFuliza(true);
+    let failed = 0;
+    for (const row of fulizaUpdates) {
+      try { await sendJson(`/api/joint-account/${row.id}`, "PUT", { amount: row.statement, date: row.date }); } catch { failed += 1; }
+    }
+    await queryClient.invalidateQueries();
+    setUpdatingFuliza(false);
+    if (failed > 0) toast({ variant: "destructive", title: "Some were not updated", description: `${failed} could not be updated. Edit them on Bank accounts.` });
+  };
+  // One entry saved for a different amount: set to the statement's.
+  const [correcting, setCorrecting] = useState<number | null>(null);
+  const applyStatementAmount = async (row: { id: number; date: string; description: string; recorded: number; statement: number }) => {
+    if (!window.confirm(`Change it to ${formatKes(row.statement)}?\n\n${row.date} · ${row.description}\n\nSaved as ${formatKes(row.recorded)}; your M-Pesa statement says ${formatKes(row.statement)}.`)) return;
+    setCorrecting(row.id);
+    try {
+      await sendJson(`/api/joint-account/${row.id}`, "PUT", { amount: row.statement, date: row.date });
+      await queryClient.invalidateQueries();
+    } catch (error) {
+      toast({ variant: "destructive", title: "Could not change it", description: error instanceof Error ? error.message : "Please try again." });
+    } finally {
+      setCorrecting(null);
+    }
+  };
 
   // Would saving these leave the account moved as far as the statement says M-Pesa moved?
   const balanceCheck = useMemo(
@@ -1328,6 +1493,90 @@ export default function MpesaImportPage() {
                       ))}
                     </ul>
                   </>
+                ) : null}
+                {openingFix && canManageBudget ? (
+                  <div className="space-y-2 rounded-lg border border-border p-3" data-testid="mpesa-opening-fix">
+                    <p className="text-foreground">
+                      Your statement starts at {formatKes(openingFix.to)}, but this account starts at {formatKes(openingFix.current)}.
+                      Nothing is recorded in it before the statement, so its starting balance can simply be set to match.
+                    </p>
+                    <Button onClick={() => void fixOpeningBalance()} disabled={openingSaving} data-testid="mpesa-opening-fix-button">
+                      {openingSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : `Start this account at ${formatKes(openingFix.to)}`}
+                    </Button>
+                  </div>
+                ) : null}
+                {balanceSides && !openingFix ? (
+                  <div className="space-y-1" data-testid="mpesa-balance-sides">
+                    <p className="text-foreground">On {balanceSides.startDay}: Jamvi {formatKes(balanceSides.jamviStart)} · M-Pesa {formatKes(balanceSides.mpesaStart)}</p>
+                    <p className="text-foreground">On {balanceSides.endDay}: Jamvi {formatKes(balanceSides.jamviEnd)} · M-Pesa {formatKes(balanceSides.mpesaEnd)}</p>
+                    {Math.abs(balanceSides.jamviStart - balanceSides.mpesaStart) >= 0.005 ? (
+                      <p className="text-destructive" data-testid="mpesa-balance-before">
+                        {formatKes(Math.round((balanceSides.mpesaStart - balanceSides.jamviStart) * 100) / 100)} of the difference is from before {balanceSides.startDay}: this account&apos;s starting balance, or entries before then, do not match M-Pesa. Import the statement for the month before to find them.
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
+                {extras && extras.rows.length > 0 ? (
+                  <div className="space-y-1" data-testid="mpesa-not-on-statement">
+                    <p className="font-semibold text-foreground">
+                      In Jamvi but not on this statement: {extras.rows.length} {extras.rows.length === 1 ? "entry" : "entries"}, {formatKes(extras.net)}
+                    </p>
+                    <p className="text-muted-foreground">These move the balance but M-Pesa has no record of them. Remove any that did not happen, or were recorded twice.</p>
+                    {fixableExtras.length > 0 && canManageBudget ? (
+                      <Button onClick={() => void fixExtras()} disabled={fixingExtras} data-testid="mpesa-fix-extras">
+                        {fixingExtras ? <Loader2 className="h-4 w-4 animate-spin" /> : `Fix ${fixableExtras.length} for me`}
+                      </Button>
+                    ) : null}
+                    <ul className="space-y-1">
+                      {extras.rows.slice(0, 20).map((row) => (
+                        <li key={row.id} className="flex items-center gap-3">
+                          <span className="min-w-0 flex-1 text-foreground">
+                            {String(row.date).slice(0, 10)} · {row.description ?? ""} · {row.effect < 0 ? "−" : "+"}{formatKes(Math.abs(row.effect))} ({row.why})
+                          </span>
+                          {canManageBudget ? (
+                            <button type="button" onClick={() => removeExtra(row)} className="text-sm font-semibold text-destructive hover:underline" data-testid={`mpesa-extra-remove-${row.id}`}>Remove</button>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
+                    {extras.rows.length > 20 ? <p className="text-muted-foreground">and {extras.rows.length - 20} more</p> : null}
+                  </div>
+                ) : null}
+                {missing && (missing.charges.length > 0 || missing.amounts.length > 0) ? (
+                  <div className="space-y-1" data-testid="mpesa-missing-in-jamvi">
+                    <p className="font-semibold text-foreground">
+                      On the statement but missing here{missing.charges.length > 0 ? `: ${missing.charges.length} ${missing.charges.length === 1 ? "charge" : "charges"}, ${formatKes(Math.abs(missing.net))}` : ""}
+                    </p>
+                    {missing.charges.length > 0 && canManageBudget ? (
+                      <Button onClick={() => void addMissingCharges()} disabled={addingMissing} data-testid="mpesa-add-missing">
+                        {addingMissing ? <Loader2 className="h-4 w-4 animate-spin" /> : `Add ${missing.charges.length} missing ${missing.charges.length === 1 ? "charge" : "charges"}`}
+                      </Button>
+                    ) : null}
+                    <ul className="space-y-1 text-foreground">
+                      {missing.charges.slice(0, 20).map((charge) => (
+                        <li key={`c-${charge.parentId}`}>{charge.date} · {charge.description} · −{formatKes(charge.amount)} (the payment is saved, its charge is not)</li>
+                      ))}
+                    </ul>
+                    {fulizaUpdates.length > 0 && canManageBudget ? (
+                      <Button onClick={() => void updateFuliza()} disabled={updatingFuliza} data-testid="mpesa-update-fuliza">
+                        {updatingFuliza ? <Loader2 className="h-4 w-4 animate-spin" /> : `Update ${fulizaUpdates.length} Fuliza ${fulizaUpdates.length === 1 ? "line" : "lines"} to this statement`}
+                      </Button>
+                    ) : null}
+                    <ul className="space-y-1">
+                      {missing.amounts.slice(0, 20).map((row) => (
+                        <li key={`a-${row.id}`} className="flex items-center gap-3">
+                          <span className="min-w-0 flex-1 text-destructive">
+                            {row.date} · {row.description}: saved as {formatKes(row.recorded)}, the statement says {formatKes(row.statement)}.
+                          </span>
+                          {canManageBudget ? (
+                            <button type="button" onClick={() => void applyStatementAmount(row)} disabled={correcting !== null} className="text-sm font-semibold text-primary hover:underline" data-testid={`mpesa-amount-fix-${row.id}`}>
+                              {correcting === row.id ? "Changing…" : `Use ${formatKes(row.statement)}`}
+                            </button>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 ) : null}
                 <p className="text-xs text-muted-foreground">Your account also has to start at {formatKes(balanceCheck.opening)} for it to end at {formatKes(balanceCheck.closing)}.</p>
               </CardContent>
