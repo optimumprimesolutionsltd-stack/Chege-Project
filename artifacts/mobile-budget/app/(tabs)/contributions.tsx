@@ -301,10 +301,10 @@ function BreakdownModal({
                         onPress={() => { member.setMonth(item.month); member.setYear(item.year); setPickerVisible(false); }}
                         style={[bStyles.pickerItem, selected && { backgroundColor: '#1a3320' }]}
                       >
-                        <Text style={[bStyles.pickerItemText, { color: selected ? '#4ade80' : colors.foreground }, selected && { fontFamily: 'Inter_700Bold' }]}>
+                        <Text style={[bStyles.pickerItemText, { color: selected ? colors.primary : colors.foreground }, selected && { fontFamily: 'Inter_700Bold' }]}>
                           {item.label}
                         </Text>
-                        {selected && <Feather name="check" size={16} color="#4ade80" />}
+                        {selected && <Feather name="check" size={16} color={colors.primary} />}
                       </Pressable>
                     );
                   }}
@@ -499,7 +499,7 @@ export default function ContributionsScreen() {
   const unattributedFunding = incomeStreamReport?.streams.find(stream => stream.incomeSourceId == null);
 
   const MEMBER_PALETTE = [
-    { accent: '#4ade80', gradient: ['#132a1c', '#0f2217'] as [string, string] },
+    { accent: '#E9B949', gradient: ['#0D4A43', '#0A3833'] as [string, string] },
     { accent: '#f97316', gradient: ['#2a1c0a', '#1c130a'] as [string, string] },
     { accent: '#38bdf8', gradient: ['#0e2030', '#0a1c2a'] as [string, string] },
     { accent: '#f472b6', gradient: ['#2a0a1a', '#1c0a14'] as [string, string] },
@@ -578,10 +578,10 @@ export default function ContributionsScreen() {
                     onPress={() => jumpToMonth(item.month, item.year)}
                     style={[styles.pickerItem, selected && { backgroundColor: '#1a3320' }]}
                   >
-                    <Text style={[styles.pickerItemText, { color: selected ? '#4ade80' : colors.foreground }, selected && { fontFamily: 'Inter_700Bold' }]}>
+                    <Text style={[styles.pickerItemText, { color: selected ? colors.primary : colors.foreground }, selected && { fontFamily: 'Inter_700Bold' }]}>
                       {item.label}
                     </Text>
-                    {selected && <Feather name="check" size={16} color="#4ade80" />}
+                    {selected && <Feather name="check" size={16} color={colors.primary} />}
                   </Pressable>
                 );
               }}
@@ -600,7 +600,7 @@ export default function ContributionsScreen() {
 
       <PageScrollView scroller={{ top: 12, bottom: insets.bottom + 110 }}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4ade80" />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
         contentContainerStyle={[styles.scroll, { paddingBottom: Platform.OS === 'web' ? 100 : insets.bottom + 110 }]}
       >
         {isSharedWorkspace ? (
