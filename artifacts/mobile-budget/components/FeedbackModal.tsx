@@ -76,7 +76,9 @@ export function FeedbackModal({ visible, onClose, context, onSubmitted }: Props)
       setSent(true);
       onSubmitted?.();
     } catch (reason) {
-      setError(reason instanceof ApiError ? reason.message : 'Could not send feedback. Please try again.');
+      // The server's own words, never "HTTP 503 : ..." in front of them.
+      const said = reason instanceof ApiError ? (reason.data as { error?: unknown } | null)?.error : undefined;
+      setError(typeof said === 'string' && said.trim() ? said : 'Could not send feedback. Please try again.');
     } finally {
       setSubmitting(false);
     }
