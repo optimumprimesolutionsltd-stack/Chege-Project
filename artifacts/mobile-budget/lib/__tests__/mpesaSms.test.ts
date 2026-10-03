@@ -40,7 +40,8 @@ describe('reading M-Pesa messages from the phone', () => {
 describe('choosing a period to read', () => {
   const today = new Date(2026, 9, 3); // 3 Oct 2026
   it('offers a month (with the arrows) and periods ending today', () => {
-    expect(SMS_PERIODS.map((period) => period.label)).toEqual(['A month', 'Last 7 days', 'Last 30 days', 'Last 3 months', 'Last 6 months', 'This year', 'Last 12 months']);
+    expect(SMS_PERIODS.map((period) => period.label)).toEqual(['Today', 'A month', 'Last 7 days', 'Last 30 days', 'Last 3 months', 'Last 6 months', 'This year', 'Last 12 months', 'Pick dates']);
+    expect(smsPeriodRange('today', today)).toEqual({ from: '2026-10-03', to: '2026-10-03' });
     expect(smsPeriodRange('month', today)).toEqual({ from: '2026-10-01', to: '2026-10-03' });
     expect(smsPeriodRange('days7', today)).toEqual({ from: '2026-09-27', to: '2026-10-03' });
     expect(smsPeriodRange('days30', today)).toEqual({ from: '2026-09-04', to: '2026-10-03' });
@@ -53,6 +54,9 @@ describe('choosing a period to read', () => {
     const screen = readFileSync('app/mpesa-import.tsx', 'utf8');
     expect(screen).toContain('testID="mpesa-sms-periods"');
     expect(screen).toContain("{smsPeriod === 'month' ? (");
+    // "I still need to be able to specify a specific date".
+    expect(screen).toContain(") : smsPeriod === 'dates' ? (");
+    expect(screen).toContain('testID={`mpesa-sms-date-${which}`}');
   });
 });
 

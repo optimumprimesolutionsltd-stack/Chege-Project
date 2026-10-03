@@ -178,6 +178,7 @@ export const newSmsTitle = (count: number): string => `${count} new M-Pesa ${cou
  * 2026 ("a period, instead of just the months"). Chips, not a calendar.
  */
 export const SMS_PERIODS = [
+  { key: 'today', label: 'Today' },
   { key: 'month', label: 'A month' },
   { key: 'days7', label: 'Last 7 days' },
   { key: 'days30', label: 'Last 30 days' },
@@ -185,6 +186,8 @@ export const SMS_PERIODS = [
   { key: 'months6', label: 'Last 6 months' },
   { key: 'year', label: 'This year' },
   { key: 'months12', label: 'Last 12 months' },
+  // "I still need to be able to specify a specific date" - From and To pickers.
+  { key: 'dates', label: 'Pick dates' },
 ] as const;
 export type SmsPeriod = (typeof SMS_PERIODS)[number]['key'];
 
@@ -197,6 +200,7 @@ export function smsPeriodRange(period: SmsPeriod, today: Date = new Date()): { f
   const daysBack = (days: number) => iso(new Date(today.getFullYear(), today.getMonth(), today.getDate() - (days - 1)));
   const monthsBack = (months: number) => iso(new Date(today.getFullYear(), today.getMonth() - months, today.getDate() + 1));
   switch (period) {
+    case 'today': return { from: to, to };
     case 'days7': return { from: daysBack(7), to };
     case 'days30': return { from: daysBack(30), to };
     case 'months3': return { from: monthsBack(3), to };
