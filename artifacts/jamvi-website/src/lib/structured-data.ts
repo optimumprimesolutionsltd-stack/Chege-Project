@@ -96,6 +96,7 @@ const BREADCRUMB_LABELS: Record<string, string> = {
   "/guides": "Guides",
   "/terms": "Terms of Service",
   "/privacy": "Privacy Policy",
+  "/download": "Android app",
   ...Object.fromEntries(SEGMENTS.map((segment) => [segment.slug, segment.label])),
   ...Object.fromEntries(GUIDES.map((guide) => [guide.slug, guide.label])),
 };

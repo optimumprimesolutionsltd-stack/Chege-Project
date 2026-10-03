@@ -18,6 +18,7 @@ import About from '@/pages/about';
 import FAQ from '@/pages/faq';
 import Terms from '@/pages/terms';
 import Privacy from '@/pages/privacy';
+import Download from '@/pages/download';
 import NotFound from '@/pages/not-found';
 import { SegmentPage } from '@/pages/segment';
 import { SEGMENTS } from '@/lib/segments';
@@ -41,6 +42,7 @@ function Router() {
             <Route path="/faq" component={FAQ} />
             <Route path="/terms" component={Terms} />
             <Route path="/privacy" component={Privacy} />
+            <Route path="/download" component={Download} />
             <Route path="/guides" component={Guides} />
             {GUIDES.map((guide) => (
               <Route key={guide.slug} path={guide.slug}>

@@ -146,6 +146,16 @@ function attachDualWebBuilds(
     });
   }
 
+  // The Android app, at an address that never changes: jamvi.co.ke/download
+  // links here, and so can any message. It points at the newest APK, kept as
+  // the "jamvi-android" release's jamvi.apk (replaced with each new build), or
+  // wherever JAMVI_APK_URL says once that moves - the Play Store, say.
+  for (const alias of ["/download/jamvi.apk", "/apk"]) {
+    app.get(alias, (_req, res) => {
+      res.redirect(302, androidApkUrl());
+    });
+  }
+
   // Invitation and group-join links carry a token in the path. They were sent
   // without the /app prefix for a long time, and every one of those is still
   // sitting in somebody's inbox. Unprefixed they hit the marketing catch-all
@@ -261,4 +271,13 @@ export function attachWebBuild(
     : defaultBuildDir();
 
   attachDualWebBuilds(app, marketingBuildDir, appBuildDir);
+}
+
+/** The newest Android app: the jamvi-android release's file, unless JAMVI_APK_URL says otherwise. */
+export const DEFAULT_ANDROID_APK_URL =
+  "https://github.com/optimumprimesolutionsltd-stack/Chege-Project/releases/download/jamvi-android/jamvi.apk";
+
+export function androidApkUrl(env: NodeJS.ProcessEnv = process.env): string {
+  const configured = env.JAMVI_APK_URL?.trim();
+  return configured && /^https:\/\//.test(configured) ? configured : DEFAULT_ANDROID_APK_URL;
 }

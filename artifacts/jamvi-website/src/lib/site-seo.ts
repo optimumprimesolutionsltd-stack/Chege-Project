@@ -60,6 +60,11 @@ const PAGES: Record<string, SeoEntry> = {
     description:
       "The terms on which Jamvi is provided: what the service does, what it deliberately does not do, and the responsibilities of everyone using it.",
   },
+  "/download": {
+    title: "Download the Jamvi Android App",
+    description:
+      "Get Jamvi on your Android phone: download the app, how to install it, and what the Android warnings mean. On an iPhone, use Jamvi in your browser.",
+  },
   "/privacy": {
     title: "Privacy Policy",
     description:
