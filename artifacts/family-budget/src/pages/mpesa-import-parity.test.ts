@@ -53,6 +53,7 @@ describe("a save cut short in the browser is finished next time", () => {
 describe("the import is named for statements on the web", () => {
   it("on the Bank page and the import itself", () => {
     expect(readFileSync(new URL("./bank.tsx", import.meta.url), "utf8")).not.toContain("Paste M-Pesa messages");
-    expect(page).toContain('<h1 className="text-2xl font-bold text-foreground">Import M-Pesa</h1>');
+    // The title, whatever it is styled as.
+    expect(page).toMatch(/<h1 className="[^"]*">Import M-Pesa<\/h1>/);
   });
 });
