@@ -1635,7 +1635,7 @@ export default function BudgetScreen() {
               </View>
               <View style={styles.reportActions}>
                 <Pressable onPress={() => openManage()} style={styles.manageBtn} hitSlop={4}>
-                  <Feather name="edit-2" size={14} color="#d9fbe5" />
+                  <Feather name="edit-2" size={14} color="#FBF7EC" />
                   <Text style={styles.manageBtnText}>Edit</Text>
                 </Pressable>
                 <Pressable
@@ -1646,7 +1646,7 @@ export default function BudgetScreen() {
                   accessibilityLabel="Add a budget category or subcategory"
                   testID="budget-add-category"
                 >
-                  <Feather name="plus" size={16} color="#4ade80" />
+                  <Feather name="plus" size={16} color="#E9B949" />
                   <Text style={styles.addBtnText}>Category</Text>
                 </Pressable>
               </View>
@@ -1668,7 +1668,7 @@ export default function BudgetScreen() {
                 <Text style={styles.overallPct}>{Math.round(overallPct * 100)}%</Text>
               </View>
               <View style={[styles.barTrack, { backgroundColor: 'rgba(255,255,255,0.15)' }]}>
-                <View style={[styles.barFill, { width: `${overallPct * 100}%`, backgroundColor: overallPct >= 1 ? '#f87171' : '#4ade80' }]} />
+                <View style={[styles.barFill, { width: `${overallPct * 100}%`, backgroundColor: overallPct >= 1 ? '#f87171' : '#E9B949' }]} />
               </View>
               <View style={styles.overallAmounts}>
                 <View>
@@ -1690,11 +1690,11 @@ export default function BudgetScreen() {
                 </Text>
               ) : null}
               <View style={styles.overallContextRow}>
-                <Feather name="arrow-up-right" size={13} color="#d9fbe5" />
+                <Feather name="arrow-up-right" size={13} color="#FBF7EC" />
                 <Text style={styles.overallContext}>{summaryContext}</Text>
               </View>
             </Pressable>
-          ) : <ActivityIndicator color="#4ade80" style={{ marginVertical: 16 }} />}
+          ) : <ActivityIndicator color="#E9B949" style={{ marginVertical: 16 }} />}
         </LinearGradient>
 
         <View style={styles.incomeSection} testID="budget-category-quick-add">
@@ -2416,7 +2416,7 @@ const styles = StyleSheet.create({
   navBtn: { padding: 4 },
   monthLabel: { fontSize: 14, color: '#FBF7EC', fontFamily: 'Inter_500Medium', minWidth: 64, textAlign: 'center' },
   addBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, height: 32, borderRadius: 10, backgroundColor: 'rgba(74,222,128,0.15)', justifyContent: 'center' },
-  addBtnText: { color: '#4ade80', fontSize: 12, fontFamily: 'Inter_600SemiBold' },
+  addBtnText: { color: '#E9B949', fontSize: 12, fontFamily: 'Inter_600SemiBold' },
   quickAddAction: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 8, height: 46, marginTop: 10 },
   quickAddActionText: { color: '#fff', fontSize: 13, fontFamily: 'Inter_600SemiBold' },
   categoryDropdown: { borderWidth: 1, borderRadius: 8, overflow: 'hidden', marginTop: 6 },
@@ -2424,7 +2424,7 @@ const styles = StyleSheet.create({
   inlineAddCategory: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1, borderStyle: 'dashed', borderRadius: 8, height: 46, marginTop: 10 },
   inlineAddCategoryText: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
    manageBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, height: 32, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.10)' },
-   manageBtnText: { color: '#d9fbe5', fontSize: 12, fontFamily: 'Inter_600SemiBold' },
+   manageBtnText: { color: '#FBF7EC', fontSize: 12, fontFamily: 'Inter_600SemiBold' },
   overallCard: { backgroundColor: 'rgba(255,255,255,0.07)', borderRadius: 10, padding: 16 },
   overallRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
   overallLabel: { fontSize: 12, color: '#C2BBA8', fontFamily: 'Inter_400Regular', letterSpacing: 0.5 },
@@ -2434,7 +2434,7 @@ const styles = StyleSheet.create({
   overallSpent: { fontSize: 16, fontWeight: '700' as const, color: '#FBF7EC', fontFamily: 'Inter_700Bold' },
   overallTarget: { fontSize: 14, color: '#C2BBA8', fontFamily: 'Inter_400Regular', alignSelf: 'flex-end' },
   overallContextRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 13 },
-  overallContext: { flex: 1, color: '#d9fbe5', fontSize: 11, fontFamily: 'Inter_500Medium' },
+  overallContext: { flex: 1, color: '#FBF7EC', fontSize: 11, fontFamily: 'Inter_500Medium' },
   pressedCard: { opacity: 0.82 },
   barTrack: { height: 8, borderRadius: 4, overflow: 'hidden' },
   barFill: { height: '100%', borderRadius: 4 },
