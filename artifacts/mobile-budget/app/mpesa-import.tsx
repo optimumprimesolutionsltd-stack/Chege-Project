@@ -92,11 +92,14 @@ import { mpesaNameFor, saveMpesaNames, type MpesaName } from '@/lib/mpesaNames';
 import { isLapsedRefusal, lapsedSaveMessage } from '@/lib/lapsedSave';
 import { useEntitlements } from '@/hooks/useEntitlements';
 import { useUndoHistory } from '@/hooks/useUndoHistory';
+import { UndoDeleteBar, useUndoableDelete } from '@/components/UndoDeleteBar';
+import { deletedLabel } from '@/lib/undoDelete';
 import type { DebtEntryLink } from '@/lib/debtLinks';
 import { canReadStatements, chooseStatement, statementBase64, type ChosenStatement } from '@/lib/statementFile';
 import { canNotifySms, canReadSms, newMpesaSms, parseSmsAuto, readMpesaSms, setSmsNotify, SMS_PERIODS, smsAutoKey, smsBatches, smsNotifyOn, smsPeriodRange, smsRefusal, type SmsAuto, type SmsPeriod } from '@/lib/mpesaSms';
 import { isoDay, longDay, monthStartIso } from '@/lib/dayRange';
 import { MonthStepper } from '@/components/MonthStepper';
+import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { shownFileName } from '@/lib/shownFileName';
 import { readPercent } from '@/lib/statementProgress';
 import { balanceAtEndOf, dayBefore, missingInJamvi, notOnStatement, withoutRecordedFuliza, type RecordedRow, fulizaChargeOverlap, fulizaCharges, fulizaOwedBefore, reconcile, statementLines, type StatementReading } from '@/lib/statementImport';
@@ -966,11 +969,14 @@ export default function MpesaImportScreen() {
   // A month with the arrows, or a period ending today (lib/mpesaSms).
   const [smsPeriod, setSmsPeriod] = useState<SmsPeriod>('month');
   const chooseSmsPeriod = (period: SmsPeriod) => {
-    const range = smsPeriodRange(period);
     setSmsPeriod(period);
+    // Picking dates starts from whatever was showing, to adjust from there.
+    if (period === 'dates') return;
+    const range = smsPeriodRange(period);
     setSmsFrom(range.from);
     setSmsTo(range.to);
   };
+  const [smsPicker, setSmsPicker] = useState<null | 'from' | 'to'>(null);
   const [smsAuto, setSmsAuto] = useState<SmsAuto>({ on: false, since: 0 });
   // The newest message taken in by "new since you last looked", so a save moves the mark on.
   const smsNewestRef = React.useRef<number | null>(null);
@@ -1262,11 +1268,67 @@ export default function MpesaImportScreen() {
       mpesaEnd: statementReading.closing,
     };
   }, [statementReading, account]);
+  // Removing an entry the statement does not have waits a few seconds for Undo.
+  const undoable = useUndoableDelete();
   // What this account has for the statement's days that the statement does not.
-  const extras = useMemo(
-    () => (statementReading && account ? notOnStatement(statementReading, (account.transactions ?? []) as unknown as RecordedRow[]) : null),
-    [statementReading, account],
-  );
+  const extras = useMemo(() => {
+    const found = statementReading && account ? notOnStatement(statementReading, (account.transactions ?? []) as unknown as RecordedRow[]) : null;
+    if (!found) return null;
+    const rows = found.rows.filter((row) => !undoable.isHidden(`extra:${row.id}`));
+    return { rows, net: Math.round(rows.reduce((sum, row) => sum + row.effect, 0) * 100) / 100 };
+  }, [statementReading, account, undoable.isHidden]);
+  // Sorting a difference out where it is shown (asked for 3 Oct 2026), rather
+  // than "open Bank and fix it": an entry M-Pesa never had can be removed, and
+  // one saved for a different amount set to the statement's.
+  const removeExtra = (row: { id: number; date: string; description?: string | null; effect: number; why: string }) => {
+    Alert.alert(
+      'Remove it from Jamvi?',
+      `${String(row.date).slice(0, 10)} · ${row.description ?? ''} · KES ${formatExact(Math.abs(row.effect))}\n\nYour M-Pesa statement has no record of it (${row.why}). Remove it if it did not happen, or was recorded twice.`,
+      [
+        { text: 'Keep it', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () => undoable.schedule(`extra:${row.id}`, deletedLabel(row.description, Math.abs(row.effect)), async () => {
+            try {
+              await customFetch(`/api/joint-account/${row.id}`, { method: 'DELETE' });
+            } catch (error: unknown) {
+              Alert.alert('Could not remove it', plainSaveError(error));
+            }
+            await queryClient.invalidateQueries();
+          }),
+        },
+      ],
+    );
+  };
+  const [correcting, setCorrecting] = useState<number | null>(null);
+  const applyStatementAmount = (row: { id: number; date: string; description: string; recorded: number; statement: number }) => {
+    Alert.alert(
+      `Change it to KES ${formatExact(row.statement)}?`,
+      `${row.date} · ${row.description}\n\nSaved as KES ${formatExact(row.recorded)}; your M-Pesa statement says KES ${formatExact(row.statement)}.`,
+      [
+        { text: 'Not now', style: 'cancel' },
+        {
+          text: 'Use the statement',
+          onPress: async () => {
+            setCorrecting(row.id);
+            try {
+              await customFetch(`/api/joint-account/${row.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ amount: row.statement, date: row.date }),
+              });
+              await queryClient.invalidateQueries();
+            } catch (error: unknown) {
+              Alert.alert('Could not change it', plainSaveError(error));
+            } finally {
+              setCorrecting(null);
+            }
+          },
+        },
+      ],
+    );
+  };
   // "Fix these for me": the entries the check can prove are duplicates of this
   // statement - a pasted Fuliza fee its Fuliza charges already hold, an
   // earlier statement's Fuliza line it replaces, a charge kept twice - removed
@@ -2110,6 +2172,40 @@ export default function MpesaImportScreen() {
                 </ScrollView>
                 {smsPeriod === 'month' ? (
                   <MonthStepper from={smsFrom} to={smsTo} onChange={(nextFrom, nextTo) => { setSmsFrom(nextFrom); setSmsTo(nextTo); }} testID="mpesa-sms-month" />
+                ) : smsPeriod === 'dates' ? (
+                  <View style={{ gap: 6 }}>
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      {(['from', 'to'] as const).map((which) => (
+                        <Pressable
+                          key={which}
+                          onPress={() => setSmsPicker(which)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`${which === 'from' ? 'From' : 'To'} ${longDay(which === 'from' ? smsFrom : smsTo)}. Change`}
+                          testID={`mpesa-sms-date-${which}`}
+                          style={[styles.categoryButton, { flex: 1, borderColor: colors.border, backgroundColor: colors.muted }]}
+                        >
+                          <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>{which === 'from' ? 'From' : 'To'}</Text>
+                          <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>{longDay(which === 'from' ? smsFrom : smsTo)}</Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                    {smsPicker ? (
+                      <DateTimePicker
+                        value={new Date(`${smsPicker === 'from' ? smsFrom : smsTo}T00:00:00`)}
+                        mode="date"
+                        display={Platform.OS === 'ios' ? 'inline' : 'calendar'}
+                        maximumDate={new Date()}
+                        onChange={(_event: DateTimePickerEvent, selected?: Date) => {
+                          const which = smsPicker;
+                          setSmsPicker(Platform.OS === 'ios' ? which : null);
+                          if (selected && which) {
+                            if (which === 'from') setSmsFrom(isoDay(selected));
+                            else setSmsTo(isoDay(selected));
+                          }
+                        }}
+                      />
+                    ) : null}
+                  </View>
                 ) : (
                   <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0 }]} testID="mpesa-sms-period-range">
                     {longDay(smsFrom)} to {longDay(smsTo)}
@@ -2352,7 +2448,7 @@ export default function MpesaImportScreen() {
                       In Jamvi but not on this statement: {extras.rows.length} {extras.rows.length === 1 ? 'entry' : 'entries'}, KES {formatExact(extras.net)}
                     </Text>
                     <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0 }]}>
-                      These move the balance but M-Pesa has no record of them. Open Bank and delete any that did not happen, or were recorded twice.
+                      These move the balance but M-Pesa has no record of them. Remove any that did not happen, or were recorded twice.
                     </Text>
                     {fixableExtras.length > 0 && canManageBudget ? (
                       <Pressable
@@ -2368,9 +2464,16 @@ export default function MpesaImportScreen() {
                       </Pressable>
                     ) : null}
                     {extras.rows.slice(0, 20).map((row) => (
-                      <Text key={row.id} style={[styles.hint, { color: colors.foreground, marginTop: 0 }]} numberOfLines={2}>
-                        • {String(row.date).slice(0, 10)} · {row.description ?? ''} · {row.effect < 0 ? '−' : '+'}KES {formatExact(Math.abs(row.effect))} ({row.why})
-                      </Text>
+                      <View key={row.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Text style={[styles.hint, { color: colors.foreground, marginTop: 0, flex: 1 }]} numberOfLines={2}>
+                          • {String(row.date).slice(0, 10)} · {row.description ?? ''} · {row.effect < 0 ? '−' : '+'}KES {formatExact(Math.abs(row.effect))} ({row.why})
+                        </Text>
+                        {canManageBudget ? (
+                          <Pressable onPress={() => removeExtra(row)} hitSlop={8} accessibilityRole="button" accessibilityLabel={`Remove ${row.description ?? 'this entry'}`} testID={`mpesa-extra-remove-${row.id}`}>
+                            <Text style={{ color: colors.destructive, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>Remove</Text>
+                          </Pressable>
+                        ) : null}
+                      </View>
                     ))}
                     {extras.rows.length > 20 ? (
                       <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0 }]}>and {extras.rows.length - 20} more</Text>
@@ -2414,9 +2517,18 @@ export default function MpesaImportScreen() {
                       </Pressable>
                     ) : null}
                     {missing.amounts.slice(0, 20).map((row) => (
-                      <Text key={`a-${row.id}`} style={[styles.hint, { color: colors.destructive, marginTop: 0 }]} numberOfLines={2}>
-                        • {row.date} · {row.description}: saved as KES {formatExact(row.recorded)}, the statement says KES {formatExact(row.statement)}. Open it on Bank to correct it.
-                      </Text>
+                      <View key={`a-${row.id}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Text style={[styles.hint, { color: colors.destructive, marginTop: 0, flex: 1 }]} numberOfLines={2}>
+                          • {row.date} · {row.description}: saved as KES {formatExact(row.recorded)}, the statement says KES {formatExact(row.statement)}.
+                        </Text>
+                        {canManageBudget ? (
+                          <Pressable onPress={() => applyStatementAmount(row)} disabled={correcting !== null} hitSlop={8} accessibilityRole="button" accessibilityLabel={`Change ${row.description} to KES ${formatExact(row.statement)}`} testID={`mpesa-amount-fix-${row.id}`}>
+                            {correcting === row.id
+                              ? <ActivityIndicator size="small" color={colors.primary} />
+                              : <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>Use KES {formatExact(row.statement)}</Text>}
+                          </Pressable>
+                        ) : null}
+                      </View>
                     ))}
                   </View>
                 ) : null}
@@ -3579,6 +3691,7 @@ export default function MpesaImportScreen() {
       </Modal>
 
       <CategorySheet visible={picking !== null} budgetName={group?.name} onPick={chooseCategory} onClose={() => setPicking(null)} />
+      <UndoDeleteBar pending={undoable.pending} onUndo={undoable.undo} />
     </View>
   );
 }

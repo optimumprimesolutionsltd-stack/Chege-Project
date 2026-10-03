@@ -17,7 +17,7 @@ describe('the phone has what the web shows on Reports and Contributions', () => 
 
   it('shows the 6-month spending trend', () => {
     expect(reports).toContain('<SpendingTrendCard />');
-    expect(readFileSync('components/SpendingTrendCard.tsx', 'utf8')).toContain('useGetDashboardTrends(\n    { months: 6 }');
+    expect(readFileSync('components/SpendingTrendCard.tsx', 'utf8').replace(/\r\n/g, '\n')).toContain('useGetDashboardTrends(\n    { months: 6 }');
   });
 
   it('shows a shared group its contributions month by month', () => {
