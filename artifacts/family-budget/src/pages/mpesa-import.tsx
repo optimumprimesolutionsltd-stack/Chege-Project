@@ -865,7 +865,7 @@ export default function MpesaImportPage() {
   const lapsedCard = (waiting: number) => {
     const words = lapsedSaveMessage(entitlements?.status, waiting, isShared);
     return (
-      <div className="space-y-2 rounded-xl border border-primary bg-card p-4 text-sm" data-testid="mpesa-save-lapsed">
+      <div className="space-y-2 rounded-md border border-primary bg-card p-4 text-sm" data-testid="mpesa-save-lapsed">
         <p className="flex items-center gap-2 font-semibold text-foreground"><Lock className="h-4 w-4 text-primary" /> {words.title}</p>
         <p className="text-muted-foreground">{words.body.replace("tap Save", "click Save")}</p>
         <Link href="/subscription" className="inline-flex h-10 items-center rounded-md bg-primary px-4 font-semibold text-primary-foreground" data-testid="mpesa-save-lapsed-pay">
@@ -1273,7 +1273,7 @@ export default function MpesaImportPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5 p-4 sm:p-6" data-testid="mpesa-import-page">
+    <div className="mx-auto max-w-4xl space-y-6 p-4 sm:p-6" data-testid="mpesa-import-page">
       <Dialog open={rulesOpen} onOpenChange={setRulesOpen}>
         <DialogContent>
           <DialogHeader>
@@ -1334,7 +1334,7 @@ export default function MpesaImportPage() {
             value={reporting?.text ?? ""}
             onChange={(event) => setReporting((current) => (current ? { ...current, text: event.target.value } : current))}
             rows={7}
-            className="w-full rounded-xl border border-input bg-card p-3 text-sm"
+            className="w-full rounded-md border border-input bg-card p-3 text-sm"
             data-testid="mpesa-report-text"
           />
           <div className="flex justify-end gap-3">
@@ -1346,11 +1346,12 @@ export default function MpesaImportPage() {
         </DialogContent>
       </Dialog>
 
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Import M-Pesa</h1>
+      <div className="space-y-2">
+        <p className="kicker text-[hsl(var(--clay))] dark:text-[hsl(var(--sisal))]">M-PESA · BRING IT IN</p>
+        <h1 className="text-3xl font-extrabold leading-none text-foreground sm:text-4xl">Import M-Pesa</h1>
         <p className="text-sm text-muted-foreground">Read your M-Pesa statement, or paste messages, into entries - without typing.</p>
         {/* Which budget these land in: the one switched to last, which may not be the one with the categories. */}
-        <p className="mt-2 text-sm text-foreground" data-testid="mpesa-budget-row">
+        <p className="mt-3 border-l-4 border-[hsl(var(--sisal))] pl-3 text-sm text-foreground" data-testid="mpesa-budget-row">
           These will be saved in <span className="font-semibold" data-testid="mpesa-budget-name">{group?.name ?? "…"}</span>. Use the budget switcher to change it.
         </p>
       </div>
@@ -1365,29 +1366,41 @@ export default function MpesaImportPage() {
               </CardContent>
             </Card>
           ) : null}
-          <Card>
-            <CardContent className="space-y-2 p-4 text-sm text-foreground">
-              <p><span className="font-bold text-primary">1</span>  Open your Messages app and hold on an M-Pesa message.</p>
-              <p><span className="font-bold text-primary">2</span>  Select the ones you want (as many as you like), then tap Copy.</p>
-              <p><span className="font-bold text-primary">3</span>  Come back here and paste them in the box.</p>
-            </CardContent>
-          </Card>
+          {/* Two ways in, side by side on a wide screen: neither is the lesser
+              option, and someone holding a statement should not have to scroll
+              past the paste box to find it. */}
+          <div className="grid items-start gap-6 md:grid-cols-2">
+          <section aria-labelledby="mpesa-paste-heading" className="space-y-3 rounded-lg border-2 border-foreground bg-card p-4 shadow-[5px_5px_0_hsl(var(--jade))] sm:p-5">
+            <h2 id="mpesa-paste-heading" className="font-display text-xl font-bold text-foreground">Paste your messages</h2>
+            <ol className="space-y-2 text-sm text-foreground">
+              {[
+                "Open your Messages app and hold on an M-Pesa message.",
+                "Select the ones you want (as many as you like), then tap Copy.",
+                "Come back here and paste them in the box.",
+              ].map((step, i) => (
+                <li key={step} className="flex gap-3">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[3px] bg-primary font-mono text-xs font-semibold text-primary-foreground">{i + 1}</span>
+                  <span className="pt-0.5">{step}</span>
+                </li>
+              ))}
+            </ol>
           <textarea
             value={text}
             onChange={(event) => setText(event.target.value)}
             rows={9}
             placeholder="Paste your M-Pesa messages here"
-            className="w-full rounded-xl border border-input bg-card p-3 text-sm"
+            className="w-full rounded-md border-2 border-input bg-background p-3 font-mono text-[13px] leading-relaxed"
             data-testid="mpesa-import-text"
           />
           <p className="text-xs text-muted-foreground">Jamvi reads your messages to fill in this list. They are not saved.</p>
           <Button onClick={readMessages} disabled={reading} className="h-12 w-full" data-testid="mpesa-import-read">
             {reading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Read my messages"}
           </Button>
+          </section>
 
-          <Card data-testid="mpesa-statement">
-            <CardContent className="space-y-3 p-4">
-              <p className="text-sm font-semibold text-foreground">Or use your M-Pesa statement</p>
+          <Card data-testid="mpesa-statement" className="border-2 border-foreground shadow-[5px_5px_0_hsl(var(--clay-bright))]">
+            <CardContent className="space-y-3 p-4 sm:p-5">
+              <p className="font-display text-xl font-bold text-foreground">Or use your M-Pesa statement</p>
               <p className="text-xs text-muted-foreground">
                 Choose the statement PDF and type its password. Jamvi reads it here on your device. The file and the password are not uploaded or saved.
               </p>
@@ -1416,6 +1429,7 @@ export default function MpesaImportPage() {
               </Button>
             </CardContent>
           </Card>
+          </div>
         </>
       ) : (
         <>
@@ -1439,16 +1453,16 @@ export default function MpesaImportPage() {
           </div>
 
           {!canManageBudget ? (
-            <p className="rounded-xl border border-destructive bg-card p-3 text-sm text-foreground" data-testid="mpesa-member-warning">
+            <p className="rounded-md border border-destructive bg-card p-3 text-sm text-foreground" data-testid="mpesa-member-warning">
               You are a member of this group, so you can record money that came in, but not payments out, moves between accounts or savings. Those are left unticked. A group owner or admin can record them.
             </p>
           ) : null}
           {statementNote ? (
-            <p className="rounded-xl border border-border bg-card p-3 text-sm text-foreground" data-testid="mpesa-statement-note">{statementNote}</p>
+            <p className="rounded-md border border-border bg-card p-3 text-sm text-foreground" data-testid="mpesa-statement-note">{statementNote}</p>
           ) : null}
           {lastSave?.lapsed ? lapsedCard(confirmedCount) : null}
           {lastSave && !(lastSave.lapsed && lastSave.saved === 0 && lastSave.failed.length === 0) ? (
-            <div className={`space-y-1 rounded-xl border bg-card p-3 text-sm ${lastSave.failed.length > 0 ? "border-destructive" : "border-success"}`} data-testid="mpesa-last-save">
+            <div className={`space-y-1 rounded-md border bg-card p-3 text-sm ${lastSave.failed.length > 0 ? "border-destructive" : "border-success"}`} data-testid="mpesa-last-save">
               <div className="flex items-center gap-2">
                 <p className="flex-1 font-semibold text-foreground">
                   Saved {lastSave.saved}{lastSave.repeats > 0 ? ` · ${lastSave.repeats} already recorded` : ""}{lastSave.failed.length > 0 ? ` · ${lastSave.failed.length} not saved` : ""}
@@ -1469,7 +1483,7 @@ export default function MpesaImportPage() {
             </div>
           ) : null}
           {statementReading && !balanceCheck ? (
-            <p className="rounded-xl border border-border bg-card p-3 text-sm text-foreground" data-testid="mpesa-balance-missing">
+            <p className="rounded-md border border-border bg-card p-3 text-sm text-foreground" data-testid="mpesa-balance-missing">
               Jamvi could not work out this statement's starting and closing balance, so it cannot check them or set this account's starting balance. Reading it again with the latest Jamvi fixes that, and keeps your choices.
             </p>
           ) : null}
@@ -2296,7 +2310,7 @@ export default function MpesaImportPage() {
             </div>
           ) : null}
 
-          <div className="sticky bottom-4 space-y-2 rounded-2xl border border-border bg-card p-3 shadow-lg">
+          <div className="sticky bottom-4 space-y-2 rounded-lg border-2 border-foreground bg-card p-3 shadow-[5px_5px_0_hsl(var(--jade))]">
             {firstProblem ? (
               <button type="button" onClick={showProblem} className="block w-full text-left text-sm text-destructive" data-testid="mpesa-first-problem">
                 {firstProblem}
