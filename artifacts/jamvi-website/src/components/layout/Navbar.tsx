@@ -18,7 +18,8 @@ export function Navbar() {
     { href: "/pricing", label: "Pricing" },
     { href: "/guides", label: "Guides" },
     { href: "/about", label: "About" },
-    { href: "/faq", label: "FAQ" }
+    { href: "/faq", label: "FAQ" },
+    { href: "/download", label: "Get the app" }
   ];
 
   return (

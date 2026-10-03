@@ -52,6 +52,7 @@ const CRAWL = {
   "/guides/how-to-budget-in-kenya": { changefreq: "yearly", priority: "0.7" },
   "/terms": { changefreq: "yearly", priority: "0.3" },
   "/privacy": { changefreq: "yearly", priority: "0.3" },
+  "/download": { changefreq: "monthly", priority: "0.6" },
 };
 
 const routes = Object.keys(SITE_SEO).filter((route) => route !== "/404");
