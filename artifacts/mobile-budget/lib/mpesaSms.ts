@@ -172,3 +172,37 @@ export async function setSmsNotify(on: boolean): Promise<{ on: boolean; reason?:
 
 /** "3 new M-Pesa messages" - for Home. */
 export const newSmsTitle = (count: number): string => `${count} new M-Pesa ${count === 1 ? 'message' : 'messages'}`;
+
+/**
+ * Periods to read messages for, besides a month at a time - asked for 3 Oct
+ * 2026 ("a period, instead of just the months"). Chips, not a calendar.
+ */
+export const SMS_PERIODS = [
+  { key: 'month', label: 'A month' },
+  { key: 'days7', label: 'Last 7 days' },
+  { key: 'days30', label: 'Last 30 days' },
+  { key: 'months3', label: 'Last 3 months' },
+  { key: 'months6', label: 'Last 6 months' },
+  { key: 'year', label: 'This year' },
+  { key: 'months12', label: 'Last 12 months' },
+] as const;
+export type SmsPeriod = (typeof SMS_PERIODS)[number]['key'];
+
+const iso = (date: Date): string =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
+/** The first and last day (both included) of a period ending today. "month" is this month; the arrows move it. */
+export function smsPeriodRange(period: SmsPeriod, today: Date = new Date()): { from: string; to: string } {
+  const to = iso(today);
+  const daysBack = (days: number) => iso(new Date(today.getFullYear(), today.getMonth(), today.getDate() - (days - 1)));
+  const monthsBack = (months: number) => iso(new Date(today.getFullYear(), today.getMonth() - months, today.getDate() + 1));
+  switch (period) {
+    case 'days7': return { from: daysBack(7), to };
+    case 'days30': return { from: daysBack(30), to };
+    case 'months3': return { from: monthsBack(3), to };
+    case 'months6': return { from: monthsBack(6), to };
+    case 'months12': return { from: monthsBack(12), to };
+    case 'year': return { from: `${today.getFullYear()}-01-01`, to };
+    default: return { from: `${to.slice(0, 8)}01`, to };
+  }
+}

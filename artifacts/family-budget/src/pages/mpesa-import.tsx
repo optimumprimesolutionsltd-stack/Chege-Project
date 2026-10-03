@@ -4,7 +4,7 @@ import { CategoryGroupPicker, resolveGroupChoice, type GroupChoice } from "@/com
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { CheckCircle2, Loader2, Lock, Pencil } from "lucide-react";
+import { CheckCircle2, Loader2, Lock, Pencil, RotateCcw } from "lucide-react";
 import {
   createDeposit as createDepositInOtherBudget,
   createDisbursement as createDisbursementInOtherBudget,
@@ -119,6 +119,7 @@ import { applyOtherBudgetRules, otherBudgetRuleFor, otherBudgetRuleLabel, otherB
 import { saveDebtLinks } from "@/lib/debt-reversal";
 import { mpesaNameFor, saveMpesaNames, type MpesaName } from "@/lib/mpesa-names";
 import { isLapsedRefusal, lapsedSaveMessage } from "@/lib/lapsed-save";
+import { useUndoHistory } from "@/hooks/use-undo-history";
 import { plainSaveError, retrySave, withRetries } from "@/lib/save-retry";
 import { isNotSure, needsNotSureCategory, NOT_SURE_CATEGORY, notSureableLines, otherBudgetToMark, putUnderNotSure, toMarkAfterSave } from "@/lib/entries-to-sort";
 import { useEntitlements } from "@/hooks/use-entitlements";
@@ -213,6 +214,11 @@ export default function MpesaImportPage() {
   const [reading, setReading] = useState(false);
   const [lines, setLines] = useState<PreviewLine[] | null>(null);
   const [choices, setChoices] = useState<Record<number, Choice>>({});
+  // Undo for every change to the list, most recent first - as on the phone.
+  // Cleared for a new list or after a save; a save itself is not undone here.
+  const { canUndo, steps: undoSteps, undo } = useUndoHistory(choices, setChoices, lines, {
+    skip: (previous) => Object.keys(previous).length === 0,
+  });
   // Categories chosen for entries already recorded, keyed by the line.
   const [recat, setRecat] = useState<Record<number, string>>({});
   const [recategorising, setRecategorising] = useState(false);
@@ -1637,7 +1643,7 @@ export default function MpesaImportPage() {
                       </div>
                     </div>
                   ) : null}
-                  {out && choice?.include && !isMove(choice) && choice.category && item.description && rules[payeeKey(item.description)] !== choice.category ? (
+                  {out && choice?.include && !isMove(choice) && choice.category && !isNotSure(choice.category) && item.description && rules[payeeKey(item.description)] !== choice.category ? (
                     // Ticked by itself once a category is chosen or confirmed; untick what Jamvi should not learn.
                     <label className="flex w-fit cursor-pointer items-center gap-2 text-sm text-foreground" data-testid={`mpesa-line-remember-${item.index}`}>
                       <input
@@ -1653,7 +1659,7 @@ export default function MpesaImportPage() {
                       Filed under {categoryPath(choice.category, categories)}
                     </p>
                   ) : null}
-                  {out && choice?.include && !isMove(choice) && choice.category && item.description && rules[payeeKey(item.description)] !== choice.category ? (
+                  {out && choice?.include && !isMove(choice) && choice.category && !isNotSure(choice.category) && item.description && rules[payeeKey(item.description)] !== choice.category ? (
                     <label className="flex items-center gap-2 text-sm text-foreground">
                       <input
                         type="checkbox"
@@ -2050,6 +2056,11 @@ export default function MpesaImportPage() {
             ) : null}
             <div className="flex gap-3">
               <Button variant="outline" onClick={statementReading ? startOverStatement : () => { setLines(null); setChoices({}); setStatementNote(null); setStatementReading(null); }}>Start again</Button>
+              {canUndo && !saving ? (
+                <Button variant="outline" onClick={undo} className="gap-2" aria-label={`Undo the last change. ${undoSteps} ${undoSteps === 1 ? "change" : "changes"} can be undone`} data-testid="mpesa-import-undo">
+                  <RotateCcw className="h-4 w-4" aria-hidden="true" /> Undo
+                </Button>
+              ) : null}
               <Button onClick={() => void saveAll()} disabled={saving || !summary || summary.count === 0 || (statementReading !== null && confirmedCount === 0)} className="flex-1 gap-2" data-testid="mpesa-import-save">
                 {saving ? (
                   <>

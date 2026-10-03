@@ -91,10 +91,11 @@ import { saveDebtLinks } from '@/lib/debtReversal';
 import { mpesaNameFor, saveMpesaNames, type MpesaName } from '@/lib/mpesaNames';
 import { isLapsedRefusal, lapsedSaveMessage } from '@/lib/lapsedSave';
 import { useEntitlements } from '@/hooks/useEntitlements';
+import { useUndoHistory } from '@/hooks/useUndoHistory';
 import type { DebtEntryLink } from '@/lib/debtLinks';
 import { canReadStatements, chooseStatement, statementBase64, type ChosenStatement } from '@/lib/statementFile';
-import { canNotifySms, canReadSms, newMpesaSms, parseSmsAuto, readMpesaSms, setSmsNotify, smsAutoKey, smsBatches, smsNotifyOn, smsRefusal, type SmsAuto } from '@/lib/mpesaSms';
-import { isoDay, monthStartIso } from '@/lib/dayRange';
+import { canNotifySms, canReadSms, newMpesaSms, parseSmsAuto, readMpesaSms, setSmsNotify, SMS_PERIODS, smsAutoKey, smsBatches, smsNotifyOn, smsPeriodRange, smsRefusal, type SmsAuto, type SmsPeriod } from '@/lib/mpesaSms';
+import { isoDay, longDay, monthStartIso } from '@/lib/dayRange';
 import { MonthStepper } from '@/components/MonthStepper';
 import { shownFileName } from '@/lib/shownFileName';
 import { readPercent } from '@/lib/statementProgress';
@@ -545,6 +546,12 @@ export default function MpesaImportScreen() {
   const [statementReading, setStatementReading] = useState<StatementReading | null>(null);
   const [lines, setLines] = useState<PreviewLine[] | null>(null);
   const [choices, setChoices] = useState<Record<number, Choice>>({});
+  // Undo for every change to the list - a chip, Not sure, Confirm, a bulk
+  // button, an untick - most recent first. Cleared for a new list or after a
+  // save (when the lines change); a save itself is not undone here.
+  const { canUndo, steps: undoSteps, undo } = useUndoHistory(choices, setChoices, lines, {
+    skip: (previous) => Object.keys(previous).length === 0,
+  });
   // Which of the entries to show: all, or only those still to look at, changed by you, or needing you.
   const [view, setView] = useState<ReviewView>('all');
   // How many entries are drawn. A full year's statement is thousands of
@@ -956,6 +963,14 @@ export default function MpesaImportScreen() {
   const [smsMessages, setSmsMessages] = useState<string[] | null>(null);
   const [smsFrom, setSmsFrom] = useState<string>(monthStartIso);
   const [smsTo, setSmsTo] = useState<string>(() => isoDay(new Date()));
+  // A month with the arrows, or a period ending today (lib/mpesaSms).
+  const [smsPeriod, setSmsPeriod] = useState<SmsPeriod>('month');
+  const chooseSmsPeriod = (period: SmsPeriod) => {
+    const range = smsPeriodRange(period);
+    setSmsPeriod(period);
+    setSmsFrom(range.from);
+    setSmsTo(range.to);
+  };
   const [smsAuto, setSmsAuto] = useState<SmsAuto>({ on: false, since: 0 });
   // The newest message taken in by "new since you last looked", so a save moves the mark on.
   const smsNewestRef = React.useRef<number | null>(null);
@@ -2074,9 +2089,32 @@ export default function MpesaImportScreen() {
               <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.primary }]} testID="mpesa-sms">
                 <Text style={[styles.summaryLine, { color: colors.foreground }]}>Read my M-Pesa messages</Text>
                 <Text style={[styles.hint, { color: colors.mutedForeground }]}>
-                  Only M-Pesa's messages, only for these dates, only when you ask. They are read into the list below and not kept.
+                  Only M-Pesa's messages, only for the period you choose, only when you ask. They are read into the list below and not kept.
                 </Text>
-                <MonthStepper from={smsFrom} to={smsTo} onChange={(nextFrom, nextTo) => { setSmsFrom(nextFrom); setSmsTo(nextTo); }} testID="mpesa-sms-month" />
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 2 }} testID="mpesa-sms-periods">
+                  {SMS_PERIODS.map((option) => {
+                    const on = smsPeriod === option.key;
+                    return (
+                      <Pressable
+                        key={option.key}
+                        onPress={() => chooseSmsPeriod(option.key)}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: on }}
+                        testID={`mpesa-sms-period-${option.key}`}
+                        style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, borderWidth: 1, borderColor: on ? colors.primary : colors.border, backgroundColor: on ? `${colors.primary}22` : colors.muted }}
+                      >
+                        <Text style={{ color: on ? colors.primary : colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>{option.label}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+                {smsPeriod === 'month' ? (
+                  <MonthStepper from={smsFrom} to={smsTo} onChange={(nextFrom, nextTo) => { setSmsFrom(nextFrom); setSmsTo(nextTo); }} testID="mpesa-sms-month" />
+                ) : (
+                  <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0 }]} testID="mpesa-sms-period-range">
+                    {longDay(smsFrom)} to {longDay(smsTo)}
+                  </Text>
+                )}
                 <Pressable
                   onPress={() => void readSmsRange()}
                   disabled={reading}
@@ -2084,7 +2122,7 @@ export default function MpesaImportScreen() {
                   accessibilityRole="button"
                   testID="mpesa-sms-read"
                 >
-                  {reading && !readerJob ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Read M-Pesa messages for these dates</Text>}
+                  {reading && !readerJob ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Read M-Pesa messages for this period</Text>}
                 </Pressable>
                 {smsAuto.since > 0 ? (
                   <Pressable
@@ -2748,7 +2786,7 @@ export default function MpesaImportScreen() {
                       Saved under Not sure yet. Home will remind you to sort it out.
                     </Text>
                   ) : null}
-                  {out && choice?.include && !isMove(choice) && choice.category && item.description && rules[payeeKey(item.description)] !== choice.category ? (
+                  {out && choice?.include && !isMove(choice) && choice.category && !isNotSure(choice.category) && item.description && rules[payeeKey(item.description)] !== choice.category ? (
                     <Pressable
                       onPress={() => setChoices((current) => ({ ...current, [item.index]: { ...current[item.index], remember: !current[item.index]?.remember } }))}
                       accessibilityRole="checkbox"
@@ -3230,10 +3268,23 @@ export default function MpesaImportScreen() {
               <ProgressBar fraction={saveProgress.done / saveProgress.total} color={colors.primary} track={colors.muted} />
             </View>
           ) : null}
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+          {canUndo && !saving ? (
+            <Pressable
+              onPress={undo}
+              style={[styles.primary, { backgroundColor: colors.muted, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 16, flexDirection: 'row', gap: 6 }]}
+              accessibilityRole="button"
+              accessibilityLabel={`Undo the last change. ${undoSteps} ${undoSteps === 1 ? 'change' : 'changes'} can be undone`}
+              testID="mpesa-import-undo"
+            >
+              <Feather name="rotate-ccw" size={16} color={colors.foreground} />
+              <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>Undo</Text>
+            </Pressable>
+          ) : null}
           <Pressable
             onPress={saveAll}
             disabled={saving || !summary || summary.count === 0 || (statementReading !== null && confirmedCount === 0)}
-            style={[styles.primary, { backgroundColor: colors.primary, opacity: saving || !summary || summary.count === 0 || (statementReading !== null && confirmedCount === 0) ? 0.5 : 1 }]}
+            style={[styles.primary, { flex: 1, backgroundColor: colors.primary, opacity: saving || !summary || summary.count === 0 || (statementReading !== null && confirmedCount === 0) ? 0.5 : 1 }]}
             accessibilityRole="button"
             testID="mpesa-import-save"
           >
@@ -3254,6 +3305,7 @@ export default function MpesaImportScreen() {
               </Text>
             )}
           </Pressable>
+          </View>
         </View>
       ) : null}
 
