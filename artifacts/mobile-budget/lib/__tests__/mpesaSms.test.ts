@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('expo', () => ({ requireOptionalNativeModule: () => null }));
 vi.mock('react-native', () => ({ Platform: { OS: 'android' }, PermissionsAndroid: {} }));
 
-import { canNotifySms, canReadSms, MPESA_SENDERS, newSmsTitle, parseSmsAuto, smsBatches, smsBodies, smsRefusal } from '@/lib/mpesaSms';
+import { canNotifySms, canReadSms, MPESA_SENDERS, SMS_PERIODS, smsPeriodRange, newSmsTitle, parseSmsAuto, smsBatches, smsBodies, smsRefusal } from '@/lib/mpesaSms';
 
 // Asked for 2 Oct 2026: read M-Pesa's messages on request, and each time Jamvi
 // opens, from an APK now and the Play Store later.
@@ -33,6 +33,26 @@ describe('reading M-Pesa messages from the phone', () => {
   it('says plainly why it could not read them', () => {
     expect(smsRefusal('blocked')).toContain('Settings > Apps > Jamvi > Permissions > SMS');
     expect(smsRefusal('unavailable')).toContain('newest Jamvi app');
+  });
+});
+
+// Asked for 3 Oct 2026: "a period, instead of just the months" - chips, not a calendar.
+describe('choosing a period to read', () => {
+  const today = new Date(2026, 9, 3); // 3 Oct 2026
+  it('offers a month (with the arrows) and periods ending today', () => {
+    expect(SMS_PERIODS.map((period) => period.label)).toEqual(['A month', 'Last 7 days', 'Last 30 days', 'Last 3 months', 'Last 6 months', 'This year', 'Last 12 months']);
+    expect(smsPeriodRange('month', today)).toEqual({ from: '2026-10-01', to: '2026-10-03' });
+    expect(smsPeriodRange('days7', today)).toEqual({ from: '2026-09-27', to: '2026-10-03' });
+    expect(smsPeriodRange('days30', today)).toEqual({ from: '2026-09-04', to: '2026-10-03' });
+    expect(smsPeriodRange('months3', today)).toEqual({ from: '2026-07-04', to: '2026-10-03' });
+    expect(smsPeriodRange('year', today)).toEqual({ from: '2026-01-01', to: '2026-10-03' });
+    expect(smsPeriodRange('months12', today)).toEqual({ from: '2025-10-04', to: '2026-10-03' });
+  });
+
+  it('shows the chips on the card, and the arrows only for a month', () => {
+    const screen = readFileSync('app/mpesa-import.tsx', 'utf8');
+    expect(screen).toContain('testID="mpesa-sms-periods"');
+    expect(screen).toContain("{smsPeriod === 'month' ? (");
   });
 });
 
