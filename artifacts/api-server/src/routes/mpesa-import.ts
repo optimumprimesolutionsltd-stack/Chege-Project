@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, isNull, lte, sql } from "drizzle-orm";
 import { db, jointAccountTxTable } from "@workspace/db";
 import { getActiveGroupId, requireGroupManager } from "../lib/activeGroup";
 import { canonicalExpenseCategoryName } from "../lib/categoryNames";
@@ -335,5 +335,55 @@ async function sendByEmail(report: string): Promise<"sent" | "not-configured" | 
     return error instanceof EmailNotConfiguredError ? "not-configured" : "failed";
   }
 }
+
+/**
+ * The home screen's M-Pesa panel: what this workspace's M-Pesa did in a month.
+ *
+ * M-Pesa is what people open Jamvi for, so Home leads with it rather than with
+ * budget cards. Counts every saved entry carrying an M-Pesa code, the same
+ * test the status route above uses, so "came in" and "went out" are money that
+ * moved through M-Pesa as recorded here - transfers between your own accounts
+ * included - and not a claim about income or spending, which the budget
+ * figures already make. The latest entry's date is across all months, so a
+ * quiet month still says when M-Pesa was last brought in.
+ */
+router.get("/mpesa/summary", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+
+  const now = new Date();
+  const askedMonth = Number(req.query.month);
+  const askedYear = Number(req.query.year);
+  const month = Number.isInteger(askedMonth) && askedMonth >= 1 && askedMonth <= 12 ? askedMonth : now.getMonth() + 1;
+  const year = Number.isInteger(askedYear) && askedYear >= 2000 && askedYear <= 2100 ? askedYear : now.getFullYear();
+  const from = `${year}-${String(month).padStart(2, "0")}-01`;
+  const to = new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
+
+  const fromMpesa = and(eq(jointAccountTxTable.groupId, groupId), isNotNull(jointAccountTxTable.mpesaReceipt));
+  const [totals] = await db
+    .select({
+      entries: sql<number>`count(*)::int`,
+      moneyIn: sql<number>`coalesce(sum(case when ${jointAccountTxTable.type} = 'deposit' then ${jointAccountTxTable.amount} else 0 end), 0)::float8`,
+      moneyOut: sql<number>`coalesce(sum(case when ${jointAccountTxTable.type} = 'disbursement' then ${jointAccountTxTable.amount} else 0 end), 0)::float8`,
+    })
+    .from(jointAccountTxTable)
+    .where(and(fromMpesa, gte(jointAccountTxTable.date, from), lte(jointAccountTxTable.date, to)));
+  const [latest] = await db
+    .select({ date: jointAccountTxTable.date })
+    .from(jointAccountTxTable)
+    .where(fromMpesa)
+    .orderBy(desc(jointAccountTxTable.date), desc(jointAccountTxTable.id))
+    .limit(1);
+
+  res.json({
+    month,
+    year,
+    imported: Boolean(latest),
+    latestDate: latest?.date ?? null,
+    entries: totals?.entries ?? 0,
+    moneyIn: totals?.moneyIn ?? 0,
+    moneyOut: totals?.moneyOut ?? 0,
+  });
+});
 
 export default router;
