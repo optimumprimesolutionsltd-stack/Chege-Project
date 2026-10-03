@@ -2070,6 +2070,7 @@ export default function MpesaImportScreen() {
           <Feather name="chevron-left" size={24} color={colors.foreground} />
         </Pressable>
         <View style={{ flex: 1 }}>
+          <Text style={[styles.kicker, { color: colors.primary }]}>M-PESA · BRING IT IN</Text>
           <Text style={[styles.title, { color: colors.foreground }]}>Import M-Pesa</Text>
           <ScreenHint>Read your M-Pesa statement, or paste messages, into entries - without typing.</ScreenHint>
         </View>
@@ -2127,45 +2128,9 @@ export default function MpesaImportScreen() {
                 </Pressable>
               </View>
             ) : null}
-            <View style={[styles.steps, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              {['Open your Messages app and hold on an M-Pesa message.', 'Select the ones you want (as many as you like), then tap Copy.', 'Come back here and paste them in the box.'].map((step, index) => (
-                <View key={step} style={styles.step}>
-                  <Text style={[styles.stepNumber, { color: colors.primary }]}>{index + 1}</Text>
-                  <Text style={[styles.stepText, { color: colors.foreground }]}>{step}</Text>
-                </View>
-              ))}
-            </View>
-            {canReceiveShares ? (
-              <Text style={[styles.hint, { color: colors.primary }]} testID="mpesa-share-hint">
-                Faster: select the messages, tap Share, and choose Jamvi. They arrive here already read.
-              </Text>
-            ) : null}
-            <TextInput
-              value={text}
-              onChangeText={setText}
-              multiline
-              textAlignVertical="top"
-              placeholder="Paste your M-Pesa messages here"
-              placeholderTextColor={colors.mutedForeground}
-              autoCorrect={false}
-              style={[styles.pasteBox, { borderColor: colors.border, backgroundColor: colors.muted, color: colors.foreground }]}
-              testID="mpesa-import-text"
-            />
-            <Text style={[styles.hint, { color: colors.mutedForeground }]}>
-              Jamvi reads your messages to fill in this list. They are not saved.
-            </Text>
-            <Pressable
-              onPress={() => readMessages()}
-              disabled={reading}
-              style={[styles.primary, { backgroundColor: colors.primary, opacity: reading ? 0.6 : 1 }]}
-              accessibilityRole="button"
-              testID="mpesa-import-read"
-            >
-              {reading && !readerJob ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Read my messages</Text>}
-            </Pressable>
-
+            {/* The easiest way in, so it leads when this phone can do it. */}
             {smsReadable ? (
-              <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.primary }]} testID="mpesa-sms">
+              <View style={[styles.card, styles.leadCard, { backgroundColor: colors.card, borderColor: colors.foreground }]} testID="mpesa-sms">
                 <Text style={[styles.summaryLine, { color: colors.foreground }]}>Read my M-Pesa messages</Text>
                 <Text style={[styles.hint, { color: colors.mutedForeground }]}>
                   Only M-Pesa's messages, only for the period you choose, only when you ask. They are read into the list below and not kept.
@@ -2263,6 +2228,46 @@ export default function MpesaImportScreen() {
                 ) : null}
               </View>
             ) : null}
+
+            {smsReadable ? (
+              <Text style={[styles.orLine, { color: colors.mutedForeground }]}>Or paste your messages</Text>
+            ) : null}
+            <View style={[styles.steps, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              {['Open your Messages app and hold on an M-Pesa message.', 'Select the ones you want (as many as you like), then tap Copy.', 'Come back here and paste them in the box.'].map((step, index) => (
+                <View key={step} style={styles.step}>
+                  <Text style={[styles.stepNumber, { color: colors.primary }]}>{index + 1}</Text>
+                  <Text style={[styles.stepText, { color: colors.foreground }]}>{step}</Text>
+                </View>
+              ))}
+            </View>
+            {canReceiveShares ? (
+              <Text style={[styles.hint, { color: colors.primary }]} testID="mpesa-share-hint">
+                Faster: select the messages, tap Share, and choose Jamvi. They arrive here already read.
+              </Text>
+            ) : null}
+            <TextInput
+              value={text}
+              onChangeText={setText}
+              multiline
+              textAlignVertical="top"
+              placeholder="Paste your M-Pesa messages here"
+              placeholderTextColor={colors.mutedForeground}
+              autoCorrect={false}
+              style={[styles.pasteBox, { borderColor: colors.border, backgroundColor: colors.muted, color: colors.foreground }]}
+              testID="mpesa-import-text"
+            />
+            <Text style={[styles.hint, { color: colors.mutedForeground }]}>
+              Jamvi reads your messages to fill in this list. They are not saved.
+            </Text>
+            <Pressable
+              onPress={() => readMessages()}
+              disabled={reading}
+              style={[styles.primary, { backgroundColor: colors.primary, opacity: reading ? 0.6 : 1 }]}
+              accessibilityRole="button"
+              testID="mpesa-import-read"
+            >
+              {reading && !readerJob ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Read my messages</Text>}
+            </Pressable>
 
             {canReadStatements ? (
               <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]} testID="mpesa-statement">
@@ -3742,6 +3747,9 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingBottom: 10, borderBottomWidth: StyleSheet.hairlineWidth },
   body: { padding: 16, gap: 12 },
   title: { fontSize: 20, fontFamily: 'Inter_700Bold' },
+  kicker: { fontSize: 11, fontFamily: 'Inter_700Bold', letterSpacing: 0.8, marginBottom: 2 },
+  leadCard: { borderWidth: 2, shadowColor: '#0D4A43', shadowOffset: { width: 4, height: 4 }, shadowOpacity: 1, shadowRadius: 0, elevation: 4 },
+  orLine: { fontSize: 13, fontFamily: 'Inter_600SemiBold', marginTop: 4 },
   hint: { fontSize: 13, fontFamily: 'Inter_400Regular', marginTop: 2 },
   label: { fontSize: 12, fontFamily: 'Inter_600SemiBold', textTransform: 'uppercase', letterSpacing: 0.4 },
   steps: { borderWidth: 1, borderRadius: 8, padding: 14, gap: 10 },
