@@ -9,6 +9,7 @@ import { budgetCategoriesTable } from "@workspace/db";
 import { buildFormatReport, readPaste, type ImportItem } from "../lib/mpesa-parser/import";
 import { feedbackLimiter } from "../middlewares/rateLimit";
 import { EmailNotConfiguredError, sendEmail } from "../lib/email";
+import { mpesaBalance, nairobiToday } from "../lib/mpesa-balance";
 
 const router = Router();
 
@@ -375,6 +376,9 @@ router.get("/mpesa/summary", async (req, res): Promise<void> => {
     .orderBy(desc(jointAccountTxTable.date), desc(jointAccountTxTable.id))
     .limit(1);
 
+  // The M-Pesa account's balance today, to check against the M-Pesa app.
+  const balance = await mpesaBalance(groupId, nairobiToday()).catch(() => null);
+
   res.json({
     month,
     year,
@@ -383,6 +387,8 @@ router.get("/mpesa/summary", async (req, res): Promise<void> => {
     entries: totals?.entries ?? 0,
     moneyIn: totals?.moneyIn ?? 0,
     moneyOut: totals?.moneyOut ?? 0,
+    balance: balance?.balance ?? null,
+    balanceAccount: balance?.accountName ?? null,
   });
 });
 
