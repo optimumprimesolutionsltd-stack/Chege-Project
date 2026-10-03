@@ -76,7 +76,7 @@ export function BankPeriodBar({
               <Pressable
                 onPress={() => setPicking(which)}
                 testID={`bank-period-${which}`}
-                style={{ flex: 1, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.muted }}
+                style={{ flex: 1, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 6, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.muted }}
               >
                 <Text style={{ color: colors.foreground, fontSize: 13, fontFamily: 'Inter_400Regular' }}>
                   {which === 'from' ? 'From ' : 'To '}

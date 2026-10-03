@@ -54,7 +54,9 @@ describe("web shows the default group colour and viewers, like mobile", () => {
     ["../components/workspace-switcher.tsx"],
   ])("%s does not paint a group's own accent colour", (file) => {
     const source = read(file);
-    expect(source).toContain("DEFAULT_WORKSPACE_ACCENT");
+    // Jamvi's own colour: the shared constant, or (on the dashboard since the
+    // redesign) the theme's primary, which also follows light and dark mode.
+    expect(source).toMatch(/DEFAULT_WORKSPACE_ACCENT|hsl\(var\(--primary\)/);
     expect(source).not.toMatch(/(group\??|workspace|activeBrandedBudget)\.accentColor/);
   });
 

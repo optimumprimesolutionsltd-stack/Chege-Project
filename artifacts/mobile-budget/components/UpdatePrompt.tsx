@@ -114,7 +114,7 @@ export function UpdatePrompt({ notes, onDismiss }: Props) {
 
         {/* Icon badge */}
         <View style={styles.iconWrap}>
-          <Feather name="download-cloud" size={28} color="#FDBB0A" />
+          <Feather name="download-cloud" size={28} color="#E9B949" />
         </View>
 
         {/* Heading */}
@@ -183,7 +183,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#011C4E',
+    backgroundColor: '#0B1F2A',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingHorizontal: 24,
@@ -205,7 +205,7 @@ const styles = StyleSheet.create({
   iconWrap: {
     width: 64,
     height: 64,
-    borderRadius: 20,
+    borderRadius: 12,
     backgroundColor: 'rgba(207,114,23,0.15)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -231,7 +231,7 @@ const styles = StyleSheet.create({
   notes: {
     alignSelf: 'stretch',
     backgroundColor: 'rgba(255,255,255,0.06)',
-    borderRadius: 14,
+    borderRadius: 8,
     padding: 14,
     gap: 6,
     marginBottom: 24,
@@ -239,7 +239,7 @@ const styles = StyleSheet.create({
   notesHead: {
     fontSize: 12,
     fontFamily: 'Inter_600SemiBold',
-    color: '#FDBB0A',
+    color: '#E9B949',
     letterSpacing: 0.6,
     textTransform: 'uppercase',
     marginBottom: 2,
@@ -264,8 +264,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FDBB0A',
-    borderRadius: 14,
+    backgroundColor: '#E9B949',
+    borderRadius: 8,
     paddingVertical: 16,
     marginBottom: 12,
   },

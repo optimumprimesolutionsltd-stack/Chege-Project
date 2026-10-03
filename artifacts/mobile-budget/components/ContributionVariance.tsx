@@ -309,7 +309,7 @@ export function ContributionVariance({ canManage = false }: { canManage?: boolea
 }
 
 const styles = StyleSheet.create({
-  card: { borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, padding: 16, gap: 10 },
+  card: { borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, padding: 16, gap: 10 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
   // minWidth 0 is what stops a flex child being squeezed narrower than its
   // own content: without it the heading kept its share of the row only until
@@ -330,7 +330,7 @@ const styles = StyleSheet.create({
   rangeLabel: { fontSize: 11, fontFamily: 'Inter_600SemiBold' },
   customRangeBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 28 },
   dayRow: { flexDirection: 'row', gap: 10, marginTop: 2 },
-  dayField: { flex: 1, borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 10, paddingVertical: 8, gap: 3 },
+  dayField: { flex: 1, borderRadius: 6, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 10, paddingVertical: 8, gap: 3 },
   dayLabel: { fontSize: 10, fontFamily: 'Inter_600SemiBold', textTransform: 'uppercase', letterSpacing: 0.4 },
   dayValueRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   dayValue: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },

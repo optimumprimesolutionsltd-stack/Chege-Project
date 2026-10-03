@@ -271,22 +271,22 @@ export function DebtPayoffCard({ canManage }: { canManage: boolean }) {
 }
 
 const styles = StyleSheet.create({
-  card: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 14, padding: 14, gap: 10 },
+  card: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 8, padding: 14, gap: 10 },
   headingRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   heading: { fontSize: 15, fontFamily: 'Inter_600SemiBold' },
   sub: { fontSize: 11, lineHeight: 16, fontFamily: 'Inter_400Regular' },
   strategyRow: { flexDirection: 'row', gap: 8 },
-  strategyChip: { flex: 1, borderWidth: 1, borderRadius: 9, paddingVertical: 8, alignItems: 'center' },
+  strategyChip: { flex: 1, borderWidth: 1, borderRadius: 6, paddingVertical: 8, alignItems: 'center' },
   strategyLabel: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
   debtRow: { flexDirection: 'row', gap: 10, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 10 },
-  rank: { width: 24, height: 24, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center' },
+  rank: { width: 24, height: 24, borderRadius: 8, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center' },
   rankText: { fontSize: 12, fontFamily: 'Inter_700Bold' },
   debtName: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
   editForm: { gap: 8, marginTop: 8 },
-  input: { height: 40, borderWidth: StyleSheet.hairlineWidth, borderRadius: 9, paddingHorizontal: 10, fontSize: 13 },
+  input: { height: 40, borderWidth: StyleSheet.hairlineWidth, borderRadius: 6, paddingHorizontal: 10, fontSize: 13 },
   editActions: { flexDirection: 'row', gap: 14, alignItems: 'center', marginTop: 4 },
   linkText: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
-  smallBtn: { paddingHorizontal: 12, height: 36, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  smallBtn: { paddingHorizontal: 12, height: 36, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
   smallBtnText: { fontSize: 12, fontFamily: 'Inter_700Bold' },
-  addBtn: { flexDirection: 'row', gap: 7, alignItems: 'center', justifyContent: 'center', height: 40, borderWidth: StyleSheet.hairlineWidth, borderRadius: 9, borderStyle: 'dashed' },
+  addBtn: { flexDirection: 'row', gap: 7, alignItems: 'center', justifyContent: 'center', height: 40, borderWidth: StyleSheet.hairlineWidth, borderRadius: 6, borderStyle: 'dashed' },
 });

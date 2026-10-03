@@ -127,7 +127,7 @@ export function ContributionMemberCard({
 }
 
 const styles = StyleSheet.create({
-  card: { borderWidth: 1, borderRadius: 16, padding: 16 },
+  card: { borderWidth: 1, borderRadius: 10, padding: 16 },
   top: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   avatar: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
   initial: { fontSize: 16, fontFamily: 'Inter_700Bold' },
@@ -139,7 +139,7 @@ const styles = StyleSheet.create({
   noTarget: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 },
   link: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
   parts: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
-  part: { borderRadius: 10, paddingHorizontal: 10, paddingVertical: 7 },
+  part: { borderRadius: 6, paddingHorizontal: 10, paddingVertical: 7 },
   partLabel: { fontSize: 10, fontFamily: 'Inter_500Medium', textTransform: 'uppercase', letterSpacing: 0.3 },
   partAmount: { fontSize: 13, fontFamily: 'Inter_700Bold', marginTop: 2 },
   toggle: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 12 },

@@ -116,9 +116,9 @@ type Shortcut = {
 const SHARED_OVERVIEW_SHORTCUTS: Shortcut[] = [
   { icon: 'bar-chart-2', label: 'Budget',        color: '#2DD4CC', bg: '#0B343B', route: '/(tabs)/budget',        description: 'Plan spending' },
   { icon: 'trending-up', label: 'Contributions', color: '#3CDD62', bg: '#0D3428', route: '/(tabs)/contributions', description: 'See money in' },
-  { icon: 'file-text',   label: 'Expenses',      color: '#FDBB0A', bg: '#392D08', route: '/(tabs)/history',       description: 'Review spending' },
+  { icon: 'file-text',   label: 'Expenses',      color: '#E9B949', bg: '#392D08', route: '/(tabs)/history',       description: 'Review spending' },
   { icon: 'target',      label: 'Goals',         color: '#6C9FE6', bg: '#0A254E', route: '/(tabs)/goals',         description: 'Track targets' },
-  { icon: 'credit-card', label: 'Bank',          color: '#08B7B0', bg: '#0B343B', route: '/(tabs)/bank',          description: 'Manage funds' },
+  { icon: 'credit-card', label: 'Bank',          color: '#14776A', bg: '#0B343B', route: '/(tabs)/bank',          description: 'Manage funds' },
   { icon: 'pie-chart',   label: 'Reports',       color: '#6C9FE6', bg: '#0A254E', route: '/(tabs)/reports',       description: 'Understand trends' },
   // What you owe and are owed - loans, Fuliza, people - one tap from Home.
   { icon: 'trending-down', label: 'Debt',        color: '#F87171', bg: '#3A1212', route: '/(tabs)/debt',          description: 'What you owe' },
@@ -455,7 +455,7 @@ export default function DashboardScreen() {
                 user={user}
                 size={34}
                 backgroundColor="rgba(247,250,246,0.16)"
-                foregroundColor="#F4F8FF"
+                foregroundColor="#FBF7EC"
               />
             </Pressable>
           </View>
@@ -1095,7 +1095,7 @@ export default function DashboardScreen() {
   );
 }
 
-function StatCell({ label, value, valueColor = '#F4F8FF' }: { label: string; value: string; valueColor?: string }) {
+function StatCell({ label, value, valueColor = '#FBF7EC' }: { label: string; value: string; valueColor?: string }) {
   return (
     <View style={styles.statCell}>
       <Text style={styles.statLabel}>{label}</Text>
@@ -1167,11 +1167,11 @@ function ContribBar({ name, contributed, spent, target, color, hidden }: {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   accessContainer: { flex: 1, padding: 20, justifyContent: 'center' },
-  accessCard: { borderWidth: 1, borderRadius: 20, padding: 24, alignItems: 'center' },
-  accessIcon: { width: 54, height: 54, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  accessCard: { borderWidth: 1, borderRadius: 12, padding: 24, alignItems: 'center' },
+  accessIcon: { width: 54, height: 54, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   accessTitle: { marginTop: 18, fontSize: 21, fontFamily: 'Inter_700Bold', textAlign: 'center' },
   accessText: { marginTop: 9, fontSize: 14, lineHeight: 21, fontFamily: 'Inter_400Regular', textAlign: 'center' },
-  accessButton: { marginTop: 22, borderRadius: 12, paddingHorizontal: 18, paddingVertical: 12 },
+  accessButton: { marginTop: 22, borderRadius: 8, paddingHorizontal: 18, paddingVertical: 12 },
   accessButtonText: { color: '#fff', fontSize: 14, fontFamily: 'Inter_600SemiBold' },
 
   header: { paddingHorizontal: 20, paddingBottom: 20 },
@@ -1198,7 +1198,7 @@ const styles = StyleSheet.create({
   },
   headerRest: { paddingHorizontal: 20, paddingBottom: 20 },
   homeStatus: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 9 },
-  homeStatusText: { fontSize: 10, color: '#FDBB0A', fontFamily: 'Inter_700Bold', letterSpacing: 1.1 },
+  homeStatusText: { fontSize: 10, color: '#E9B949', fontFamily: 'Inter_700Bold', letterSpacing: 1.1 },
   headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   greetingBlock: { flex: 1, minWidth: 0 },
   headerUtilityRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
@@ -1206,18 +1206,18 @@ const styles = StyleSheet.create({
   workspaceIdentity: { flexDirection: 'row', alignItems: 'center', gap: 11, borderWidth: 1, borderRadius: 15, padding: 10, marginBottom: 16 },
   workspaceIdentityIcon: { width: 38, height: 38, borderRadius: 11, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   workspaceIdentityCopy: { flex: 1, minWidth: 0 },
-  workspaceIdentityEyebrow: { fontSize: 9, color: '#A5B9D4', fontFamily: 'Inter_700Bold', letterSpacing: 1 },
-  workspaceIdentityName: { fontSize: 16, color: '#F4F8FF', marginTop: 2 },
+  workspaceIdentityEyebrow: { fontSize: 9, color: '#C2BBA8', fontFamily: 'Inter_700Bold', letterSpacing: 1 },
+  workspaceIdentityName: { fontSize: 16, color: '#FBF7EC', marginTop: 2 },
   iconBtn: { padding: 4 },
-  greeting: { fontSize: 12, color: '#A5B9D4', fontFamily: 'Inter_400Regular' },
-  name: { fontSize: 20, fontWeight: '700' as const, color: '#F4F8FF', fontFamily: 'Inter_700Bold' },
+  greeting: { fontSize: 12, color: '#C2BBA8', fontFamily: 'Inter_400Regular' },
+  name: { fontSize: 20, fontWeight: '700' as const, color: '#FBF7EC', fontFamily: 'Inter_700Bold' },
   monthNav: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   navBtn: { padding: 4 },
-  monthLabel: { fontSize: 13, color: '#F4F8FF', fontFamily: 'Inter_500Medium', minWidth: 56, textAlign: 'center' },
+  monthLabel: { fontSize: 13, color: '#FBF7EC', fontFamily: 'Inter_500Medium', minWidth: 56, textAlign: 'center' },
 
-  statsStrip: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.07)', borderRadius: 14, paddingVertical: 12, marginBottom: 14 },
+  statsStrip: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.07)', borderRadius: 8, paddingVertical: 12, marginBottom: 14 },
   statCell: { flex: 1, alignItems: 'center' },
-  statLabel: { fontSize: 10, color: '#A5B9D4', fontFamily: 'Inter_400Regular', letterSpacing: 0.5, marginBottom: 3 },
+  statLabel: { fontSize: 10, color: '#C2BBA8', fontFamily: 'Inter_400Regular', letterSpacing: 0.5, marginBottom: 3 },
   statValue: { fontSize: 11, fontWeight: '500' as const, fontFamily: 'Inter_500Medium', opacity: 0.75 },
   stripDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.12)' },
   ringWrap: { alignItems: 'center', marginBottom: 16 },
@@ -1236,7 +1236,7 @@ const styles = StyleSheet.create({
   overviewNavTitle: { fontSize: 18, fontFamily: 'Inter_700Bold', marginTop: 4 },
   overviewNavSubtitle: { fontSize: 12, lineHeight: 18, fontFamily: 'Inter_400Regular', marginTop: 5 },
   overviewNavGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 14 },
-  overviewNavButton: { width: '47%', minWidth: 0, minHeight: 78, borderWidth: 1, borderRadius: 12, paddingHorizontal: 7, paddingVertical: 9, flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2, position: 'relative' },
+  overviewNavButton: { width: '47%', minWidth: 0, minHeight: 78, borderWidth: 1, borderRadius: 8, paddingHorizontal: 7, paddingVertical: 9, flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2, position: 'relative' },
   overviewNavButtonText: { width: '100%', maxWidth: '100%', flexShrink: 1, fontSize: 11, lineHeight: 15, textAlign: 'center', fontFamily: 'Inter_600SemiBold' },
   overviewNavButtonDescription: { width: '100%', maxWidth: '100%', flexShrink: 1, fontSize: 9, lineHeight: 12, textAlign: 'center', fontFamily: 'Inter_400Regular' },
   overviewNavChevron: { position: 'absolute', top: 6, right: 6 },
@@ -1244,19 +1244,19 @@ const styles = StyleSheet.create({
   budgetCtaCard: { marginHorizontal: 16, marginTop: 12, borderWidth: 1, borderRadius: 18, padding: 16 },
   uncategorizedCtaCard: { marginHorizontal: 16, marginTop: 12, borderWidth: 1, borderRadius: 18, padding: 16 },
   askCtaCard: { marginHorizontal: 16, marginTop: 12, borderWidth: 1, borderRadius: 18, padding: 16 },
-  askCtaIcon: { width: 42, height: 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  askCtaIcon: { width: 42, height: 42, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   uncategorizedList: { marginTop: 12, gap: 8 },
-  uncategorizedRow: { minHeight: 52, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 9, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  uncategorizedRow: { minHeight: 52, borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 9, flexDirection: 'row', alignItems: 'center', gap: 8 },
   uncategorizedCopy: { minWidth: 0, flex: 1 },
   uncategorizedDescription: { fontSize: 13, fontFamily: 'Inter_700Bold' },
   uncategorizedAmount: { marginTop: 2, fontSize: 11, fontFamily: 'Inter_400Regular' },
   uncategorizedAction: { fontSize: 12, fontFamily: 'Inter_700Bold' },
   groupCtaHeader: { flexDirection: 'row', alignItems: 'center', gap: 11 },
-  groupCtaIcon: { width: 42, height: 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  groupCtaIcon: { width: 42, height: 42, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   groupCtaEyebrow: { fontSize: 10, fontFamily: 'Inter_700Bold', letterSpacing: 1 },
   groupCtaTitle: { fontSize: 18, fontFamily: 'Inter_700Bold', marginTop: 3 },
   groupCtaText: { fontSize: 12, lineHeight: 18, fontFamily: 'Inter_400Regular', marginTop: 11 },
-  groupCtaButton: { minHeight: 46, borderRadius: 12, paddingHorizontal: 14, marginTop: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  groupCtaButton: { minHeight: 46, borderRadius: 8, paddingHorizontal: 14, marginTop: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   groupCtaButtonText: { fontSize: 13, fontFamily: 'Inter_700Bold' },
   askModalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(1, 28, 78, 0.48)' },
   askModalSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 18, paddingBottom: 28, maxHeight: '92%' },
@@ -1265,14 +1265,14 @@ const styles = StyleSheet.create({
   askModalIcon: { width: 38, height: 38, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   askModalTitle: { fontSize: 19, fontFamily: 'Inter_700Bold' },
   askModalSubtitle: { fontSize: 11, lineHeight: 16, fontFamily: 'Inter_400Regular', marginTop: 2 },
-  askInput: { minHeight: 50, borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, fontFamily: 'Inter_400Regular' },
-  askSubmit: { minHeight: 46, borderRadius: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 10 },
+  askInput: { minHeight: 50, borderWidth: 1, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, fontFamily: 'Inter_400Regular' },
+  askSubmit: { minHeight: 46, borderRadius: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 10 },
   askSubmitText: { fontSize: 14, fontFamily: 'Inter_700Bold' },
   askPromptList: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginTop: 14 },
   askPrompt: { borderWidth: 1, borderRadius: 18, paddingHorizontal: 11, paddingVertical: 8 },
   askPromptText: { fontSize: 11, fontFamily: 'Inter_500Medium' },
   askError: { fontSize: 12, lineHeight: 17, marginTop: 13, fontFamily: 'Inter_500Medium' },
-  askAnswer: { borderWidth: 1, borderRadius: 14, padding: 14, marginTop: 15 },
+  askAnswer: { borderWidth: 1, borderRadius: 8, padding: 14, marginTop: 15 },
   askAnswerLabel: { fontSize: 10, letterSpacing: 0.8, fontFamily: 'Inter_700Bold' },
   askAnswerText: { fontSize: 14, lineHeight: 21, marginTop: 5, fontFamily: 'Inter_400Regular' },
   askAnswerMeta: { fontSize: 10, marginTop: 9, fontFamily: 'Inter_400Regular' },
@@ -1284,12 +1284,12 @@ const styles = StyleSheet.create({
 
   empty: { alignItems: 'center', paddingVertical: 40, gap: 12 },
   emptyText: { fontSize: 15, fontFamily: 'Inter_400Regular' },
-  emptyBtn: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 20, paddingVertical: 10, marginTop: 4 },
+  emptyBtn: { borderWidth: 1, borderRadius: 6, paddingHorizontal: 20, paddingVertical: 10, marginTop: 4 },
   emptyBtnText: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
 
-  bankCard: { marginHorizontal: 16, marginTop: 12, borderRadius: 16, borderWidth: 1, overflow: 'hidden' },
+  bankCard: { marginHorizontal: 16, marginTop: 12, borderRadius: 10, borderWidth: 1, overflow: 'hidden' },
   bankCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 12 },
-  bankIconWrap: { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(56,189,248,0.15)', alignItems: 'center', justifyContent: 'center' },
+  bankIconWrap: { width: 36, height: 36, borderRadius: 6, backgroundColor: 'rgba(56,189,248,0.15)', alignItems: 'center', justifyContent: 'center' },
   bankCardTitle: { fontSize: 14, fontWeight: '600' as const, fontFamily: 'Inter_600SemiBold' },
   bankCardSub: { fontSize: 11, fontFamily: 'Inter_400Regular' },
   bankStatsRow: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: 'rgba(128,128,128,0.15)' },
@@ -1301,8 +1301,8 @@ const styles = StyleSheet.create({
   bankStatDivider: { width: 1, marginVertical: 10 },
 
   bankEmptyState: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 16, borderTopWidth: 1, borderTopColor: 'rgba(128,128,128,0.15)' },
-  bankEmptyText: { fontSize: 13, color: '#08B7B0', fontFamily: 'Inter_400Regular', opacity: 0.8 },
-  negativeBankBalanceWarning: { gap: 5, marginHorizontal: 12, marginBottom: 12, borderWidth: 1, borderColor: '#fca5a5', borderRadius: 10, backgroundColor: '#fef2f2', paddingHorizontal: 12, paddingVertical: 10 },
+  bankEmptyText: { fontSize: 13, color: '#14776A', fontFamily: 'Inter_400Regular', opacity: 0.8 },
+  negativeBankBalanceWarning: { gap: 5, marginHorizontal: 12, marginBottom: 12, borderWidth: 1, borderColor: '#fca5a5', borderRadius: 6, backgroundColor: '#fef2f2', paddingHorizontal: 12, paddingVertical: 10 },
   negativeBankBalanceWarningTitle: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   negativeBankBalanceWarningTitleText: { color: '#991b1b', fontSize: 13, fontFamily: 'Inter_600SemiBold' },
   negativeBankBalanceWarningText: { color: '#7f1d1d', fontSize: 12, lineHeight: 17, fontFamily: 'Inter_400Regular' },

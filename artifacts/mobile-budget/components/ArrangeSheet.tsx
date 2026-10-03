@@ -112,7 +112,7 @@ export function ArrangeSheet({
                     styles.row,
                     { borderColor: isLanding ? colors.primary : colors.border, opacity: hidden || outOfSlots ? 0.5 : 1 },
                     isLanding && { borderBottomWidth: 2 },
-                    isDragged && { transform: [{ translateY: offset }], zIndex: 10, backgroundColor: colors.muted, borderRadius: 10, elevation: 6 },
+                    isDragged && { transform: [{ translateY: offset }], zIndex: 10, backgroundColor: colors.muted, borderRadius: 6, elevation: 6 },
                   ]}
                   testID={`arrange-row-${item.id}`}
                 >
@@ -190,8 +190,8 @@ const styles = StyleSheet.create({
   grip: { width: 28, height: 36, alignItems: 'center', justifyContent: 'center' },
   label: { fontSize: 15, fontFamily: 'Inter_600SemiBold' },
   small: { fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: 1 },
-  iconButton: { width: 34, height: 34, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  iconButton: { width: 34, height: 34, borderRadius: 6, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   foot: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 14 },
   reset: { flex: 1, paddingVertical: 12 },
-  done: { borderRadius: 12, paddingVertical: 12, paddingHorizontal: 28, alignItems: 'center' },
+  done: { borderRadius: 8, paddingVertical: 12, paddingHorizontal: 28, alignItems: 'center' },
 });

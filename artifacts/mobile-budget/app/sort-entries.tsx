@@ -171,5 +171,5 @@ const styles = StyleSheet.create({
   title: { fontSize: 20, fontFamily: 'Inter_700Bold' },
   subtitle: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 1 },
   body: { padding: 16, gap: 12 },
-  card: { borderWidth: 1, borderRadius: 14, padding: 14, gap: 8 },
+  card: { borderWidth: 1, borderRadius: 8, padding: 14, gap: 8 },
 });

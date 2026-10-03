@@ -222,6 +222,24 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: '/settings', label: 'Settings', icon: Settings },
   ];
 
+  // Short names for the phone's bottom tabs: Home plus the first three
+  // everyday pages this budget actually uses.
+  const TAB_SHORT: Record<string, string> = {
+    '/contributions': 'Paid',
+    '/expenses': 'Spending',
+    '/budget': 'Budget',
+    '/activity': 'Activity',
+    '/savings-goals': 'Goals',
+    '/bank': 'Bank',
+  };
+  const tabItems = [
+    { ...navItems[0], short: 'Home' },
+    ...navItems
+      .filter((item) => item.href in TAB_SHORT)
+      .slice(0, 3)
+      .map((item) => ({ ...item, short: TAB_SHORT[item.href] })),
+  ];
+
   // Simple view: the everyday pages on show, the rest folded under "More".
   const [simpleNav, setSimpleNavState] = useState(() =>
     readSimpleNav(typeof window === 'undefined' ? undefined : window.localStorage));
@@ -246,10 +264,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
         >
           <div className={cn(
             big
-              ? 'flex items-center gap-3 px-4 py-4 rounded-xl text-lg font-medium'
-              : 'flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium',
+              ? 'flex items-center gap-3 px-4 py-4 rounded-md text-lg font-medium'
+              : 'flex items-center gap-3 px-4 py-2.5 rounded-md transition-colors duration-150 font-medium',
             isActive
-              ? (big ? 'bg-sidebar-accent text-sidebar-accent-foreground' : 'bg-sidebar-accent text-sidebar-accent-foreground shadow-sm')
+              ? 'bg-sidebar-accent text-sidebar-accent-foreground font-bold shadow-[inset_4px_0_0_hsl(var(--sisal))]'
               : (big ? 'text-sidebar-foreground/80' : 'text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'),
           )}>
             <item.icon className={cn(big ? 'w-6 h-6' : 'w-5 h-5', isActive ? 'text-sidebar-primary' : (big ? '' : 'text-sidebar-foreground/60'))} />
@@ -269,7 +287,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               aria-expanded={showMore}
               data-testid={`nav-more-${variant}`}
               className={cn(
-                'flex w-full items-center gap-3 rounded-xl px-4 font-medium text-sidebar-foreground/80 hover:bg-sidebar-accent/50',
+                'flex w-full items-center gap-3 rounded-md px-4 font-medium text-sidebar-foreground/80 hover:bg-sidebar-accent/50',
                 big ? 'py-4 text-lg' : 'py-3',
               )}
             >
@@ -301,14 +319,16 @@ export function Layout({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-screen w-full max-w-full bg-background text-foreground selection:bg-primary/20">
       {/* Sidebar for Desktop */}
       <aside className="hidden md:flex w-64 flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border h-screen sticky top-0">
-        <div className="p-6">
-            <div className="flex h-10 w-40 items-center justify-center rounded-xl bg-brand-surface px-2 shadow-sm">
+        <div className="weave-thin shrink-0" aria-hidden="true" />
+        <div className="px-6 pt-5 pb-4">
+          <div className="flex h-10 w-36 items-center justify-center rounded-md bg-brand-surface px-2 shadow-[3px_3px_0_hsl(var(--sisal))]">
             <BrandLogo className="h-8 w-full" alt="Jamvi — personal and shared grouping" />
           </div>
-          <div className="mt-2 min-w-0">
-            <span className="block text-[11px] font-medium text-sidebar-foreground/70">Personal & shared money, together</span>
-            <span className="mt-1 flex items-center gap-1.5 truncate text-xs text-sidebar-foreground/60"><span className={cn('inline-block h-1.5 w-1.5 shrink-0 rounded-full', isSharedWorkspace ? 'bg-[#087F8C]' : 'bg-sidebar-primary')} aria-hidden="true" />{group ? workspaceLabel(group) : 'My budget'}</span>
-            <span className="mt-1 inline-flex rounded-full border border-sidebar-border bg-sidebar-accent/60 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-sidebar-foreground/80">{workspaceContextLabel}</span>
+          {/* Which budget you are in, said plainly and large: everything on the
+              page beside it belongs to it. */}
+          <div className="mt-5 min-w-0">
+            <span className="kicker block text-sidebar-primary">{workspaceContextLabel}</span>
+            <span className="mt-1 block truncate font-display text-xl font-bold leading-tight text-sidebar-foreground">{group ? workspaceLabel(group) : 'My budget'}</span>
           </div>
         </div>
         {location !== '/' && (
@@ -345,14 +365,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Mobile Header */}
-      <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-sidebar border-b border-sidebar-border z-50 flex items-center justify-between px-4">
-        <div className="flex items-center gap-2 text-sidebar-foreground">
-           <div className="flex h-8 w-28 items-center justify-center rounded-lg bg-brand-surface px-1.5">
+      <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-sidebar z-50 flex items-center justify-between px-4">
+        <div className="weave-thin absolute inset-x-0 bottom-0" aria-hidden="true" />
+        <div className="flex min-w-0 items-center gap-3 text-sidebar-foreground">
+          <div className="flex h-8 w-24 shrink-0 items-center justify-center rounded-md bg-brand-surface px-1.5">
             <BrandLogo className="h-6 w-full" alt="Jamvi — personal and shared grouping" />
           </div>
           <div className="min-w-0">
-            <span className="block max-w-36 truncate text-[10px] text-sidebar-foreground/60">{group ? workspaceLabel(group) : 'My budget'}</span>
-            <span className="mt-0.5 block text-[9px] font-bold uppercase tracking-[0.1em] text-sidebar-primary">{workspaceContextLabel}</span>
+            <span className="kicker block text-[10px] text-sidebar-primary">{workspaceContextLabel}</span>
+            <span className="block max-w-40 truncate font-display text-sm font-bold leading-tight">{group ? workspaceLabel(group) : 'My budget'}</span>
           </div>
         </div>
         <button
@@ -400,12 +421,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
       {/* A budget that uses none of these - reports and activity only - gets
           no button rather than one that opens an empty menu. */}
       {!isMobileMenuOpen && offeredQuickLogActions.length > 0 && (
-      <div className="fixed bottom-5 right-4 z-50 flex flex-col items-end gap-3 md:bottom-7 md:right-7">
+      <div className="fixed bottom-[5.5rem] right-4 z-50 flex flex-col items-end gap-3 md:bottom-7 md:right-7">
         {isQuickLogOpen && (
           <div
             role="menu"
             aria-label="What do you want to add?"
-            className="w-64 overflow-hidden rounded-2xl border border-border bg-card p-2 shadow-2xl"
+            className="w-64 overflow-hidden rounded-lg border-2 border-foreground bg-card p-2 shadow-[6px_6px_0_hsl(var(--jade))]"
           >
             <div className="px-3 pb-2 pt-2">
               <p className="text-sm font-bold text-foreground">What do you want to add?</p>
@@ -416,9 +437,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
               type="button"
               role="menuitem"
               onClick={() => openQuickLog('contribution')}
-              className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-muted"
+              className="flex w-full items-center gap-3 rounded-md px-3 py-3 text-left transition-colors hover:bg-muted"
             >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-secondary/10 text-secondary">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-secondary/10 text-secondary">
                 <HandCoins className="h-4 w-4" aria-hidden="true" />
               </span>
               <span>
@@ -433,9 +454,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
               role="menuitem"
               onClick={() => openQuickLog('expense')}
               disabled={sharedTransactionsLocked}
-              className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex w-full items-center gap-3 rounded-md px-3 py-3 text-left transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-warning/10 text-warning">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-warning/10 text-warning">
                 <Receipt className="h-4 w-4" aria-hidden="true" />
               </span>
               <span>
@@ -449,9 +470,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
               type="button"
               role="menuitem"
               onClick={() => openQuickLog('income')}
-              className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-muted"
+              className="flex w-full items-center gap-3 rounded-md px-3 py-3 text-left transition-colors hover:bg-muted"
             >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-success/10 text-success">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-success/10 text-success">
                 <Landmark className="h-4 w-4" aria-hidden="true" />
               </span>
               <span>
@@ -465,9 +486,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
               type="button"
               role="menuitem"
               onClick={() => openQuickLog('budget')}
-              className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-muted"
+              className="flex w-full items-center gap-3 rounded-md px-3 py-3 text-left transition-colors hover:bg-muted"
             >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-info/10 text-info">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-info/10 text-info">
                 <PieChart className="h-4 w-4" aria-hidden="true" />
               </span>
               <span>
@@ -482,9 +503,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
               role="menuitem"
               onClick={() => openQuickLog('goal')}
               disabled={sharedTransactionsLocked}
-              className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex w-full items-center gap-3 rounded-md px-3 py-3 text-left transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-info/10 text-info">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-info/10 text-info">
                 <Target className="h-4 w-4" aria-hidden="true" />
               </span>
               <span>
@@ -494,7 +515,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </button>
             )}
             {sharedTransactionsLocked && (
-              <p className="mx-1 mt-2 rounded-xl bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
+              <p className="mx-1 mt-2 rounded-md bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
                 Invite one more member before recording shared expenses or goal contributions.
               </p>
             )}
@@ -505,7 +526,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           onClick={() => setIsQuickLogOpen((isOpen) => !isOpen)}
           aria-expanded={isQuickLogOpen}
           aria-label={isQuickLogOpen ? 'Close the add menu' : 'Add something'}
-          className="h-12 rounded-full px-4 shadow-xl md:h-14 md:px-5"
+          className="h-12 rounded-md px-4 md:h-14 md:px-5"
         >
           {isQuickLogOpen ? <X className="mr-2 h-5 w-5" aria-hidden="true" /> : <Plus className="mr-2 h-5 w-5" aria-hidden="true" />}
           <span className="text-sm font-bold">Add</span>
@@ -513,8 +534,41 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </div>
       )}
 
+      {/* Bottom tabs on phones: the everyday pages one tap away, as in the
+          Android app, and the full list behind Menu. */}
+      <nav
+        aria-label="Main"
+        className="md:hidden fixed inset-x-0 bottom-0 z-40 flex h-16 items-stretch border-t-2 border-foreground/10 bg-card"
+      >
+        {tabItems.map((item) => {
+          const isActive = location === item.href;
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              aria-current={isActive ? 'page' : undefined}
+              className={cn(
+                'flex flex-1 flex-col items-center justify-center gap-0.5 border-t-[3px] -mt-[2px] text-[11px] font-bold',
+                isActive ? 'border-secondary text-primary' : 'border-transparent text-muted-foreground',
+              )}
+            >
+              <item.icon className="h-5 w-5" aria-hidden="true" />
+              {item.short}
+            </Link>
+          );
+        })}
+        <button
+          type="button"
+          onClick={() => setIsMobileMenuOpen(true)}
+          className="flex flex-1 flex-col items-center justify-center gap-0.5 border-t-[3px] -mt-[2px] border-transparent text-[11px] font-bold text-muted-foreground"
+        >
+          <Menu className="h-5 w-5" aria-hidden="true" />
+          Menu
+        </button>
+      </nav>
+
       {/* Main Content */}
-      <main className="min-w-0 flex-1 flex flex-col min-h-screen overflow-x-hidden pb-24 pt-16 md:pb-0 md:pt-0">
+      <main className="min-w-0 flex-1 flex flex-col min-h-screen overflow-x-hidden pb-40 pt-16 md:pb-0 md:pt-0">
         <div className="min-w-0 flex-1 w-full max-w-6xl mx-auto p-4 md:p-8">
           {group?.role === 'viewer' ? <ViewerBanner groupName={group?.name} /> : null}
           {children}

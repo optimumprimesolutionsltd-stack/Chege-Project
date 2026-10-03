@@ -59,14 +59,14 @@ export function WorkspaceIdentityRow({
         </View>
       )}
       <View style={styles.copy}>
-        <Text style={[styles.eyebrow, { color: isDark ? '#A5B9D4' : colors.mutedForeground }]}>
+        <Text style={[styles.eyebrow, { color: isDark ? '#C2BBA8' : colors.mutedForeground }]}>
           {isShared ? 'SHARED GROUP' : 'PERSONAL BUDGET'}
         </Text>
         <Text
           numberOfLines={1}
           style={[
             styles.name,
-            { color: isDark ? '#F4F8FF' : colors.foreground },
+            { color: isDark ? '#FBF7EC' : colors.foreground },
             workspaceNameTextStyle(group.nameStyle),
           ]}
         >
@@ -87,13 +87,13 @@ const styles = {
   photo: {
     width: 34,
     height: 34,
-    borderRadius: 10,
+    borderRadius: 6,
     borderWidth: 2,
   },
   icon: {
     width: 34,
     height: 34,
-    borderRadius: 10,
+    borderRadius: 6,
     borderWidth: 1,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,

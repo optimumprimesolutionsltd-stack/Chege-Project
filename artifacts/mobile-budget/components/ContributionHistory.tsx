@@ -43,7 +43,7 @@ export function ContributionHistory() {
   const sum = (values: number[]) => values.reduce((total, value) => total + value, 0);
 
   return (
-    <View style={{ backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, borderRadius: 14, padding: 14, gap: 10 }} testID="contribution-history">
+    <View style={{ backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, borderRadius: 8, padding: 14, gap: 10 }} testID="contribution-history">
       <View>
         <Text style={{ color: colors.foreground, fontFamily: 'Inter_700Bold', fontSize: 16 }}>Contributions month by month</Text>
         <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>What each member has put in, and what the group spent against it.</Text>

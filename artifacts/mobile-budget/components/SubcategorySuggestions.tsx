@@ -78,7 +78,7 @@ export function SubcategorySuggestions({ canManage }: { canManage: boolean }) {
   });
 
   return (
-    <View style={{ backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, borderRadius: 14, padding: 14, gap: 12 }} testID="subcategory-suggestions">
+    <View style={{ backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, borderRadius: 8, padding: 14, gap: 12 }} testID="subcategory-suggestions">
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
         <Feather name="git-merge" size={16} color={colors.primary} />
         <Text style={{ color: colors.foreground, fontFamily: 'Inter_700Bold', fontSize: 15 }}>Tidy up sub-categories</Text>
@@ -147,7 +147,7 @@ export function SubcategorySuggestions({ canManage }: { canManage: boolean }) {
 
       {canManage ? (
         <Pressable onPress={() => void apply()} disabled={applying || moves.length === 0} accessibilityRole="button" testID="button-apply-subcategory-suggestions"
-          style={{ borderWidth: 1, borderColor: colors.primary, borderRadius: 10, paddingVertical: 10, alignItems: 'center', opacity: moves.length === 0 ? 0.5 : 1 }}>
+          style={{ borderWidth: 1, borderColor: colors.primary, borderRadius: 6, paddingVertical: 10, alignItems: 'center', opacity: moves.length === 0 ? 0.5 : 1 }}>
           {applying ? <ActivityIndicator color={colors.primary} /> : (
             <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>
               {moves.length === 0 ? 'Nothing selected' : `Apply ${moves.length} ${moves.length === 1 ? 'move' : 'moves'}`}

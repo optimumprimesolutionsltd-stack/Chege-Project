@@ -263,7 +263,7 @@ const styles = StyleSheet.create({
   strategyRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   strategyChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 14, minHeight: 36, justifyContent: 'center' },
   strategyHint: { fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 17 },
-  debtRow: { borderWidth: 1, borderRadius: 12, padding: 12, gap: 3 },
+  debtRow: { borderWidth: 1, borderRadius: 8, padding: 12, gap: 3 },
   debtHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
   debtName: { fontSize: 14, fontFamily: 'Inter_600SemiBold', flexShrink: 1, minWidth: 0 },
   debtBalance: { fontSize: 14, fontFamily: 'Inter_700Bold' },

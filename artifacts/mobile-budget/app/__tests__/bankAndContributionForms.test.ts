@@ -55,6 +55,6 @@ describe('Record contributions reads as sections', () => {
   });
 
   it('gives a section a visible edge rather than bare stacked rows', () => {
-    expect(record).toContain('sectionCard: { borderWidth: 1, borderRadius: 12, padding: 12 }');
+    expect(record).toContain('sectionCard: { borderWidth: 1, borderRadius: 8, padding: 12 }');
   });
 });

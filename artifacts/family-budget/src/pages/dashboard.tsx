@@ -79,7 +79,6 @@ import { buildCategoryTree, childrenFor, parentOf, type CategoryRow } from "@wor
 import { CategorySearchInput, useCategorySearch } from "@/components/category-search";
 import { AmountField } from "@/components/amount-field";
 import { HomeAnswersCard } from "@/components/home-answers-card";
-import { DEFAULT_WORKSPACE_ACCENT } from "@/lib/workspace-accent";
 import { useEntitlements } from "@/hooks/use-entitlements";
 import { mayStartGroup } from "@/lib/group-start";
 import { toSortTitle, type EntryToSort } from "@/lib/entries-to-sort";
@@ -2242,7 +2241,7 @@ function ExpenseForm({
             ))}
           </div>
           {paidFromBank && (
-            <div className="space-y-2 rounded-xl border border-sky-200 bg-sky-50/70 p-3 dark:border-sky-900 dark:bg-sky-950/40">
+            <div className="space-y-2 rounded-xl border border-info/40 bg-info/10 p-3">
               <label className="text-sm font-semibold text-foreground">
                 Bank account <span className="text-destructive">*</span>
               </label>
@@ -2313,7 +2312,7 @@ function ExpenseForm({
                   type="button"
                   size="sm"
                   variant="outline"
-                  className="h-10 border-sky-300 bg-white/70 text-sky-800 hover:bg-white dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-200"
+                  className="h-10 border-info/40 bg-white/70 text-info hover:bg-white"
                   onClick={() => setAllowMixedFunding(true)}
                   data-testid="quick-expense-add-funding-source"
                 >
@@ -2321,7 +2320,7 @@ function ExpenseForm({
                   Add another funding source
                 </Button>
               ) : (
-                <p className="text-xs font-medium text-sky-800 dark:text-sky-200">
+                <p className="text-xs font-medium text-info">
                   Choose the payer and income source above. Only the bank portion reduces this account.
                 </p>
               )}
@@ -2748,7 +2747,6 @@ export default function Dashboard() {
           color: category.color || "hsl(var(--primary))",
         }))
     : [];
-  const workspaceAccentColor = DEFAULT_WORKSPACE_ACCENT;
   return (
     <div className="min-w-0 overflow-x-hidden space-y-6 pb-12 sm:space-y-8">
       <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/[0.06] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-primary">
@@ -2779,8 +2777,8 @@ export default function Dashboard() {
           aria-labelledby="dashboard-workspace-heading"
           className="w-full rounded-2xl border bg-card p-4 shadow-sm sm:max-w-sm"
           style={{
-            borderColor: `${workspaceAccentColor}80`,
-            background: `linear-gradient(135deg, ${workspaceAccentColor}20 0%, hsl(var(--card)) 62%)`,
+            borderColor: 'hsl(var(--primary) / 0.5)',
+            background: 'linear-gradient(135deg, hsl(var(--primary) / 0.12) 0%, hsl(var(--card)) 62%)',
           }}
         >
           <div className="flex items-start justify-between gap-3">
@@ -2788,7 +2786,7 @@ export default function Dashboard() {
               <p
                 id="dashboard-workspace-heading"
                 className="text-xs font-bold uppercase tracking-[0.15em]"
-                style={{ color: workspaceAccentColor }}
+                style={{ color: 'hsl(var(--primary))' }}
               >
                 Viewing workspace
               </p>
@@ -2802,9 +2800,9 @@ export default function Dashboard() {
               // Shared group was absent on a phone.
               className="inline-flex shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold"
               style={{
-                backgroundColor: `${workspaceAccentColor}20`,
-                borderColor: `${workspaceAccentColor}60`,
-                color: workspaceAccentColor,
+                backgroundColor: 'hsl(var(--primary) / 0.12)',
+                borderColor: 'hsl(var(--primary) / 0.4)',
+                color: 'hsl(var(--primary))',
               }}
             >
               {isSharedWorkspace ? "Shared" : "Personal"}
@@ -3191,8 +3189,8 @@ export default function Dashboard() {
           <CardContent className="p-4 sm:p-6">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
-                <div className="w-9 h-9 rounded-xl bg-sky-100 dark:bg-sky-900/40 flex items-center justify-center">
-                  <Building2 className="w-5 h-5 text-sky-600 dark:text-sky-400" />
+                <div className="w-9 h-9 rounded-xl bg-info/15 flex items-center justify-center">
+                  <Building2 className="w-5 h-5 text-info" />
                 </div>
                 <div>
                   <p className="font-semibold text-foreground">Bank accounts</p>
@@ -3204,7 +3202,7 @@ export default function Dashboard() {
             <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-3 sm:gap-4">
               <div className="space-y-0.5">
                 <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Balance</p>
-                <p className="whitespace-nowrap tabular-nums text-base min-[400px]:text-lg sm:text-2xl font-display font-bold text-sky-600 dark:text-sky-400">
+                <p className="whitespace-nowrap tabular-nums text-base min-[400px]:text-lg sm:text-2xl font-display font-bold text-info">
                   {bankAccount ? formatKes(bankAccount.balance) : "—"}
                 </p>
               </div>

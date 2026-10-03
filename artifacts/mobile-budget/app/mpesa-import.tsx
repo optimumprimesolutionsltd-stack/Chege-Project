@@ -2255,7 +2255,7 @@ export default function MpesaImportScreen() {
                 </Text>
                 <Pressable
                   onPress={pickStatement}
-                  style={[styles.secondary, { borderColor: colors.border, borderWidth: 1, borderRadius: 12 }]}
+                  style={[styles.secondary, { borderColor: colors.border, borderWidth: 1, borderRadius: 8 }]}
                   accessibilityRole="button"
                   testID="mpesa-statement-choose"
                 >
@@ -2598,7 +2598,7 @@ export default function MpesaImportScreen() {
                 {toNotSure.length > 0 && canManageBudget ? (
                   <Pressable
                     onPress={allUnderNotSure}
-                    style={[styles.secondary, { borderColor: colors.border, borderWidth: 1, borderRadius: 12, marginTop: 10 }]}
+                    style={[styles.secondary, { borderColor: colors.border, borderWidth: 1, borderRadius: 8, marginTop: 10 }]}
                     accessibilityRole="button"
                     testID="mpesa-review-all-not-sure"
                   >
@@ -2644,7 +2644,7 @@ export default function MpesaImportScreen() {
                     {toConfirm.length > 0 ? (
                       <Pressable
                         onPress={confirmFound}
-                        style={[styles.secondary, { borderColor: colors.primary, borderWidth: 1, borderRadius: 12 }]}
+                        style={[styles.secondary, { borderColor: colors.primary, borderWidth: 1, borderRadius: 8 }]}
                         accessibilityRole="button"
                         testID="mpesa-review-confirm-found"
                       >
@@ -2654,7 +2654,7 @@ export default function MpesaImportScreen() {
                     {toCategorise.length > 0 ? (
                       <Pressable
                         onPress={() => setPicking('bulk')}
-                        style={[styles.secondary, { borderColor: colors.border, borderWidth: 1, borderRadius: 12 }]}
+                        style={[styles.secondary, { borderColor: colors.border, borderWidth: 1, borderRadius: 8 }]}
                         accessibilityRole="button"
                         testID="mpesa-review-categorise-found"
                       >
@@ -2664,7 +2664,7 @@ export default function MpesaImportScreen() {
                     {toStream.length > 0 && incomeSources.length > 0 ? (
                       <Pressable
                         onPress={() => setStreamPickerOpen((open) => !open)}
-                        style={[styles.secondary, { borderColor: colors.border, borderWidth: 1, borderRadius: 12 }]}
+                        style={[styles.secondary, { borderColor: colors.border, borderWidth: 1, borderRadius: 8 }]}
                         accessibilityRole="button"
                         testID="mpesa-review-stream-found"
                       >
@@ -2689,7 +2689,7 @@ export default function MpesaImportScreen() {
                     {toSend.length > 0 && canManageBudget && otherManagedBudgets.length > 0 ? (
                       <Pressable
                         onPress={() => setSendFound((current) => (current ? null : { groupId: null, accountId: 0, category: '', incomeSourceId: null }))}
-                        style={[styles.secondary, { borderColor: colors.border, borderWidth: 1, borderRadius: 12 }]}
+                        style={[styles.secondary, { borderColor: colors.border, borderWidth: 1, borderRadius: 8 }]}
                         accessibilityRole="button"
                         testID="mpesa-review-send-found"
                       >
@@ -3251,7 +3251,7 @@ export default function MpesaImportScreen() {
             {inView.length > shownCount ? (
               <Pressable
                 onPress={() => setShownCount((count) => count + LINES_PER_PAGE)}
-                style={[styles.secondary, { borderColor: colors.border, borderWidth: 1, borderRadius: 12 }]}
+                style={[styles.secondary, { borderColor: colors.border, borderWidth: 1, borderRadius: 8 }]}
                 accessibilityRole="button"
                 testID="mpesa-show-more"
               >
@@ -3321,7 +3321,7 @@ export default function MpesaImportScreen() {
                 {notImported.length > shownSkipped ? (
                   <Pressable
                     onPress={() => setShownSkipped((count) => count + LINES_PER_PAGE)}
-                    style={[styles.secondary, { borderColor: colors.border, borderWidth: 1, borderRadius: 12 }]}
+                    style={[styles.secondary, { borderColor: colors.border, borderWidth: 1, borderRadius: 8 }]}
                     accessibilityRole="button"
                     testID="mpesa-show-more-skipped"
                   >
@@ -3712,21 +3712,21 @@ const styles = StyleSheet.create({
   title: { fontSize: 20, fontFamily: 'Inter_700Bold' },
   hint: { fontSize: 13, fontFamily: 'Inter_400Regular', marginTop: 2 },
   label: { fontSize: 12, fontFamily: 'Inter_600SemiBold', textTransform: 'uppercase', letterSpacing: 0.4 },
-  steps: { borderWidth: 1, borderRadius: 14, padding: 14, gap: 10 },
+  steps: { borderWidth: 1, borderRadius: 8, padding: 14, gap: 10 },
   step: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
   stepNumber: { fontSize: 16, fontFamily: 'Inter_700Bold', width: 18 },
   stepText: { flex: 1, fontSize: 14, fontFamily: 'Inter_400Regular' },
-  pasteBox: { minHeight: 170, borderWidth: 1, borderRadius: 14, padding: 12, fontSize: 14, fontFamily: 'Inter_400Regular' },
-  primary: { height: 50, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  pasteBox: { minHeight: 170, borderWidth: 1, borderRadius: 8, padding: 12, fontSize: 14, fontFamily: 'Inter_400Regular' },
+  primary: { height: 50, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   primaryText: { color: '#fff', fontSize: 16, fontFamily: 'Inter_700Bold' },
   secondary: { alignItems: 'center', paddingVertical: 12 },
-  card: { borderWidth: 1, borderRadius: 14, padding: 12, gap: 8 },
+  card: { borderWidth: 1, borderRadius: 8, padding: 12, gap: 8 },
   summaryLine: { fontSize: 16, fontFamily: 'Inter_700Bold' },
   lineTop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   lineTitle: { fontSize: 15, fontFamily: 'Inter_600SemiBold' },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   amount: { fontSize: 16, fontFamily: 'Inter_700Bold' },
-  categoryButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 },
+  categoryButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderRadius: 6, paddingHorizontal: 12, paddingVertical: 10 },
   footer: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth },
   sheetBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' },
   sheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, borderWidth: 1, paddingBottom: 24 },

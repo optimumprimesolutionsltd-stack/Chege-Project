@@ -1,118 +1,123 @@
 /**
  * Jamvi brand tokens shared with the web app styles.
  *
- * Logo palette: navy #011C4E, royal blue #003383, turquoise #08B7B0,
- * bright green #3CDD62, and gold #FDBB0A. Keep status roles separate so
- * success, warning, and destructive states stay immediately understandable.
+ * The mat (matches jamvi.co.ke and the web app): jade #0D4A43, jade mid
+ * #14776A, clay #B24A24 / #D9663B, sisal gold #E9B949, ink #0B1F2A on a
+ * paper ground #FBF7EC. Keep status roles separate so success, warning, and
+ * destructive states stay immediately understandable.
+ *
+ * The brand* names are kept so existing styles keep working; they now hold
+ * the mat colours.
  */
 
 const colors = {
   light: {
     // Legacy aliases
-    text: '#06224F',
-    tint: '#011C4E',
+    text: '#0B1F2A',
+    tint: '#0D4A43',
 
     // Surfaces
-    background: '#F5F8FC',
-    foreground: '#06224F',
+    background: '#FBF7EC',
+    foreground: '#0B1F2A',
 
     // Cards
-    card: '#FFFFFF',
-    cardForeground: '#06224F',
+    card: '#FEFCF6',
+    cardForeground: '#0B1F2A',
 
-    // Primary — Jamvi navy
-    primary: '#011C4E',
-    primaryForeground: '#ffffff',
+    // Primary — jade
+    primary: '#0D4A43',
+    primaryForeground: '#FBF7EC',
 
-    // Secondary — Jamvi gold
-    secondary: '#FDBB0A',
-    secondaryForeground: '#011C4E',
+    // Secondary — sisal gold
+    secondary: '#E9B949',
+    secondaryForeground: '#0B1F2A',
 
     // Muted
-    muted: '#E7EFF8',
-    mutedForeground: '#4D6687',
+    muted: '#F1EBDB',
+    mutedForeground: '#4A5E63',
 
-    // Accent — turquoise tint
-    accent: '#E1F6F4',
-    accentForeground: '#0B6A69',
+    // Accent — warm gold tint
+    accent: '#F6EDD3',
+    accentForeground: '#0D4A43',
 
     // Destructive
-    destructive: '#d92626',
+    destructive: '#C42323',
     destructiveForeground: '#ffffff',
-    success: '#209E45',
+    success: '#277A45',
     successForeground: '#ffffff',
-    warning: '#C98C00',
-    warningForeground: '#011C4E',
-    info: '#003383',
+    warning: '#B26A0E',
+    warningForeground: '#ffffff',
+    info: '#14776A',
     infoForeground: '#ffffff',
 
     // Logo and focus
-    brandNavy: '#011C4E',
-    brandBlue: '#003383',
-    brandTeal: '#08B7B0',
-    brandGreen: '#3CDD62',
-    brandGold: '#FDBB0A',
-    logoSurface: '#E7EFFB',
-    focus: '#08B7B0',
+    brandNavy: '#0B1F2A',
+    brandBlue: '#14776A',
+    brandTeal: '#14776A',
+    brandGreen: '#2E9150',
+    brandGold: '#E9B949',
+    logoSurface: '#FBF7EC',
+    focus: '#14776A',
 
     // Borders / inputs
-    border: '#D7E3F1',
-    input: '#C3D3E8',
-    dropdownBackground: '#FFFFFF',
-    dropdownForeground: '#06224F',
-    dropdownMutedForeground: '#4D6687',
-    dropdownBorder: '#D7E3F1',
+    border: '#E2D8BF',
+    input: '#D3C6A6',
+    dropdownBackground: '#FEFCF6',
+    dropdownForeground: '#0B1F2A',
+    dropdownMutedForeground: '#4A5E63',
+    dropdownBorder: '#E2D8BF',
   },
 
+  // "Jamvi night"
   dark: {
-    text: '#F4F8FF',
-    tint: '#2D70C8',
+    text: '#FBF7EC',
+    tint: '#E9B949',
 
-    background: '#040F29',
-    foreground: '#F4F8FF',
+    background: '#0A1A1C',
+    foreground: '#FBF7EC',
 
-    card: '#091A3D',
-    cardForeground: '#F4F8FF',
+    card: '#102527',
+    cardForeground: '#FBF7EC',
 
-    primary: '#2D70C8',
-    primaryForeground: '#ffffff',
+    primary: '#E9B949',
+    primaryForeground: '#0B1F2A',
 
-    secondary: '#FDBB0A',
-    secondaryForeground: '#011C4E',
+    secondary: '#E9B949',
+    secondaryForeground: '#0B1F2A',
 
-    muted: '#10274F',
-    mutedForeground: '#A5B9D4',
+    muted: '#16302F',
+    mutedForeground: '#C2BBA8',
 
-    accent: '#124A4B',
-    accentForeground: '#9BE5DF',
+    accent: '#1B3634',
+    accentForeground: '#E9B949',
 
-    destructive: '#e53e3e',
+    destructive: '#E05252',
     destructiveForeground: '#ffffff',
-    success: '#3CDD62',
-    successForeground: '#040F29',
-    warning: '#FDBB0A',
-    warningForeground: '#011C4E',
-    info: '#6C9FE6',
-    infoForeground: '#040F29',
+    success: '#5CC77F',
+    successForeground: '#0A1A1C',
+    warning: '#EEB04A',
+    warningForeground: '#0A1A1C',
+    info: '#5FC2B2',
+    infoForeground: '#0A1A1C',
 
-    brandNavy: '#011C4E',
-    brandBlue: '#003383',
-    brandTeal: '#08B7B0',
-    brandGreen: '#3CDD62',
-    brandGold: '#FDBB0A',
-    logoSurface: '#E7EFFB',
-    focus: '#2DD4CC',
+    brandNavy: '#0B1F2A',
+    brandBlue: '#14776A',
+    brandTeal: '#5FC2B2',
+    brandGreen: '#5CC77F',
+    brandGold: '#E9B949',
+    logoSurface: '#FBF7EC',
+    focus: '#E9B949',
 
-    border: '#1D3B67',
-    input: '#28517E',
-    dropdownBackground: '#091A3D',
-    dropdownForeground: '#F4F8FF',
-    dropdownMutedForeground: '#A5B9D4',
-    dropdownBorder: '#1D3B67',
+    border: '#24413F',
+    input: '#335654',
+    dropdownBackground: '#102527',
+    dropdownForeground: '#FBF7EC',
+    dropdownMutedForeground: '#C2BBA8',
+    dropdownBorder: '#24413F',
   },
 
-  // 0.75rem = 12px — matches web app's --radius: 0.75rem
-  radius: 12,
+  // 6px, matching the web app's --radius: 0.375rem.
+  radius: 6,
 };
 
 export default colors;

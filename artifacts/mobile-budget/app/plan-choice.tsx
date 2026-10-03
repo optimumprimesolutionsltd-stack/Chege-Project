@@ -86,7 +86,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 28, fontFamily: 'Inter_700Bold', marginTop: 6 },
   body: { fontSize: 15, lineHeight: 23, fontFamily: 'Inter_400Regular', marginTop: 14 },
   actions: { marginTop: 'auto', gap: 12 },
-  btn: { flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center', minHeight: 52, borderRadius: 14, paddingHorizontal: 16 },
+  btn: { flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center', minHeight: 52, borderRadius: 8, paddingHorizontal: 16 },
   btnOutline: { borderWidth: 1.5 },
   btnText: { fontSize: 16, fontFamily: 'Inter_700Bold' },
 });

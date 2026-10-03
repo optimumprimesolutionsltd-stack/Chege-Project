@@ -1103,7 +1103,7 @@ export default function GoalsScreen() {
         </LinearGradient>
 
         {inconsistentGoals.length > 0 ? (
-          <View style={{ marginHorizontal: 16, marginTop: 14, borderWidth: 1, borderColor: '#f59e0b55', backgroundColor: '#f59e0b18', borderRadius: 12, padding: 12, gap: 4 }} testID="goals-balance-mismatch">
+          <View style={{ marginHorizontal: 16, marginTop: 14, borderWidth: 1, borderColor: '#f59e0b55', backgroundColor: '#f59e0b18', borderRadius: 8, padding: 12, gap: 4 }} testID="goals-balance-mismatch">
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <Feather name="alert-triangle" size={15} color="#d97706" />
               <Text style={{ color: '#d97706', fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>
@@ -1157,7 +1157,7 @@ export default function GoalsScreen() {
                         alignItems: 'center',
                         gap: 6,
                         backgroundColor: '#1a3320',
-                        borderRadius: 20,
+                        borderRadius: 12,
                         paddingHorizontal: 12,
                         paddingVertical: 6,
                         opacity: pressed ? 0.7 : 1,
@@ -1207,7 +1207,7 @@ export default function GoalsScreen() {
                       </View>
 
                       {isFunded && (
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#1a3320', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 4 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#1a3320', borderRadius: 6, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 4 }}>
                           <Feather name="check-circle" size={14} color="#4ade80" />
                           <Text style={{ color: '#4ade80', fontSize: 13, fontWeight: '600' }}>Fully funded · Contributions locked</Text>
                         </View>
@@ -1453,7 +1453,7 @@ export default function GoalsScreen() {
                             onPress={selectContribJoint}
                             style={{
                               flexDirection: 'row', alignItems: 'center', gap: 6,
-                              paddingHorizontal: 14, paddingVertical: 9, borderRadius: 10, borderWidth: 1,
+                              paddingHorizontal: 14, paddingVertical: 9, borderRadius: 6, borderWidth: 1,
                               backgroundColor: validContribPayerIds.length === 0 ? '#1a3320' : colors.muted,
                               borderColor: validContribPayerIds.length === 0 ? '#4ade80' : colors.border,
                             }}
@@ -1484,7 +1484,7 @@ export default function GoalsScreen() {
                                 onPress={() => toggleContribPayer(m.userId)}
                                 style={{
                                   flexDirection: 'row', alignItems: 'center', gap: 6,
-                                  paddingHorizontal: 14, paddingVertical: 9, borderRadius: 10, borderWidth: 1,
+                                  paddingHorizontal: 14, paddingVertical: 9, borderRadius: 6, borderWidth: 1,
                                   backgroundColor: sel ? colors.primary + '22' : colors.muted,
                                   borderColor: sel ? colors.primary : colors.border,
                                 }}
@@ -1520,7 +1520,7 @@ export default function GoalsScreen() {
                                     </View>
                                     <TextInput
                                       style={{
-                                        flex: 1, height: 44, borderRadius: 10, borderWidth: 1,
+                                        flex: 1, height: 44, borderRadius: 6, borderWidth: 1,
                                         borderColor: colors.border, backgroundColor: colors.muted,
                                         paddingHorizontal: 12, fontSize: 16, color: colors.foreground,
                                         fontFamily: 'Inter_400Regular',
@@ -1701,7 +1701,7 @@ export default function GoalsScreen() {
                                 onPress={() => { setCascadePayerIds([]); setCascadePayerAmounts({}); }}
                                 style={{
                                   flexDirection: 'row', alignItems: 'center', gap: 6,
-                                  paddingHorizontal: 14, paddingVertical: 9, borderRadius: 10, borderWidth: 1,
+                                  paddingHorizontal: 14, paddingVertical: 9, borderRadius: 6, borderWidth: 1,
                                   backgroundColor: validCascadePayerIds.length === 0 ? '#1a3320' : colors.muted,
                                   borderColor: validCascadePayerIds.length === 0 ? '#4ade80' : colors.border,
                                 }}
@@ -1736,7 +1736,7 @@ export default function GoalsScreen() {
                                     }
                                     style={{
                                       flexDirection: 'row', alignItems: 'center', gap: 6,
-                                      paddingHorizontal: 14, paddingVertical: 9, borderRadius: 10, borderWidth: 1,
+                                      paddingHorizontal: 14, paddingVertical: 9, borderRadius: 6, borderWidth: 1,
                                       backgroundColor: sel ? colors.primary + '22' : colors.muted,
                                       borderColor: sel ? colors.primary : colors.border,
                                     }}
@@ -1772,7 +1772,7 @@ export default function GoalsScreen() {
                                         </View>
                                         <TextInput
                                           style={{
-                                            flex: 1, height: 44, borderRadius: 10, borderWidth: 1,
+                                            flex: 1, height: 44, borderRadius: 6, borderWidth: 1,
                                             borderColor: colors.border, backgroundColor: colors.muted,
                                             paddingHorizontal: 12, fontSize: 16, color: colors.foreground,
                                             fontFamily: 'Inter_400Regular',
@@ -2365,7 +2365,7 @@ export default function GoalsScreen() {
                         backgroundColor: '#fef3c7',
                         borderColor: '#d97706',
                         borderWidth: 1,
-                        borderRadius: 12,
+                        borderRadius: 8,
                         padding: 14,
                         marginBottom: 8,
                         gap: 8,
@@ -2500,7 +2500,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#4ade80',
     paddingHorizontal: 14,
     paddingVertical: 8,
-    borderRadius: 20,
+    borderRadius: 12,
   },
   newGoalBtnText: {
     fontSize: 13,
@@ -2511,7 +2511,7 @@ const styles = StyleSheet.create({
   headerStats: {
     flexDirection: 'row',
     backgroundColor: 'rgba(255,255,255,0.07)',
-    borderRadius: 16,
+    borderRadius: 10,
     paddingVertical: 14,
   },
   headerStat: { flex: 1, alignItems: 'center' },
@@ -2538,7 +2538,7 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   card: {
-    borderRadius: 16,
+    borderRadius: 10,
     borderWidth: 1,
     padding: 16,
     marginBottom: 12,
@@ -2547,7 +2547,7 @@ const styles = StyleSheet.create({
   iconCircle: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
@@ -2598,7 +2598,7 @@ const styles = StyleSheet.create({
     gap: 5,
     paddingHorizontal: 12,
     paddingVertical: 7,
-    borderRadius: 12,
+    borderRadius: 8,
     flexShrink: 0,
   },
   contributeBtnText: {
@@ -2612,7 +2612,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     padding: 12,
-    borderRadius: 12,
+    borderRadius: 8,
     borderWidth: 1,
     marginBottom: 8,
   },
@@ -2626,13 +2626,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     padding: 12,
-    borderRadius: 12,
+    borderRadius: 8,
     borderWidth: 1,
     marginBottom: 8,
   },
   cascadePreview: {
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: 8,
     padding: 12,
     marginBottom: 20,
   },
@@ -2693,7 +2693,7 @@ const styles = StyleSheet.create({
   modalSaveBtn: {
     paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: 10,
+    borderRadius: 6,
     minWidth: 68,
     alignItems: 'center',
   },
@@ -2730,7 +2730,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    borderRadius: 12,
+    borderRadius: 8,
     marginTop: 4,
   },
   goalPillText: {
@@ -2773,7 +2773,7 @@ const styles = StyleSheet.create({
   pickerHandle: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginTop: 12, marginBottom: 4 },
   pickerTitle: { fontSize: 16, fontWeight: '700' as const, fontFamily: 'Inter_700Bold', textAlign: 'center', paddingVertical: 12 },
   pickerList: { flexGrow: 0 },
-  pickerItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24, paddingVertical: 14, borderRadius: 12, marginHorizontal: 12, marginVertical: 1 },
+  pickerItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24, paddingVertical: 14, borderRadius: 8, marginHorizontal: 12, marginVertical: 1 },
   pickerItemText: { fontSize: 16, fontFamily: 'Inter_500Medium' },
   filterBar: {
     flexDirection: 'column',
@@ -2792,7 +2792,7 @@ const styles = StyleSheet.create({
   },
   chip: {
     borderWidth: 1,
-    borderRadius: 20,
+    borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 6,
   },

@@ -145,7 +145,7 @@ export function WorkspaceSetupGuide() {
 }
 
 const styles = StyleSheet.create({
-  card: { marginTop: 16, borderWidth: 1, borderRadius: 16, padding: 16 },
+  card: { marginTop: 16, borderWidth: 1, borderRadius: 10, padding: 16 },
   header: { flexDirection: 'row', alignItems: 'center' },
   icon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
   headerCopy: { flex: 1 }, eyebrow: { fontSize: 11, fontFamily: 'Inter_700Bold', letterSpacing: .7 }, title: { fontSize: 17, fontFamily: 'Inter_700Bold', marginTop: 2 },
@@ -155,6 +155,6 @@ const styles = StyleSheet.create({
   track: { height: 7, borderRadius: 4, overflow: 'hidden', marginTop: 7 }, fill: { height: '100%', borderRadius: 4 },
   support: { fontSize: 13, lineHeight: 19, fontFamily: 'Inter_400Regular', marginTop: 12 }, stepLabel: { fontSize: 10, fontFamily: 'Inter_700Bold', letterSpacing: .6, marginTop: 12 }, step: { fontSize: 15, fontFamily: 'Inter_600SemiBold', marginTop: 3 },
   actions: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 14 }, back: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 10 }, backText: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
-  primary: { flexDirection: 'row', alignItems: 'center', gap: 7, borderRadius: 9, paddingHorizontal: 13, paddingVertical: 11 }, primaryText: { fontSize: 14, fontFamily: 'Inter_700Bold' },
+  primary: { flexDirection: 'row', alignItems: 'center', gap: 7, borderRadius: 6, paddingHorizontal: 13, paddingVertical: 11 }, primaryText: { fontSize: 14, fontFamily: 'Inter_700Bold' },
   skip: { alignSelf: 'flex-end', marginTop: 7, paddingVertical: 5 }, skipText: { fontSize: 12, fontFamily: 'Inter_500Medium' },
 });

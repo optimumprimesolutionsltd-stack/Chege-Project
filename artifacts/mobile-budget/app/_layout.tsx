@@ -16,13 +16,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
-import {
-  Inter_400Regular,
-  Inter_500Medium,
-  Inter_600SemiBold,
-  Inter_700Bold,
-  useFonts,
-} from '@expo-google-fonts/inter';
+import { useFonts } from 'expo-font';
 import { Stack, router, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -477,11 +471,16 @@ function RootLayoutNav() {
 
 export default function RootLayout() {
   const { updateNotes, dismiss } = useUpdatePrompt();
+  // The redesign's faces, loaded under the family names every screen already
+  // uses, so the whole app changes typeface without touching each style:
+  // Atkinson Hyperlegible for reading text (it holds up on cheap screens) and
+  // Bricolage Grotesque for the bold weight, which carries titles and figures.
+  // Bundled assets, so this ships as an over-the-air update.
   const [fontsLoaded, fontError] = useFonts({
-    Inter_400Regular,
-    Inter_500Medium,
-    Inter_600SemiBold,
-    Inter_700Bold,
+    Inter_400Regular: require('../assets/fonts/AtkinsonHyperlegible_400Regular.ttf'),
+    Inter_500Medium: require('../assets/fonts/AtkinsonHyperlegible_400Regular.ttf'),
+    Inter_600SemiBold: require('../assets/fonts/AtkinsonHyperlegible_700Bold.ttf'),
+    Inter_700Bold: require('../assets/fonts/BricolageGrotesque_700Bold.ttf'),
   });
 
   // Restore the last query results before the first screen mounts so it can

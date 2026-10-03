@@ -20,7 +20,7 @@ const EXPENSE_TIERS = [
   },
   {
     tier: 4, label: "Connectivity & Care",
-    bar: "bg-brand-teal", badge: "bg-brand-teal/10 text-[#087F8C] dark:text-brand-teal",
+    bar: "bg-brand-teal", badge: "bg-brand-teal/10 text-[#14776A] dark:text-brand-teal",
     categories: ["Wifi/data", "Grooming"],
   },
   {
@@ -2221,7 +2221,7 @@ export default function Expenses() {
                    form.setPaidById("");
                 }
               }}
-              className={`col-span-2 h-12 rounded-xl border text-base font-semibold transition-colors ${form.paidFromBank ? "bg-sky-50 text-sky-700 border-sky-300 dark:bg-sky-950 dark:text-sky-300 dark:border-sky-700" : "bg-card border-input text-foreground hover:bg-muted/40"}`}
+              className={`col-span-2 h-12 rounded-xl border text-base font-semibold transition-colors ${form.paidFromBank ? "bg-info/10 text-info border-info/40" : "bg-card border-input text-foreground hover:bg-muted/40"}`}
             >
               🏦 Bank account
             </button>
@@ -2362,7 +2362,7 @@ export default function Expenses() {
              </div>
            )}
           {form.paidFromBank && (
-            <div className="rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-700 dark:bg-sky-950 dark:text-sky-300">
+            <div className="rounded-lg bg-info/10 px-3 py-2 text-xs text-info">
               <p>
                 {allowMixedFunding
                   ? "Only the bank portion reduces the selected bank-account balance."

@@ -117,7 +117,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 9,
-    borderRadius: 10,
+    borderRadius: 6,
     borderWidth: 1,
   },
   calcKeyText: {

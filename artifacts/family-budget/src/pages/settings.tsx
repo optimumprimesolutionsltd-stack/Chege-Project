@@ -820,7 +820,7 @@ export default function Settings() {
                   : "border-border bg-card text-foreground hover:bg-muted"
               }`}
             >
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-700 bg-[#06183c] text-brand-gold shadow-sm">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-sidebar-border bg-sidebar text-brand-gold shadow-sm">
                 <Moon className="h-5 w-5" aria-hidden="true" />
               </span>
               <span>

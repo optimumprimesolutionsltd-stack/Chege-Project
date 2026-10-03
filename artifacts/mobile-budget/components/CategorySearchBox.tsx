@@ -29,7 +29,7 @@ export function CategorySearchBox({
         marginBottom: 4,
         paddingHorizontal: 10,
         borderWidth: 1,
-        borderRadius: 10,
+        borderRadius: 6,
         borderColor: colors.border,
         backgroundColor: colors.muted,
       }}

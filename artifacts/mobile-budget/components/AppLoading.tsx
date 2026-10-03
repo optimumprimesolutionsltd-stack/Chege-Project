@@ -2,8 +2,8 @@ import React from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { BrandLogo } from '@/components/BrandLogo';
 
-const NAVY = '#011C4E';
-const GOLD = '#FDBB0A';
+const NAVY = '#0B1F2A';
+const GOLD = '#E9B949';
 
 /**
  * The screen shown while the app is still working out where to send you.

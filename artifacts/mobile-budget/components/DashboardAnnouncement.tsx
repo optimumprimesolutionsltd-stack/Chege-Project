@@ -67,7 +67,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 10,
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 14,
+    borderRadius: 8,
     padding: 12,
     marginHorizontal: 16,
     marginTop: 14,

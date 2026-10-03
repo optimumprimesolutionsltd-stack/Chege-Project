@@ -71,9 +71,9 @@ export function BankAccountPicker({
 }
 
 const styles = StyleSheet.create({
-  field: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: 44, borderWidth: StyleSheet.hairlineWidth, borderRadius: 10, paddingHorizontal: 12 },
+  field: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: 44, borderWidth: StyleSheet.hairlineWidth, borderRadius: 6, paddingHorizontal: 12 },
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', padding: 24 },
-  sheet: { borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, padding: 16, gap: 4 },
+  sheet: { borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, padding: 16, gap: 4 },
   label: { fontSize: 13, fontFamily: 'Inter_600SemiBold', marginBottom: 4 },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth },
 });

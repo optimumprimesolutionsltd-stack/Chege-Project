@@ -457,7 +457,7 @@ export function MerryGoRound({ canManage = false }: { canManage?: boolean }) {
 }
 
 const styles = StyleSheet.create({
-  card: { borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, padding: 16, gap: 10 },
+  card: { borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, padding: 16, gap: 10 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
   headerText: { flex: 1, gap: 3 },
   headingRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
@@ -472,7 +472,7 @@ const styles = StyleSheet.create({
     gap: 7,
     alignSelf: 'flex-start',
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 10,
+    borderRadius: 6,
     paddingHorizontal: 12,
     height: 40,
   },
@@ -480,7 +480,7 @@ const styles = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   chip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4 },
   chipText: { fontSize: 11, fontFamily: 'Inter_500Medium' },
-  form: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, padding: 12, gap: 8 },
+  form: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 8, padding: 12, gap: 8 },
   accountRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   accountChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, minHeight: 36, justifyContent: 'center' },
   label: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
@@ -490,7 +490,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: 1,
-    borderRadius: 9,
+    borderRadius: 6,
     paddingHorizontal: 10,
     minHeight: 38,
   },
@@ -500,7 +500,7 @@ const styles = StyleSheet.create({
   input: {
     height: 40,
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 9,
+    borderRadius: 6,
     paddingHorizontal: 10,
     fontSize: 14,
   },
@@ -516,7 +516,7 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 16,
     height: 40,
-    borderRadius: 10,
+    borderRadius: 6,
   },
   recordBtnText: { fontSize: 13, fontFamily: 'Inter_700Bold' },
   payoutRow: {
