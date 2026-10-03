@@ -25,6 +25,8 @@ import { fetchDebtLinks, offerDebtReversal } from "@/lib/debt-reversal";
 import type { DebtEntryLink } from "@/lib/debt-links";
 import { Repeat, Trash2, Pencil, ArrowDownLeft, ArrowUpRight, Loader2, Landmark, TrendingUp, TrendingDown, Plus, Flag, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useUndoableDelete } from "@/hooks/use-undoable-delete";
+import { deletedLabel } from "@/lib/undo-delete";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@workspace/replit-auth-web";
 import { canManageBankAccount, resolveBankAccountSelection } from "@/lib/bank-access";
@@ -136,8 +138,14 @@ export default function Bank() {
   const [periodFrom, setPeriodFrom] = useState("");
   const [periodTo, setPeriodTo] = useState("");
   const { data: accounts = [], isLoading: accountsLoading } = useGetJointAccounts();
-  const { data: account, isLoading } = useGetJointAccount(
+  const { data: rawAccount, isLoading } = useGetJointAccount(
     selectedAccountId ? { accountId: selectedAccountId } : undefined,
+  );
+  // Deleting waits a few seconds for Undo; one waiting is already out of the list.
+  const undoable = useUndoableDelete();
+  const account = useMemo(
+    () => (rawAccount ? { ...rawAccount, transactions: (rawAccount.transactions ?? []).filter((tx) => !undoable.isHidden(`tx:${tx.id}`)) } : rawAccount),
+    [rawAccount, undoable.isHidden],
   );
   // A period narrows the list and the figures to those dates. "All time"
   // leaves the account exactly as the server reports it.
@@ -1223,6 +1231,9 @@ export default function Bank() {
     if (!confirm(deletesExpense
       ? `Delete this expense from "${budgetName}"? Its bank funding transaction will also be removed.`
       : `Delete this transaction from "${budgetName}"?`)) return;
+    undoable.schedule(`tx:${tx.id}`, deletedLabel(tx.description, tx.amount), () => deleteNow(tx, deletesExpense));
+  };
+  const deleteNow = async (tx: EditableTransaction, deletesExpense: boolean) => {
     try {
       const links = await fetchDebtLinks([tx.id]);
       if (deletesExpense) {
@@ -1230,7 +1241,6 @@ export default function Bank() {
       } else {
         await deleteTx.mutateAsync({ id: tx.id });
       }
-      toast({ title: deletesExpense ? "Expense deleted" : "Transaction deleted" });
       invalidate();
       void offerDebtReversal([{ id: tx.id, type: tx.type, amount: tx.amount, expenseCategory: tx.expenseCategory }], links, queryClient);
     } catch (error: unknown) {

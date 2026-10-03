@@ -15,7 +15,7 @@ describe('the Expenses tab shows spending that went through a bank account', () 
   });
 
   it('merges them into one list', () => {
-    expect(history).toContain('() => [...(handEntered as Expense[]), ...(bankSpending as unknown as Expense[])],');
+    expect(history).toContain('() => [...(handEntered as Expense[]), ...(bankSpending as unknown as Expense[])]');
   });
 
   it('takes only what is spending', () => {

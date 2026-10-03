@@ -21,6 +21,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
+import { UndoDeleteBar, useUndoableDelete } from '@/components/UndoDeleteBar';
+import { deletedLabel } from '@/lib/undoDelete';
 import { useListEditor } from '@/hooks/useListEditor';
 import { ListEditButton, ListEditorFooter, RemoveRowButton } from '@/components/ListEditor';
 import { PageFlatList } from '@/components/PageScrollReset';
@@ -220,9 +222,12 @@ export default function HistoryScreen() {
       }));
   }, [bankAccount, month, year]);
 
+  // Deleting waits a few seconds for Undo (components/UndoDeleteBar).
+  const undoable = useUndoableDelete();
   const expenses = useMemo(
-    () => [...(handEntered as Expense[]), ...(bankSpending as unknown as Expense[])],
-    [handEntered, bankSpending],
+    // A delete waiting for Undo is already out of the list.
+    () => [...(handEntered as Expense[]), ...(bankSpending as unknown as Expense[])].filter((exp) => !undoable.isHidden(`exp:${exp.id}`)),
+    [handEntered, bankSpending, undoable.isHidden],
   );
   const prevMonthNum = month === 1 ? 12 : month - 1;
   const prevYearNum = month === 1 ? year - 1 : year;
@@ -620,7 +625,7 @@ export default function HistoryScreen() {
     Alert.alert('Delete expense', `Delete "${exp.description}" from "${workspaceBudgetName(group)}"?`, [
       { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Delete', style: 'destructive', onPress: async () => {
+        text: 'Delete', style: 'destructive', onPress: () => undoable.schedule(`exp:${exp.id}`, deletedLabel(exp.description, exp.amount), async () => {
           try {
             await deleteExpense.mutateAsync({ id: exp.id });
             queryClient.invalidateQueries({ queryKey: getGetExpensesQueryKey({ month, year }) });
@@ -629,7 +634,7 @@ export default function HistoryScreen() {
           } catch {
             Alert.alert('Error', 'Could not delete expense.');
           }
-        },
+        }),
       },
     ]);
   };
@@ -1526,6 +1531,7 @@ export default function HistoryScreen() {
           </KeyboardAvoidingView>
         </View>
       </Modal>
+      <UndoDeleteBar pending={undoable.pending} onUndo={undoable.undo} />
     </View>
   );
 }
