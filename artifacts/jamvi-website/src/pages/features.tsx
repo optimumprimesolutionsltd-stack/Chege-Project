@@ -49,19 +49,19 @@ export default function Features() {
   ];
 
   return (
-    <div className="flex flex-col min-h-screen bg-white">
+    <div className="flex flex-col min-h-screen bg-background">
       {/* Header */}
       <section className="pt-24 pb-16 bg-muted/30 border-b border-border">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-6xl text-center">
           <motion.h1 
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0.85, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             className="text-4xl md:text-5xl lg:text-6xl font-bold text-primary mb-6 font-serif"
           >
             Everything you need,<br />nothing you don't.
           </motion.h1>
           <motion.p 
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0.85, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
             className="text-lg md:text-xl text-foreground/70 max-w-2xl mx-auto leading-relaxed"
@@ -78,16 +78,14 @@ export default function Features() {
             {features.map((feat, index) => (
               <motion.div 
                 key={index}
-                initial={{ opacity: 0, y: 20 }}
+                initial={{ opacity: 0.85, y: 12 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: index * 0.1 }}
-                className="p-8 rounded-3xl bg-white border border-border hover:shadow-xl hover:border-secondary/30 transition-all group"
+                className="border-t-4 border-primary pt-5"
               >
-                <div className="w-14 h-14 rounded-2xl bg-secondary/10 text-secondary flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                  <feat.icon className="w-7 h-7" />
-                </div>
-                <h3 className="text-xl font-bold text-primary mb-3">{feat.title}</h3>
+                <feat.icon className="w-7 h-7 text-secondary mb-4" aria-hidden="true" />
+                <h3 className="text-2xl font-bold mb-3">{feat.title}</h3>
                 <p className="text-foreground/70 leading-relaxed">
                   {feat.desc}
                 </p>
@@ -98,24 +96,23 @@ export default function Features() {
       </section>
 
       {/* Deep Dive Section */}
-      <section className="py-24 bg-primary text-white overflow-hidden relative">
-        <div className="absolute top-0 right-0 w-1/2 h-full bg-secondary/20 blur-[100px] rounded-full pointer-events-none"></div>
+      <section className="py-24 bg-primary text-primary-foreground overflow-hidden relative">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-6xl relative z-10">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
             <div className="order-2 lg:order-1">
-              <div className="bg-white/10 backdrop-blur-md p-8 rounded-[2.5rem] border border-white/20">
+              <div className="p-2">
                 <div className="space-y-6">
                   {[
                     { title: "Personal Finances", items: ["Track individual spending", "Set personal monthly budgets", "Review category breakdowns"] },
                     { title: "Chama & Group Funds", items: ["Invite members via link", "Track individual contributions", "Assign expenses to members", "Maintain a transparent audit log"] }
                   ].map((block, i) => (
-                    <div key={i} className="bg-primary/40 rounded-2xl p-6">
+                    <div key={i} className="border-l-4 border-accent pl-6 py-1">
                       <h4 className="font-serif text-xl font-bold mb-4 text-accent">{block.title}</h4>
                       <ul className="space-y-3">
                         {block.items.map((item, j) => (
                           <li key={j} className="flex items-start gap-3">
-                            <CheckCircle className="w-5 h-5 text-secondary flex-shrink-0 mt-0.5" />
-                            <span className="font-medium text-white/90">{item}</span>
+                            <CheckCircle className="w-5 h-5 text-accent flex-shrink-0 mt-0.5" />
+                            <span className="font-medium text-primary-foreground/90">{item}</span>
                           </li>
                         ))}
                       </ul>
@@ -127,11 +124,11 @@ export default function Features() {
             
             <div className="order-1 lg:order-2">
               <h2 className="text-3xl md:text-4xl font-bold mb-6 font-serif">One platform. Two modes.</h2>
-              <p className="text-lg text-white/80 mb-8 leading-relaxed">
+              <p className="text-lg text-primary-foreground/80 mb-8 leading-relaxed">
                 Jamvi recognizes that the way you manage your own money is fundamentally different from how you manage a group's money. 
                 That's why we built tailored experiences for both, seamlessly integrated into one app.
               </p>
-              <a href={JAMVI_APP_PATH} className="inline-flex items-center justify-center h-14 px-8 rounded-full bg-accent text-accent-foreground font-bold hover:bg-accent/90 transition-transform hover:scale-105 active:scale-95">
+              <a href={JAMVI_APP_PATH} className="btn-mat h-14 px-8 text-base !bg-accent !text-accent-foreground">
                 Experience it now
               </a>
             </div>

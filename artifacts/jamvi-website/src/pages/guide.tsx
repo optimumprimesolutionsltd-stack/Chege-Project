@@ -24,10 +24,10 @@ export function GuidePage({ guide }: { guide: Guide }) {
   });
 
   return (
-    <div className="flex flex-col bg-white">
+    <div className="flex flex-col bg-background">
       <article className="mx-auto w-full max-w-3xl px-4 pt-16 pb-8 sm:px-6 lg:px-8">
         <motion.div
-          initial={{ opacity: 0, y: 12 }}
+          initial={{ opacity: 0.85, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}
         >
@@ -57,12 +57,12 @@ export function GuidePage({ guide }: { guide: Guide }) {
           ))}
         </div>
 
-        <div className="my-12 rounded-3xl border border-secondary/20 bg-secondary/10 p-8">
+        <div className="my-12 rounded-[4px] border border-secondary/20 bg-secondary/10 p-8">
           <h2 className="mb-3 mt-0 text-xl font-bold text-secondary">The short version</h2>
           <p className="m-0 font-medium leading-relaxed text-foreground">{guide.takeaway}</p>
         </div>
 
-        <div className="rounded-3xl border border-border/60 bg-muted/40 p-8">
+        <div className="rounded-[4px] border border-border/60 bg-muted/40 p-8">
           <p className="mb-2 text-sm font-bold uppercase tracking-widest text-primary/60">
             Where Jamvi helps
           </p>
@@ -71,13 +71,13 @@ export function GuidePage({ guide }: { guide: Guide }) {
           <div className="flex flex-col gap-3 sm:flex-row">
             <Link
               href={guide.related.slug}
-              className="inline-flex h-12 items-center justify-center rounded-full bg-primary px-6 text-sm font-bold text-white transition-colors hover:bg-primary/90"
+              className="btn-mat h-12 px-6 text-sm"
             >
               {guide.related.label} <ArrowRight className="ml-2 h-4 w-4" />
             </Link>
             <a
               href={JAMVI_APP_PATH}
-              className="inline-flex h-12 items-center justify-center rounded-full border border-border bg-white px-6 text-sm font-bold text-primary transition-colors hover:bg-muted"
+              className="btn-line h-12 px-6 text-sm"
             >
               Start free for {TRIAL_DAYS} days
             </a>
@@ -93,7 +93,7 @@ export function GuidePage({ guide }: { guide: Guide }) {
               <li key={other.slug}>
                 <Link
                   href={other.slug}
-                  className="group flex items-start gap-3 rounded-2xl border border-border bg-white p-4 transition-colors hover:bg-white/60"
+                  className="group flex items-start gap-3 rounded-[4px] border border-border bg-card p-4 transition-colors hover:bg-white/60"
                 >
                   <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-secondary transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
                   <span>

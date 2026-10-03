@@ -6,19 +6,19 @@ export default function About() {
   useSeo(SITE_SEO["/about"]);
 
   return (
-    <div className="flex flex-col min-h-screen bg-white">
+    <div className="flex flex-col min-h-screen bg-background">
       {/* Hero */}
       <section className="pt-24 pb-16 bg-primary text-primary-foreground">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-4xl text-center">
           <motion.h1 
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0.85, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6 font-serif text-white"
+            className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6 font-serif text-primary-foreground"
           >
             The story of the mat.
           </motion.h1>
           <motion.p 
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0.85, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
             className="text-lg md:text-xl text-primary-foreground/80 leading-relaxed"
@@ -57,7 +57,7 @@ export default function About() {
               We rely on chaotic WhatsApp groups where receipts get lost in the chat. We use fragile Excel spreadsheets that only the treasurer understands. This lack of clarity breeds suspicion, delays progress, and ultimately breaks down the very trust that these groups rely on.
             </p>
             
-            <div className="my-12 p-8 bg-secondary/10 rounded-3xl border border-secondary/20">
+            <div className="my-12 p-8 bg-secondary/10 rounded-[4px] border border-secondary/20">
               <h3 className="text-2xl font-bold text-secondary mb-4 mt-0">Our Mission</h3>
               <p className="text-foreground font-medium m-0 leading-relaxed">
                 To build the digital mat where individuals and groups can manage money with absolute clarity, absolute warmth, and unbreakable trust.

@@ -1,4 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&display=swap');
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @plugin "@tailwindcss/typography";
@@ -68,63 +67,67 @@
   --elevate-1: rgba(0, 0, 0, 0.03);
   --elevate-2: rgba(0, 0, 0, 0.08);
 
-  /* Primary: Navy #172B63 */
-  --primary: 224 62% 24%;
-  --primary-foreground: 0 0% 100%;
-  
-  /* Secondary: Teal #1B9A8A */
-  --secondary: 172 70% 35%;
+  /* The mat. Jamvi's palette is a woven sisal mat: jade and clay strips on
+     a natural ground, with gold from the logo. Deliberately not the navy +
+     single-green SaaS palette the other sites use. */
+  --jade: 173 70% 17%;        /* #0D4A43 */
+  --jade-mid: 172 71% 27%;    /* #14776A */
+  --clay: 16 66% 42%;         /* #B24A24 – text-safe on paper */
+  --clay-bright: 16 68% 54%;  /* #D9663B – fills and shadows only */
+  --sisal: 42 79% 60%;        /* #E9B949 */
+  --ink: 201 58% 10%;         /* #0B1F2A */
+  --paper: 44 64% 95%;        /* #FBF7EC */
+
+  --primary: var(--jade);
+  --primary-foreground: var(--paper);
+
+  --secondary: var(--clay);
   --secondary-foreground: 0 0% 100%;
-  
-  /* Accent: Amber #E4A72C */
-  --accent: 40 77% 53%;
-  --accent-foreground: 224 62% 24%;
 
-  /* Background & Foreground */
-  --background: 0 0% 100%;
-  --foreground: 224 62% 24%;
+  --accent: var(--sisal);
+  --accent-foreground: var(--ink);
 
-  /* Cards & Popovers */
-  --card: 0 0% 100%;
-  --card-foreground: 224 62% 24%;
-  --card-border: 224 20% 92%;
+  --background: var(--paper);
+  --foreground: var(--ink);
 
-  --popover: 0 0% 100%;
-  --popover-foreground: 224 62% 24%;
-  --popover-border: 224 20% 92%;
+  --card: 45 70% 98%;
+  --card-foreground: var(--ink);
+  --card-border: 43 36% 83%;
 
-  /* Muted & Borders */
-  --muted: 224 20% 96%;
-  --muted-foreground: 224 30% 45%;
-  --border: 224 20% 90%;
-  --input: 224 20% 90%;
-  --ring: 172 70% 35%;
+  --popover: 45 70% 98%;
+  --popover-foreground: var(--ink);
+  --popover-border: 43 36% 83%;
 
-  /* Destructive */
-  --destructive: 0 84% 60%;
+  --muted: 44 46% 90%;
+  --muted-foreground: 190 14% 34%;
+  --border: 43 36% 80%;
+  --input: 43 36% 78%;
+  --ring: var(--jade-mid);
+
+  --destructive: 0 72% 46%;
   --destructive-foreground: 0 0% 100%;
 
-  /* Sidebar */
-  --sidebar: 224 62% 24%;
-  --sidebar-foreground: 0 0% 100%;
-  --sidebar-border: 224 50% 30%;
-  --sidebar-primary: 172 70% 35%;
-  --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 224 50% 30%;
-  --sidebar-accent-foreground: 0 0% 100%;
-  --sidebar-ring: 172 70% 35%;
+  --sidebar: var(--jade);
+  --sidebar-foreground: var(--paper);
+  --sidebar-border: 173 50% 24%;
+  --sidebar-primary: var(--sisal);
+  --sidebar-primary-foreground: var(--ink);
+  --sidebar-accent: 173 50% 24%;
+  --sidebar-accent-foreground: var(--paper);
+  --sidebar-ring: var(--sisal);
 
-  /* Fonts */
-  --app-font-sans: 'Plus Jakarta Sans', sans-serif;
-  --app-font-serif: 'Fraunces', serif;
-  --app-font-mono: 'Menlo', monospace;
-  
-  --radius: 1rem;
+  /* Fonts. "serif" is the display role (every heading uses it); it is a
+     grotesque now, kept under the old name so the shadcn tokens still map. */
+  --app-font-sans: 'Atkinson Hyperlegible', system-ui, sans-serif;
+  --app-font-serif: 'Bricolage Grotesque', 'Arial Narrow', sans-serif;
+  --app-font-mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
 
-  --shadow-sm: 0 1px 2px 0 rgb(23 43 99 / 0.05);
-  --shadow: 0 4px 6px -1px rgb(23 43 99 / 0.1), 0 2px 4px -2px rgb(23 43 99 / 0.1);
-  --shadow-md: 0 10px 15px -3px rgb(23 43 99 / 0.1), 0 4px 6px -4px rgb(23 43 99 / 0.1);
-  --shadow-lg: 0 20px 25px -5px rgb(23 43 99 / 0.1), 0 8px 10px -6px rgb(23 43 99 / 0.1);
+  --radius: 0.375rem;
+
+  --shadow-sm: 2px 2px 0 rgb(11 31 42 / 0.08);
+  --shadow: 3px 3px 0 rgb(11 31 42 / 0.10);
+  --shadow-md: 4px 4px 0 rgb(11 31 42 / 0.12);
+  --shadow-lg: 6px 6px 0 rgb(11 31 42 / 0.14);
 
   /* Fallback borders */
   --sidebar-primary-border: hsl(from hsl(var(--sidebar-primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
@@ -137,27 +140,25 @@
 }
 
 .dark {
-  /* Enforce light mode strictly since Jamvi website should primarily be light mode and warm.
-     If a user forces dark mode, we provide a reasonable fallback but prefer light. */
-  --background: 224 62% 10%;
-  --foreground: 0 0% 98%;
-  --primary: 172 70% 35%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 40 77% 53%;
-  --secondary-foreground: 224 62% 10%;
-  --accent: 40 77% 53%;
-  --accent-foreground: 224 62% 10%;
-  --muted: 224 40% 16%;
-  --muted-foreground: 224 20% 65%;
-  --border: 224 40% 20%;
-  --input: 224 40% 20%;
-  --ring: 172 70% 35%;
-  --card: 224 50% 14%;
-  --card-foreground: 0 0% 98%;
-  --card-border: 224 40% 20%;
-  --popover: 224 50% 14%;
-  --popover-foreground: 0 0% 98%;
-  --popover-border: 224 40% 20%;
+  --background: 190 45% 8%;
+  --foreground: var(--paper);
+  --primary: var(--sisal);
+  --primary-foreground: var(--ink);
+  --secondary: var(--clay-bright);
+  --secondary-foreground: var(--ink);
+  --accent: var(--sisal);
+  --accent-foreground: var(--ink);
+  --muted: 185 35% 13%;
+  --muted-foreground: 44 20% 70%;
+  --border: 180 30% 20%;
+  --input: 180 30% 20%;
+  --ring: var(--sisal);
+  --card: 186 40% 11%;
+  --card-foreground: var(--paper);
+  --card-border: 180 30% 20%;
+  --popover: 186 40% 11%;
+  --popover-foreground: var(--paper);
+  --popover-border: 180 30% 20%;
 }
 
 @layer base {
@@ -178,6 +179,61 @@
      home page. Body carries text-foreground, so ordinary headings are
      unchanged. */
   h1, h2, h3, h4, h5, h6 {
-    @apply font-serif tracking-tight;
+    @apply font-serif;
+    letter-spacing: -0.025em;
+    text-wrap: balance;
   }
+  h1 {
+    font-variation-settings: "opsz" 96;
+    letter-spacing: -0.035em;
+  }
+}
+
+@layer components {
+  /* The one button shape on the site: square-cornered with a hard offset
+     shadow, like a strip laid over the mat. No pills. */
+  .btn-mat {
+    @apply inline-flex items-center justify-center gap-2 font-bold rounded-[3px] bg-primary text-primary-foreground outline-none transition-[transform,box-shadow] duration-150;
+    box-shadow: 5px 5px 0 hsl(var(--sisal));
+  }
+  .btn-mat:hover { transform: translate(-1px, -1px); box-shadow: 6px 6px 0 hsl(var(--sisal)); }
+  .btn-mat:active { transform: translate(3px, 3px); box-shadow: 2px 2px 0 hsl(var(--sisal)); }
+  .btn-mat-sm { box-shadow: 3px 3px 0 hsl(var(--sisal)); }
+  .btn-mat-sm:hover { box-shadow: 4px 4px 0 hsl(var(--sisal)); }
+  .btn-mat:focus-visible { outline: 3px solid hsl(var(--clay-bright)); outline-offset: 3px; }
+
+  .btn-line {
+    @apply inline-flex items-center justify-center gap-2 font-bold rounded-[3px] border-2 border-primary text-primary bg-transparent outline-none transition-colors hover:bg-primary hover:text-primary-foreground;
+  }
+  .btn-line:focus-visible { outline: 3px solid hsl(var(--clay-bright)); outline-offset: 3px; }
+
+  /* Woven strip: the mat itself, used as a band between sections. */
+  .weave {
+    height: 18px;
+    background: repeating-linear-gradient(90deg,
+      hsl(var(--jade)) 0 28px, hsl(var(--sisal)) 28px 56px,
+      hsl(var(--clay-bright)) 56px 70px, hsl(var(--jade-mid)) 70px 98px,
+      hsl(var(--paper)) 98px 104px);
+  }
+  .weave-thin {
+    height: 8px;
+    background: repeating-linear-gradient(90deg,
+      hsl(var(--sisal)) 0 14px, hsl(var(--jade)) 14px 42px);
+  }
+
+  /* Highlighter stroke behind a phrase. */
+  .hl {
+    background: linear-gradient(transparent 60%, hsl(var(--sisal)) 60% 92%, transparent 92%);
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+  }
+
+  /* Small mono label used above headings: real words, not a pill. */
+  .kicker {
+    @apply font-mono text-sm font-semibold text-secondary;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn-mat, .btn-mat:hover, .btn-mat:active { transition: none; transform: none; }
 }

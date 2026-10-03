@@ -1,368 +1,295 @@
 import { useSeo } from "@/hooks/use-seo";
 import { SITE_SEO } from "@/lib/site-seo";
-import { motion, useReducedMotion, type Variants } from "framer-motion";
-import { ArrowRight, CheckCircle2, FileText, Lock, Users, Wallet, Target, Upload, ListChecks } from "lucide-react";
+import { ArrowRight, ArrowDown, Lock } from "lucide-react";
 import { Link } from "wouter";
 import { JAMVI_APP_PATH } from "@/lib/site-links";
 import { SEGMENTS } from "@/lib/segments";
 import { JAMVI_PACKAGE, TRIAL_DAYS } from "@workspace/jamvi-pricing";
 
+/*
+ * The home page is built around the product's one trick, shown rather than
+ * described: an M-Pesa message going in, a sorted budget line coming out.
+ * Names and amounts are made up, and every example says so.
+ */
+
+const SAMPLE_BUDGET = [
+  { name: "Groceries", detail: "Sample supermarket · 9 entries", spent: 8450, budget: 12000 },
+  { name: "Fare", detail: "Matatu and rides · 22 entries", spent: 4900, budget: 4500 },
+  { name: "Chama contribution", detail: "Shared with your group", spent: 3000, budget: 3000 },
+];
+
+const fmt = (n: number) => n.toLocaleString("en-KE");
+
 export default function Home() {
-  const shouldReduceMotion = useReducedMotion();
   const price = JAMVI_PACKAGE.monthlyPriceKes;
 
   useSeo(SITE_SEO["/"]);
 
-  const fadeUp: Variants = {
-    hidden: { opacity: 0.84, y: 8 },
-    visible: { opacity: 1, y: 0, transition: { duration: 0.28, ease: "easeOut" } }
-  };
-
-  const staggerContainer: Variants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: { staggerChildren: shouldReduceMotion ? 0 : 0.06 }
-    }
-  };
-
   return (
-    <div className="flex flex-col min-h-screen">
-      {/* Hero Section */}
-      <section className="relative pt-20 pb-32 overflow-hidden bg-white">
-        <div className="absolute inset-0 z-0 bg-[radial-gradient(circle_at_top_right,var(--color-muted),transparent_50%)] opacity-50"></div>
-        <div className="absolute top-20 -left-20 w-64 h-64 bg-secondary/10 rounded-full blur-2xl opacity-60"></div>
-        <div className="absolute bottom-10 right-10 w-80 h-80 bg-accent/10 rounded-full blur-2xl opacity-60"></div>
-        
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-6xl relative z-10">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-8 items-center">
-            <motion.div 
-              initial={shouldReduceMotion ? false : "hidden"}
-              animate="visible"
-              variants={staggerContainer}
-              className="max-w-2xl"
-            >
-              <motion.div variants={fadeUp} className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-secondary/10 text-secondary text-sm font-semibold mb-6 border border-secondary/20">
-                <span className="w-2 h-2 rounded-full bg-secondary"></span>
-                 KES {price} a month. Free for your first {TRIAL_DAYS} days.
-              </motion.div>
-              <motion.h1 variants={fadeUp} className="text-5xl sm:text-6xl lg:text-7xl font-bold leading-[1.1] mb-6 text-primary">
-                 Your M-Pesa month, <br/><span className="text-secondary">sorted in minutes.</span>
-              </motion.h1>
-              <motion.p variants={fadeUp} className="text-lg sm:text-xl text-foreground/70 mb-8 leading-relaxed max-w-lg">
-                 Import your M-Pesa statement, or paste your messages, and Jamvi fills in
-                 your budget for you: who you paid, what it was for, what came in. No more
-                 typing it all in. Then share it with your partner, your family or your
-                 chama, at no extra cost.
-              </motion.p>
-              <motion.div variants={fadeUp} className="flex flex-col sm:flex-row gap-4">
-                <a href={JAMVI_APP_PATH} className="inline-flex items-center justify-center h-14 px-8 rounded-full bg-primary text-white text-base font-bold hover:bg-primary/90 transition-transform hover:scale-105 active:scale-95 shadow-lg">
-                  Get started for free <ArrowRight className="ml-2 h-5 w-5" />
+    <div className="flex flex-col">
+      {/* Hero */}
+      <section className="relative">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-6xl pt-14 pb-20 lg:pt-20 lg:pb-24">
+          <div className="grid grid-cols-1 lg:grid-cols-[1.05fr_1fr] gap-14 lg:gap-12 items-center">
+            <div className="min-w-0">
+              <p className="kicker mb-5">Pesa wazi · money, in the open</p>
+              <h1 className="text-[2.75rem] leading-[0.95] sm:text-6xl lg:text-[5.25rem] font-extrabold text-foreground">
+                Paste your <span className="whitespace-nowrap">M-Pesa.</span> <span className="hl">See where it went.</span>
+              </h1>
+              <p className="mt-7 text-lg sm:text-xl leading-relaxed text-foreground/75 max-w-[34rem]">
+                Jamvi fills in your budget from your M-Pesa: who you paid, what it was for,
+                what came in. On Android the app reads your M-Pesa messages if you allow it.
+                Anywhere else, import your statement or paste the messages in.
+              </p>
+              <div className="mt-9 flex flex-wrap items-center gap-x-7 gap-y-4">
+                <a href={JAMVI_APP_PATH} className="btn-mat h-14 px-7 text-base">
+                  Try {TRIAL_DAYS} days free <ArrowRight className="h-5 w-5" />
                 </a>
-                <Link href="/pricing" className="inline-flex items-center justify-center h-14 px-8 rounded-full bg-white text-primary text-base font-bold hover:bg-muted border border-border transition-colors">
-                  See simple pricing
+                <Link href="/guides/how-jamvi-reads-mpesa" className="font-bold text-primary underline decoration-accent decoration-[3px] underline-offset-[6px] hover:decoration-primary">
+                  How it reads your M-Pesa
                 </Link>
-              </motion.div>
-              
-              <motion.p variants={fadeUp} className="mt-10 text-sm font-medium text-foreground/60">
-                Your statement is read on your phone and never uploaded. Built in Nairobi, for how Kenyans actually manage money.
-              </motion.p>
-            </motion.div>
-            
-            <motion.div 
-              initial={shouldReduceMotion ? false : { opacity: 0.94, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: shouldReduceMotion ? 0 : 0.45, delay: shouldReduceMotion ? 0 : 0.1 }}
-              className="relative lg:h-[600px] flex items-center justify-center"
-            >
-              {/* Abstract decorative graphic representing the "mat" (Jamvi) and connection */}
-              {/* Taller than a square on purpose: the card is absolutely positioned
-                  inside this box, so the box gives it height, and the progress bar
-                  and rows do not fit a square. */}
-              <div className="relative w-full max-w-md aspect-[4/5]">
-                <div className="absolute inset-0 bg-primary rounded-[3rem] rotate-6 opacity-5 shadow-2xl"></div>
-                <div className="absolute inset-0 bg-secondary rounded-[3rem] -rotate-3 opacity-10 shadow-xl"></div>
-                <div className="absolute inset-0 bg-white rounded-[2.5rem] border border-border shadow-2xl overflow-hidden flex flex-col p-6">
-
-                  {/*
-                    The product's best trick, shown rather than described: a
-                    statement becoming a sorted month. The names and amounts are
-                    made up, and the card says so.
-                  */}
-                  <div className="flex items-start justify-between mb-5">
-                    <div>
-                      <div className="text-xs font-bold text-foreground/50 uppercase tracking-wider mb-2">
-                        Example · Your statement
-                      </div>
-                      <div className="text-3xl font-serif font-bold text-primary leading-none">
-                        194 entries read
-                      </div>
-                      <div className="text-sm font-medium text-foreground/60 mt-1">
-                        sorted into categories, ready to check
-                      </div>
-                    </div>
-                    <div className="w-12 h-12 shrink-0 rounded-full bg-accent/20 flex items-center justify-center text-accent-foreground">
-                      <FileText className="w-6 h-6" />
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    {[
-                      { who: "Sample Employer", tag: "Salary", amount: "+ KES 45,000", incoming: true },
-                      { who: "Sample Landlord", tag: "Rent", amount: "- KES 15,000", incoming: false },
-                      { who: "Sample Grocer", tag: "Groceries", amount: "- KES 1,250", incoming: false },
-                      { who: "Airtime", tag: "Data and airtime", amount: "- KES 100", incoming: false },
-                    ].map((item, i) => (
-                      <div key={i} className="flex items-center justify-between p-3 rounded-2xl bg-muted/50">
-                        <div>
-                          <div className="font-bold text-foreground">{item.who}</div>
-                          <div className="mt-1 inline-block rounded-full bg-secondary/10 px-2 py-0.5 text-xs font-semibold text-secondary">
-                            {item.tag}
-                          </div>
-                        </div>
-                        <span className={`font-bold ${item.incoming ? "text-secondary" : "text-foreground"}`}>
-                          {item.amount}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="mt-auto pt-6">
-                    <div className="flex items-center justify-center gap-2 rounded-xl bg-secondary/10 py-3 text-sm font-bold text-secondary">
-                      <CheckCircle2 className="w-5 h-5" /> Matches your statement
-                    </div>
-                  </div>
-
-                </div>
               </div>
-            </motion.div>
+              <p className="mt-6 text-sm text-muted-foreground">
+                KES {price} a month after the trial. Groups cost nothing extra.{" "}
+                <Link href="/download" className="font-bold text-primary underline underline-offset-2">Get the Android app</Link>
+              </p>
+            </div>
+
+            {/* The demo. */}
+            <div className="min-w-0 w-full max-w-md lg:justify-self-end" aria-label="Example: an M-Pesa message becoming a budget line">
+              <div className="rounded-[18px_18px_18px_4px] bg-[hsl(90_8%_89%)] px-4 py-3.5 max-w-[22rem] shadow-sm">
+                <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-muted-foreground mb-1">M-PESA · example message</p>
+                <p className="font-mono text-[13px] leading-relaxed text-foreground">
+                  SJK4T2LQ8P Confirmed. Ksh1,250.00 paid to SAMPLE SUPERMARKET on 2/10/26 at 6:41 PM.
+                  New M-PESA balance is Ksh8,310.00.
+                </p>
+              </div>
+
+              <p className="font-mono text-sm font-semibold text-secondary flex items-center gap-2 my-4 pl-4">
+                <ArrowDown className="h-4 w-4" /> Jamvi sorts it
+              </p>
+
+              <div className="bg-primary text-primary-foreground rounded-[4px] px-5 pt-5 pb-3" style={{ boxShadow: "8px 8px 0 hsl(var(--clay-bright))" }}>
+                <p className="font-mono text-xs font-semibold tracking-wider text-accent mb-2">OCTOBER · SAMPLE BUDGET</p>
+                {SAMPLE_BUDGET.map((row) => {
+                  const over = row.spent > row.budget;
+                  return (
+                    <div key={row.name} className="grid grid-cols-[1fr_auto] gap-x-3 py-3 border-t border-dashed border-accent/35">
+                      <div className="min-w-0">
+                        <p className="font-serif text-[17px] font-semibold leading-tight">{row.name}</p>
+                        <p className="text-xs text-primary-foreground/65 mt-0.5">{row.detail}</p>
+                      </div>
+                      <p className="font-mono text-sm font-semibold tabular-nums text-right whitespace-nowrap">
+                        {fmt(row.spent)} <span className="text-primary-foreground/50">/ {fmt(row.budget)}</span>
+                      </p>
+                      <div className="col-span-2 mt-2 h-1.5 bg-primary-foreground/15">
+                        <div
+                          className={over ? "h-full bg-[hsl(var(--clay-bright))]" : "h-full bg-accent"}
+                          style={{ width: `${Math.min(100, (row.spent / row.budget) * 100)}%` }}
+                        />
+                      </div>
+                      {over && <p className="col-span-2 mt-1.5 text-xs font-bold text-[hsl(var(--clay-bright))] brightness-125">KES {fmt(row.spent - row.budget)} over</p>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* The headline feature, in three steps. */}
-      <section id="mpesa-import" className="py-24 bg-primary text-primary-foreground">
+      <div className="weave" aria-hidden="true" />
+
+      {/* The headline feature, in its real three steps. */}
+      <section id="mpesa-import" className="bg-primary text-primary-foreground py-20 lg:py-24">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-6xl">
-          <div className="text-center max-w-3xl mx-auto mb-14">
-            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-5 font-serif">Stop typing your M-Pesa in.</h2>
-            <p className="text-lg text-primary-foreground/80 leading-relaxed">
+          <div className="max-w-2xl">
+            <h2 className="text-4xl md:text-5xl lg:text-6xl font-extrabold leading-[0.98]">Stop typing your M-Pesa in.</h2>
+            <p className="mt-5 text-lg text-primary-foreground/80 leading-relaxed">
               Every payment is already in your M-Pesa. Jamvi reads it for you, so a whole
               month of budgeting takes minutes instead of an evening.
             </p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+          <ol className="mt-14 grid grid-cols-1 md:grid-cols-3 gap-y-10 md:gap-x-10">
             {[
               {
-                icon: Upload,
                 title: "Bring your M-Pesa",
-                desc: "Choose your M-Pesa statement PDF, or select your M-Pesa messages and paste them in. Do as much or as little as you like.",
+                desc: "On Android, let the Jamvi app read your M-Pesa messages. Android asks you first. Or choose your statement PDF, or paste messages in. Do as much or as little as you like.",
               },
               {
-                icon: ListChecks,
                 title: "Check what Jamvi read",
                 desc: "Every payment arrives with who it went to, a suggested category and Fuliza handled properly. You change what is wrong, and Jamvi remembers for next time.",
               },
               {
-                icon: CheckCircle2,
                 title: "Save, and it adds up",
                 desc: "Save some now and the rest another day. Jamvi checks the result against your statement's own balance, so you know nothing was missed.",
               },
             ].map((step, i) => (
-              <div key={i} className="p-8 rounded-3xl bg-white/10 border border-white/15">
-                <div className="w-14 h-14 rounded-2xl bg-accent/20 text-accent flex items-center justify-center mb-6">
-                  <step.icon className="w-7 h-7" />
-                </div>
-                <h3 className="text-xl font-bold mb-3">{i + 1}. {step.title}</h3>
-                <p className="text-primary-foreground/80 leading-relaxed">{step.desc}</p>
-              </div>
+              <li key={step.title} className="border-t-4 border-accent pt-5">
+                <span className="font-mono text-sm font-semibold text-accent">Step {i + 1}</span>
+                <h3 className="mt-2 text-2xl font-bold">{step.title}</h3>
+                <p className="mt-3 text-primary-foreground/80 leading-relaxed">{step.desc}</p>
+              </li>
             ))}
-          </div>
-          <p className="mt-8 text-center">
-            <Link href="/guides/how-jamvi-reads-mpesa" className="text-accent font-bold hover:underline inline-flex items-center">
-              How Jamvi reads your M-Pesa without guessing <ArrowRight className="ml-1 w-4 h-4" />
-            </Link>
-          </p>
-          <p className="mt-6 flex items-start justify-center gap-2 text-center text-sm font-medium text-primary-foreground/80 max-w-3xl mx-auto">
-            <Lock className="w-4 h-4 mt-0.5 flex-shrink-0" />
+          </ol>
+
+          <p className="mt-14 flex items-start gap-3 text-sm text-primary-foreground/80 max-w-3xl">
+            <Lock className="w-4 h-4 mt-0.5 flex-shrink-0 text-accent" />
             <span>
               Your statement and its password are read on your own phone or computer and are never uploaded.
-              Messages you paste are read to fill in the list and are not kept. Jamvi records; it never moves your money.
+              Messages are read to fill in the list and are not kept, and nothing is saved until you have checked it.
+              Jamvi records; it never moves your money.
             </span>
           </p>
         </div>
       </section>
 
-      {/* Trust Badges */}
-      <section className="py-10 border-y border-border bg-muted/30">
-        <div className="container mx-auto px-4 max-w-6xl">
-          <p className="text-center text-sm font-bold text-foreground/50 uppercase tracking-widest mb-6">Designed for the way we actually manage money</p>
-          <div className="flex flex-wrap justify-center gap-8 md:gap-16 text-foreground/70 font-serif font-medium text-lg lg:text-xl">
-            <span>Transparent</span>
-            <span className="text-accent">•</span>
-            <span>Secure</span>
-            <span className="text-accent">•</span>
-            <span>Local</span>
-            <span className="text-accent">•</span>
-            <span>Collaborative</span>
-          </div>
-        </div>
-      </section>
-
-      {/* Features Outline */}
-      <section id="how-it-works" className="py-24 bg-white">
+      {/* Alone or together: the range is the point. */}
+      <section id="how-it-works" className="py-20 lg:py-28">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-6xl">
-          <div className="text-center max-w-3xl mx-auto mb-16">
-            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-primary mb-6">Money shouldn't be a solo journey.</h2>
-            <p className="text-lg text-foreground/70 leading-relaxed">
-              We built Jamvi because managing money in Kenya is inherently social. Whether you are budgeting for yourself, splitting bills with a partner, or running a large chama, you need a tool that speaks your language.
-            </p>
-          </div>
+          <h2 className="text-4xl md:text-5xl lg:text-6xl font-extrabold leading-[0.98] max-w-3xl">
+            On your own, or <span className="hl">around the mat</span> with everyone.
+          </h2>
+          <p className="mt-5 text-lg text-foreground/75 leading-relaxed max-w-2xl">
+            A jamvi is the mat people sit on together. Jamvi keeps your own budget and every
+            group you belong to in one place, with one price for you.
+          </p>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {[
-              {
-                icon: Wallet,
-                title: "Your own money, clear",
-                desc: "Track what comes in, organise what goes out, set your own goals. See exactly where your KES went this month — no group required.",
-                color: "text-primary",
-                bg: "bg-primary/10"
-              },
-              {
-                icon: Users,
-                title: "Shared, without the arguments",
-                desc: "A budget the two of you, the four of you, or the whole chama can see. The same history for everyone, so nobody has to remember who paid what.",
-                color: "text-secondary",
-                bg: "bg-secondary/10"
-              },
-              {
-                icon: Target,
-                title: "Saving towards something",
-                desc: "A deposit, a trip, a plot. Set the target once and watch it fill as people add to it, with everyone seeing how far there is to go.",
-                color: "text-accent",
-                bg: "bg-accent/10"
-              }
-            ].map((feature, i) => (
-              <div key={i} className="p-8 rounded-3xl bg-muted/40 border border-border/50 hover:bg-muted transition-colors">
-                <div className={`w-14 h-14 rounded-2xl ${feature.bg} ${feature.color} flex items-center justify-center mb-6`}>
-                  <feature.icon className="w-7 h-7" />
-                </div>
-                <h3 className="text-xl font-bold text-primary mb-3">{feature.title}</h3>
-                <p className="text-foreground/70 leading-relaxed">
-                  {feature.desc}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Detail Section */}
-      <section className="py-24 bg-primary text-primary-foreground overflow-hidden">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-6xl">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
-            <div>
-              <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-6 font-serif">No more spreadsheet headaches.</h2>
-              <p className="text-lg text-primary-foreground/80 mb-8 leading-relaxed">
-                Keeping track of who paid what shouldn't require an accounting degree. Jamvi replaces messy WhatsApp groups and fragile spreadsheets with a clean, beautifully simple history.
+          <div className="mt-14 grid grid-cols-1 md:grid-cols-2 border-2 border-foreground">
+            <div className="p-7 sm:p-10">
+              <p className="kicker">Peke yako · on your own</p>
+              <h3 className="mt-3 text-3xl font-bold">Your own money, clear</h3>
+              <p className="mt-4 text-foreground/75 leading-relaxed">
+                Track what comes in, organise what goes out, set your own goals. See exactly
+                where your KES went this month. No group required.
               </p>
-              <ul className="space-y-4">
+              <ul className="mt-6 space-y-2 font-mono text-sm">
+                <li>+ Monthly budget by category</li>
+                <li>+ Goals: a deposit, a trip, a plot</li>
+                <li>+ M-Pesa messages, statements or a paste</li>
+              </ul>
+            </div>
+            <div className="p-7 sm:p-10 bg-accent border-t-2 md:border-t-0 md:border-l-2 border-foreground">
+              <p className="font-mono text-sm font-semibold text-foreground">Pamoja · together</p>
+              <h3 className="mt-3 text-3xl font-bold">Shared, without the arguments</h3>
+              <p className="mt-4 text-foreground/80 leading-relaxed">
+                A budget the two of you, the four of you, or the whole chama can see. The same
+                history for everyone, so nobody has to remember who paid what.
+              </p>
+              <ul className="mt-6 space-y-2 font-mono text-sm">
+                <li>+ Who paid, and who still owes</li>
+                <li>+ Notes on every adjustment</li>
+                <li>+ Groups of any size cost nothing extra</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* The shared record, as a ledger. */}
+      <section className="pb-20 lg:pb-28">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-6xl">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-14 items-center">
+            <div className="min-w-0 order-2 lg:order-1">
+              <div className="bg-card border-2 border-foreground rounded-[4px]" style={{ boxShadow: "8px 8px 0 hsl(var(--jade))" }}>
+                <div className="flex items-baseline justify-between gap-3 px-5 py-4 border-b-2 border-foreground">
+                  <p className="font-serif text-xl font-bold">Household · September</p>
+                  <p className="font-mono text-xs text-muted-foreground">Example</p>
+                </div>
                 {[
-                  "Clear chronological history of every transaction",
-                  "Assign payers to expenses instantly",
-                  "Leave explanatory notes on adjustments",
-                  "Keep your records available across your devices"
-                ].map((item, i) => (
-                  <li key={i} className="flex items-start gap-3">
-                    <CheckCircle2 className="w-6 h-6 text-accent flex-shrink-0" />
-                    <span className="text-primary-foreground/90 font-medium">{item}</span>
+                  { who: "N", text: "Nanjala added her share of rent", note: "Sent this morning", amount: "+ 5,000", inn: true },
+                  { who: "O", text: "Groceries", note: "Paid by Otieno, split four ways", amount: "− 2,400", inn: false },
+                  { who: "W", text: "Electricity tokens", note: "Paid by Wanjiru", amount: "− 1,500", inn: false },
+                ].map((row) => (
+                  <div key={row.text} className="flex items-center gap-4 px-5 py-4 border-b border-dashed border-border last:border-b-0">
+                    <span className="w-9 h-9 shrink-0 grid place-items-center bg-primary text-primary-foreground font-serif font-bold rounded-[3px]">{row.who}</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-bold leading-snug">{row.text}</p>
+                      <p className="text-sm text-muted-foreground">{row.note}</p>
+                    </div>
+                    <p className={`font-mono text-sm font-semibold tabular-nums whitespace-nowrap ${row.inn ? "text-primary" : "text-foreground"}`}>{row.amount}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="min-w-0 order-1 lg:order-2">
+              <h2 className="text-4xl md:text-5xl font-extrabold leading-[0.98]">One record everybody trusts.</h2>
+              <p className="mt-5 text-lg text-foreground/75 leading-relaxed">
+                Jamvi replaces the WhatsApp thread and the spreadsheet with one history the
+                whole group reads the same way.
+              </p>
+              <ul className="mt-7 space-y-3">
+                {[
+                  "Every transaction in date order",
+                  "Who paid, assigned in one tap",
+                  "Notes that explain each adjustment",
+                  "The same records on every device",
+                ].map((item) => (
+                  <li key={item} className="flex gap-3 items-baseline">
+                    <span className="w-2.5 h-2.5 shrink-0 bg-secondary translate-y-[-1px]" aria-hidden="true" />
+                    <span>{item}</span>
                   </li>
                 ))}
               </ul>
-              <div className="mt-10">
-                <Link href="/features" className="text-accent font-bold hover:underline inline-flex items-center">
-                  Explore all features <ArrowRight className="ml-1 w-4 h-4" />
-                </Link>
-              </div>
-            </div>
-            
-            <div className="relative">
-              <div className="absolute inset-0 bg-secondary blur-3xl opacity-20 rounded-full"></div>
-              <div className="bg-white text-foreground p-8 rounded-[2.5rem] shadow-2xl relative">
-                <div className="flex items-center justify-between border-b border-border pb-4 mb-4">
-                  <h3 className="font-bold font-serif text-xl">Recent Activity</h3>
-                  <span className="text-sm font-bold text-secondary">September</span>
-                </div>
-                <div className="space-y-5">
-                  <div className="flex gap-4">
-                    <div className="w-12 h-12 rounded-full bg-accent/20 flex items-center justify-center text-accent-foreground font-bold flex-shrink-0">N</div>
-                    <div>
-                      <p className="font-bold">Nanjala added her share of rent</p>
-                      <p className="text-sm text-foreground/60">"Sent this morning"</p>
-                      <p className="text-secondary font-bold mt-1">KES 5,000</p>
-                    </div>
-                  </div>
-                  <div className="flex gap-4">
-                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold flex-shrink-0">G</div>
-                    <div>
-                      <p className="font-bold">Groceries</p>
-                      <p className="text-sm text-foreground/60">Paid by Otieno, split four ways</p>
-                      <p className="text-primary font-bold mt-1">KES 2,400</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Who this is actually for.
-          Every audience page is linked from here, which is both how a reader
-          finds the one that describes them and how a crawler reaching the home
-          page finds the rest of the site. */}
-      <section className="py-24 bg-muted/30 border-t border-border">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-6xl">
-          <div className="text-center max-w-2xl mx-auto mb-14">
-            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-primary mb-6">Whatever you are keeping money for.</h2>
-            <p className="text-lg text-foreground/70 leading-relaxed">
-              A chama chases arrears. A church never chases anybody. A class fund runs for
-              ten weeks and stops. Jamvi starts each group with what that kind of group
-              actually needs.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {SEGMENTS.map((segment) => (
-              <Link
-                key={segment.slug}
-                href={segment.slug}
-                className="group p-8 rounded-3xl bg-white border border-border/60 hover:border-secondary/40 hover:shadow-lg transition-all"
-              >
-                <h3 className="text-xl font-bold text-primary mb-3">{segment.label}</h3>
-                <p className="text-foreground/70 leading-relaxed mb-5">{segment.subheading}</p>
-                <span className="inline-flex items-center text-secondary font-bold text-sm">
-                  See how <ArrowRight className="ml-1 w-4 h-4 transition-transform group-hover:translate-x-1" />
-                </span>
+              <Link href="/features" className="mt-8 inline-flex items-center gap-1 font-bold text-primary underline decoration-accent decoration-[3px] underline-offset-[6px] hover:decoration-primary">
+                Everything Jamvi does <ArrowRight className="w-4 h-4" />
               </Link>
-            ))}
+            </div>
           </div>
         </div>
       </section>
 
-      {/* CTA Section */}
-      <section className="py-24 bg-white text-center">
-        <div className="container mx-auto px-4 max-w-4xl">
-          <img src={`${import.meta.env.BASE_URL}branding/jamvi-mark-inline.png`} alt="Jamvi Mark" className="w-20 h-20 mx-auto mb-8 drop-shadow-md" />
-          <h2 className="text-4xl md:text-5xl font-bold text-primary mb-6">Take a seat on the mat.</h2>
-          <p className="text-xl text-foreground/70 mb-6 max-w-2xl mx-auto leading-relaxed">
-            Start managing your money with clarity and confidence. Free for your first {TRIAL_DAYS} days, and setup takes less than two minutes.
-          </p>
-          <p className="mx-auto mb-10 max-w-2xl text-sm font-medium leading-relaxed text-foreground/60">
+      {/* Who it is for. Every audience page is linked from here, which is both
+          how a reader finds the one that describes them and how a crawler
+          reaching the home page finds the rest of the site. */}
+      <section className="py-20 lg:py-24 bg-muted border-y-2 border-foreground/10">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-6xl">
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.6fr] gap-10 lg:gap-16">
+            <div>
+              <h2 className="text-4xl md:text-5xl font-extrabold leading-[0.98]">Whatever you are keeping money for.</h2>
+              <p className="mt-5 text-lg text-foreground/75 leading-relaxed">
+                A chama chases arrears. A church never chases anybody. A class fund runs for
+                ten weeks and stops. Jamvi starts each group with what that kind of group
+                actually needs.
+              </p>
+            </div>
+            <ul className="border-t-2 border-foreground">
+              {SEGMENTS.map((segment) => (
+                <li key={segment.slug} className="border-b-2 border-foreground/15">
+                  <Link href={segment.slug} className="group flex items-start gap-4 py-5 outline-none focus-visible:bg-background">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-serif text-2xl font-bold group-hover:text-secondary transition-colors">{segment.label}</p>
+                      <p className="mt-1 text-foreground/70 leading-relaxed">{segment.subheading}</p>
+                    </div>
+                    <ArrowRight className="mt-2 w-6 h-6 shrink-0 text-secondary transition-transform group-hover:translate-x-1" />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      {/* CTA */}
+      <section className="bg-primary text-primary-foreground">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-6xl py-20 lg:py-24">
+          <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-10 items-end">
+            <div>
+              <h2 className="text-5xl md:text-6xl lg:text-7xl font-extrabold leading-[0.92]">Take a seat on the mat.</h2>
+              <p className="mt-6 text-lg text-primary-foreground/80 max-w-xl leading-relaxed">
+                Free for your first {TRIAL_DAYS} days, then KES {price} a month. Setup takes less than two minutes.
+              </p>
+            </div>
+            <div className="lg:justify-self-end">
+              <a href={JAMVI_APP_PATH} className="btn-mat h-16 px-9 text-lg !bg-accent !text-accent-foreground" style={{ boxShadow: "6px 6px 0 hsl(var(--clay-bright))" }}>
+                Create your free account
+              </a>
+            </div>
+          </div>
+          <p className="mt-12 pt-6 border-t border-primary-foreground/15 text-sm text-primary-foreground/65 max-w-3xl leading-relaxed">
             Jamvi records contributions, expenses, and balances. It does not send, receive, or hold money, and it is not a payment service. Money moves through M-Pesa or your bank, exactly as it does now.
           </p>
-          <a href={JAMVI_APP_PATH} className="inline-flex items-center justify-center h-16 px-10 rounded-full bg-secondary text-white text-lg font-bold hover:bg-secondary/90 transition-transform hover:scale-105 active:scale-95 shadow-xl">
-            Create your free account
-          </a>
         </div>
       </section>
     </div>
