@@ -24,6 +24,9 @@ interface MpesaSummary {
   entries: number;
   moneyIn: number;
   moneyOut: number;
+  /** The M-Pesa account's balance as Jamvi has it today - to check against the M-Pesa app. */
+  balance?: number | null;
+  balanceAccount?: string | null;
 }
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -90,6 +93,14 @@ export function MpesaImportCard() {
             </p>
           </div>
         ) : (
+          <>
+          {summary?.balance != null ? (
+            <div data-testid="mpesa-home-card-balance">
+              <p className="text-xs text-[hsl(var(--paper))]/70">{summary.balanceAccount ? `${summary.balanceAccount} balance in Jamvi` : "M-Pesa balance in Jamvi"}</p>
+              <p className="mt-1 font-mono text-2xl font-semibold tabular-nums sm:text-3xl">{kes(summary.balance)}</p>
+              <p className="text-xs text-[hsl(var(--paper))]/70">Check it matches your M-Pesa app. If not, import the statement to find the difference.</p>
+            </div>
+          ) : null}
           <dl className="grid grid-cols-3 gap-3 border-t border-dashed border-[hsl(var(--sisal))]/35 pt-4">
             {[
               { label: "Came in", value: summary ? kes(summary.moneyIn) : "…" },
@@ -102,6 +113,7 @@ export function MpesaImportCard() {
               </div>
             ))}
           </dl>
+          </>
         )}
 
         {!showIntro && summary && summary.entries === 0 ? (

@@ -27,6 +27,9 @@ interface MpesaSummary {
   entries: number;
   moneyIn: number;
   moneyOut: number;
+  /** The M-Pesa account's balance as Jamvi has it today - to check against the M-Pesa app. */
+  balance?: number | null;
+  balanceAccount?: string | null;
 }
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -98,6 +101,16 @@ export function MpesaImportCard() {
             </Text>
           </>
         ) : (
+          <>
+          {summary?.balance != null ? (
+            <View style={styles.balanceRow} testID="mpesa-home-card-balance">
+              <Text style={[styles.figureLabel, { color: colors.mutedForeground }]}>
+                {summary.balanceAccount ? `${summary.balanceAccount} balance in Jamvi` : 'M-Pesa balance in Jamvi'}
+              </Text>
+              <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.balanceValue, { color: colors.foreground }]}>{kes(summary.balance)}</Text>
+              <Text style={[styles.figureLabel, { color: colors.mutedForeground }]}>Check it matches your M-Pesa app. If not, import the statement to find the difference.</Text>
+            </View>
+          ) : null}
           <View style={[styles.figures, { borderTopColor: colors.border }]}>
             {figures.map((figure) => (
               <View key={figure.label} style={styles.figure}>
@@ -108,6 +121,7 @@ export function MpesaImportCard() {
               </View>
             ))}
           </View>
+          </>
         )}
 
         {!showIntro && summary && summary.entries === 0 ? (
@@ -153,6 +167,8 @@ export function MpesaImportCard() {
 }
 
 const styles = StyleSheet.create({
+  balanceRow: { gap: 2, paddingBottom: 4 },
+  balanceValue: { fontSize: 26, fontFamily: 'Inter_700Bold' },
   card: { borderWidth: 2, borderRadius: 6, overflow: 'hidden', shadowColor: '#D9663B', shadowOffset: { width: 5, height: 5 }, shadowOpacity: 1, shadowRadius: 0, elevation: 6 },
   weave: { flexDirection: 'row', height: 6 },
   inner: { padding: 16, gap: 12 },
