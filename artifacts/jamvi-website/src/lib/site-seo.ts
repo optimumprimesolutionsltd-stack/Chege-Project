@@ -6,7 +6,7 @@ export const SITE_ORIGIN = "https://jamvi.co.ke";
 // 1200x630, which is the slot WhatsApp, X and LinkedIn actually render. The
 // square logo mark is still the Organization logo in the structured data,
 // where a square is what is wanted.
-export const DEFAULT_OG_IMAGE = `${SITE_ORIGIN}/branding/jamvi-og.png`;
+export const DEFAULT_OG_IMAGE = `${SITE_ORIGIN}/branding/jamvi-og-v2.png`;
 
 export interface SeoEntry {
   title: string;

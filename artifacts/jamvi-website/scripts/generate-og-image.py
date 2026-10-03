@@ -19,7 +19,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 BRANDING = ROOT / "public" / "branding"
-OUT = BRANDING / "jamvi-og.png"
+# Renamed from jamvi-og.png when the logo changed, so WhatsApp/Facebook caches fetch it fresh.
+OUT = BRANDING / "jamvi-og-v2.png"
 
 W, H = 1200, 630
 NAVY = (23, 43, 99)
@@ -53,11 +54,12 @@ gd.ellipse([820, 380, 1500, 900], fill=GOLD)
 card = Image.blend(card, glow.filter(__import__("PIL.ImageFilter", fromlist=["ImageFilter"]).GaussianBlur(150)), 0.13)
 draw = ImageDraw.Draw(card)
 
-# The wordmark, sized to leave the text room to breathe.
-mark = Image.open(BRANDING / "jamvi-horizontal-transparent.png").convert("RGBA")
-target_w = 620
+# The wordmark - the app icon beside "Jamvi", the same lockup as the site
+# header and the app - sized to leave the text room to breathe.
+mark = Image.open(BRANDING / "jamvi-wordmark.png").convert("RGBA")
+target_w = 520
 mark = mark.resize((target_w, round(mark.height * target_w / mark.width)), Image.LANCZOS)
-card.paste(mark, ((W - mark.width) // 2, 150), mark)
+card.paste(mark, ((W - mark.width) // 2, 120), mark)
 
 # The slogan carries the brand; the line under it carries the search terms, and
 # is what a person skims to decide whether this is for them.
