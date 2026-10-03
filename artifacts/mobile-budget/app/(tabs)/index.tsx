@@ -430,7 +430,7 @@ export default function DashboardScreen() {
       >
         {/* Dark header */}
         <LinearGradient
-          colors={[colors.brandNavy, '#05255E']}
+          colors={[colors.brandNavy, '#0A3833']}
           style={[styles.header, styles.headerTopPiece, { paddingTop: topPad + 12 }]}
         >
           <View style={styles.homeStatus}>
@@ -523,7 +523,7 @@ export default function DashboardScreen() {
         </View>
 
         <LinearGradient
-          colors={['#05255E', colors.brandBlue]}
+          colors={['#0A3833', colors.brandBlue]}
           style={styles.headerRest}
         >
           <MpesaImportCard />
@@ -1180,7 +1180,7 @@ const styles = StyleSheet.create({
   // Solid mid-gradient colour: the shade both pieces meet at, so the card
   // looks identical resting in the header and stuck to the top.
   workspaceIdentitySticky: {
-    backgroundColor: '#05255E',
+    backgroundColor: '#0A3833',
     paddingHorizontal: 20,
     paddingTop: 16,
     // An edge, because the band holds still while the gradient behind it
