@@ -38,15 +38,32 @@ export const ERROR_DELAYS = [1_000, 2_000];
  * the second time as already recorded, so nothing is saved twice. `before`
  * runs ahead of every try (the phone waits there while Jamvi is behind another app).
  */
+/** How long one request may take before it is given up on and tried again. */
+export const REQUEST_TIME_LIMIT_MS = 45_000;
+
+/** `promise`, or a failure with no status (a hiccup) once `ms` pass without an answer. */
+export function withTimeLimit<T>(promise: Promise<T>, ms = REQUEST_TIME_LIMIT_MS): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('No answer from the server in time.')), ms);
+    promise.then(
+      (value) => { clearTimeout(timer); resolve(value); },
+      (error) => { clearTimeout(timer); reject(error); },
+    );
+  });
+}
+
 export async function retrySave<T>(
   task: () => Promise<T>,
-  options: { before?: () => Promise<void>; pause?: (ms: number) => Promise<void> } = {},
+  options: { before?: () => Promise<void>; pause?: (ms: number) => Promise<void>; timeLimitMs?: number } = {},
 ): Promise<T> {
   const pause = options.pause ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   for (let attempt = 0; ; attempt += 1) {
     if (options.before) await options.before();
     try {
-      return await task();
+      // A request that never answers used to hold the whole save "still going"
+      // for ever. A late answer that did save is refused next time as already
+      // recorded, so nothing is saved twice.
+      return await withTimeLimit(task(), options.timeLimitMs);
     } catch (error) {
       const status = statusOf(error);
       const delays = isServerHiccup(error) ? HICCUP_DELAYS : status !== undefined && status >= 500 ? ERROR_DELAYS : [];

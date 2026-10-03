@@ -79,7 +79,7 @@ import { formatExact } from '@/lib/formatExact';
 import { READER_STOPPED, StatementReader, type ReaderJob } from '@/components/StatementReader';
 import { rememberMpesaCard } from '@/lib/mpesaCard';
 import { keepScreenAwakeWhileSaving, letScreenSleepAgain } from '@/lib/keepAwake';
-import { getImportProgress, setImportProgress, useImportProgress } from '@/lib/importProgress';
+import { getImportProgress, importSaveStalled, setImportProgress, useImportProgress } from '@/lib/importProgress';
 import { clearSavePending, hasPendingSave, markSavePending } from '@/lib/importSaveJob';
 import { retryWhenCutOff } from '@/lib/saveWhileAway';
 import { plainSaveError, withRetries } from '@/lib/saveRetry';
@@ -671,6 +671,9 @@ export default function MpesaImportScreen() {
   const [waitingForSave, setWaitingForSave] = useState(false);
   const [resumeSave, setResumeSave] = useState(false);
   const liveProgress = useImportProgress();
+  // A save from an earlier visit to this screen, still running: its progress
+  // is shown here, since the bar the rest of Jamvi shows is off on this screen.
+  const backgroundSave = !saving && liveProgress?.stage === 'saving' ? liveProgress : null;
   useEffect(() => {
     if (!waitingForSave || liveProgress?.stage === 'saving' || !lines) return;
     setWaitingForSave(false);
@@ -1727,8 +1730,22 @@ export default function MpesaImportScreen() {
 
   const saveAll = () => {
     if (!lines || !accountId || saving) return;
-    if (getImportProgress()?.stage === 'saving') {
-      Alert.alert('Still saving', 'Your earlier save is still going. This list updates when it finishes.');
+    const running = getImportProgress();
+    if (running?.stage === 'saving') {
+      // Stopped, not slow: let the rest be saved now. What the stopped save did
+      // reach the server is refused as already recorded, so nothing doubles.
+      if (importSaveStalled()) {
+        Alert.alert(
+          'Your earlier save stopped',
+          `It stopped at ${running.done} of ${running.total}. Save the rest now? Anything it already saved is recognised and skipped.`,
+          [
+            { text: 'Not now', style: 'cancel' },
+            { text: 'Save the rest now', onPress: () => { setImportProgress(null); setTimeout(() => saveAll(), 0); } },
+          ],
+        );
+        return;
+      }
+      Alert.alert('Still saving', `Your earlier save is still going: ${running.done} of ${running.total} done. It carries on in the background, and this list updates when it finishes.`);
       return;
     }
     if (!statementReading) {
@@ -3380,6 +3397,16 @@ export default function MpesaImportScreen() {
               <ProgressBar fraction={saveProgress.done / saveProgress.total} color={colors.primary} track={colors.muted} />
             </View>
           ) : null}
+          {backgroundSave ? (
+            // A save started on an earlier visit, still running in the background:
+            // the bar the rest of Jamvi shows is off on this screen, so show it here.
+            <View style={{ gap: 6 }} testID="mpesa-background-save" accessibilityLiveRegion="polite">
+              <Text style={[styles.hint, { color: colors.foreground }]}>
+                Saving in the background: {backgroundSave.done} of {backgroundSave.total} · {backgroundSave.total > 0 ? Math.round((backgroundSave.done / backgroundSave.total) * 100) : 0}%. You can keep using Jamvi.
+              </Text>
+              <ProgressBar fraction={backgroundSave.total > 0 ? backgroundSave.done / backgroundSave.total : 0} color={colors.primary} track={colors.muted} />
+            </View>
+          ) : null}
           <View style={{ flexDirection: 'row', gap: 8 }}>
           {canUndo && !saving ? (
             <Pressable
@@ -3408,6 +3435,11 @@ export default function MpesaImportScreen() {
                     Saving {saveProgress.done} of {saveProgress.total}
                   </Text>
                 ) : null}
+              </View>
+            ) : backgroundSave ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <ActivityIndicator color="#fff" />
+                <Text style={styles.primaryText} testID="mpesa-background-save-button">Saving… {backgroundSave.done} of {backgroundSave.total}</Text>
               </View>
             ) : (
               <Text style={styles.primaryText}>

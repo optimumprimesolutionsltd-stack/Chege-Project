@@ -46,6 +46,7 @@ describe('the import screen finishes or waits for an earlier save', () => {
 
   it('shows a save still running instead of starting a second one', () => {
     expect(screen).toContain('testID="mpesa-save-still-running"');
-    expect(screen).toContain("Alert.alert('Still saving', 'Your earlier save is still going. This list updates when it finishes.');");
+    // Now with how far it has got (backgroundSave.test.ts).
+    expect(screen).toContain("Alert.alert('Still saving', `Your earlier save is still going: ${running.done} of ${running.total} done.");
   });
 });
