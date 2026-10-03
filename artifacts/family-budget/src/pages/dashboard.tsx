@@ -42,7 +42,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { formatKes, formatDate, formatMonthYear } from "@/lib/utils";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import {
-   Wallet, Plus, TrendingUp, TrendingDown, Target, Loader2, X, ChevronLeft, ChevronRight, Building2, Link2, Receipt, BarChart3, Landmark, Home, Flag, BellRing, CalendarDays, Trash2,
+   Wallet, Plus, TrendingUp, TrendingDown, Target, Loader2, X, ChevronLeft, ChevronRight, Building2, Link2, Receipt, BarChart3, Landmark, Flag, BellRing, CalendarDays, Trash2,
   ArrowRightLeft,
   UserPlus,
 } from "lucide-react";
@@ -2749,10 +2749,9 @@ export default function Dashboard() {
     : [];
   return (
     <div className="min-w-0 overflow-x-hidden space-y-6 pb-12 sm:space-y-8">
-      <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/[0.06] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-primary">
-        <Home className="h-3.5 w-3.5" aria-hidden="true" />
-        Home · Start here
-      </div>
+      {/* M-Pesa first, above everything: it is what people open Jamvi to see. */}
+      <MpesaImportCard />
+
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="flex min-w-0 flex-1 items-start gap-3">
           <ProfileAvatar user={user} className="h-12 w-12 sm:h-14 sm:w-14" textClassName="text-lg" alt={user?.firstName ?? "User"} />
@@ -2847,7 +2846,6 @@ export default function Dashboard() {
         }
       />
 
-       <MpesaImportCard />
       <WorkspaceSetupGuide userId={user?.id} />
 
       <AskJamviPanel month={month} year={year} workspaceName={group?.name ?? undefined} />

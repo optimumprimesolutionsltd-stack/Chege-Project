@@ -1617,7 +1617,7 @@ export default function BudgetScreen() {
         contentContainerStyle={{ paddingBottom: Platform.OS === 'web' ? 100 : insets.bottom + 110 }}
       >
         {/* Header */}
-        <LinearGradient colors={[colors.brandNavy, '#05255E', colors.brandBlue]} style={[styles.header, { paddingTop: topPad + 16 }]}>
+        <LinearGradient colors={[colors.brandNavy, '#0A3833', colors.brandBlue]} style={[styles.header, { paddingTop: topPad + 16 }]}>
           <WorkspaceIdentityRow group={group} />
           <View style={styles.headerTop}>
             <Text style={styles.headerTitle}>Budget</Text>

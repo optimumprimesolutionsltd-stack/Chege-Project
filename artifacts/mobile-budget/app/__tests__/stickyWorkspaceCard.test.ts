@@ -36,9 +36,9 @@ describe('the workspace card on Home', () => {
   it('paints the band the colour both gradient pieces meet at', () => {
     // A mismatch here is a visible seam across the header, in one position or
     // the other, and only on a device.
-    expect(source).toContain("colors={[colors.brandNavy, '#05255E']}");
-    expect(source).toContain("backgroundColor: '#05255E'");
-    expect(source).toContain("colors={['#05255E', colors.brandBlue]}");
+    expect(source).toContain("colors={[colors.brandNavy, '#0A3833']}");
+    expect(source).toContain("backgroundColor: '#0A3833'");
+    expect(source).toContain("colors={['#0A3833', colors.brandBlue]}");
   });
 
   it('does not let the top piece add space before the band', () => {
