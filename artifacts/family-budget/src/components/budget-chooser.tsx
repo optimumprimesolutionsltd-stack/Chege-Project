@@ -861,7 +861,7 @@ export function BudgetChooser({
                     );
                     const sharedSection = (
                       <div key="shared-section" className="mt-6 border-l-2 border-border pl-4 first:mt-0">
-                        <div className="mb-3 flex items-center gap-2"><UsersRound className="h-4 w-4 text-[#087F8C]" /><h3 className="text-sm font-bold text-foreground">Shared groups</h3></div>
+                        <div className="mb-3 flex items-center gap-2"><UsersRound className="h-4 w-4 text-[#14776A]" /><h3 className="text-sm font-bold text-foreground">Shared groups</h3></div>
                         {shouldOfferSharedGroupForm(onboardingMode, shared.length) ? (
                           <StandaloneSharedBudgetForm
                             name={sharedBudgetName}

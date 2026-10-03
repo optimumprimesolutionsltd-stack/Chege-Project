@@ -9,11 +9,11 @@ import { BrandLogo } from '@/components/brand-logo';
  *  link worked or not. */
 function ResetCard({ children }: { children: React.ReactNode }) {
   return (
-    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-[#00132f] via-brand-navy to-brand-blue px-4 py-10 sm:px-6">
+    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-[#0D4A43] via-brand-navy to-brand-blue px-4 py-10 sm:px-6">
       <div className="pointer-events-none absolute -left-32 -top-32 h-80 w-80 rounded-full bg-brand-gold/10 blur-3xl" />
       <div className="pointer-events-none absolute -bottom-40 -right-20 h-[28rem] w-[28rem] rounded-full bg-brand-teal/15 blur-3xl" />
       <main className="relative mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-md items-center">
-        <div className="w-full rounded-[2rem] border border-brand-teal/20 bg-[#06183c]/95 p-6 shadow-2xl backdrop-blur-xl sm:p-8">
+        <div className="w-full rounded-[2rem] border border-brand-teal/20 bg-[#0A3833]/95 p-6 shadow-2xl backdrop-blur-xl sm:p-8">
           <div className="mb-7 flex items-start justify-between gap-4">
             <div className="flex h-11 w-36 items-center justify-center rounded-2xl bg-brand-surface px-2">
               <BrandLogo className="h-9 w-full" alt="Jamvi — personal and shared grouping" />
@@ -30,7 +30,7 @@ function ResetCard({ children }: { children: React.ReactNode }) {
 }
 
 const inputClass =
-  'h-12 w-full rounded-xl border border-blue-100/20 bg-white/[0.08] px-4 text-white placeholder:text-blue-100/50 focus:border-brand-teal focus:outline-none focus:ring-2 focus:ring-brand-teal/30';
+  'h-12 w-full rounded-xl border border-sidebar-foreground/20 bg-white/[0.08] px-4 text-white placeholder:text-sidebar-foreground/50 focus:border-brand-teal focus:outline-none focus:ring-2 focus:ring-brand-teal/30';
 
 export default function ResetPasswordPage() {
   const { adoptSession } = useAuth();
@@ -47,7 +47,7 @@ export default function ResetPasswordPage() {
     return (
       <ResetCard>
         <h1 className="font-display text-2xl font-bold text-white">That reset link is incomplete</h1>
-        <p className="mt-3 text-sm leading-6 text-blue-100/80">
+        <p className="mt-3 text-sm leading-6 text-sidebar-foreground/80">
           Some email apps cut long links in half. Open the link from the email again, or ask for a new one from the
           sign-in page.
         </p>
@@ -93,7 +93,7 @@ export default function ResetPasswordPage() {
   return (
     <ResetCard>
       <h1 className="font-display text-3xl font-bold leading-tight text-white">Choose a new password</h1>
-      <p className="mt-3 text-sm leading-6 text-blue-100/80">
+      <p className="mt-3 text-sm leading-6 text-sidebar-foreground/80">
         Pick something you have not used elsewhere. You will be signed in as soon as it is saved.
       </p>
 

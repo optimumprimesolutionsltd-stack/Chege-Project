@@ -4,4 +4,4 @@
  * members see: the app is Jamvi's colour for everyone, whoever owns the group
  * they joined.
  */
-export const DEFAULT_WORKSPACE_ACCENT = "#003383";
+export const DEFAULT_WORKSPACE_ACCENT = "#0D4A43";

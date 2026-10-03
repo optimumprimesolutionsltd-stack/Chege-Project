@@ -122,7 +122,7 @@ type IncomeStream = {
   variance: number;
   transactionCount: number;
 };
-const MEMBER_ACCENT_COLORS = ["#08B7B0", "#FDBB0A", "#003383", "#3CDD62", "#6C9FE6"];
+const MEMBER_ACCENT_COLORS = ["#14776A", "#E9B949", "#0D4A43", "#D9663B", "#5B8A9A"];
 
 const CONTRIBUTIONS_MONTH_KEY = "contributions-month-pref";
 
@@ -836,7 +836,7 @@ export default function Contributions() {
               <p className="text-muted-foreground text-sm mb-1">of {formatKes(totalTarget)}</p>
             </div>
             <div className="mt-3">
-              <ProgressBar value={totalContrib} max={totalTarget} color="#003383" />
+              <ProgressBar value={totalContrib} max={totalTarget} color="#0D4A43" />
               <p className="text-xs text-muted-foreground mt-1.5">
                 {Math.round(totalTarget > 0 ? (totalContrib / totalTarget) * 100 : 0)}% of combined target
               </p>

@@ -1,4 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
 
 @import 'tailwindcss';
 @import 'tw-animate-css';
@@ -73,140 +72,160 @@
 
   --font-sans: var(--app-font-sans);
   --font-display: var(--app-font-display);
+  --font-mono: var(--app-font-mono);
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  /* The mat has square-ish corners: the large radii pages reach for are
+     pulled in line with the rest rather than going soft and round. */
+  --radius-2xl: calc(var(--radius) + 4px);
+  --radius-3xl: calc(var(--radius) + 6px);
 }
 
 :root {
-  --app-font-sans: 'Plus Jakarta Sans', sans-serif;
-  --app-font-display: 'Outfit', sans-serif;
+  --app-font-sans: 'Atkinson Hyperlegible', system-ui, sans-serif;
+  --app-font-display: 'Bricolage Grotesque', 'Arial Narrow', sans-serif;
+  --app-font-mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
 
   /*
-   * Jamvi brand palette
-   * Navy #011C4E · Royal blue #003383 · Teal #08B7B0
-   * Bright green #3CDD62 · Gold #FDBB0A
+   * Jamvi palette: the mat (matches jamvi.co.ke)
+   * Jade #0D4A43 · Jade mid #14776A · Clay #B24A24 / #D9663B
+   * Sisal gold #E9B949 · Ink #0B1F2A · Paper #FBF7EC
    *
    * These roles intentionally match mobile/constants/colors.ts. Keep status
-   * colours separate from the logo palette so meaning remains clear.
+   * colours separate from the brand palette so meaning remains clear.
+   * The brand-* names are kept so existing classes keep working; they now
+   * point at the mat colours.
    */
-  --brand-navy: 218 98% 15%;
-  --brand-blue: 220 100% 26%;
-  --brand-teal: 178 92% 37%;
-  --brand-green: 132 72% 57%;
-  --brand-gold: 44 98% 52%;
-  --brand-surface: 216 57% 96%;
+  --jade: 173 70% 17%;
+  --jade-mid: 172 71% 27%;
+  --clay: 16 66% 42%;
+  --clay-bright: 16 68% 54%;
+  --sisal: 42 79% 60%;
+  --ink: 201 58% 10%;
+  --paper: 44 64% 95%;
 
-  --background: 214 47% 98%;
-  --foreground: 218 84% 18%;
-  --border: 214 39% 88%;
-  
-  --card: 0 0% 100%;
-  --card-foreground: 218 84% 18%;
-  --card-border: 214 39% 88%;
+  --brand-navy: var(--ink);
+  --brand-blue: var(--jade-mid);
+  --brand-teal: var(--jade-mid);
+  --brand-green: 140 52% 38%;
+  --brand-gold: var(--sisal);
+  --brand-surface: var(--paper);
 
-  --sidebar: 218 90% 13%;
-  --sidebar-foreground: 216 57% 97%;
-  --sidebar-border: 218 62% 24%;
-  --sidebar-primary: 44 98% 52%;
-  --sidebar-primary-foreground: 218 98% 15%;
-  --sidebar-accent: 218 66% 23%;
-  --sidebar-accent-foreground: 216 57% 97%;
-  --sidebar-ring: 178 92% 37%;
+  --background: var(--paper);
+  --foreground: var(--ink);
+  --border: 43 30% 80%;
 
-  --popover: 0 0% 100%;
-  --popover-foreground: 218 84% 18%;
-  --popover-border: 214 39% 88%;
+  --card: 45 70% 98%;
+  --card-foreground: var(--ink);
+  --card-border: 43 30% 80%;
 
-  --primary: 218 98% 15%;
-  --primary-foreground: 0 0% 100%;
-  
-  --secondary: 44 98% 52%;
-  --secondary-foreground: 218 98% 15%;
+  --sidebar: var(--jade);
+  --sidebar-foreground: var(--paper);
+  --sidebar-border: 173 45% 24%;
+  --sidebar-primary: var(--sisal);
+  --sidebar-primary-foreground: var(--ink);
+  --sidebar-accent: 173 55% 22%;
+  --sidebar-accent-foreground: var(--paper);
+  --sidebar-ring: var(--sisal);
 
-  --muted: 214 42% 95%;
-  --muted-foreground: 215 32% 39%;
+  --popover: 45 70% 98%;
+  --popover-foreground: var(--ink);
+  --popover-border: 43 30% 80%;
 
-  --accent: 178 58% 93%;
-  --accent-foreground: 180 78% 25%;
+  --primary: var(--jade);
+  --primary-foreground: var(--paper);
 
-  --destructive: 0 70% 50%;
+  --secondary: var(--sisal);
+  --secondary-foreground: var(--ink);
+
+  --muted: 44 46% 90%;
+  --muted-foreground: 190 14% 34%;
+
+  --accent: 44 60% 88%;
+  --accent-foreground: var(--jade);
+
+  --destructive: 0 70% 45%;
   --destructive-foreground: 0 0% 100%;
-  --success: 132 72% 34%;
+  --success: 140 52% 32%;
   --success-foreground: 0 0% 100%;
-  --warning: 40 92% 39%;
-  --warning-foreground: 218 98% 15%;
-  --info: 220 100% 26%;
+  --warning: 32 85% 38%;
+  --warning-foreground: 0 0% 100%;
+  --info: var(--jade-mid);
   --info-foreground: 0 0% 100%;
 
-  --input: 214 39% 79%;
-  --ring: 178 92% 37%;
+  --input: 43 30% 74%;
+  --ring: var(--jade-mid);
 
-  --chart-1: 218 98% 15%; /* Navy */
-  --chart-2: 220 100% 26%; /* Royal blue */
-  --chart-3: 178 92% 37%; /* Teal */
-  --chart-4: 132 72% 42%; /* Green */
-  --chart-5: 44 98% 52%; /* Gold */
+  --chart-1: var(--jade); /* Jade */
+  --chart-2: var(--clay-bright); /* Clay */
+  --chart-3: var(--sisal); /* Sisal */
+  --chart-4: var(--jade-mid); /* Jade mid */
+  --chart-5: 201 30% 45%; /* Slate */
 
-  --radius: 0.75rem;
+  --radius: 0.375rem;
 
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-sm: 2px 2px 0 rgb(11 31 42 / 0.06);
+  --shadow: 3px 3px 0 rgb(11 31 42 / 0.08);
+  --shadow-md: 4px 4px 0 rgb(11 31 42 / 0.10);
+  --shadow-lg: 6px 6px 0 rgb(11 31 42 / 0.12);
 }
 
-html[data-appearance="white"] {
-  --background: 0 0% 100%;
-}
+/* "white" is the light appearance's stored name; it now means the mat's
+   paper ground, so it needs no override of its own. */
 
 .dark {
-  --background: 218 90% 7%;
-  --foreground: 216 57% 97%;
-  --border: 218 62% 24%;
-  
-  --card: 218 70% 13%;
-  --card-foreground: 216 57% 97%;
-  --card-border: 218 62% 24%;
+  --background: 190 45% 7%;
+  --foreground: var(--paper);
+  --border: 180 28% 20%;
 
-  --sidebar: 218 98% 9%;
-  --sidebar-foreground: 216 57% 97%;
-  --sidebar-border: 218 62% 20%;
-  --sidebar-primary: 44 98% 52%;
-  --sidebar-primary-foreground: 218 98% 15%;
-  --sidebar-accent: 218 66% 17%;
-  --sidebar-accent-foreground: 216 57% 97%;
-  --sidebar-ring: 178 92% 45%;
+  --card: 186 40% 11%;
+  --card-foreground: var(--paper);
+  --card-border: 180 28% 20%;
 
-  --popover: 218 70% 13%;
-  --popover-foreground: 216 57% 97%;
-  --popover-border: 218 62% 24%;
+  --sidebar: 186 50% 9%;
+  --sidebar-foreground: var(--paper);
+  --sidebar-border: 180 30% 17%;
+  --sidebar-primary: var(--sisal);
+  --sidebar-primary-foreground: var(--ink);
+  --sidebar-accent: 180 32% 15%;
+  --sidebar-accent-foreground: var(--paper);
+  --sidebar-ring: var(--sisal);
 
-  --primary: 220 78% 48%;
-  --primary-foreground: 0 0% 100%;
-  
-  --secondary: 44 98% 52%;
-  --secondary-foreground: 218 98% 15%;
+  --popover: 186 40% 11%;
+  --popover-foreground: var(--paper);
+  --popover-border: 180 28% 20%;
 
-  --muted: 218 66% 18%;
-  --muted-foreground: 214 36% 72%;
+  --primary: var(--sisal);
+  --primary-foreground: var(--ink);
 
-  --accent: 178 64% 19%;
-  --accent-foreground: 178 74% 78%;
+  --secondary: var(--sisal);
+  --secondary-foreground: var(--ink);
 
-  --destructive: 0 60% 50%;
+  --muted: 185 32% 14%;
+  --muted-foreground: 44 18% 70%;
+
+  --accent: 180 30% 17%;
+  --accent-foreground: var(--sisal);
+
+  --destructive: 0 65% 55%;
   --destructive-foreground: 0 0% 100%;
-  --success: 132 72% 57%;
-  --success-foreground: 218 98% 9%;
-  --warning: 44 98% 52%;
-  --warning-foreground: 218 98% 15%;
-  --info: 220 100% 65%;
-  --info-foreground: 218 98% 9%;
+  --success: 140 50% 55%;
+  --success-foreground: var(--ink);
+  --warning: 38 85% 58%;
+  --warning-foreground: var(--ink);
+  --info: 172 50% 55%;
+  --info-foreground: var(--ink);
 
-  --input: 218 55% 31%;
-  --ring: 178 92% 45%;
+  --input: 180 25% 28%;
+  --ring: var(--sisal);
+
+  --shadow-sm: 2px 2px 0 rgb(0 0 0 / 0.25);
+  --shadow: 3px 3px 0 rgb(0 0 0 / 0.3);
+  --shadow-md: 4px 4px 0 rgb(0 0 0 / 0.35);
+  --shadow-lg: 6px 6px 0 rgb(0 0 0 / 0.4);
 }
 
 @layer base {
@@ -228,7 +247,8 @@ html[data-appearance="white"] {
     user-select: text;
   }
   h1, h2, h3, h4, h5, h6 {
-    @apply font-display tracking-tight;
+    @apply font-display;
+    letter-spacing: -0.025em;
   }
 
   select {
@@ -239,5 +259,22 @@ html[data-appearance="white"] {
   select option {
     background-color: hsl(var(--popover));
     color: hsl(var(--popover-foreground));
+  }
+}
+
+@layer components {
+  /* The mat's woven edge, as on jamvi.co.ke. */
+  .weave-thin {
+    height: 6px;
+    background: repeating-linear-gradient(90deg,
+      hsl(var(--sisal)) 0 14px, hsl(var(--jade-mid)) 14px 42px,
+      hsl(var(--clay-bright)) 42px 50px, hsl(var(--jade)) 50px 78px);
+  }
+  /* Small mono label above a heading or a figure. */
+  .kicker {
+    font-family: var(--app-font-mono);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
   }
 }
