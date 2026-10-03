@@ -26,6 +26,8 @@ import { incomeTotal, leftToPlan, planWith } from '@/lib/budgetTotals';
 import { effectiveBudgets } from '@workspace/category-tree';
 import { CategorySearchBox } from '@/components/CategorySearchBox';
 import { useColors } from '@/hooks/useColors';
+import { UndoDeleteBar, useUndoableDelete } from '@/components/UndoDeleteBar';
+import { deletedLabel } from '@/lib/undoDelete';
 import { useCollapsed } from '@/hooks/useCollapsed';
 import { useListEditor } from '@/hooks/useListEditor';
 import { EditableName, EditPill, ListEditButton, ListEditorFooter, RemoveRowButton } from '@/components/ListEditor';
@@ -112,13 +114,17 @@ export default function BudgetScreen() {
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
 
+  // Deleting a category waits a few seconds for Undo (components/UndoDeleteBar).
+  const undoable = useUndoableDelete();
   const {
-    data: breakdown = [],
+    data: rawBreakdown = [],
     isLoading: breakdownLoading,
     isFetching: breakdownFetching,
     refetch: refetchBreakdown,
   } =
     useGetDashboardCategoryBreakdown({ month, year });
+  // A category waiting for Undo is already out of every list and total.
+  const breakdown = useMemo(() => rawBreakdown.filter((row) => !undoable.isHidden(`cat:${row.category}`)), [rawBreakdown, undoable.isHidden]);
   const { data: allCategories = [], isLoading: categoriesLoading, refetch: refetchCats } = useQuery<BudgetCategory[]>({
     queryKey: ['budget-categories-full'],
     queryFn: () => customFetch<BudgetCategory[]>('/api/budget-categories'),
@@ -805,14 +811,14 @@ export default function BudgetScreen() {
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Remove', style: 'destructive',
-          onPress: async () => {
+          onPress: () => undoable.schedule(`cat:${cat.name}`, deletedLabel(cat.name), async () => {
             try {
               await customFetch(`/api/budget-categories/${cat.id}`, { method: 'DELETE' });
               await refreshAll();
             } catch {
               Alert.alert('Error', 'Could not remove category.');
             }
-          },
+          }),
         },
       ],
     );
@@ -2386,6 +2392,7 @@ export default function BudgetScreen() {
           )}
         </View>
       </PageScrollView>
+      <UndoDeleteBar pending={undoable.pending} onUndo={undoable.undo} />
     </View>
   );
 }

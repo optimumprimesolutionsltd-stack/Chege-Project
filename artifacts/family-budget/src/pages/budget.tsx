@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   getGetDashboardCategoryBreakdownQueryKey,
   getGetDashboardCategoryLedgerQueryKey,
@@ -26,6 +26,8 @@ import { useListEditor } from "@/hooks/use-list-editor";
 import { EditableName, ListEditButton, ListEditorFooter, RemoveRowButton } from "@/components/list-editor";
 import { DebtPayoffCard } from "@/components/debt-payoff-card";
 import { useToast } from "@/hooks/use-toast";
+import { useUndoableDelete } from "@/hooks/use-undoable-delete";
+import { deletedLabel } from "@/lib/undo-delete";
 import { useAuth } from "@workspace/replit-auth-web";
 import { getCategoryIcon } from "@/lib/category-icons";
 import { effectiveBudgets } from "@workspace/category-tree";
@@ -703,7 +705,7 @@ export default function Budget() {
     }));
 
   const {
-    data: breakdown,
+    data: rawBreakdown,
     isLoading,
     isFetching,
     refetch: refetchBreakdown,
@@ -711,6 +713,9 @@ export default function Budget() {
     { month, year },
     { request: { cache: "no-store" } },
   );
+  // Removing a category waits a few seconds for Undo; one waiting is already out of every list and total.
+  const undoable = useUndoableDelete();
+  const breakdown = useMemo(() => rawBreakdown?.filter((row) => !undoable.isHidden(`cat:${row.category}`)), [rawBreakdown, undoable.isHidden]);
   const { data: allCategories = [], isLoading: allCategoriesLoading, refetch: refetchCats } = useQuery<BudgetCategory[]>({
     queryKey: ["budget-categories-full"],
     queryFn: async () => {
@@ -931,17 +936,19 @@ export default function Budget() {
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
-    setDeleting(true);
-    try {
-      await fetch(`/api/budget-categories/${deleteTarget.id}`, { method: "DELETE", credentials: "include" });
-      toast({ title: "Category removed" });
-      setDeleteTarget(null);
-      await refreshAll();
-    } catch {
-      toast({ variant: "destructive", title: "Error", description: "Could not remove category." });
-    } finally {
-      setDeleting(false);
-    }
+    const target = deleteTarget;
+    setDeleteTarget(null);
+    undoable.schedule(`cat:${target.name}`, deletedLabel(target.name), async () => {
+      setDeleting(true);
+      try {
+        await fetch(`/api/budget-categories/${target.id}`, { method: "DELETE", credentials: "include" });
+        await refreshAll();
+      } catch {
+        toast({ variant: "destructive", title: "Error", description: "Could not remove category." });
+      } finally {
+        setDeleting(false);
+      }
+    });
   };
 
   const handlePrevMonth = () => { if (month === 1) { setMonth(12); setYear(year - 1); } else setMonth(month - 1); };

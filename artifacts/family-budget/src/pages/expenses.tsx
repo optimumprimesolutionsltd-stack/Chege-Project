@@ -71,6 +71,8 @@ import { AmountField } from "@/components/amount-field";
 import { groupExpensesByCategory, groupExpensesByItem } from "@/lib/expense-groups";
 import { Trash2, Plus, ArrowLeft, ArrowRight, Loader2, Calendar, RefreshCw, Repeat, Pencil, TrendingUp, TrendingDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useUndoableDelete } from "@/hooks/use-undoable-delete";
+import { deletedLabel } from "@/lib/undo-delete";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   getCategoryAllocationStatus,
@@ -355,7 +357,10 @@ export default function Expenses() {
     window.history.replaceState(null, "", `${window.location.pathname}${search ? `?${search}` : ""}`);
   }, []);
 
-  const { data: expenses, isLoading } = useGetExpenses({ month, year });
+  const { data: rawExpenses, isLoading } = useGetExpenses({ month, year });
+  // Deleting waits a few seconds for Undo; one waiting is already out of the list.
+  const undoable = useUndoableDelete();
+  const expenses = useMemo(() => rawExpenses?.filter((expense) => !undoable.isHidden(`exp:${expense.id}`)), [rawExpenses, undoable.isHidden]);
   const { data: categories } = useGetBudgetCategories();
   // Parents and their subcategories, rebuilt from the flat rows the API
   // returns: the select offers the parents, and a second select underneath
@@ -1364,19 +1369,21 @@ export default function Expenses() {
       });
       return;
     }
-    try {
-      await deleteExpense.mutateAsync({ id });
-    } catch {
-      toast({ variant: "destructive", title: "Error", description: "Failed to delete expense." });
-      return;
-    }
-    toast({ title: "Expense deleted" });
+    const gone = rawExpenses?.find((expense) => expense.id === id);
     setDeleteTarget(null);
     if (editingId === id) {
       setEditingId(null);
       clearEditDeepLink();
     }
-    invalidate();
+    undoable.schedule(`exp:${id}`, deletedLabel(gone?.description, gone?.amount), async () => {
+      try {
+        await deleteExpense.mutateAsync({ id });
+      } catch {
+        toast({ variant: "destructive", title: "Error", description: "Failed to delete expense." });
+        return;
+      }
+      invalidate();
+    });
   };
 
   const handleApplyRecurring = async () => {

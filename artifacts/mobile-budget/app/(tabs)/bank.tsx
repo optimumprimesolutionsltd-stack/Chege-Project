@@ -26,6 +26,8 @@ const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
 import { router, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useColors } from '@/hooks/useColors';
+import { UndoDeleteBar, useUndoableDelete } from '@/components/UndoDeleteBar';
+import { deletedLabel } from '@/lib/undoDelete';
 import { ReversalLink } from '@/components/ReversalLink';
 import { autoLinkReversals } from '@workspace/api-client-react';
 import { useListEditor } from '@/hooks/useListEditor';
@@ -369,6 +371,8 @@ export default function BankScreen() {
   const { mutateAsync: updateTransaction } = useUpdateJointAccountTransaction();
   const { mutateAsync: deleteTransaction } = useDeleteJointAccountTransaction();
   const { mutateAsync: deleteExpense } = useDeleteExpense();
+  // Deleting waits a few seconds for Undo (components/UndoDeleteBar).
+  const undoable = useUndoableDelete();
   const { mutateAsync: transferBankToSavings } = useTransferBankToSavings();
   const { mutateAsync: transferSavingsToBank } = useTransferSavingsToBank();
   const { mutateAsync: transferBankToBank } = useTransferBankToBank();
@@ -977,7 +981,7 @@ export default function BankScreen() {
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Delete', style: 'destructive', onPress: async () => {
+          text: 'Delete', style: 'destructive', onPress: () => undoable.schedule(`tx:${tx.id}`, deletedLabel(tx.description, tx.amount), async () => {
             try {
               const links = await fetchDebtLinks([tx.id]);
               if (deletesExpense) {
@@ -999,7 +1003,7 @@ export default function BankScreen() {
                 error instanceof Error ? error.message : 'Please try again.',
               );
             }
-          },
+          }),
         },
       ],
     );
@@ -2097,7 +2101,8 @@ export default function BankScreen() {
     }
   };
 
-  const transactions: Tx[] = data?.transactions ?? [];
+  // A delete waiting for Undo is already out of the list.
+  const transactions: Tx[] = (data?.transactions ?? []).filter((tx) => !undoable.isHidden(`tx:${tx.id}`));
   // A period narrows the list and the figures to those dates. "All time"
   // leaves the account exactly as the server reports it.
   const period = periodFor(periodPreset, nairobiToday(), { from: periodFrom, to: periodTo });
@@ -5431,6 +5436,7 @@ export default function BankScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+      <UndoDeleteBar pending={undoable.pending} onUndo={undoable.undo} />
     </View>
   );
 }
