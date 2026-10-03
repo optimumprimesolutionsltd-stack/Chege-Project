@@ -104,9 +104,9 @@ export default function Home() {
       <section id="mpesa-import" className="bg-primary text-primary-foreground py-20 lg:py-24">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-6xl">
           <div className="max-w-2xl">
-            <h2 className="text-4xl md:text-5xl lg:text-6xl font-extrabold leading-[0.98]">Stop typing your M-Pesa in.</h2>
+            <h2 className="text-4xl md:text-5xl lg:text-6xl font-extrabold leading-[0.98]">Your M-Pesa month, sorted in minutes.</h2>
             <p className="mt-5 text-lg text-primary-foreground/80 leading-relaxed">
-              Every payment is already in your M-Pesa. Jamvi reads it for you, so a whole
+              Stop typing it in. Every payment is already in your M-Pesa. Jamvi reads it for you, so a whole
               month of budgeting takes minutes instead of an evening.
             </p>
           </div>
