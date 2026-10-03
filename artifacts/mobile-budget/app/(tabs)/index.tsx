@@ -31,7 +31,8 @@ import { DebtSummaryCard } from '@/components/DebtSummaryCard';
 import { useColors } from '@/hooks/useColors';
 import { useEntitlements } from '@/hooks/useEntitlements';
 import { mayStartGroup } from '@/lib/groupStart';
-import { toSortTitle, type EntryToSort } from '@/lib/entriesToSort';
+import { toSortTitle } from '@/lib/entriesToSort';
+import { useWaitingForYou } from '@/hooks/useWaitingForYou';
 import { useQuery } from '@tanstack/react-query';
 import { canReadSms, newMpesaSms, newSmsTitle, parseSmsAuto, smsAutoKey } from '@/lib/mpesaSms';
 import { PageScrollView } from '@/components/PageScrollReset';
@@ -314,28 +315,11 @@ export default function DashboardScreen() {
   const [arrangingAreas, setArrangingAreas] = useState(false);
   const baseShortcuts = isSharedWorkspace ? SHARED_OVERVIEW_SHORTCUTS : PERSONAL_OVERVIEW_SHORTCUTS;
   const { data: entitlements } = useEntitlements();
-  // Entries saved as "Not sure" in any month, waiting to be sorted out.
-  const { data: toSort } = useQuery<{ entries: EntryToSort[] }>({
-    queryKey: ['entries-to-sort'],
-    queryFn: () => customFetch('/api/entries-to-sort'),
-    staleTime: 60_000,
-    retry: false,
-  });
-  const toSortCount = toSort?.entries.length ?? 0;
-  // New M-Pesa messages since Jamvi last took them in, when the person turned
-  // that on (lib/mpesaSms): looked for each time Home is shown, and each time
-  // Jamvi comes back to the front.
-  const { data: newSms = 0, refetch: recheckSms } = useQuery<number>({
-    queryKey: ['new-mpesa-sms', user?.id],
-    queryFn: async () => {
-      const auto = parseSmsAuto(await AsyncStorage.getItem(smsAutoKey(user?.id)).catch(() => null));
-      if (!auto.on) return 0;
-      return (await newMpesaSms(auto.since))?.messages.length ?? 0;
-    },
-    enabled: canReadSms(),
-    staleTime: 30_000,
-    retry: false,
-  });
+  // Entries saved as "Not sure", and new M-Pesa messages: the two things most
+  // easily forgotten, so they lead Home (hooks/useWaitingForYou, shared with
+  // the Home tab's badge). New messages are looked for each time Home is shown
+  // and each time Jamvi comes back to the front.
+  const { toSortCount, newSmsCount: newSms, recheckSms } = useWaitingForYou();
   useFocusEffect(React.useCallback(() => { if (canReadSms()) void recheckSms(); }, [recheckSms]));
   useEffect(() => {
     if (!canReadSms()) return;
@@ -526,6 +510,55 @@ export default function DashboardScreen() {
           colors={['#0A3833', colors.brandBlue]}
           style={styles.headerRest}
         >
+          {/* What is waiting for you leads Home: the two things most easily forgotten. */}
+          {newSms > 0 && canManageBudget ? (
+            <Pressable
+              testID="new-mpesa-sms-cta"
+              accessibilityRole="button"
+              accessibilityLabel={`${newSmsTitle(newSms)}. Open them to review`}
+              onPress={() => router.push('/mpesa-import?fromSms=new' as never)}
+              style={({ pressed }) => [styles.uncategorizedCtaCard, { backgroundColor: colors.card, borderColor: colors.primary, opacity: pressed ? 0.85 : 1 }]}
+            >
+              <View style={styles.groupCtaHeader}>
+                <View style={[styles.groupCtaIcon, { backgroundColor: `${colors.primary}22` }]}>
+                  <Feather name="message-square" size={20} color={colors.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.groupCtaEyebrow, { color: colors.primary }]}>FROM YOUR MESSAGES</Text>
+                  <Text style={[styles.groupCtaTitle, { color: colors.foreground }]}>{newSmsTitle(newSms)}</Text>
+                </View>
+                <Feather name="chevron-right" size={18} color={colors.primary} />
+              </View>
+              <Text style={[styles.groupCtaText, { color: colors.mutedForeground }]}>
+                Review them and save what is right. Nothing is saved until you do.
+              </Text>
+            </Pressable>
+          ) : null}
+
+          {toSortCount > 0 && canManageBudget ? (
+            <Pressable
+              testID="entries-to-sort-cta"
+              accessibilityRole="button"
+              accessibilityLabel={`${toSortTitle(toSortCount)}. Open Sort them out`}
+              onPress={() => router.push('/sort-entries' as never)}
+              style={({ pressed }) => [styles.uncategorizedCtaCard, { backgroundColor: colors.card, borderColor: '#F59E0B', opacity: pressed ? 0.85 : 1 }]}
+            >
+              <View style={styles.groupCtaHeader}>
+                <View style={[styles.groupCtaIcon, { backgroundColor: '#F59E0B22' }]}>
+                  <Feather name="help-circle" size={20} color="#D97706" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.groupCtaEyebrow, { color: '#D97706' }]}>SAVED AS NOT SURE</Text>
+                  <Text style={[styles.groupCtaTitle, { color: colors.foreground }]}>{toSortTitle(toSortCount)}</Text>
+                </View>
+                <Feather name="chevron-right" size={18} color={colors.primary} />
+              </View>
+              <Text style={[styles.groupCtaText, { color: colors.mutedForeground }]}>
+                Say what each one was for, or where it came from, whenever you remember.
+              </Text>
+            </Pressable>
+          ) : null}
+
           <MpesaImportCard />
 
            <WorkspaceSetupGuide />
@@ -728,54 +761,6 @@ export default function DashboardScreen() {
             </View>
           </View>
         )}
-
-        {newSms > 0 && canManageBudget ? (
-          <Pressable
-            testID="new-mpesa-sms-cta"
-            accessibilityRole="button"
-            accessibilityLabel={`${newSmsTitle(newSms)}. Open them to review`}
-            onPress={() => router.push('/mpesa-import?fromSms=new' as never)}
-            style={({ pressed }) => [styles.uncategorizedCtaCard, { backgroundColor: colors.card, borderColor: colors.primary, opacity: pressed ? 0.85 : 1 }]}
-          >
-            <View style={styles.groupCtaHeader}>
-              <View style={[styles.groupCtaIcon, { backgroundColor: `${colors.primary}22` }]}>
-                <Feather name="message-square" size={20} color={colors.primary} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.groupCtaEyebrow, { color: colors.primary }]}>FROM YOUR MESSAGES</Text>
-                <Text style={[styles.groupCtaTitle, { color: colors.foreground }]}>{newSmsTitle(newSms)}</Text>
-              </View>
-              <Feather name="chevron-right" size={18} color={colors.primary} />
-            </View>
-            <Text style={[styles.groupCtaText, { color: colors.mutedForeground }]}>
-              Review them and save what is right. Nothing is saved until you do.
-            </Text>
-          </Pressable>
-        ) : null}
-
-        {toSortCount > 0 && canManageBudget ? (
-          <Pressable
-            testID="entries-to-sort-cta"
-            accessibilityRole="button"
-            accessibilityLabel={`${toSortTitle(toSortCount)}. Open Sort them out`}
-            onPress={() => router.push('/sort-entries' as never)}
-            style={({ pressed }) => [styles.uncategorizedCtaCard, { backgroundColor: colors.card, borderColor: '#F59E0B', opacity: pressed ? 0.85 : 1 }]}
-          >
-            <View style={styles.groupCtaHeader}>
-              <View style={[styles.groupCtaIcon, { backgroundColor: '#F59E0B22' }]}>
-                <Feather name="help-circle" size={20} color="#D97706" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.groupCtaEyebrow, { color: '#D97706' }]}>SAVED AS NOT SURE</Text>
-                <Text style={[styles.groupCtaTitle, { color: colors.foreground }]}>{toSortTitle(toSortCount)}</Text>
-              </View>
-              <Feather name="chevron-right" size={18} color={colors.primary} />
-            </View>
-            <Text style={[styles.groupCtaText, { color: colors.mutedForeground }]}>
-              Say what each one was for, or where it came from, whenever you remember.
-            </Text>
-          </Pressable>
-        ) : null}
 
         {!summaryLoading && summary && summary.totalBudget === 0 && (
           <View style={[styles.budgetCtaCard, { backgroundColor: colors.card, borderColor: `${colors.primary}55` }]}>

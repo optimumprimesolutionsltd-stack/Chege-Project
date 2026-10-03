@@ -13,6 +13,7 @@ import { GlobalFAB } from '@/components/GlobalFAB';
 import { SubscriptionBanner } from '@/components/SubscriptionBanner';
 import { useSimpleView } from '@/hooks/useSimpleView';
 import { useTabFlags } from '@/hooks/useTabFlags';
+import { useWaitingForYou, waitingBadge } from '@/hooks/useWaitingForYou';
 import { visibleTabs, type TabName } from '@/lib/tabPlan';
 
 // iOS 26+: NativeTabs with liquid glass support
@@ -76,6 +77,7 @@ function NativeTabLayout({ visible }: { visible: TabName[] }) {
 }
 
 function ClassicTabLayout({ visible }: { visible: TabName[] }) {
+  const homeBadge = waitingBadge(useWaitingForYou().total);
   const has = (name: TabName) => visible.includes(name);
   const colors = useColors();
   const { resolvedScheme } = useAppearance();
@@ -127,6 +129,8 @@ function ClassicTabLayout({ visible }: { visible: TabName[] }) {
         name="index"
         options={{
           title: 'Home',
+          // New M-Pesa messages and entries to sort out, seen from every screen.
+          tabBarBadge: homeBadge,
           tabBarIcon: ({ color }) =>
             isIOS ? (
               <SymbolView name="house.fill" tintColor={color} size={24} />
