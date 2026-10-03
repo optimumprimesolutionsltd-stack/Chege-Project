@@ -22,7 +22,7 @@ export function SpendingTrendCard() {
     <View style={{ gap: 8 }} testID="spending-trend-section">
       <Text style={{ color: colors.foreground, fontFamily: 'Inter_700Bold', fontSize: 17 }}>Spending trend</Text>
       <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_400Regular', fontSize: 13 }}>What was spent each month, last 6 months</Text>
-      <View style={{ backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, borderRadius: 14, padding: 14 }}>
+      <View style={{ backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, borderRadius: 8, padding: 14 }}>
         {isLoading ? (
           <ActivityIndicator color={colors.primary} />
         ) : isError ? (

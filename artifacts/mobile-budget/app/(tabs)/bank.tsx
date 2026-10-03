@@ -2460,7 +2460,7 @@ export default function BankScreen() {
           // list header they scroll with everything else.
           <>
         <LinearGradient
-          colors={['#0a1a10', '#0f2217', '#132a1c']}
+          colors={['#082E2A', '#0D4A43', '#14776A']}
           style={[styles.header, { paddingTop: topPad + 16 }]}
         >
           <WorkspaceIdentityRow group={group} />
@@ -2490,7 +2490,7 @@ export default function BankScreen() {
                 return (
                   <View
                     key={account.id}
-                    style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#1f3a2b', borderRadius: 12, paddingHorizontal: 12, minHeight: 44 }}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#1f3a2b', borderRadius: 8, paddingHorizontal: 12, minHeight: 44 }}
                   >
                     <TouchableOpacity onPress={() => accountEditor.toggleRemoval(account.id)} hitSlop={8} testID={`bank-remove-account-${account.id}`}>
                       <Feather name={staged ? 'rotate-ccw' : 'trash-2'} size={16} color={staged ? '#86efac' : '#fca5a5'} />
@@ -2531,7 +2531,7 @@ export default function BankScreen() {
                 <TouchableOpacity
                   key={`add-${index}`}
                   onPress={() => accountEditor.dropAdd(index)}
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#14532d', borderRadius: 12, paddingHorizontal: 12, minHeight: 40 }}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#14532d', borderRadius: 8, paddingHorizontal: 12, minHeight: 40 }}
                 >
                   <Feather name="plus" size={14} color="#86efac" />
                   <Text style={{ flex: 1, color: '#ecfdf5' }}>{name}</Text>
@@ -2546,9 +2546,9 @@ export default function BankScreen() {
                   maxLength={120}
                   placeholder="Add a bank account by name"
                   placeholderTextColor="#6ee7b7"
-                  style={{ flex: 1, height: 42, borderWidth: 1, borderColor: '#2f6f4c', borderRadius: 10, paddingHorizontal: 12, color: '#ecfdf5' }}
+                  style={{ flex: 1, height: 42, borderWidth: 1, borderColor: '#2f6f4c', borderRadius: 6, paddingHorizontal: 12, color: '#ecfdf5' }}
                 />
-                <TouchableOpacity onPress={accountEditor.commitAdd} style={{ width: 42, height: 42, borderRadius: 10, borderWidth: 1, borderColor: '#2f6f4c', alignItems: 'center', justifyContent: 'center' }}>
+                <TouchableOpacity onPress={accountEditor.commitAdd} style={{ width: 42, height: 42, borderRadius: 6, borderWidth: 1, borderColor: '#2f6f4c', alignItems: 'center', justifyContent: 'center' }}>
                   <Feather name="plus" size={18} color="#86efac" />
                 </TouchableOpacity>
               </View>
@@ -2559,7 +2559,7 @@ export default function BankScreen() {
                 <TouchableOpacity
                   onPress={() => void accountEditor.save()}
                   disabled={accountEditor.saving || !accountEditor.dirty}
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#22c55e', paddingHorizontal: 16, height: 40, borderRadius: 10, opacity: accountEditor.saving || !accountEditor.dirty ? 0.5 : 1 }}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#22c55e', paddingHorizontal: 16, height: 40, borderRadius: 6, opacity: accountEditor.saving || !accountEditor.dirty ? 0.5 : 1 }}
                   testID="bank-save-accounts"
                 >
                   {accountEditor.saving ? <ActivityIndicator size="small" color="#052e16" /> : null}
@@ -2578,7 +2578,7 @@ export default function BankScreen() {
                 <TouchableOpacity
                   key={account.id}
                   onPress={() => selectAccount(account.id)}
-                  style={{ minHeight: 40, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, borderRadius: 20, backgroundColor: active ? '#dcfce7' : '#1f3a2b' }}
+                  style={{ minHeight: 40, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, borderRadius: 12, backgroundColor: active ? '#dcfce7' : '#1f3a2b' }}
                   testID={`bank-account-${account.id}`}
                 >
                   <Text style={{ color: active ? '#14532d' : '#d1fae5', fontFamily: 'Inter_600SemiBold' }}>{account.name}</Text>
@@ -2801,8 +2801,8 @@ export default function BankScreen() {
                 testID="bank-import-mpesa"
                 style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 10, paddingVertical: 8 }}
               >
-                <Feather name="smartphone" size={15} color="#F4F8FF" />
-                <Text style={{ color: '#F4F8FF', fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>Import M-Pesa statement or messages</Text>
+                <Feather name="smartphone" size={15} color="#FBF7EC" />
+                <Text style={{ color: '#FBF7EC', fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>Import M-Pesa statement or messages</Text>
               </TouchableOpacity>
             </>
           )}
@@ -3022,7 +3022,7 @@ export default function BankScreen() {
               />
               <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
                 <TouchableOpacity
-                  style={{ minHeight: 48, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 10, borderWidth: 1, borderColor: colors.border }}
+                  style={{ minHeight: 48, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 6, borderWidth: 1, borderColor: colors.border }}
                   onPress={closeAccountEditor}
                   disabled={savingAccount}
                   testID="bank-cancel-account"
@@ -3031,7 +3031,7 @@ export default function BankScreen() {
                 </TouchableOpacity>
                 {editingAccountId !== null && (
                   <TouchableOpacity
-                    style={{ minHeight: 48, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 10, backgroundColor: '#7f1d1d' }}
+                    style={{ minHeight: 48, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 6, backgroundColor: '#7f1d1d' }}
                     onPress={() => { setAccountModalVisible(false); removeAccount(editingAccountId); }}
                     testID="bank-remove-account"
                   >
@@ -3051,7 +3051,7 @@ export default function BankScreen() {
         <TouchableWithoutFeedback onPress={closeMoveDay}>
           <View style={{ flex: 1, justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.55)', padding: 20 }}>
             <TouchableWithoutFeedback>
-              <View style={{ backgroundColor: colors.card, borderRadius: 16, padding: 16, maxHeight: '75%', gap: 8 }}>
+              <View style={{ backgroundColor: colors.card, borderRadius: 10, padding: 16, maxHeight: '75%', gap: 8 }}>
                 <Text style={{ color: colors.foreground, fontSize: 16, fontFamily: 'Inter_700Bold' }}>
                   {!moveDayDate
                     ? 'Which day needs fixing?'
@@ -3118,7 +3118,7 @@ export default function BankScreen() {
                       ) : null}
                       <TouchableOpacity
                         onPress={() => void moveDayToDate()}
-                        style={{ marginTop: 10, minHeight: 46, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary }}
+                        style={{ marginTop: 10, minHeight: 46, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary }}
                         testID="bank-move-day-date-save"
                       >
                         <Text style={{ color: colors.primaryForeground, fontFamily: 'Inter_700Bold' }}>Change the date</Text>
@@ -3307,7 +3307,7 @@ export default function BankScreen() {
                           ? accounts.filter((accountOption) => accountOption.id === selectedAccountId)
                           : accounts
                         ).map((accountOption) => (
-                      <TouchableOpacity key={accountOption.id} onPress={() => selectAccount(accountOption.id)} style={{ borderWidth: 1, borderColor: selectedAccountId === accountOption.id ? colors.primary : colors.border, backgroundColor: selectedAccountId === accountOption.id ? `${colors.primary}18` : colors.card, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 11 }} accessibilityRole="radio" accessibilityState={{ selected: selectedAccountId === accountOption.id }}>
+                      <TouchableOpacity key={accountOption.id} onPress={() => selectAccount(accountOption.id)} style={{ borderWidth: 1, borderColor: selectedAccountId === accountOption.id ? colors.primary : colors.border, backgroundColor: selectedAccountId === accountOption.id ? `${colors.primary}18` : colors.card, borderRadius: 6, paddingHorizontal: 12, paddingVertical: 11 }} accessibilityRole="radio" accessibilityState={{ selected: selectedAccountId === accountOption.id }}>
                         <Text style={{ color: colors.foreground, fontWeight: selectedAccountId === accountOption.id ? '700' : '500' }}>{accountOption.name}{accountOption.accountNumber ? ` · ${accountOption.accountNumber}` : ''}</Text>
                       </TouchableOpacity>
                     ))}
@@ -3672,7 +3672,7 @@ export default function BankScreen() {
                       <TouchableOpacity
                         disabled={addingGoal}
                         onPress={handleCreateGoal}
-                        style={{ minWidth: 58, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary, opacity: addingGoal ? 0.55 : 1 }}
+                        style={{ minWidth: 58, borderRadius: 6, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary, opacity: addingGoal ? 0.55 : 1 }}
                         testID="bank-add-goal"
                       >
                         {addingGoal ? <ActivityIndicator size="small" color="#fff" /> : <Text style={{ color: '#fff', fontFamily: 'Inter_600SemiBold' }}>Add</Text>}
@@ -4227,7 +4227,7 @@ export default function BankScreen() {
                               </View>
                               <TextInput
                                 style={{
-                                  flex: 1, height: 44, borderRadius: 10, borderWidth: 1,
+                                  flex: 1, height: 44, borderRadius: 6, borderWidth: 1,
                                   borderColor: colors.border, backgroundColor: colors.background,
                                   paddingHorizontal: 12, fontSize: 16, color: colors.foreground,
                                   fontFamily: 'Inter_400Regular',
@@ -4726,7 +4726,7 @@ export default function BankScreen() {
                       style={{
                         flexDirection: 'row', alignItems: 'center', gap: 8,
                         paddingVertical: 10, paddingHorizontal: 14,
-                        borderRadius: 10, borderWidth: 1,
+                        borderRadius: 6, borderWidth: 1,
                         borderColor: '#0891b2', backgroundColor: '#0891b222',
                         marginTop: 6,
                       }}
@@ -4770,7 +4770,7 @@ export default function BankScreen() {
                         <TouchableOpacity
                           disabled={addingGoal}
                           onPress={handleCreateGoal}
-                          style={{ minWidth: 58, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary, opacity: addingGoal ? 0.55 : 1 }}
+                          style={{ minWidth: 58, borderRadius: 6, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary, opacity: addingGoal ? 0.55 : 1 }}
                           testID="bank-withdraw-add-goal"
                         >
                           {addingGoal ? <ActivityIndicator size="small" color="#fff" /> : <Text style={{ color: '#fff', fontFamily: 'Inter_600SemiBold' }}>Add</Text>}
@@ -5473,7 +5473,7 @@ const styles = StyleSheet.create({
     padding: 12,
     borderWidth: 1,
     borderColor: '#ef4444',
-    borderRadius: 10,
+    borderRadius: 6,
     backgroundColor: 'rgba(239, 68, 68, 0.12)',
     gap: 4,
   },
@@ -5496,7 +5496,7 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: 'row',
     backgroundColor: 'rgba(255,255,255,0.07)',
-    borderRadius: 16,
+    borderRadius: 10,
     paddingVertical: 14,
     marginBottom: 16,
   },
@@ -5525,7 +5525,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 14,
     marginBottom: 16,
-    borderRadius: 14,
+    borderRadius: 8,
     backgroundColor: 'rgba(255,255,255,0.07)',
   },
   transferKindRow: {
@@ -5540,7 +5540,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
     borderWidth: 1,
-    borderRadius: 10,
+    borderRadius: 6,
     paddingVertical: 11,
     paddingHorizontal: 8,
   },
@@ -5572,7 +5572,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    borderRadius: 10,
+    borderRadius: 6,
     borderWidth: 1,
     borderColor: 'rgba(209,250,229,0.35)',
     paddingVertical: 8,
@@ -5603,7 +5603,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
     backgroundColor: '#4ade80',
-    borderRadius: 14,
+    borderRadius: 8,
     paddingVertical: 12,
     paddingHorizontal: 8,
   },
@@ -5635,7 +5635,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     borderWidth: 1,
-    borderRadius: 10,
+    borderRadius: 6,
     paddingHorizontal: 12,
   },
   inlineAccountButtonText: {
@@ -5645,7 +5645,7 @@ const styles = StyleSheet.create({
   transactionBalanceCard: {
     marginTop: 10,
     borderWidth: 1,
-    borderRadius: 10,
+    borderRadius: 6,
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
@@ -5675,7 +5675,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
     marginTop: 10,
@@ -5716,7 +5716,7 @@ const styles = StyleSheet.create({
   txIcon: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
@@ -5754,7 +5754,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: 40,
   },
-  emptyAction: { flexDirection: 'row', alignItems: 'center', gap: 7, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 11, marginTop: 6 },
+  emptyAction: { flexDirection: 'row', alignItems: 'center', gap: 7, borderRadius: 6, paddingHorizontal: 16, paddingVertical: 11, marginTop: 6 },
   emptyActionText: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
   // Modal styles
   modalOverlay: {
@@ -5785,7 +5785,7 @@ const styles = StyleSheet.create({
   },
   toggle: {
     flexDirection: 'row',
-    borderRadius: 12,
+    borderRadius: 8,
     padding: 4,
     marginBottom: 20,
   },
@@ -5793,7 +5793,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 8,
     alignItems: 'center',
-    borderRadius: 9,
+    borderRadius: 6,
   },
   toggleActive: {
     backgroundColor: '#4ade80',
@@ -5828,7 +5828,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderRadius: 14,
+    borderRadius: 8,
     paddingVertical: 14,
   },
   cancelOpeningBalanceText: {
@@ -5840,7 +5840,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 14,
+    borderRadius: 8,
     paddingVertical: 14,
     backgroundColor: '#4ade80',
   },
@@ -5858,7 +5858,7 @@ const styles = StyleSheet.create({
   },
   input: {
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: 8,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 16,
@@ -5866,7 +5866,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   submitBtn: {
-    borderRadius: 14,
+    borderRadius: 8,
     paddingVertical: 14,
     alignItems: 'center',
     marginTop: 4,
@@ -5884,7 +5884,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 9,
-    borderRadius: 10,
+    borderRadius: 6,
     borderWidth: 1,
   },
   calcKeyText: {
@@ -5904,7 +5904,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   saveAndAddBtn: {
-    borderRadius: 14,
+    borderRadius: 8,
     borderWidth: 1,
     paddingVertical: 13,
     marginTop: 10,
@@ -5966,7 +5966,7 @@ const styles = StyleSheet.create({
     alignItems: 'center' as const,
     gap: 10,
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: 8,
     paddingHorizontal: 14,
     paddingVertical: 12,
     marginBottom: 16,
@@ -5983,7 +5983,7 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    borderRadius: 12,
+    borderRadius: 8,
     borderWidth: 1,
   },
   memberPillText: {
@@ -5993,7 +5993,7 @@ const styles = StyleSheet.create({
   },
   categoryDropdown: {
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: 8,
     marginBottom: 16,
     overflow: 'hidden' as const,
   },

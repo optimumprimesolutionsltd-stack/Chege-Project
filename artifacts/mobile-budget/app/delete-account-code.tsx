@@ -148,7 +148,7 @@ const styles = StyleSheet.create({
   codeInput: {
     height: 56,
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 12,
+    borderRadius: 8,
     paddingHorizontal: 16,
     fontSize: 24,
     fontFamily: 'Inter_700Bold',
@@ -157,6 +157,6 @@ const styles = StyleSheet.create({
   },
   resendLink: { alignSelf: 'center', paddingVertical: 4 },
   footer: { paddingHorizontal: 16, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth },
-  confirmBtn: { height: 52, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  confirmBtn: { height: 52, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   confirmLabel: { fontFamily: 'Inter_700Bold', fontSize: 16 },
 });

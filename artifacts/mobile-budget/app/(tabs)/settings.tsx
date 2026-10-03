@@ -1122,7 +1122,7 @@ export default function SettingsScreen() {
                 {photoUrl ? (
                   <Image
                     source={{ uri: photoUrl }}
-                    style={[styles.rowIcon, { borderRadius: 10, borderWidth: 2, borderColor: colors.primary }]}
+                    style={[styles.rowIcon, { borderRadius: 6, borderWidth: 2, borderColor: colors.primary }]}
                   />
                  ) : workspace.emoji ? (
                     <View style={[styles.rowIcon, { backgroundColor: `${colors.primary}24`, borderWidth: 1, borderColor: `${colors.primary}66` }]}>
@@ -1222,7 +1222,7 @@ export default function SettingsScreen() {
                     </View>
                   </View>
                 </View>
-                <View style={[styles.identityPreview, { marginTop: 12, padding: 10, borderRadius: 12, backgroundColor: colors.muted }]}>
+                <View style={[styles.identityPreview, { marginTop: 12, padding: 10, borderRadius: 8, backgroundColor: colors.muted }]}>
                   <Text style={{ fontSize: 22 }}>{groupEmoji || '✨'}</Text>
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.summaryValue, { color: colors.foreground, marginTop: 0 }, workspaceNameTextStyle(groupNameStyle)]}>
@@ -1491,7 +1491,7 @@ export default function SettingsScreen() {
          <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border, padding: 14, gap: 14 }]}>
               <View style={styles.identityPreview}>
                 {(group?.isPrivate ? user?.profileImageUrl : group?.photoUrl) ? (
-                   <Image source={{ uri: (group?.isPrivate ? user?.profileImageUrl : group?.photoUrl)! }} style={[styles.identityIcon, { borderRadius: 12, borderWidth: 2, borderColor: groupAccentColor }]} />
+                   <Image source={{ uri: (group?.isPrivate ? user?.profileImageUrl : group?.photoUrl)! }} style={[styles.identityIcon, { borderRadius: 8, borderWidth: 2, borderColor: groupAccentColor }]} />
                 ) : (
                   <View style={[styles.identityIcon, { backgroundColor: groupAccentColor }]}>
                     <Feather name={getSharedBudgetIcon(groupIcon)} size={20} color="#fff" />
@@ -1512,9 +1512,9 @@ export default function SettingsScreen() {
                {canManageWorkspace ? (
                 <>
                    {!group?.isPrivate ? (
-                  <View style={[styles.identityPreview, { padding: 10, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, borderRadius: 12 }]}>
+                  <View style={[styles.identityPreview, { padding: 10, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, borderRadius: 8 }]}>
                     {group?.photoUrl ? (
-                       <Image source={{ uri: group.photoUrl }} style={[styles.identityIcon, { borderRadius: 12, borderWidth: 2, borderColor: groupAccentColor }]} />
+                       <Image source={{ uri: group.photoUrl }} style={[styles.identityIcon, { borderRadius: 8, borderWidth: 2, borderColor: groupAccentColor }]} />
                     ) : (
                       <View style={[styles.identityIcon, { backgroundColor: groupAccentColor }]}>
                         <Feather name="camera" size={20} color="#fff" />
@@ -1856,7 +1856,7 @@ export default function SettingsScreen() {
               <Pressable
                 testID="done-group-access"
                 onPress={() => setEditingAccess(false)}
-                style={{ backgroundColor: colors.primary, borderRadius: 9, paddingHorizontal: 16, paddingVertical: 9 }}
+                style={{ backgroundColor: colors.primary, borderRadius: 6, paddingHorizontal: 16, paddingVertical: 9 }}
               >
                 <Text style={{ color: colors.primaryForeground, fontFamily: 'Inter_700Bold', fontSize: 13 }}>Done</Text>
               </Pressable>
@@ -2132,42 +2132,42 @@ const styles = StyleSheet.create({
 
   profileCard: {
     flexDirection: 'row', alignItems: 'center', gap: 14,
-    padding: 16, borderRadius: 14, borderWidth: 1, marginBottom: 20,
+    padding: 16, borderRadius: 8, borderWidth: 1, marginBottom: 20,
   },
   workspaceRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
   workspaceInfo: { padding: 14 },
   identityPreview: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  identityIcon: { height: 42, width: 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  identityIcon: { height: 42, width: 42, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   identityChoices: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  identityIconChoice: { width: 76, minHeight: 56, borderWidth: 1, borderRadius: 10, alignItems: 'center', justifyContent: 'center', gap: 3 },
+  identityIconChoice: { width: 76, minHeight: 56, borderWidth: 1, borderRadius: 6, alignItems: 'center', justifyContent: 'center', gap: 3 },
   identityChoiceText: { fontSize: 11, fontFamily: 'Inter_600SemiBold' },
   emojiStyleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
-  emojiInput: { minHeight: 44, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, marginTop: 6, fontSize: 20 },
+  emojiInput: { minHeight: 44, borderWidth: 1, borderRadius: 6, paddingHorizontal: 12, marginTop: 6, fontSize: 20 },
   nameStyleChoices: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 },
-  nameStyleChoice: { minWidth: 76, borderWidth: 1, borderRadius: 9, paddingHorizontal: 9, paddingVertical: 8 },
+  nameStyleChoice: { minWidth: 76, borderWidth: 1, borderRadius: 6, paddingHorizontal: 9, paddingVertical: 8 },
   nameStyleLabel: { fontSize: 12 },
   identityColors: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   identityColorChoice: { height: 34, width: 34, borderRadius: 17, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
-  identitySaveButton: { alignSelf: 'flex-start', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 11 },
+  identitySaveButton: { alignSelf: 'flex-start', borderRadius: 6, paddingHorizontal: 14, paddingVertical: 11 },
   kindHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   kindAction: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
   kindChoices: { gap: 7, marginTop: 4 },
-  kindChoice: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 11, paddingVertical: 9 },
+  kindChoice: { borderWidth: 1, borderRadius: 6, paddingHorizontal: 11, paddingVertical: 9 },
   kindChoiceLabel: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
   recommendationBlock: { gap: 8 },
   recommendationRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 },
-  createGroupButton: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 13, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9 },
+  createGroupButton: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 13, borderWidth: 1, borderRadius: 6, paddingHorizontal: 12, paddingVertical: 9 },
   createGroupButtonText: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
   modalBackdrop: { flex: 1, justifyContent: 'center', padding: 20, backgroundColor: 'rgba(0,0,0,0.5)' },
   modalKAV: { flex: 1 },
   modalScroll: { maxHeight: '100%' },
   modalScrollContent: { flexGrow: 1, justifyContent: 'center' },
-  modalCard: { borderWidth: 1, borderRadius: 16, padding: 18 },
+  modalCard: { borderWidth: 1, borderRadius: 10, padding: 18 },
   modalHeader: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
   modalTitle: { fontSize: 19, fontFamily: 'Inter_700Bold' },
-  modalInput: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 12, marginTop: 18, fontFamily: 'Inter_400Regular', fontSize: 15 },
+  modalInput: { borderWidth: 1, borderRadius: 6, paddingHorizontal: 12, paddingVertical: 12, marginTop: 18, fontFamily: 'Inter_400Regular', fontSize: 15 },
   modalKindLabel: { fontSize: 14, fontFamily: 'Inter_600SemiBold', marginTop: 16, marginBottom: 4 },
-  modalCreateButton: { minHeight: 46, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginTop: 12 },
+  modalCreateButton: { minHeight: 46, borderRadius: 6, alignItems: 'center', justifyContent: 'center', marginTop: 12 },
   modalCreateText: { color: '#fff', fontSize: 14, fontFamily: 'Inter_600SemiBold' },
   avatar: { width: 56, height: 56, borderRadius: 28 },
   avatarFallback: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
@@ -2178,15 +2178,15 @@ const styles = StyleSheet.create({
   profileEmail: { fontSize: 13, fontFamily: 'Inter_400Regular', marginTop: 2 },
   lockedEmail: { flexDirection: 'row', alignItems: 'center', gap: 5, maxWidth: '100%' },
   lockedHint: { fontSize: 10, lineHeight: 14, fontFamily: 'Inter_400Regular', marginTop: 4 },
-  profileNameInput: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 11, marginTop: 12, fontFamily: 'Inter_400Regular', fontSize: 15 },
+  profileNameInput: { borderWidth: 1, borderRadius: 6, paddingHorizontal: 12, paddingVertical: 11, marginTop: 12, fontFamily: 'Inter_400Regular', fontSize: 15 },
   summaryRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
   summaryValue: { fontSize: 16, fontFamily: 'Inter_600SemiBold', marginTop: 3 },
   editActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  outlineButton: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: 9, paddingHorizontal: 12, paddingVertical: 9 },
+  outlineButton: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: 6, paddingHorizontal: 12, paddingVertical: 9 },
   outlineButtonText: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
-  cancelButton: { minHeight: 40, borderWidth: 1, borderRadius: 9, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, marginTop: 10 },
+  cancelButton: { minHeight: 40, borderWidth: 1, borderRadius: 6, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, marginTop: 10 },
   cancelButtonText: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
-  saveNameButton: { alignSelf: 'flex-start', minHeight: 40, borderRadius: 9, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, marginTop: 10 },
+  saveNameButton: { alignSelf: 'flex-start', minHeight: 40, borderRadius: 6, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, marginTop: 10 },
   saveNameButtonText: { color: '#fff', fontSize: 13, fontFamily: 'Inter_600SemiBold' },
 
   sectionLabel: {
@@ -2195,7 +2195,7 @@ const styles = StyleSheet.create({
   },
   sectionHeaderRow: { flexDirection: 'row', alignItems: 'flex-end' },
   accessHint: { fontSize: 12, lineHeight: 17, marginHorizontal: 4, marginBottom: 8 },
-  section: { borderRadius: 14, borderWidth: 1, overflow: 'hidden' },
+  section: { borderRadius: 8, borderWidth: 1, overflow: 'hidden' },
 
   row: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
@@ -2218,7 +2218,7 @@ const styles = StyleSheet.create({
 
   signOutBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 10, marginTop: 28, padding: 15, borderRadius: 14, borderWidth: 1,
+    gap: 10, marginTop: 28, padding: 15, borderRadius: 8, borderWidth: 1,
   },
   signOutText: { fontSize: 16, fontWeight: '600', fontFamily: 'Inter_600SemiBold', color: '#ef4444' },
 

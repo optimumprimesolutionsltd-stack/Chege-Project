@@ -103,7 +103,7 @@ export function HomeAnswersCard({
 const styles = StyleSheet.create({
   card: { borderWidth: 1, borderRadius: 18, marginHorizontal: 16, marginTop: 12, overflow: 'hidden' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, paddingHorizontal: 14 },
-  icon: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  icon: { width: 38, height: 38, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   text: { flex: 1, minWidth: 0 },
   question: { fontSize: 12, fontFamily: 'Inter_400Regular' },
   answer: { fontSize: 20, fontFamily: 'Inter_700Bold', marginTop: 1 },

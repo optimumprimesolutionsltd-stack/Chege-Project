@@ -42,14 +42,14 @@ export default function LoginScreen() {
   if (isLoading) {
     return (
       <View style={styles.loading}>
-        <ActivityIndicator size="large" color="#FDBB0A" />
+        <ActivityIndicator size="large" color="#E9B949" />
       </View>
     );
   }
 
   return (
     <LinearGradient
-      colors={['#00132F', '#011C4E', '#003383']}
+      colors={['#00132F', '#0B1F2A', '#0D4A43']}
       style={[styles.container, { paddingTop: topPad + 20, paddingBottom: botPad + 24 }]}
     >
       {/* Brand mark */}
@@ -98,7 +98,7 @@ function FeatureRow({ icon, text }: { icon: keyof typeof Feather.glyphMap; text:
   return (
     <View style={styles.featureRow}>
       <View style={styles.featureIcon}>
-        <Feather name={icon} size={16} color="#FDBB0A" />
+        <Feather name={icon} size={16} color="#E9B949" />
       </View>
       <Text style={styles.featureText}>{text}</Text>
     </View>
@@ -110,7 +110,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#011C4E',
+    backgroundColor: '#0B1F2A',
   },
   container: {
     flex: 1,
@@ -137,7 +137,7 @@ const styles = StyleSheet.create({
   },
   tagline: {
     fontSize: 16,
-    color: '#A5B9D4',
+    color: '#C2BBA8',
     fontFamily: 'Inter_400Regular',
     marginTop: 8,
   },
@@ -150,7 +150,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 14,
     backgroundColor: 'rgba(255,255,255,0.05)',
-    borderRadius: 14,
+    borderRadius: 8,
     padding: 16,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
@@ -158,14 +158,14 @@ const styles = StyleSheet.create({
   featureIcon: {
     width: 36,
     height: 36,
-    borderRadius: 10,
+    borderRadius: 6,
     backgroundColor: 'rgba(207,114,23,0.12)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   featureText: {
     fontSize: 15,
-    color: '#F4F8FF',
+    color: '#FBF7EC',
     fontFamily: 'Inter_500Medium',
     flex: 1,
   },
@@ -178,8 +178,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
-    backgroundColor: '#003383',
-    borderRadius: 16,
+    backgroundColor: '#0D4A43',
+    borderRadius: 10,
     paddingVertical: 16,
     width: '100%',
   },
@@ -193,7 +193,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     // Was #5c8a6c, a muted green left over from the green theme and close to
     // unreadable on this navy gradient. Matches the tagline instead.
-    color: '#A5B9D4',
+    color: '#C2BBA8',
     fontFamily: 'Inter_400Regular',
   },
 });

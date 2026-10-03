@@ -64,7 +64,7 @@ export function ReversalLink({ transaction, canManage, onChanged }: Props) {
   if (!isDeposit) {
     if (transaction.reversal?.role !== 'reversed_payment') return null;
     return (
-      <View style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12, gap: 4, marginTop: 8 }} testID="reversal-payment-note">
+      <View style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 8, padding: 12, gap: 4, marginTop: 8 }} testID="reversal-payment-note">
         <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>This payment was reversed</Text>
         <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_400Regular', fontSize: 13 }}>
           The money came back on {day(transaction.reversal.otherDate)} ({transaction.reversal.otherDescription}), so neither counts as
@@ -116,7 +116,7 @@ export function ReversalLink({ transaction, canManage, onChanged }: Props) {
   if (data.linked) {
     const original = data.linked;
     return (
-      <View style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12, gap: 6, marginTop: 8 }} testID="reversal-linked">
+      <View style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 8, padding: 12, gap: 6, marginTop: 8 }} testID="reversal-linked">
         <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>Money back from a reversed payment</Text>
         <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_400Regular', fontSize: 13 }}>
           Reverses {original.description} of KES {kes(original.amount)} on {day(original.date)}
@@ -138,7 +138,7 @@ export function ReversalLink({ transaction, canManage, onChanged }: Props) {
   if (data.candidates.length === 0 && !saysMoneyBack) return null;
 
   return (
-    <View style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12, gap: 8, marginTop: 8 }} testID="reversal-candidates">
+    <View style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 8, padding: 12, gap: 8, marginTop: 8 }} testID="reversal-candidates">
       <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>Is this money back from a payment that did not go through?</Text>
       {data.candidates.length === 0 ? (
         <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_400Regular', fontSize: 13 }} testID="reversal-none">
@@ -158,7 +158,7 @@ export function ReversalLink({ transaction, canManage, onChanged }: Props) {
               accessibilityLabel={`Link to ${candidate.description}, ${kes(candidate.amount)} shillings on ${day(candidate.date)}`}
               testID={`reversal-candidate-${candidate.id}`}
               style={({ pressed }) => ({
-                flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderRadius: 10,
+                flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderRadius: 6,
                 backgroundColor: pressed ? colors.muted : 'transparent', borderWidth: 1, borderColor: colors.border,
               })}
             >

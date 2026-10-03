@@ -38,7 +38,7 @@ export default function BudgetRing({ percent, spent, total, isOver, hideValues }
     strokeDashoffset: CIRCUMFERENCE * (1 - progress.value),
   }));
 
-  const ringColor = isOver ? '#F87171' : '#FDBB0A';
+  const ringColor = isOver ? '#F87171' : '#E9B949';
   const pctDisplay = Math.round(percent * 100);
 
   return (
@@ -97,13 +97,13 @@ const styles = StyleSheet.create({
   pct: {
     fontSize: 42,
     fontWeight: '800' as const,
-    color: '#F4F8FF',
+    color: '#FBF7EC',
     fontFamily: 'Inter_700Bold',
     lineHeight: 46,
   },
   label: {
     fontSize: 12,
-    color: '#A5B9D4',
+    color: '#C2BBA8',
     fontFamily: 'Inter_400Regular',
     letterSpacing: 1,
     textTransform: 'uppercase',

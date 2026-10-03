@@ -27,7 +27,7 @@ export function PeriodTotalsCard({ startDate, endDate }: { startDate: string; en
   return (
     <View style={{ gap: 8 }} testID="period-totals-section">
       <Text style={{ color: colors.foreground, fontFamily: 'Inter_700Bold', fontSize: 17 }}>This period at a glance</Text>
-      <View style={{ backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, borderRadius: 14, padding: 14 }}>
+      <View style={{ backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, borderRadius: 8, padding: 14 }}>
         {isLoading ? (
           <ActivityIndicator color={colors.primary} />
         ) : isError || !data ? (

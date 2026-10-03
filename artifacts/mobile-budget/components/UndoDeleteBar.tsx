@@ -91,7 +91,7 @@ export function UndoDeleteBar({ pending, onUndo }: { pending: Array<{ key: strin
 
 const styles = StyleSheet.create({
   wrap: { position: 'absolute', left: 16, right: 16, alignItems: 'center' },
-  bar: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, maxWidth: 520, width: '100%', elevation: 6, shadowOpacity: 0.2, shadowRadius: 8 },
+  bar: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 12, maxWidth: 520, width: '100%', elevation: 6, shadowOpacity: 0.2, shadowRadius: 8 },
   text: { flex: 1, fontFamily: 'Inter_600SemiBold', fontSize: 14 },
   undo: { fontFamily: 'Inter_700Bold', fontSize: 14 },
 });

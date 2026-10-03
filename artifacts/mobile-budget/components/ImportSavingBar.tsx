@@ -27,9 +27,9 @@ export function ImportSavingBar() {
         accessibilityRole={done ? 'button' : 'text'}
         accessibilityLiveRegion="polite"
         testID="import-saving-bar"
-        style={[styles.bar, { backgroundColor: failed ? '#7f1d1d' : '#011C4E' }]}
+        style={[styles.bar, { backgroundColor: failed ? '#7f1d1d' : '#0B1F2A' }]}
       >
-        <Feather name={done ? (failed ? 'alert-circle' : 'check-circle') : 'upload-cloud'} size={15} color="#FDBB0A" />
+        <Feather name={done ? (failed ? 'alert-circle' : 'check-circle') : 'upload-cloud'} size={15} color="#E9B949" />
         <Text style={styles.text} numberOfLines={2}>{importProgressText(progress)}</Text>
         {done ? (
           <Pressable

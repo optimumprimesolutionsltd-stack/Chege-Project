@@ -165,7 +165,7 @@ const styles = StyleSheet.create({
   tabText: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
   loading: { marginTop: 70 },
   list: { padding: 16, gap: 10 },
-  result: { minHeight: 72, flexDirection: 'row', alignItems: 'center', gap: 11, borderWidth: 1, borderRadius: 14, padding: 12 },
+  result: { minHeight: 72, flexDirection: 'row', alignItems: 'center', gap: 11, borderWidth: 1, borderRadius: 8, padding: 12 },
   icon: { width: 38, height: 38, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   resultCopy: { flex: 1, minWidth: 0 },
   resultTitle: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },

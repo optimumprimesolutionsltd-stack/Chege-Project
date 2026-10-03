@@ -2461,7 +2461,7 @@ export default function AddExpenseSheet() {
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                       <Text style={{ fontSize: 14, color: colors.foreground, fontFamily: 'Inter_600SemiBold', width: 76 }}>Bank account</Text>
                       <TextInput
-                        style={{ flex: 1, height: 44, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.muted, paddingHorizontal: 12, fontSize: 16, color: colors.foreground, fontFamily: 'Inter_400Regular' }}
+                        style={{ flex: 1, height: 44, borderRadius: 6, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.muted, paddingHorizontal: 12, fontSize: 16, color: colors.foreground, fontFamily: 'Inter_400Regular' }}
                         keyboardType="numeric" placeholder="0" placeholderTextColor={colors.mutedForeground}
                         value={payerAmounts.__joint_bank__ || ''}
                         onChangeText={val => {
@@ -2478,7 +2478,7 @@ export default function AddExpenseSheet() {
                     const name = member?.userName?.split(' ')[0] ?? 'Member';
                     const sources = payerIncomeSources[pid] ?? [];
                     return (
-                      <View key={pid} style={{ gap: 6, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10 }}>
+                      <View key={pid} style={{ gap: 6, borderWidth: 1, borderColor: colors.border, borderRadius: 6, padding: 10 }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, width: 76 }}>
                             <Feather name="user" size={13} color={colors.mutedForeground} />
@@ -2486,7 +2486,7 @@ export default function AddExpenseSheet() {
                           </View>
                           <TextInput
                             style={{
-                              flex: 1, height: 44, borderRadius: 10, borderWidth: 1,
+                              flex: 1, height: 44, borderRadius: 6, borderWidth: 1,
                               borderColor: colors.border, backgroundColor: colors.muted,
                               paddingHorizontal: 12, fontSize: 16, color: colors.foreground,
                               fontFamily: 'Inter_400Regular',
@@ -2860,7 +2860,7 @@ const styles = StyleSheet.create({
   stateContainer: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28, gap: 12 },
   stateTitle: { fontSize: 18, fontFamily: 'Inter_700Bold', textAlign: 'center' },
   stateText: { fontSize: 13, lineHeight: 19, fontFamily: 'Inter_400Regular', textAlign: 'center' },
-  stateButton: { minHeight: 44, borderRadius: 12, paddingHorizontal: 20, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
+  stateButton: { minHeight: 44, borderRadius: 8, paddingHorizontal: 20, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
   handle: {
     width: 36,
     height: 4,
@@ -2873,7 +2873,7 @@ const styles = StyleSheet.create({
     minHeight: 48,
     marginTop: 20,
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: 8,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -2898,7 +2898,7 @@ const styles = StyleSheet.create({
   saveBtn: {
     paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: 10,
+    borderRadius: 6,
     minWidth: 60,
     alignItems: 'center',
   },
@@ -2927,7 +2927,7 @@ const styles = StyleSheet.create({
   subcategoryBadgeText: { fontSize: 10, fontFamily: 'Inter_700Bold' },
   modeBar: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 10, borderBottomWidth: StyleSheet.hairlineWidth },
   modeRow: { flexDirection: 'row', gap: 8 },
-  modeButton: { flex: 1, minHeight: 40, borderWidth: 1, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  modeButton: { flex: 1, minHeight: 40, borderWidth: 1, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
   modeButtonText: { fontSize: 13, fontFamily: 'Inter_700Bold' },
   modeHint: { fontSize: 11, lineHeight: 15, marginTop: 7 },
   normalSummary: { marginTop: 14, padding: 12, borderWidth: 1, flexDirection: 'row', gap: 9, alignItems: 'flex-start' },
@@ -3016,7 +3016,7 @@ const styles = StyleSheet.create({
   categoryCreateCard: {
     marginTop: 10,
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: 8,
     padding: 12,
     gap: 10,
   },
@@ -3037,7 +3037,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 42,
     borderWidth: 1,
-    borderRadius: 9,
+    borderRadius: 6,
     paddingHorizontal: 10,
     fontSize: 13,
     fontFamily: 'Inter_400Regular',
@@ -3046,7 +3046,7 @@ const styles = StyleSheet.create({
     width: 110,
     height: 42,
     borderWidth: 1,
-    borderRadius: 9,
+    borderRadius: 6,
     paddingHorizontal: 10,
     fontSize: 13,
     fontFamily: 'Inter_400Regular',
@@ -3059,7 +3059,7 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderWidth: 1,
-    borderRadius: 9,
+    borderRadius: 6,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -3069,7 +3069,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     borderWidth: 1,
-    borderRadius: 10,
+    borderRadius: 6,
     paddingHorizontal: 11,
     paddingVertical: 8,
   },
@@ -3080,7 +3080,7 @@ const styles = StyleSheet.create({
   },
   categoryCreateSave: {
     minHeight: 38,
-    borderRadius: 9,
+    borderRadius: 6,
     paddingHorizontal: 13,
     alignItems: 'center',
     justifyContent: 'center',
@@ -3214,7 +3214,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     borderWidth: 1,
-    borderRadius: 10,
+    borderRadius: 6,
     paddingHorizontal: 12,
     paddingVertical: 8,
     marginBottom: 4,
@@ -3251,7 +3251,7 @@ const styles = StyleSheet.create({
   negativeBankWarning: {
     borderWidth: 1,
     borderColor: '#ef4444',
-    borderRadius: 10,
+    borderRadius: 6,
     backgroundColor: 'rgba(239, 68, 68, 0.12)',
     padding: 12,
     gap: 4,
@@ -3279,7 +3279,7 @@ const styles = StyleSheet.create({
   },
   otherCategoryPrompt: {
     borderWidth: 1,
-    borderRadius: 10,
+    borderRadius: 6,
     paddingHorizontal: 12,
     paddingVertical: 10,
     flexDirection: 'row',
@@ -3325,7 +3325,7 @@ const styles = StyleSheet.create({
   // Funding card
   fundingCard: {
     borderWidth: 1.5,
-    borderRadius: 14,
+    borderRadius: 8,
     padding: 14,
     gap: 10,
   },

@@ -60,14 +60,14 @@ const MONTHS = [
 ];
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-const MEMBER_COLORS = ['#08B7B0', '#FDBB0A', '#003383', '#3CDD62', '#6C9FE6', '#C98C00'];
+const MEMBER_COLORS = ['#14776A', '#E9B949', '#0D4A43', '#3CDD62', '#6C9FE6', '#C98C00'];
 
 const CATEGORY_COLORS: Record<string, string> = {
   Food: '#C98C00',
-  Transport: '#08B7B0',
+  Transport: '#14776A',
   Health: '#D92626',
-  Education: '#003383',
-  Utilities: '#FDBB0A',
+  Education: '#0D4A43',
+  Utilities: '#E9B949',
   Entertainment: '#6C9FE6',
   Clothing: '#087F8C',
   Savings: '#209E45',
@@ -1779,7 +1779,7 @@ export default function ReportsScreen() {
                   disabled={!chosen || isExporting}
                   accessibilityRole="button"
                   testID="report-pdf-download"
-                  style={{ marginTop: 14, borderRadius: 12, paddingVertical: 14, alignItems: 'center', backgroundColor: colors.primary, opacity: chosen ? 1 : 0.5 }}
+                  style={{ marginTop: 14, borderRadius: 8, paddingVertical: 14, alignItems: 'center', backgroundColor: colors.primary, opacity: chosen ? 1 : 0.5 }}
                 >
                   <Text style={{ color: colors.primaryForeground, fontFamily: 'Inter_600SemiBold', fontSize: 15 }}>
                     {chosen ? 'Download PDF' : 'Tick at least one'}
@@ -1893,7 +1893,7 @@ export default function ReportsScreen() {
             <Pressable
               onPress={() => setCostCategoryFor(null)}
               accessibilityRole="button"
-              style={{ margin: 16, marginBottom: Math.max(insets.bottom, 16), borderRadius: 12, paddingVertical: 14, alignItems: 'center', backgroundColor: colors.primary }}
+              style={{ margin: 16, marginBottom: Math.max(insets.bottom, 16), borderRadius: 8, paddingVertical: 14, alignItems: 'center', backgroundColor: colors.primary }}
               testID="cost-categories-done"
             >
               <Text style={{ color: '#fff', fontFamily: 'Inter_600SemiBold' }}>
@@ -1913,9 +1913,9 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: 20, paddingBottom: 20 },
   headerTitle: { fontSize: 28, fontFamily: 'Inter_700Bold', color: '#fff', marginBottom: 12 },
   headerControls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
-  pdfButton: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 10, backgroundColor: '#ffffff', paddingHorizontal: 11, paddingVertical: 9 },
+  pdfButton: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 6, backgroundColor: '#ffffff', paddingHorizontal: 11, paddingVertical: 9 },
   pdfButtonDisabled: { opacity: 0.55 },
-  pdfButtonText: { color: '#011C4E', fontSize: 12, fontFamily: 'Inter_700Bold' },
+  pdfButtonText: { color: '#0B1F2A', fontSize: 12, fontFamily: 'Inter_700Bold' },
   pdfError: { color: '#fee2e2', fontSize: 12, fontFamily: 'Inter_500Medium', lineHeight: 17 },
   // The range controls sit on the navy header gradient, so they are drawn in
   // white on translucent white rather than the usual card tokens.
@@ -1948,7 +1948,7 @@ const styles = StyleSheet.create({
   content: { padding: 16, gap: 12 },
 
   // Plain-language monthly progress
-  progressCard: { borderRadius: 14, borderWidth: 1, padding: 16, gap: 12 },
+  progressCard: { borderRadius: 8, borderWidth: 1, padding: 16, gap: 12 },
   progressHeading: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   progressEyebrow: { fontSize: 10, fontFamily: 'Inter_600SemiBold', letterSpacing: 0.8 },
   progressTitleRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginTop: 3 },
@@ -1956,11 +1956,11 @@ const styles = StyleSheet.create({
   progressMonth: { fontSize: 11, fontFamily: 'Inter_500Medium' },
   progressMessageRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   progressMessage: { fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 18 },
-  netBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 10, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 8 },
+  netBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 6, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 8 },
   netBannerLabel: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
   netBannerAmount: { fontSize: 18, fontFamily: 'Inter_700Bold' },
   progressStats: { flexDirection: 'row', gap: 8 },
-  progressStat: { flex: 1, borderRadius: 10, borderWidth: 1, padding: 10 },
+  progressStat: { flex: 1, borderRadius: 6, borderWidth: 1, padding: 10 },
   progressStatPressed: { opacity: 0.72 },
   progressStatHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 4 },
   progressStatLabel: { fontSize: 10, fontFamily: 'Inter_500Medium' },
@@ -1969,13 +1969,13 @@ const styles = StyleSheet.create({
 
   // Summary cards (3 across)
   cardsRow: { flexDirection: 'row', gap: 8 },
-  card: { flex: 1, borderRadius: 12, borderWidth: 1, padding: 12, gap: 3 },
+  card: { flex: 1, borderRadius: 8, borderWidth: 1, padding: 12, gap: 3 },
   cardLabel: { fontSize: 10, fontFamily: 'Inter_500Medium', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 5 },
   cardAmount: { fontSize: 15, fontFamily: 'Inter_700Bold', marginTop: 1 },
   cardSub: { fontSize: 10, fontFamily: 'Inter_400Regular' },
 
   // Overall utilisation card
-  utilisationCard: { borderRadius: 14, borderWidth: 1, padding: 16, gap: 10 },
+  utilisationCard: { borderRadius: 8, borderWidth: 1, padding: 16, gap: 10 },
   utilisationTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 },
   utilisationLabel: { fontSize: 10, fontFamily: 'Inter_500Medium', letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: 4 },
   utilisationPct: { fontSize: 22, fontFamily: 'Inter_700Bold' },
@@ -1993,7 +1993,7 @@ const styles = StyleSheet.create({
   sectionSub: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: -4, marginBottom: 2 },
 
   // Budget vs Actual row
-  budgetRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, borderRadius: 12, borderWidth: 1, padding: 12 },
+  budgetRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, borderRadius: 8, borderWidth: 1, padding: 12 },
   budgetRowContent: { flex: 1, gap: 5 },
   budgetRowTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   budgetAmounts: { flexDirection: 'row', alignItems: 'baseline' },
@@ -2002,19 +2002,19 @@ const styles = StyleSheet.create({
   variance: { fontSize: 11, fontFamily: 'Inter_500Medium' },
 
   // Shared
-  catIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  catIcon: { width: 36, height: 36, borderRadius: 6, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   catName: { fontSize: 13, fontFamily: 'Inter_500Medium', flex: 1, marginRight: 8 },
   catAmount: { fontSize: 14, fontFamily: 'Inter_700Bold' },
   barBg: { height: 4, borderRadius: 2, overflow: 'hidden' },
   barFill: { height: 4, borderRadius: 2 },
 
   // Who spent
-  memberRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 12, borderWidth: 1, padding: 12 },
+  memberRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 8, borderWidth: 1, padding: 12 },
   memberAvatar: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   memberInitial: { fontSize: 16, fontFamily: 'Inter_700Bold' },
 
   // Largest expenses
-  expRow: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 12, borderWidth: 1, padding: 12 },
+  expRow: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 8, borderWidth: 1, padding: 12 },
   expRank: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   expRankText: { fontSize: 11, fontFamily: 'Inter_700Bold' },
   expInfo: { flex: 1, gap: 4 },
@@ -2026,12 +2026,12 @@ const styles = StyleSheet.create({
   expAmount: { fontSize: 14, fontFamily: 'Inter_700Bold' },
 
   // Contributions section
-  contribCard: { borderRadius: 12, borderWidth: 1, padding: 12, gap: 10 },
+  contribCard: { borderRadius: 8, borderWidth: 1, padding: 12, gap: 10 },
   contribHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   contribHeaderInfo: { flex: 1 },
   contribName: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
   contribShare: { fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: 1 },
-  spendOnCard: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderRadius: 14, padding: 14 },
+  spendOnCard: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderRadius: 8, padding: 14 },
   spendOnTitle: { fontSize: 15, fontFamily: 'Inter_600SemiBold' },
   spendOnSub: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 2 },
   contribAmountBlock: { alignItems: 'flex-end' },
@@ -2041,20 +2041,20 @@ const styles = StyleSheet.create({
   contribStat: { gap: 1 },
   contribStatLabel: { fontSize: 10, fontFamily: 'Inter_500Medium', textTransform: 'uppercase', letterSpacing: 0.4 },
   contribStatValue: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
-  contribNetChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
+  contribNetChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 },
   contribNetText: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
 
   // Income streams
   incomeStreamHeading: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 12 },
-  incomeStreamStatus: { minHeight: 88, borderRadius: 12, borderWidth: 1, padding: 15, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  incomeStreamStatus: { minHeight: 88, borderRadius: 8, borderWidth: 1, padding: 15, flexDirection: 'row', alignItems: 'center', gap: 12 },
   incomeStreamStatusTitle: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
   incomeStreamStatusText: { fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 17, marginTop: 2 },
-  incomeStreamTotal: { borderRadius: 12, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 10 },
+  incomeStreamTotal: { borderRadius: 8, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 10 },
   incomeStreamTotalLabel: { fontSize: 10, fontFamily: 'Inter_700Bold', letterSpacing: 0.7 },
   incomeStreamTotalAmount: { fontSize: 21, fontFamily: 'Inter_700Bold', marginTop: 4 },
-  incomeStreamCard: { borderRadius: 12, borderWidth: 1, padding: 12, gap: 10, marginBottom: 9 },
+  incomeStreamCard: { borderRadius: 8, borderWidth: 1, padding: 12, gap: 10, marginBottom: 9 },
   incomeStreamRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  incomeStreamIcon: { height: 32, width: 32, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
+  incomeStreamIcon: { height: 32, width: 32, borderRadius: 6, justifyContent: 'center', alignItems: 'center' },
   incomeStreamName: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
   incomeStreamOwner: { fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: 1 },
   incomeStreamAmount: { fontSize: 13, fontFamily: 'Inter_700Bold' },
@@ -2066,18 +2066,18 @@ const styles = StyleSheet.create({
   streamDetailRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   // A column: the name, then its kind buttons on a line of their own. In a row
   // a long name ('Transport for side hustle') pushed Expense off the card.
-  costCategoryOption: { flexDirection: 'column', alignItems: 'stretch', borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 8 },
+  costCategoryOption: { flexDirection: 'column', alignItems: 'stretch', borderWidth: 1, borderRadius: 8, padding: 12, marginBottom: 8 },
   incomeTrendHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   incomeTrendBars: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 8 },
 
   // Savings goal cards
-  savingsCard: { borderRadius: 12, borderWidth: 1, padding: 12, gap: 10 },
+  savingsCard: { borderRadius: 8, borderWidth: 1, padding: 12, gap: 10 },
 
   // Completed goals badge
-  completedBadge: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: 12, borderWidth: 1 },
+  completedBadge: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: 8, borderWidth: 1 },
 
   // Daily trend bar chart
-  trendCard: { borderRadius: 12, borderWidth: 1, paddingVertical: 12 },
+  trendCard: { borderRadius: 8, borderWidth: 1, paddingVertical: 12 },
   trendBars: { flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: 12, gap: 5 },
   trendBarCol: { alignItems: 'center', gap: 3, minWidth: 22 },
   trendBarWrap: { height: 80, justifyContent: 'flex-end' },
@@ -2088,7 +2088,7 @@ const styles = StyleSheet.create({
   empty: { alignItems: 'center', justifyContent: 'center', paddingVertical: 80, gap: 12 },
   emptyTitle: { fontSize: 18, fontFamily: 'Inter_600SemiBold' },
   emptyText: { fontSize: 14, fontFamily: 'Inter_400Regular', textAlign: 'center' },
-  emptyAction: { flexDirection: 'row', alignItems: 'center', gap: 7, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 11, marginTop: 2 },
+  emptyAction: { flexDirection: 'row', alignItems: 'center', gap: 7, borderRadius: 6, paddingHorizontal: 16, paddingVertical: 11, marginTop: 2 },
   emptyActionText: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
 
   // Category details sheet
@@ -2096,13 +2096,13 @@ const styles = StyleSheet.create({
   detailsSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, maxHeight: '78%' },
   detailsHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 18 },
   detailsTitleBlock: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
-  detailsIcon: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  detailsIcon: { width: 38, height: 38, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   detailsTitle: { fontSize: 18, fontFamily: 'Inter_700Bold' },
   detailsSubtitle: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 2 },
   detailsCloseButton: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
   detailsList: { flexGrow: 0 },
   detailsListContent: { gap: 8, paddingBottom: 4 },
-  detailsRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 12, padding: 11 },
+  detailsRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 8, padding: 11 },
   detailsRowContent: { flex: 1, gap: 3 },
   detailsRowTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   detailsCategoryName: { flex: 1, fontSize: 14, fontFamily: 'Inter_600SemiBold' },

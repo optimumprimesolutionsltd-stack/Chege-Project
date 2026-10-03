@@ -327,7 +327,7 @@ export function DebtSummaryCard({ canTrackDebt = false }: { canTrackDebt?: boole
 }
 
 const styles = StyleSheet.create({
-  card: { borderWidth: 1, borderRadius: 16, padding: 16, gap: 3, marginTop: 12 },
+  card: { borderWidth: 1, borderRadius: 10, padding: 16, gap: 3, marginTop: 12 },
   headRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   headLeft: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1, minWidth: 0 },
   heading: { fontSize: 15, fontFamily: 'Inter_700Bold', flexShrink: 1 },
@@ -338,7 +338,7 @@ const styles = StyleSheet.create({
   cleared: { fontSize: 11, fontFamily: 'Inter_600SemiBold', marginTop: 4 },
   promptBody: { fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 18, marginTop: 6 },
   promptActions: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12 },
-  promptButton: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10, paddingHorizontal: 14, borderRadius: 12 },
+  promptButton: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10, paddingHorizontal: 14, borderRadius: 8 },
   promptButtonText: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
   promptDismiss: { paddingVertical: 10, paddingHorizontal: 8 },
   promptDismissText: { fontSize: 12, fontFamily: 'Inter_500Medium' },

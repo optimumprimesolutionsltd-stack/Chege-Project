@@ -88,12 +88,12 @@ function ClassicTabLayout({ visible }: { visible: TabName[] }) {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: colors.secondary,
+        tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.mutedForeground,
-        tabBarLabelStyle: { fontSize: 10 },
+        tabBarLabelStyle: { fontSize: 10, fontFamily: 'Inter_700Bold' },
         tabBarStyle: {
           backgroundColor: isIOS ? 'transparent' : colors.card,
-          borderTopWidth: isWeb ? 1 : 0,
+          borderTopWidth: isWeb ? 2 : 0,
           borderTopColor: colors.border,
           elevation: 0,
           paddingBottom: safeAreaInsets.bottom,
@@ -112,7 +112,7 @@ function ClassicTabLayout({ visible }: { visible: TabName[] }) {
                 StyleSheet.absoluteFill,
                   {
                     backgroundColor: colors.card,
-                    borderTopWidth: 1,
+                    borderTopWidth: 2,
                     borderTopColor: colors.border,
                   },
               ]}

@@ -81,7 +81,7 @@ const styles = StyleSheet.create({
   eyebrow: { fontFamily: 'Inter_700Bold', fontSize: 11, letterSpacing: 0.8 },
   title: { fontFamily: 'Inter_700Bold', fontSize: 17, lineHeight: 22 },
   body: { fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 20 },
-  primary: { borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
+  primary: { borderRadius: 8, paddingVertical: 14, alignItems: 'center' },
   primaryText: { color: '#fff', fontFamily: 'Inter_700Bold', fontSize: 15 },
   later: { alignSelf: 'center', paddingVertical: 2 },
 });
