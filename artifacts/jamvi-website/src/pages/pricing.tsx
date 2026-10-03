@@ -57,17 +57,17 @@ export default function Pricing() {
   useSeo(SITE_SEO["/pricing"]);
 
   return (
-    <div className="flex flex-col min-h-screen bg-white">
+    <div className="flex flex-col min-h-screen bg-background">
       <section className="pt-24 pb-10 text-center px-4 max-w-3xl mx-auto">
         <motion.h1
-          initial={shouldReduceMotion ? false : { opacity: 0, y: 20 }}
+          initial={shouldReduceMotion ? false : { opacity: 0.85, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           className="text-4xl md:text-5xl lg:text-6xl font-bold text-primary mb-6 font-serif"
         >
           One price. Groups included.
         </motion.h1>
         <motion.p
-          initial={shouldReduceMotion ? false : { opacity: 0, y: 20 }}
+          initial={shouldReduceMotion ? false : { opacity: 0.85, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: shouldReduceMotion ? 0 : 0.08 }}
           className="text-lg text-foreground/70 leading-relaxed"
@@ -81,14 +81,14 @@ export default function Pricing() {
         <div
           role="group"
           aria-label="Billing interval"
-          className="mx-auto flex w-fit items-center gap-1 rounded-full bg-muted p-1"
+          className="mx-auto flex w-fit items-center gap-1 rounded-[3px] bg-muted p-1"
         >
           <button
             aria-pressed={!isAnnual}
             onClick={() => setBillingInterval("monthly")}
-            className={`px-6 py-3 rounded-full text-sm font-bold transition-all ${
+            className={`px-6 py-3 rounded-[3px] text-sm font-bold transition-all ${
               !isAnnual
-                ? "bg-white text-primary shadow-sm ring-1 ring-border"
+                ? "bg-card text-primary shadow-sm ring-1 ring-border"
                 : "text-foreground/60 hover:text-foreground"
             }`}
           >
@@ -97,15 +97,15 @@ export default function Pricing() {
           <button
             aria-pressed={isAnnual}
             onClick={() => setBillingInterval("annual")}
-            className={`px-6 py-3 rounded-full text-sm font-bold transition-all flex items-center gap-2 ${
+            className={`px-6 py-3 rounded-[3px] text-sm font-bold transition-all flex items-center gap-2 ${
               isAnnual
-                ? "bg-white text-primary shadow-sm ring-1 ring-border"
+                ? "bg-card text-primary shadow-sm ring-1 ring-border"
                 : "text-foreground/60 hover:text-foreground"
             }`}
           >
             Pay Annually
             <span
-              className={`text-xs px-2 py-0.5 rounded-full ${
+              className={`text-xs px-2 py-0.5 rounded-[3px] ${
                 isAnnual
                   ? "bg-secondary/10 text-secondary"
                   : "bg-muted border border-border text-foreground/60"
@@ -119,10 +119,10 @@ export default function Pricing() {
 
       <section className="pb-24 px-4">
         <motion.div
-          initial={shouldReduceMotion ? false : { opacity: 0, y: 20 }}
+          initial={shouldReduceMotion ? false : { opacity: 0.85, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: shouldReduceMotion ? 0 : 0.12 }}
-          className="mx-auto max-w-2xl rounded-[2rem] border-2 border-secondary bg-white p-8 sm:p-10 shadow-xl shadow-secondary/10"
+          className="mx-auto max-w-2xl rounded-[4px] border-2 border-foreground bg-card p-8 sm:p-10" style={{ boxShadow: "8px 8px 0 hsl(var(--jade))" }}
         >
           <div className="flex flex-col gap-1 text-center">
             <h2 className="text-2xl font-bold text-primary">{JAMVI_PACKAGE.displayName}</h2>
@@ -142,7 +142,7 @@ export default function Pricing() {
             First {TRIAL_DAYS} days free — no card, no M-Pesa prompt
           </p>
 
-          <div className="mt-8 flex items-center justify-center gap-2 rounded-2xl bg-muted px-4 py-3 text-sm text-foreground/70">
+          <div className="mt-8 flex items-center justify-center gap-2 rounded-[4px] bg-muted px-4 py-3 text-sm text-foreground/70">
             <Users className="h-4 w-4 shrink-0 text-secondary" aria-hidden="true" />
             <span>No limit on how many people share a budget</span>
           </div>
@@ -158,7 +158,7 @@ export default function Pricing() {
 
           <a
             href={JAMVI_APP_PATH}
-            className="mt-9 inline-flex h-14 w-full items-center justify-center rounded-full bg-primary px-8 text-base font-bold text-white shadow-lg transition-transform hover:scale-[1.02] hover:bg-primary/90 active:scale-95"
+            className="btn-mat h-14 px-8 text-base w-full"
           >
             Start free for {TRIAL_DAYS} days
           </a>
@@ -172,7 +172,7 @@ export default function Pricing() {
           </h2>
           <div className="flex flex-col gap-4">
             {pricingFaqs.map((faq) => (
-              <div key={faq.question} className="rounded-2xl border border-border bg-white p-6">
+              <div key={faq.question} className="rounded-[4px] border border-border bg-card p-6">
                 <h3 className="mb-2 font-bold text-primary">{faq.question}</h3>
                 <p className="leading-relaxed text-foreground/70">{faq.answer}</p>
               </div>

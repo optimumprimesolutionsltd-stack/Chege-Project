@@ -13,11 +13,11 @@ export default function Guides() {
   useSeo(SITE_SEO["/guides"]);
 
   return (
-    <div className="flex flex-col bg-white">
+    <div className="flex flex-col bg-background">
       <section className="border-b border-border bg-muted/30 pt-20 pb-14">
         <div className="container mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
           <motion.div
-            initial={{ opacity: 0, y: 12 }}
+            initial={{ opacity: 0.85, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3 }}
           >
@@ -41,7 +41,7 @@ export default function Guides() {
               <li key={guide.slug}>
                 <Link
                   href={guide.slug}
-                  className="group block rounded-3xl border border-border/60 bg-white p-7 transition-colors hover:border-secondary/40 hover:bg-muted/30"
+                  className="group block rounded-[4px] border border-border/60 bg-card p-7 transition-colors hover:border-secondary/40 hover:bg-muted/30"
                 >
                   <h2 className="mb-2 text-2xl font-bold text-primary group-hover:text-secondary">
                     {guide.heading}
