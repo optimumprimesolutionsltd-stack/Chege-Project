@@ -63,6 +63,10 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { formatKes, formatDate, formatMonthYear } from "@/lib/utils";
+import { FigureStrip } from "@/components/figure-strip";
+import { Link } from "wouter";
+import { MessageSquare } from "lucide-react";
+import { PageTitle, MONTH_PICKER_CLASS } from "@/components/page-title";
 import { appPath } from "@/lib/base-path";
 import { workspaceLabel } from "@/lib/workspace-identity";
 import { buildCategoryTree, childrenFor, parentOf, type CategoryRow } from "@workspace/category-tree";
@@ -2709,12 +2713,16 @@ export default function Expenses() {
   return (
     <div className="space-y-5 pb-8 sm:space-y-8 sm:pb-12">
       {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-display font-bold text-foreground">Expenses</h1>
-          <p className="text-muted-foreground mt-1">Everything you spent, and what it was for.</p>
-        </div>
-        <div className="flex w-full items-center justify-between gap-1 rounded-xl border border-input bg-card p-1 text-foreground shadow-sm sm:w-auto sm:justify-start">
+      <PageTitle
+        kicker={`SPENDING · ${formatMonthYear(month, year).toUpperCase()}`}
+        title="Expenses"
+        description="Everything you spent, and what it was for."
+        aside={<>
+        {/* Most spending arrives through M-Pesa, so bringing it in sits beside the month. */}
+        <Link href="/mpesa-import" className="inline-flex h-12 items-center justify-center gap-2 rounded-md border-2 border-foreground/80 bg-card px-4 text-sm font-bold text-foreground hover:bg-muted" data-testid="expenses-import-mpesa">
+          <MessageSquare className="h-4 w-4" aria-hidden="true" /> Import M-Pesa
+        </Link>
+        <div className={MONTH_PICKER_CLASS}>
           <Button variant="ghost" size="icon" onClick={handlePrevMonth} className="h-10 w-10 rounded-lg text-foreground/70 hover:bg-muted hover:text-foreground">
             <ArrowLeft className="h-5 w-5" />
           </Button>
@@ -2746,7 +2754,23 @@ export default function Expenses() {
             <ArrowRight className="h-5 w-5" />
           </Button>
         </div>
-      </div>
+        </>}
+      />
+
+      {summary ? (
+        <FigureStrip
+          label={`Spending in ${formatMonthYear(month, year)}`}
+          testId="expenses-figures"
+          figures={[
+            { label: "SPENT", value: formatKes(summary.totalSpent) },
+            { label: "BUDGET", value: summary.totalBudget > 0 ? formatKes(summary.totalBudget) : "Not set" },
+            summary.totalBudget > 0 && summary.totalSpent > summary.totalBudget
+              ? { label: "OVER BY", value: formatKes(summary.totalSpent - summary.totalBudget), tone: "bad" as const }
+              : { label: "LEFT", value: summary.totalBudget > 0 ? formatKes(summary.remaining) : "—", tone: summary.totalBudget > 0 ? "good" as const : "default" as const },
+            { label: "ENTRIES", value: String(summary.expenseCount) },
+          ]}
+        />
+      ) : null}
 
       {/* Budget Status */}
       {summary && (

@@ -21,6 +21,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatDate, formatKes, formatMonthYear } from "@/lib/utils";
+import { FigureStrip } from "@/components/figure-strip";
+import { PageTitle, MONTH_PICKER_CLASS } from "@/components/page-title";
 import { ArrowLeft, ArrowRight, Calendar, ChevronDown, ChevronUp, TrendingUp } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -560,18 +562,15 @@ export default function Contributions() {
   return (
     <div className="min-w-0 overflow-x-hidden space-y-8 pb-12">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-display font-bold text-foreground">{isSharedWorkspace ? "Group Contributions" : "My Contributions"}</h1>
-          <p className="text-muted-foreground mt-1">
-            {isSharedWorkspace
-              ? "Who has put money into the group, and how much."
-              : "What you have put in, and how much."}
-          </p>
-        </div>
-
-        {/* Month picker */}
-        <div className="flex items-center gap-1 bg-card rounded-xl p-1 border shadow-sm">
+      <PageTitle
+        kicker={`CONTRIBUTIONS · ${formatMonthYear(month, year).toUpperCase()}`}
+        title={isSharedWorkspace ? "Group Contributions" : "My Contributions"}
+        description={isSharedWorkspace
+          ? "Who has put money into the group, and how much."
+          : "What you have put in, and how much."}
+        aside={
+        /* Month picker */
+        <div className={MONTH_PICKER_CLASS}>
           <Button variant="ghost" size="icon" onClick={handlePrevMonth} className="h-10 w-10 rounded-lg hover:bg-muted">
             <ArrowLeft className="h-5 w-5 text-foreground/70" />
           </Button>
@@ -602,7 +601,32 @@ export default function Contributions() {
             <ArrowRight className="h-5 w-5 text-foreground/70" />
           </Button>
         </div>
-      </div>
+        }
+      />
+
+      {memberContribs.length > 0 ? (
+        <FigureStrip
+          label={`Contributions in ${formatMonthYear(month, year)}`}
+          testId="contributions-figures"
+          figures={[
+            { label: "COLLECTED", value: formatKes(totalContrib), tone: "good" },
+            ...(totalTarget > 0
+              ? [
+                  { label: "EXPECTED", value: formatKes(totalTarget) },
+                  totalContrib >= totalTarget
+                    ? { label: "STILL TO COME", value: formatKes(0), tone: "good" as const }
+                    : { label: "STILL TO COME", value: formatKes(totalTarget - totalContrib), tone: "bad" as const },
+                ]
+              : []),
+            {
+              label: isSharedWorkspace ? "MEMBERS PAID" : "PEOPLE",
+              value: isSharedWorkspace && totalTarget > 0
+                ? `${memberContribs.filter((m) => m.target != null && m.contributed >= m.target).length} of ${memberContribs.filter((m) => m.target != null).length}`
+                : String(memberContribs.filter((m) => m.contributed > 0).length),
+            },
+          ]}
+        />
+      ) : null}
 
       {isSharedWorkspace ? (
         <div className="space-y-6">

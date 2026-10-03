@@ -21,7 +21,7 @@ const source = readFileSync(
 );
 
 const monthPicker = source.slice(
-  source.indexOf('<div className="flex items-center gap-1 bg-card rounded-xl p-1 border shadow-sm">'),
+  source.indexOf('<div className={MONTH_PICKER_CLASS}>'),
   source.indexOf("{/* How it works banner */}"),
 );
 

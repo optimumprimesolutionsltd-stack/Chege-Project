@@ -14,6 +14,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { formatDate, formatKes, formatMonthYear } from "@/lib/utils";
+import { FigureStrip } from "@/components/figure-strip";
+import { PageTitle, MONTH_PICKER_CLASS } from "@/components/page-title";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -1368,13 +1370,13 @@ export default function Budget() {
         </DialogContent>
       </Dialog>
 
-       <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
-         <div className="min-w-0">
-          <h1 className="text-3xl font-display font-bold text-foreground">Budget Breakdown</h1>
-          <p className="text-muted-foreground mt-1">Decide how much to spend on each thing, and see how you are doing.</p>
-        </div>
-         <div className="flex w-full flex-col items-stretch gap-3 sm:w-auto sm:flex-row sm:items-center">
-           <div className="flex w-full items-center justify-between gap-2 rounded-xl border border-input bg-card p-1 text-foreground shadow-sm sm:w-auto">
+       <div className="flex flex-col items-start gap-4">
+       <PageTitle
+         kicker={`BUDGET · ${formatMonthYear(month, year).toUpperCase()}`}
+         title="Budget Breakdown"
+         description="Decide how much to spend on each thing, and see how you are doing."
+         aside={<>
+           <div className={MONTH_PICKER_CLASS}>
              <Button variant="ghost" size="icon" onClick={handlePrevMonth} className="h-10 w-10 rounded-lg text-foreground/70 hover:bg-muted hover:text-foreground">
                <ArrowLeft className="h-5 w-5" />
             </Button>
@@ -1399,7 +1401,8 @@ export default function Budget() {
                <Plus className="w-4 h-4" /> Add category
              </Button>
             </div>}
-        </div>
+         </>}
+       />
 
        {!canManageShared && (
          <div className="rounded-xl border border-border/60 bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
@@ -1407,6 +1410,25 @@ export default function Budget() {
          </div>
        )}
       </div>
+
+      {leafBreakdown.length > 0 ? (
+        <FigureStrip
+          label={`Budget for ${formatMonthYear(month, year)}`}
+          testId="budget-figures"
+          figures={[
+            { label: "PLANNED", value: formatKes(reportBudget) },
+            { label: "SPENT", value: formatKes(reportActual) },
+            reportActual > reportBudget && reportBudget > 0
+              ? { label: "OVER BY", value: formatKes(reportActual - reportBudget), tone: "bad" as const }
+              : { label: "LEFT", value: formatKes(Math.max(0, reportBudget - reportActual)), tone: "good" as const },
+            {
+              label: "OVER BUDGET",
+              value: `${leafBreakdown.filter((item) => item.budgetAmount > 0 && item.spentAmount > item.budgetAmount).length} of ${leafBreakdown.length}`,
+              note: "categories",
+            },
+          ]}
+        />
+      ) : null}
 
        {canManageShared && mismatchedCategories.length > 0 ? (
          <Card className="border-amber-500/30 bg-amber-500/[0.04] shadow-sm">
