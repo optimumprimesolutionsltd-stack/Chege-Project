@@ -58,3 +58,16 @@ describe('Find the difference, on the phone', () => {
     expect(importScreen).toContain('void readMpesaSms(params.smsFrom, params.smsTo).then((result) => {');
   });
 });
+
+describe('when the check cannot reach the server', () => {
+  it('says so in a sentence and never shows the host’s error page', async () => {
+    const { differenceError } = await import('../differenceError');
+    const page = Object.assign(new Error('HTTP 502 : <!DOCTYPE html><html lang="en"><head>'), { status: 502 });
+    expect(differenceError(page)).toBe('Jamvi could not reach its server just then, so nothing was checked. Nothing was changed.');
+    expect(differenceError(Object.assign(new Error('x'), { status: 400, data: { error: 'No M-Pesa messages with a balance were found.' } }))).toBe('No M-Pesa messages with a balance were found.');
+    expect(differenceError(Object.assign(new Error('HTTP 418 : <html>'), { status: 418 }))).toBe('Could not check just then.');
+  });
+  it('tries again by itself through a hiccup: the check only reads', () => {
+    expect(read('app/mpesa-difference.tsx')).toContain("setAnswer(await retrySave(() => customFetch<Answer>('/api/mpesa/difference', {");
+  });
+});
