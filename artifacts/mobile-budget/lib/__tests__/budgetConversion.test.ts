@@ -124,3 +124,13 @@ describe('copy', () => {
     expect(chooser).not.toContain('PERSONAL BUDGET · FREE');
   });
 });
+
+describe('owner actions in Group access', () => {
+  it('are stacked top to bottom, so "Make this my Personal budget" is not squeezed beside the note', () => {
+    const settings = read('app/(tabs)/settings.tsx');
+    const owner = settings.slice(settings.indexOf('testID="owner-access-actions"') - 200, settings.indexOf('testID="owner-access-actions"') + 300);
+    expect(owner).toContain("flexDirection: 'column'");
+    const block = settings.slice(settings.indexOf('testID="owner-access-actions"'));
+    expect(block.indexOf('testID="make-group-personal"')).toBeGreaterThan(0);
+  });
+});
