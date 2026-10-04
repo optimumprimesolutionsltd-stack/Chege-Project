@@ -149,7 +149,51 @@ export type MobileOnboardingDraft = {
    *  plain KES string. These become tracked debts rather than plain
    *  categories, which is what gives the Debt tab something to show. */
   debtBalances?: Record<string, string>;
+  /** Whether the person runs a business or side hustle. Null until asked,
+   *  and on every draft made before the question existed. */
+  runsBusiness?: boolean | null;
+  /** What the business is called, as typed. Blank becomes "My business". */
+  businessName?: string;
 };
+
+/**
+ * The costs a business set up in onboarding starts with, and where each sits
+ * on its profit and loss.
+ *
+ * A business on the Business screen is an income stream with categories
+ * linked to it as costs. Linking was only possible from Reports → Income
+ * streams → Cost categories, which a shopkeeper will never find, so somebody
+ * who said "I run a business" still met "No business set up yet". Asking
+ * once, here, and linking these to the business is what makes the profit and
+ * loss work from the first sale.
+ *
+ * Stock is what the things sold cost, so it comes off sales first; supplies
+ * and the general business line are the cost of running it.
+ */
+export const BUSINESS_COST_CATEGORIES: ReadonlyArray<{ name: string; costKind: "cogs" | "expense" }> = [
+  { name: "Stock & inventory", costKind: "cogs" },
+  { name: "Business supplies", costKind: "expense" },
+  { name: "Work & business", costKind: "expense" },
+];
+
+/** Ticked for somebody who says they run a business. The third line stays
+ *  on offer, unticked: not every business has one. */
+export const BUSINESS_PRESELECTED_CATEGORIES = ["Stock & inventory", "Business supplies"] as const;
+
+/** The generic income option a named business replaces. */
+export const GENERIC_BUSINESS_INCOME_STREAM = "Business or side hustle";
+
+export function isBusinessCostCategory(category: string): boolean {
+  const normalized = normalizeCategoryName(category);
+  return BUSINESS_COST_CATEGORIES.some((item) => normalizeCategoryName(item.name) === normalized);
+}
+
+/** The business's name as it will be saved, or null when there is no business. */
+export function businessNameFromDraft(draft: Pick<MobileOnboardingDraft, "usageMode" | "runsBusiness" | "businessName">): string | null {
+  if (draft.usageMode === "shared" || draft.runsBusiness !== true) return null;
+  const name = (draft.businessName ?? "").trim().replace(/\s+/g, " ").slice(0, 80);
+  return name || "My business";
+}
 
 const ONBOARDING_CATEGORY_ALIASES: Record<string, string> = {
   "food & meals": "Food",
@@ -497,9 +541,11 @@ export function onboardingDraftStorageKey(userId: string): string {
   return `${ONBOARDING_DRAFT_STORAGE_PREFIX}${encodeURIComponent(userId)}`;
 }
 
-export function recommendedCategoriesForPurpose(purpose: string | null, coupleStage: CoupleStage | null = null): string[] {
+export function recommendedCategoriesForPurpose(purpose: string | null, coupleStage: CoupleStage | null = null, runsBusiness = false): string[] {
   const key = purpose === "couple" && coupleStage === "wedding" ? "couple_wedding" : purpose;
-  return dedupeCategoryNames(key ? (PURPOSE_CATEGORY_MAP[key] ?? ALL_ONBOARDING_CATEGORIES) : ALL_ONBOARDING_CATEGORIES);
+  const usual = key ? (PURPOSE_CATEGORY_MAP[key] ?? ALL_ONBOARDING_CATEGORIES) : ALL_ONBOARDING_CATEGORIES;
+  // A student or employee with a side business still needs its costs offered.
+  return dedupeCategoryNames(runsBusiness ? [...usual, ...BUSINESS_COST_CATEGORIES.map((item) => item.name)] : usual);
 }
 
 /**
@@ -564,8 +610,9 @@ export function normalizeOnboardingDraft(value: unknown): MobileOnboardingDraft 
     }, {})
     : {};
   const coupleStage = raw.coupleStage === "together" || raw.coupleStage === "wedding" ? raw.coupleStage : null;
+  const runsBusiness = typeof raw.runsBusiness === "boolean" ? raw.runsBusiness : null;
   const selectedCategories = dedupeCategoryNames(raw.selectedCategories.filter((item): item is string => typeof item === "string"));
-  const recommendedCategories = recommendedCategoriesForPurpose(persona, coupleStage);
+  const recommendedCategories = recommendedCategoriesForPurpose(persona, coupleStage, runsBusiness === true);
   const customCategories = dedupeCategoryNames(raw.customCategories.filter((item): item is string => typeof item === "string"))
     .filter((category) => !recommendedCategories.some((item) => normalizeCategoryName(item) === normalizeCategoryName(category)));
   const categoryBudgets = raw.categoryBudgets && typeof raw.categoryBudgets === "object"
@@ -613,6 +660,8 @@ export function normalizeOnboardingDraft(value: unknown): MobileOnboardingDraft 
     expectedMemberCount: typeof raw.expectedMemberCount === "string" ? raw.expectedMemberCount.replace(/[^0-9]/g, "") : "",
     budgetGoal,
     debtBalances,
+    runsBusiness,
+    businessName: typeof raw.businessName === "string" ? raw.businessName.slice(0, 80) : "",
   };
 }
 

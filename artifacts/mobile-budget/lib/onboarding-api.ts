@@ -4,9 +4,16 @@ import {
   type Workspace,
 } from "@workspace/api-client-react";
 import {
+  BUSINESS_COST_CATEGORIES,
+  businessNameFromDraft,
   categoryPriority,
+<<<<<<< HEAD
   onboardingSubcategoriesFor,
   plannedCategoryAmount,
+=======
+  normalizeCategoryName,
+  normalizeIncomeStreamName,
+>>>>>>> 52e6571e (Onboarding asks whether you run a business, and sets it up)
   type MobileOnboardingDraft,
 } from "@/lib/onboarding";
 
@@ -127,5 +134,74 @@ export async function applyMobileOnboardingToWorkspace({
       // The web flow treats a duplicate income source as an idempotent retry.
       if (!(error instanceof ApiError) || error.status !== 409) throw error;
     }
+  }
+
+  // Cost links are only offered on a Personal budget (Budget's category form
+  // clears them in a group), so a business answer waits for that budget.
+  if (workspace.isPrivate) {
+    try {
+      await setUpBusiness({ draft, userId });
+    } catch {
+      // Not fatal to the rest of setup — Reports' Cost categories can still
+      // link the costs by hand.
+    }
+  }
+}
+
+/**
+ * The business somebody said they run: an income stream named for it, with
+ * the business cost categories they kept linked to it, so the Business
+ * screen has a profit and loss from the first sale.
+ *
+ * Safe to run twice: an existing stream of that name is reused, and a
+ * category already linked to something is left alone.
+ */
+export async function setUpBusiness({
+  draft,
+  userId,
+}: {
+  draft: MobileOnboardingDraft;
+  userId: string;
+}): Promise<void> {
+  const name = businessNameFromDraft(draft);
+  if (!name) return;
+
+  let incomeSourceId: number | null = null;
+  try {
+    const created = await customFetch<{ id: number }>("/api/income-sources", {
+      method: "POST",
+      responseType: "json",
+      body: JSON.stringify({
+        userId,
+        name,
+        isMain: false,
+        expectedMonthlyAmount: Math.max(0, Math.round(Number(draft.incomeAmounts[name] ?? 0)) || 0),
+      }),
+    });
+    incomeSourceId = created?.id ?? null;
+  } catch (error) {
+    if (!(error instanceof ApiError) || error.status !== 409) throw error;
+  }
+  if (incomeSourceId == null) {
+    const sources = await customFetch<Array<{ id: number; name: string }>>(`/api/income-sources?userId=${encodeURIComponent(userId)}`, {
+      method: "GET",
+      responseType: "json",
+    });
+    incomeSourceId = (sources ?? []).find((source) => normalizeIncomeStreamName(source.name) === normalizeIncomeStreamName(name))?.id ?? null;
+  }
+  if (incomeSourceId == null) return;
+
+  const categories = await customFetch<Array<{ id: number; name: string; reducesIncomeSourceId?: number | null }>>("/api/budget-categories", {
+    method: "GET",
+    responseType: "json",
+  });
+  for (const cost of BUSINESS_COST_CATEGORIES) {
+    const category = (categories ?? []).find((row) => normalizeCategoryName(row.name) === normalizeCategoryName(cost.name));
+    if (!category || category.reducesIncomeSourceId != null) continue;
+    await customFetch(`/api/budget-categories/${category.id}`, {
+      method: "PUT",
+      responseType: "json",
+      body: JSON.stringify({ reducesIncomeSourceId: incomeSourceId, costKind: cost.costKind }),
+    });
   }
 }
