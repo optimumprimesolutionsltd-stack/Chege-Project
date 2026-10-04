@@ -1076,7 +1076,25 @@ export default function MpesaImportScreen() {
     }
   };
   // Opened from Home's "new M-Pesa messages": everything since Jamvi last looked.
-  const params = useLocalSearchParams<{ fromSms?: string }>();
+  const params = useLocalSearchParams<{ fromSms?: string; smsFrom?: string; smsTo?: string }>();
+  // Opened from "Find the difference" for the days where Jamvi and M-Pesa parted:
+  // those days' messages, read straight away, with what is already saved marked.
+  const openedForRange = React.useRef(false);
+  useEffect(() => {
+    const day = /^\d{4}-\d{2}-\d{2}$/;
+    if (openedForRange.current || lines || !params.smsFrom || !params.smsTo || !day.test(params.smsFrom) || !day.test(params.smsTo)) return;
+    openedForRange.current = true;
+    setSmsFrom(params.smsFrom);
+    setSmsTo(params.smsTo);
+    void readMpesaSms(params.smsFrom, params.smsTo).then((result) => {
+      if (!result.ok) {
+        Alert.alert('Could not read your messages', smsRefusal(result.reason));
+        return;
+      }
+      return readSmsMessages(result.messages);
+    }).catch((error: unknown) => Alert.alert('Could not read your messages', plainSaveError(error)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.smsFrom, params.smsTo]);
   const openedForNew = React.useRef(false);
   useEffect(() => {
     if (params.fromSms !== 'new' || openedForNew.current || !smsAuto.on || lines) return;

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
-import { and, desc, eq, gte, inArray, isNotNull, isNull, lte, sql } from "drizzle-orm";
-import { db, jointAccountTxTable } from "@workspace/db";
+import { and, desc, eq, gte, inArray, isNotNull, isNull, lte, ne, sql } from "drizzle-orm";
+import { bankAccountsTable, db, jointAccountTxTable } from "@workspace/db";
 import { getActiveGroupId, requireGroupManager } from "../lib/activeGroup";
 import { canonicalExpenseCategoryName } from "../lib/categoryNames";
 import { headingAmong, postingToHeadingError } from "../lib/category-headings";
@@ -9,7 +9,8 @@ import { budgetCategoriesTable } from "@workspace/db";
 import { buildFormatReport, readPaste, type ImportItem } from "../lib/mpesa-parser/import";
 import { feedbackLimiter } from "../middlewares/rateLimit";
 import { EmailNotConfiguredError, sendEmail } from "../lib/email";
-import { mpesaBalance, nairobiToday } from "../lib/mpesa-balance";
+import { findMpesaAccount, mpesaBalance, nairobiToday } from "../lib/mpesa-balance";
+import { findDifference } from "../lib/mpesa-difference";
 
 const router = Router();
 
@@ -390,6 +391,76 @@ router.get("/mpesa/summary", async (req, res): Promise<void> => {
     balance: balance?.balance ?? null,
     balanceAccount: balance?.accountName ?? null,
   });
+});
+
+const differenceSchema = z.object({
+  messages: z.array(z.object({
+    receipt: z.string().trim().regex(/^[A-Z0-9]{8,15}$/).nullable(),
+    balance: z.number().finite(),
+    at: z.number().finite(),
+    day: z.string().date(),
+  })).min(1, "No M-Pesa messages with a balance were found.").max(6_000),
+});
+
+/**
+ * "Find the difference" (lib/mpesa-difference.ts): the phone sends, for each
+ * M-Pesa message, only its receipt code, the balance it states and when it
+ * came - never the message itself - and gets back the days on which Jamvi's
+ * M-Pesa account and M-Pesa parted, with the entries that explain each.
+ * Nothing is stored or changed.
+ */
+router.post("/mpesa/difference", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  const parsed = differenceSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Those messages could not be read." });
+    return;
+  }
+  const account = await findMpesaAccount(groupId);
+  if (!account) {
+    res.status(404).json({ error: "This budget has no M-Pesa account to compare with." });
+    return;
+  }
+
+  const rows = await db
+    .select({
+      id: jointAccountTxTable.id,
+      date: jointAccountTxTable.date,
+      type: jointAccountTxTable.type,
+      amount: jointAccountTxTable.amount,
+      receipt: jointAccountTxTable.mpesaReceipt,
+      description: jointAccountTxTable.description,
+    })
+    .from(jointAccountTxTable)
+    .where(and(eq(jointAccountTxTable.groupId, groupId), eq(jointAccountTxTable.accountId, account.id)));
+  const ledger = rows.map((row) => ({
+    id: row.id,
+    date: String(row.date).slice(0, 10),
+    signed: row.type === "deposit" ? Number(row.amount) : -Number(row.amount),
+    receipt: row.receipt,
+    description: row.description,
+  }));
+
+  // Messages this account does not have: saved to another of this budget's accounts?
+  const here = new Set(ledger.map((entry) => entry.receipt).filter(Boolean));
+  const absent = [...new Set(parsed.data.messages.map((message) => message.receipt).filter((code): code is string => Boolean(code) && !here.has(code)))];
+  const elsewhere = new Map<string, { account: string; date: string }>();
+  for (let i = 0; i < absent.length; i += 2_000) {
+    const found = await db
+      .select({ receipt: jointAccountTxTable.mpesaReceipt, date: jointAccountTxTable.date, account: bankAccountsTable.name })
+      .from(jointAccountTxTable)
+      .innerJoin(bankAccountsTable, eq(bankAccountsTable.id, jointAccountTxTable.accountId))
+      .where(and(
+        eq(jointAccountTxTable.groupId, groupId),
+        ne(jointAccountTxTable.accountId, account.id),
+        inArray(jointAccountTxTable.mpesaReceipt, absent.slice(i, i + 2_000)),
+      ));
+    for (const row of found) if (row.receipt) elsewhere.set(row.receipt, { account: row.account, date: String(row.date).slice(0, 10) });
+  }
+
+  const result = findDifference(parsed.data.messages, ledger, account.openingBalance, elsewhere);
+  res.json({ account: { id: account.id, name: account.name, openingBalance: account.openingBalance }, result });
 });
 
 export default router;
