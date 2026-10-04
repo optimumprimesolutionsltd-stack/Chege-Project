@@ -1,13 +1,15 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Feather } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 
 import { useColors } from '@/hooks/useColors';
 import { customFetch, useGetGroup } from '@workspace/api-client-react';
 import { mpesaCardKey, rememberMpesaCard, shouldShowMpesaCard } from '@/lib/mpesaCard';
+import { readLiveMpesaBalance } from '@/lib/mpesaSms';
+import { balanceComparison, kes, messageTime } from '@/lib/mpesaLiveBalance';
 
 /**
  * Your M-Pesa, first thing on Home and always there.
@@ -33,7 +35,6 @@ interface MpesaSummary {
 }
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-const kes = (n: number) => `KES ${Math.round(n).toLocaleString('en-KE')}`;
 const shortDate = (iso: string) => {
   const [y, m, d] = iso.split('-').map(Number);
   return `${d} ${MONTHS[m - 1].slice(0, 3)}${y !== new Date().getFullYear() ? ` ${y}` : ''}`;
@@ -69,6 +70,22 @@ export function MpesaImportCard() {
     retry: false,
   });
 
+  // M-Pesa's own figure, from the newest message on this phone. Looked at again
+  // each time Home is shown, so a payment made a minute ago is already in it.
+  // Personal budget only: the messages are this person's own M-Pesa, which a
+  // group's account (a chama's, a church's) has nothing to do with.
+  const personal = group?.isPrivate === true;
+  const { data: liveRead, refetch: refetchLive } = useQuery({
+    queryKey: ['mpesa-live-balance'],
+    queryFn: () => readLiveMpesaBalance(),
+    enabled: personal,
+    staleTime: 15_000,
+    retry: false,
+  });
+  useFocusEffect(useCallback(() => { if (personal) void refetchLive(); }, [personal, refetchLive]));
+  const live = personal ? liveRead ?? null : null;
+  const comparison = live && summary?.balance != null ? balanceComparison(live.balance, summary.balance, summary.balanceAccount) : null;
+
   const monthName = MONTHS[(summary?.month ?? new Date().getMonth() + 1) - 1];
   const showIntro = introOpen && !summary?.imported;
   const figures = [
@@ -102,7 +119,21 @@ export function MpesaImportCard() {
           </>
         ) : (
           <>
-          {summary?.balance != null ? (
+          {live ? (
+            <View style={styles.balanceRow} testID="mpesa-home-card-live-balance">
+              <Text style={[styles.figureLabel, { color: colors.mutedForeground }]}>M-Pesa balance now</Text>
+              <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.balanceValue, { color: colors.foreground }]}>{kes(live.balance)}</Text>
+              <Text style={[styles.figureLabel, { color: colors.mutedForeground }]}>From your M-Pesa message of {messageTime(live.at)}</Text>
+              {comparison ? (
+                <Text
+                  testID="mpesa-home-card-balance-comparison"
+                  style={[styles.comparison, { color: comparison.agrees ? colors.primary : '#B45309', borderColor: comparison.agrees ? colors.border : '#F59E0B' }]}
+                >
+                  {comparison.text}
+                </Text>
+              ) : null}
+            </View>
+          ) : summary?.balance != null ? (
             <View style={styles.balanceRow} testID="mpesa-home-card-balance">
               <Text style={[styles.figureLabel, { color: colors.mutedForeground }]}>
                 {summary.balanceAccount ? `${summary.balanceAccount} balance in Jamvi` : 'M-Pesa balance in Jamvi'}
@@ -169,6 +200,7 @@ export function MpesaImportCard() {
 const styles = StyleSheet.create({
   balanceRow: { gap: 2, paddingBottom: 4 },
   balanceValue: { fontSize: 26, fontFamily: 'Inter_700Bold' },
+  comparison: { fontFamily: 'Inter_400Regular', fontSize: 12, lineHeight: 17, marginTop: 6, borderWidth: 1, borderRadius: 4, padding: 8 },
   card: { borderWidth: 2, borderRadius: 6, overflow: 'hidden', shadowColor: '#D9663B', shadowOffset: { width: 5, height: 5 }, shadowOpacity: 1, shadowRadius: 0, elevation: 6 },
   weave: { flexDirection: 'row', height: 6 },
   inner: { padding: 16, gap: 12 },

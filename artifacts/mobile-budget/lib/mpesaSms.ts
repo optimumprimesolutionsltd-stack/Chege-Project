@@ -1,5 +1,6 @@
 import { PermissionsAndroid, Platform } from 'react-native';
 import { requireOptionalNativeModule } from 'expo';
+import { latestBalance, type LiveBalance } from './mpesaLiveBalance';
 
 /**
  * Reading M-Pesa's own text messages straight from the phone, on request
@@ -131,6 +132,20 @@ export async function newMpesaSms(since: number, now = Date.now()): Promise<{ me
   if (!(await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.READ_SMS))) return null;
   const rows = await native.readMessages(MPESA_SENDERS, since + 1, now + 1, MAX_SMS);
   return { messages: smsBodies(rows), newest: rows.reduce((max, row) => Math.max(max, row.date), since) };
+}
+
+/** How far back to look for it: a month covers anybody who uses M-Pesa at all. */
+export const LIVE_BALANCE_DAYS = 45;
+
+/**
+ * Read quietly, like the new-message check: null when this build cannot read
+ * messages or Android has not been allowed, and never asks.
+ */
+export async function readLiveMpesaBalance(now = Date.now()): Promise<LiveBalance | null> {
+  if (!native || !canReadSms()) return null;
+  if (!(await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.READ_SMS))) return null;
+  const rows = await native.readMessages(MPESA_SENDERS, now - LIVE_BALANCE_DAYS * 86_400_000, now + 1, MAX_SMS);
+  return latestBalance(rows);
 }
 
 /**
