@@ -1864,7 +1864,7 @@ export default function SettingsScreen() {
             </View>
           ))}
           {canLeaveGroup ? (
-            <View style={[styles.row, { borderTopColor: colors.border, borderTopWidth: members.length ? StyleSheet.hairlineWidth : 0, alignItems: 'stretch' }]}>
+            <View style={[styles.row, { flexDirection: 'column', borderTopColor: colors.border, borderTopWidth: members.length ? StyleSheet.hairlineWidth : 0, alignItems: 'stretch' }]}>
               <Text style={[styles.rowLabel, { color: colors.foreground }]}>Leave this group</Text>
               <Text style={[styles.rowSub, { color: colors.mutedForeground, marginTop: 4, marginBottom: 12 }]}>
                 You will lose access immediately. Shared finances and history stay with the group.
@@ -1880,7 +1880,10 @@ export default function SettingsScreen() {
               </Pressable>
             </View>
           ) : myMembership?.role === 'owner' ? (
-            <View style={[styles.row, { borderTopColor: colors.border, borderTopWidth: members.length ? StyleSheet.hairlineWidth : 0, alignItems: 'stretch' }]}>
+            // Stacked, not side by side: styles.row is a row, and the owner's
+            // note, "Make this my Personal budget" and "Delete this group" were
+            // squeezed into narrow columns next to each other.
+            <View testID="owner-access-actions" style={[styles.row, { flexDirection: 'column', borderTopColor: colors.border, borderTopWidth: members.length ? StyleSheet.hairlineWidth : 0, alignItems: 'stretch' }]}>
               <Text style={[styles.rowSub, { color: colors.mutedForeground, marginBottom: editingAccess && members.some((m) => m.role !== 'owner') ? 12 : 0 }]}>
                 {editingAccess && members.some((m) => m.role !== 'owner')
                   ? 'Owners stay in the group so it always has someone responsible for access. Tap "Make owner" next to another member above to hand it off — you can leave once you are no longer the owner.'
