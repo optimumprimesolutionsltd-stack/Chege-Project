@@ -2,7 +2,11 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const route = readFileSync("src/routes/mpesa-import.ts", "utf8").replace(/\r\n/g, "\n");
-const block = route.slice(route.indexOf('router.post("/mpesa/import/recategorise"'));
+const start = route.indexOf('router.post("/mpesa/import/recategorise"');
+// Just this route: routes after it (Fix all on Find the difference moves an
+// entry's account) are not the recategorise rule.
+const next = route.indexOf("\nrouter.", start + 1);
+const block = route.slice(start, next === -1 ? undefined : next);
 
 // Making a month of M-Pesa entries match without deleting them: only the
 // category of ordinary spending may change, by a manager, in this budget.

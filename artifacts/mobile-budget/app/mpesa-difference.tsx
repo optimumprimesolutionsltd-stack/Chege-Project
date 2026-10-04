@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
@@ -9,19 +9,12 @@ import { formatDisplayDate } from '@/lib/displayFormat';
 import { readMpesaRows, smsRefusal } from '@/lib/mpesaSms';
 import { retrySave } from '@/lib/saveRetry';
 import { differenceError } from '@/lib/differenceError';
-import { differenceMessages, kes, receiptOf, spanChangeText, startingBalanceAdvice } from '@/lib/mpesaLiveBalance';
+import { differenceMessages, fixConfirmation, fixPlan, hasFixes, kes, receiptOf, spanChangeText, startingBalanceAdvice, type DifferenceSpan } from '@/lib/mpesaLiveBalance';
 
 /** How far back to read: a year of messages is what most phones still hold. */
 const DAYS = 365;
 
-type Span = {
-  from: string;
-  to: string;
-  change: number;
-  missing: Array<{ receipt: string; day: string; savedIn: string | null; savedOn: string | null }>;
-  extra: Array<{ id: number; date: string; amount: number; description: string; receipt: string | null }>;
-  redated: Array<{ id: number; receipt: string; messageDay: string; savedDate: string; amount: number; description: string }>;
-};
+type Span = DifferenceSpan;
 type Answer = {
   account: { id: number; name: string; openingBalance: number };
   result: { from: string; to: string; checkedDays: number; startGap: number; endGap: number; spans: Span[]; moreSpans: number } | null;
@@ -96,6 +89,43 @@ export default function MpesaDifferenceScreen() {
   // list on the way back, or it goes on listing what is already sorted.
   useFocusEffect(useCallback(() => { void check(); }, [check]));
 
+  // "Fix all": one confirmation, then everything that needs no judgement.
+  const [fixing, setFixing] = useState(false);
+  const fixAll = () => {
+    if (!answer?.result) return;
+    const plan = fixPlan(answer.result.spans);
+    const { title, message } = fixConfirmation(plan, answer.account.name);
+    Alert.alert(title, message, [
+      { text: 'Not now', style: 'cancel' },
+      {
+        text: 'Fix all',
+        onPress: async () => {
+          setFixing(true);
+          try {
+            if (plan.move.length > 0 || plan.redate.length > 0) {
+              await retrySave(() => customFetch('/api/mpesa/difference/fix', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ move: plan.move, redate: plan.redate }),
+              }));
+            }
+            if (plan.bringIn) {
+              // Brought in and saved as Not sure yet by the import; coming back
+              // here checks again.
+              router.push(`/mpesa-import?smsFrom=${plan.bringIn.from}&smsTo=${plan.bringIn.to}&notSure=1` as never);
+            } else {
+              await check();
+            }
+          } catch (reason) {
+            Alert.alert('Could not fix them', differenceError(reason));
+          } finally {
+            setFixing(false);
+          }
+        },
+      },
+    ]);
+  };
+
   const result = answer?.result ?? null;
   const account = answer?.account.name ?? 'M-Pesa';
   const advice = result && answer ? startingBalanceAdvice(result.startGap, answer.account.openingBalance, account, formatDisplayDate(result.from)) : null;
@@ -157,6 +187,21 @@ export default function MpesaDifferenceScreen() {
                 </Text>
               ) : null}
             </View>
+
+            {result.spans.length > 0 && hasFixes(fixPlan(result.spans)) ? (
+              <Pressable
+                onPress={fixAll}
+                disabled={fixing || rechecking}
+                accessibilityRole="button"
+                testID="mpesa-difference-fix-all"
+                style={{ backgroundColor: colors.primary, borderRadius: 8, padding: 14, alignItems: 'center', opacity: fixing || rechecking ? 0.6 : 1 }}
+              >
+                <Text style={{ color: '#fff', fontFamily: 'Inter_700Bold', fontSize: 15 }}>{fixing ? 'Fixing…' : 'Fix all of these'}</Text>
+                <Text style={{ color: '#ffffffcc', fontSize: 12, marginTop: 2, textAlign: 'center' }}>
+                  You see exactly what changes first. Nothing is deleted.
+                </Text>
+              </Pressable>
+            ) : null}
 
             {advice ? (
               <View style={[styles.card, { backgroundColor: colors.card, borderColor: '#F59E0B' }]} testID="mpesa-difference-start">
