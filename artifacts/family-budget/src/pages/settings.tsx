@@ -28,6 +28,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getGetMembersQueryKey } from "@workspace/api-client-react";
 import { Award, BookOpen, BriefcaseBusiness, Camera, Coffee, Gift, Heart, Home, LockKeyhole, LogOut, MapPin, Monitor, Moon, Palette, Pencil, ShoppingBag, Star, Sun, Trash2, TrendingUp, Truck, User, UserPlus, Users, Shield, Send, RotateCcw, Wrench, X, MessageSquare } from "lucide-react";
 import { FeedbackDialog } from "@/components/feedback-dialog";
+import { MakeGroupMyPersonalBudget, RemoveUnusedPersonalBudget, TurnPersonalIntoGroup } from "@/components/budget-conversion";
+import { canMakeGroupPersonal } from "@/lib/budget-conversion";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { WORKSPACE_NAME_STYLES, workspaceNameClass } from "@/lib/workspace-identity";
 import type { WorkspaceNameStyle } from "@workspace/api-client-react";
@@ -1350,6 +1352,11 @@ export default function Settings() {
               </p>
             </div>
           )}
+          {isPrivateWorkspace ? <TurnPersonalIntoGroup /> : null}
+          <RemoveUnusedPersonalBudget />
+          {group && canMakeGroupPersonal({ group, members, userId: user?.id }) ? (
+            <MakeGroupMyPersonalBudget groupId={group.id} groupName={budgetName} />
+          ) : null}
           {canLeaveGroup && (
             <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
