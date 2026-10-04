@@ -6,7 +6,7 @@ vi.mock('react-native', () => ({ Platform: { OS: 'android' }, PermissionsAndroid
 vi.mock('@/lib/auth', () => ({ useAuth: () => ({ user: null }) }));
 vi.mock('@react-native-async-storage/async-storage', () => ({ default: { getItem: async () => null } }));
 
-import { waitingBadge } from '@/hooks/useWaitingForYou';
+import { canActOnWaiting, waitingBadge, waitingTotal } from '@/hooks/useWaitingForYou';
 
 // "These two can easily be forgotten, yet they are the most important in the
 // app" (3 Oct 2026): new M-Pesa messages and entries to sort out.
@@ -29,5 +29,26 @@ describe('what is waiting for you', () => {
     expect(sort).toBeGreaterThan(sms);
     expect(mpesa).toBeGreaterThan(sort);
     expect(home).toContain('useWaitingForYou()');
+  });
+
+  it('counts only for somebody who is shown the cards, so the badge always has something behind it', () => {
+    expect(canActOnWaiting({ isPrivate: true, role: 'owner' })).toBe(true);
+    expect(canActOnWaiting({ isPrivate: false, role: 'owner' })).toBe(true);
+    expect(canActOnWaiting({ isPrivate: false, role: 'admin' })).toBe(true);
+    expect(canActOnWaiting({ isPrivate: false, role: 'member' })).toBe(false);
+    expect(canActOnWaiting({ isPrivate: false, role: 'viewer' })).toBe(false);
+    expect(canActOnWaiting(undefined)).toBe(false);
+    expect(waitingTotal({ toSortCount: 4, newSmsCount: 5, canAct: true })).toBe(9);
+    expect(waitingTotal({ toSortCount: 4, newSmsCount: 5, canAct: false })).toBe(0);
+    // The same rule as the cards on Home.
+    const home = readFileSync('app/(tabs)/index.tsx', 'utf8');
+    expect(home).toContain("const canManageBudget = !isSharedWorkspace || group?.role === 'owner' || group?.role === 'admin';");
+  });
+
+  it('tapping the Home tab while on Home brings it back to the top, where the counted cards are', () => {
+    const home = readFileSync('app/(tabs)/index.tsx', 'utf8').replace(/\r\n/g, '\n');
+    expect(home).toContain("navigation.addListener('tabPress' as never, () => {");
+    expect(home).toContain('if (navigation.isFocused()) homeScrollRef.current?.scrollTo({ y: 0, animated: true });');
+    expect(home).toContain('<PageScrollView ref={homeScrollRef}');
   });
 });

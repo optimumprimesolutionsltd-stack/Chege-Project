@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { customFetch } from '@workspace/api-client-react';
+import { customFetch, useGetGroup } from '@workspace/api-client-react';
 import { useAuth } from '@/lib/auth';
 import type { EntryToSort } from '@/lib/entriesToSort';
 import { canReadSms, newMpesaSms, parseSmsAuto, smsAutoKey } from '@/lib/mpesaSms';
@@ -16,6 +16,7 @@ import { canReadSms, newMpesaSms, parseSmsAuto, smsAutoKey } from '@/lib/mpesaSm
  */
 export function useWaitingForYou() {
   const { user } = useAuth();
+  const { data: group } = useGetGroup();
   const toSort = useQuery<{ entries: EntryToSort[] }>({
     queryKey: ['entries-to-sort'],
     queryFn: () => customFetch('/api/entries-to-sort'),
@@ -35,7 +36,22 @@ export function useWaitingForYou() {
   });
   const toSortCount = toSort.data?.entries.length ?? 0;
   const newSmsCount = newSms.data ?? 0;
-  return { toSortCount, newSmsCount, total: toSortCount + newSmsCount, recheckSms: newSms.refetch };
+  const total = waitingTotal({ toSortCount, newSmsCount, canAct: canActOnWaiting(group) });
+  return { toSortCount, newSmsCount, total, recheckSms: newSms.refetch };
+}
+
+/**
+ * Who sees the cards on Home, and so who the badge counts for: anyone in their
+ * Personal budget, and a group's owner or admins. A badge with no card behind
+ * it is a number nobody can do anything about.
+ */
+export function canActOnWaiting(group: { isPrivate: boolean; role?: string | null } | null | undefined): boolean {
+  if (!group) return false;
+  return group.isPrivate || group.role === 'owner' || group.role === 'admin';
+}
+
+export function waitingTotal({ toSortCount, newSmsCount, canAct }: { toSortCount: number; newSmsCount: number; canAct: boolean }): number {
+  return canAct ? toSortCount + newSmsCount : 0;
 }
 
 /** The badge: a number, "99+" past that, nothing at none. */
