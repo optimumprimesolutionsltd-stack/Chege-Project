@@ -82,7 +82,7 @@ import { keepScreenAwakeWhileSaving, letScreenSleepAgain } from '@/lib/keepAwake
 import { getImportProgress, importSaveStalled, setImportProgress, useImportProgress } from '@/lib/importProgress';
 import { clearSavePending, hasPendingSave, markSavePending } from '@/lib/importSaveJob';
 import { retryWhenCutOff } from '@/lib/saveWhileAway';
-import { plainSaveError, withRetries } from '@/lib/saveRetry';
+import { plainReadError, plainSaveError, retrySave, withRetries } from '@/lib/saveRetry';
 import { isNotSure, needsNotSureCategory, NOT_SURE_CATEGORY, notSureableLines, otherBudgetToMark, putUnderNotSure, toMarkAfterSave } from '@/lib/entriesToSort';
 import { handleLapsedError } from '@/lib/lapsedError';
 import { runPool, savePosting, SAVE_CONCURRENCY, type PostingApi } from '@/lib/savePosting';
@@ -929,6 +929,18 @@ export default function MpesaImportScreen() {
   // under School fees. It now only stands in where there is no built-in one.
   const effectiveChargeCategory = builtInCharge ?? chargeCategory;
 
+  // Reading messages, pasted or from the phone. It saves nothing, so a server
+  // that is briefly not there (a restart, a dropped connection) is waited out
+  // and asked again, the same as a save is, before the reading gives up.
+  const readPreview = (pasted: string) =>
+    retrySave(() =>
+      customFetch<{ lines: PreviewLine[] }>('/api/mpesa/import/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: pasted }),
+      }),
+    );
+
   const readMessages = async (pasted: string = text) => {
     if (!pasted.trim()) {
       Alert.alert('Paste your messages', 'Copy them from your Messages app, then paste them here.');
@@ -937,11 +949,7 @@ export default function MpesaImportScreen() {
     setReading(true);
     setSmsMessages(null);
     try {
-      const response = await customFetch<{ lines: PreviewLine[] }>('/api/mpesa/import/preview', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: pasted }),
-      });
+      const response = await readPreview(pasted);
       // Read fresh: a share can be read before the effect above has loaded them.
       const known = parseStoredNicknames(await AsyncStorage.getItem(nicknamesKey).catch(() => null));
       setNicknames(known);
@@ -955,7 +963,7 @@ export default function MpesaImportScreen() {
         setChoices((current) => ({ ...current, ...restoredChoices }));
       }
     } catch (error: unknown) {
-      Alert.alert('Could not read them', error instanceof Error ? error.message : 'Please try again.');
+      Alert.alert('Could not read them', plainReadError(error));
     } finally {
       setReading(false);
     }
@@ -1015,11 +1023,7 @@ export default function MpesaImportScreen() {
     try {
       const all: PreviewLine[] = [];
       for (const batch of smsBatches(messages)) {
-        const response = await customFetch<{ lines: PreviewLine[] }>('/api/mpesa/import/preview', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: batch.join('\n\n') }),
-        });
+        const response = await readPreview(batch.join('\n\n'));
         const offset = all.length;
         all.push(...response.lines.map((line) => ({ ...line, index: line.index + offset })));
       }
@@ -1031,7 +1035,7 @@ export default function MpesaImportScreen() {
       setLines(shown);
       setChoices(initialChoices(shown, history, categories.map((row) => row.name), effectiveChargeCategory, rules, canManageBudget));
     } catch (error: unknown) {
-      Alert.alert('Could not read them', plainSaveError(error));
+      Alert.alert('Could not read them', plainReadError(error));
     } finally {
       setReading(false);
     }

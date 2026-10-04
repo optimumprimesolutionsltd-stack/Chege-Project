@@ -100,3 +100,20 @@ export function plainSaveError(error: unknown): string {
   const plain = message.replace(/^HTTP \d{3}[^:]*:\s*/, '').trim();
   return plain && !/<[a-z!]/i.test(plain) ? plain : 'It was not saved. Tap Save again to try it.';
 }
+
+/**
+ * Why M-Pesa messages could not be read, in a sentence. Reading saves nothing,
+ * so a server hiccup says to read them again - not "tap Save", which the
+ * screen being read into does not have yet.
+ */
+export function plainReadError(error: unknown): string {
+  const status = statusOf(error);
+  if (isServerHiccup(error) || (status !== undefined && status >= 500)) {
+    return 'Jamvi could not reach its server just then, so the messages were not read. Nothing was saved - check your connection and try again.';
+  }
+  const reason = (error as { data?: { error?: unknown } } | null)?.data?.error;
+  if (typeof reason === 'string' && reason.trim()) return reason.trim();
+  const message = error instanceof Error ? error.message : '';
+  const plain = message.replace(/^HTTP \d{3}[^:]*:\s*/, '').trim();
+  return plain && !/<[a-z!]/i.test(plain) ? plain : 'They could not be read. Please try again.';
+}
