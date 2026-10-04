@@ -32,7 +32,7 @@ import { useColors } from '@/hooks/useColors';
 import { useEntitlements } from '@/hooks/useEntitlements';
 import { mayStartGroup } from '@/lib/groupStart';
 import { toSortTitle } from '@/lib/entriesToSort';
-import { useWaitingForYou } from '@/hooks/useWaitingForYou';
+import { useWaitingForYou, waitingDestination } from '@/hooks/useWaitingForYou';
 import { useQuery } from '@tanstack/react-query';
 import { canReadSms, newMpesaSms, newSmsTitle, parseSmsAuto, smsAutoKey } from '@/lib/mpesaSms';
 import { PageScrollView } from '@/components/PageScrollReset';
@@ -320,13 +320,18 @@ export default function DashboardScreen() {
   // the Home tab's badge). New messages are looked for each time Home is shown
   // and each time Jamvi comes back to the front.
   const { toSortCount, newSmsCount: newSms, recheckSms } = useWaitingForYou();
-  // The Home tab carries a badge counting these. Tapping it while already on
-  // Home, scrolled down, did nothing, so the cards it counts stayed out of
-  // sight: a second tap now brings Home back to the top, where they lead.
+  // The Home tab carries a badge counting these. Tapping Home from another tab
+  // opens Home, where they lead. Tapping it again, once Home is open, goes
+  // straight to the thing to fix; with nothing waiting it returns to the top.
   const homeScrollRef = useRef<AskScroll>(null);
   const navigation = useNavigation();
+  const waitingDestinationRef = useRef<string | null>(null);
+  waitingDestinationRef.current = waitingDestination({ toSortCount, newSmsCount: newSms, canAct: canManageBudget });
   useEffect(() => navigation.addListener('tabPress' as never, () => {
-    if (navigation.isFocused()) homeScrollRef.current?.scrollTo({ y: 0, animated: true });
+    if (!navigation.isFocused()) return;
+    const destination = waitingDestinationRef.current;
+    if (destination) router.push(destination as never);
+    else homeScrollRef.current?.scrollTo({ y: 0, animated: true });
   }), [navigation]);
   useFocusEffect(React.useCallback(() => { if (canReadSms()) void recheckSms(); }, [recheckSms]));
   useEffect(() => {
