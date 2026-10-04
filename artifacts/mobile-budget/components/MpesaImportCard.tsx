@@ -132,6 +132,17 @@ export function MpesaImportCard() {
                   {comparison.text}
                 </Text>
               ) : null}
+              {comparison && !comparison.agrees ? (
+                <Pressable
+                  testID="mpesa-home-card-find-difference"
+                  accessibilityRole="button"
+                  onPress={() => router.push('/mpesa-difference' as never)}
+                  style={({ pressed }) => [styles.findDifference, { borderColor: colors.primary, opacity: pressed ? 0.6 : 1 }]}
+                >
+                  <Feather name="search" size={15} color={colors.primary} />
+                  <Text style={[styles.findDifferenceText, { color: colors.primary }]}>Find the difference</Text>
+                </Pressable>
+              ) : null}
             </View>
           ) : summary?.balance != null ? (
             <View style={styles.balanceRow} testID="mpesa-home-card-balance">
@@ -200,6 +211,8 @@ export function MpesaImportCard() {
 const styles = StyleSheet.create({
   balanceRow: { gap: 2, paddingBottom: 4 },
   balanceValue: { fontSize: 26, fontFamily: 'Inter_700Bold' },
+  findDifference: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', borderWidth: 1, borderRadius: 4, paddingHorizontal: 12, paddingVertical: 8, marginTop: 8 },
+  findDifferenceText: { fontFamily: 'Inter_700Bold', fontSize: 13 },
   comparison: { fontFamily: 'Inter_400Regular', fontSize: 12, lineHeight: 17, marginTop: 6, borderWidth: 1, borderRadius: 4, padding: 8 },
   card: { borderWidth: 2, borderRadius: 6, overflow: 'hidden', shadowColor: '#D9663B', shadowOffset: { width: 5, height: 5 }, shadowOpacity: 1, shadowRadius: 0, elevation: 6 },
   weave: { flexDirection: 'row', height: 6 },

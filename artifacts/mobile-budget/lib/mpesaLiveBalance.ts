@@ -67,3 +67,50 @@ export function balanceComparison(live: number, inJamvi: number, account: string
       + `Some money ${gap > 0 ? 'in' : 'out'} was not recorded in ${name}, or its opening balance is missing.`,
   };
 }
+
+/**
+ * "Find the difference": what is sent to the server for each message is only
+ * its receipt code, the balance it states and when it came - never the message.
+ */
+export type DifferenceMessage = { receipt: string | null; balance: number; at: number; day: string };
+
+/** M-Pesa's receipt code, which every transaction message starts with ("TJ4AB1CD2E Confirmed…"). */
+export function receiptOf(body: string): string | null {
+  const code = body.trim().match(/^([A-Z0-9]{8,15})\b/)?.[1];
+  return code && /[A-Z]/.test(code) && /[0-9]/.test(code) ? code : null;
+}
+
+/** A moment's day in Kenya (UTC+3 all year), as YYYY-MM-DD: the day Jamvi dates entries by. */
+export const kenyaDay = (ms: number): string => new Date(ms + 3 * 3_600_000).toISOString().slice(0, 10);
+
+/** The messages that state a balance, as the server is sent them. */
+export function differenceMessages(rows: ReadonlyArray<{ body: string; date: number }>): DifferenceMessage[] {
+  const out: DifferenceMessage[] = [];
+  for (const row of rows) {
+    const balance = balanceInMessage(row.body);
+    if (balance === null) continue;
+    out.push({ receipt: receiptOf(row.body), balance, at: row.date, day: kenyaDay(row.date) });
+  }
+  return out;
+}
+
+/** "Jamvi fell KES 2,000 below M-Pesa" / "went KES 500 above". */
+export function spanChangeText(change: number): string {
+  return change > 0
+    ? `Jamvi fell ${kes(change)} further below M-Pesa`
+    : `Jamvi went ${kes(Math.abs(change))} further above M-Pesa`;
+}
+
+/**
+ * A gap already there on the first day the messages cover is a starting
+ * balance Jamvi was never told: the opening balance that closes it.
+ */
+export function startingBalanceAdvice(startGap: number, opening: number, account: string, firstDay: string): string | null {
+  if (Math.abs(startGap) < 1) return null;
+  const needed = Math.round((opening + startGap) * 100) / 100;
+  if (needed < 0) {
+    return `On ${firstDay}, when your messages begin, Jamvi already had ${kes(Math.abs(startGap))} more in ${account} than M-Pesa did: something before then was counted twice or saved to ${account} by mistake.`;
+  }
+  return `On ${firstDay}, when your messages begin, Jamvi was already ${kes(Math.abs(startGap))} ${startGap > 0 ? 'below' : 'above'} M-Pesa. `
+    + `That is what ${account} held before Jamvi's records start: set its opening balance to ${kes(needed)} in Bank.`;
+}

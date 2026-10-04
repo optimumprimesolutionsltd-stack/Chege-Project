@@ -134,6 +134,26 @@ export async function newMpesaSms(since: number, now = Date.now()): Promise<{ me
   return { messages: smsBodies(rows), newest: rows.reduce((max, row) => Math.max(max, row.date), since) };
 }
 
+/**
+ * M-Pesa's messages with when each came, newest last, for "Find the
+ * difference". Asks Android's permission the first time, like reading a range:
+ * the person has just asked for it.
+ */
+export async function readMpesaRows(days: number, now = Date.now()): Promise<
+  | { ok: true; rows: Array<{ body: string; date: number }> }
+  | { ok: false; reason: 'denied' | 'blocked' | 'unavailable' }
+> {
+  if (!native || !canReadSms()) return { ok: false, reason: 'unavailable' };
+  const permission = PermissionsAndroid.PERMISSIONS.READ_SMS;
+  if (!(await PermissionsAndroid.check(permission))) {
+    const answer = await PermissionsAndroid.request(permission);
+    if (answer === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN) return { ok: false, reason: 'blocked' };
+    if (answer !== PermissionsAndroid.RESULTS.GRANTED) return { ok: false, reason: 'denied' };
+  }
+  const rows = await native.readMessages(MPESA_SENDERS, now - days * 86_400_000, now + 1, MAX_SMS);
+  return { ok: true, rows: [...rows].sort((a, b) => a.date - b.date) };
+}
+
 /** How far back to look for it: a month covers anybody who uses M-Pesa at all. */
 export const LIVE_BALANCE_DAYS = 45;
 

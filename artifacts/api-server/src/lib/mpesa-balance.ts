@@ -28,7 +28,8 @@ export function pickMpesaAccount(
   return best;
 }
 
-export async function mpesaBalance(groupId: number, today: string): Promise<{ accountName: string; balance: number } | null> {
+/** The budget's M-Pesa account, chosen as pickMpesaAccount says, or null when it has no accounts. */
+export async function findMpesaAccount(groupId: number): Promise<{ id: number; name: string; openingBalance: number } | null> {
   const accounts = await db
     .select({ id: bankAccountsTable.id, name: bankAccountsTable.name, openingBalance: bankAccountsTable.openingBalance })
     .from(bankAccountsTable)
@@ -41,6 +42,11 @@ export async function mpesaBalance(groupId: number, today: string): Promise<{ ac
     .groupBy(jointAccountTxTable.accountId);
   const chosen = pickMpesaAccount(accounts, new Map(counts.filter((row) => row.accountId != null).map((row) => [row.accountId as number, row.count])));
   const account = accounts.find((row) => row.id === chosen);
+  return account ? { id: account.id, name: account.name, openingBalance: Number(account.openingBalance) } : null;
+}
+
+export async function mpesaBalance(groupId: number, today: string): Promise<{ accountName: string; balance: number } | null> {
+  const account = await findMpesaAccount(groupId);
   if (!account) return null;
   const [sums] = await db
     .select({
@@ -49,7 +55,7 @@ export async function mpesaBalance(groupId: number, today: string): Promise<{ ac
     })
     .from(jointAccountTxTable)
     .where(and(eq(jointAccountTxTable.groupId, groupId), eq(jointAccountTxTable.accountId, account.id), lte(jointAccountTxTable.date, today)));
-  const balance = Math.round((Number(account.openingBalance) + (sums?.moneyIn ?? 0) - (sums?.moneyOut ?? 0)) * 100) / 100;
+  const balance = Math.round((account.openingBalance + (sums?.moneyIn ?? 0) - (sums?.moneyOut ?? 0)) * 100) / 100;
   return { accountName: account.name, balance };
 }
 
