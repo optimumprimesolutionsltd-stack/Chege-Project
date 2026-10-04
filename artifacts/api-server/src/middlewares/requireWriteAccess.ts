@@ -26,6 +26,9 @@ const ALLOWED_FOR_VIEWERS = [
   // Switching workspace. Without this a viewer cannot leave the budget they
   // are viewing, including back to their own.
   "/workspaces/select",
+  // Their own Personal budget: creating, removing or converting it. It is
+  // theirs whatever budget they happen to be viewing.
+  "/workspaces/personal",
   // Paying for their own subscription. Billing belongs to the person, not to
   // the budget they happen to be looking at.
   "/payments",

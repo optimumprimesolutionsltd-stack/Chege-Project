@@ -575,7 +575,7 @@ export function BudgetChooser({
             <div className="p-6 sm:p-10">
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-primary">First, a quick question</p>
               <h2 className="mt-2 font-display text-2xl font-bold text-foreground">How will you use Jamvi?</h2>
-              <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">Every Jamvi account includes a free, private Personal budget. This choice helps us decide what to set up first.</p>
+              <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">Your Jamvi subscription covers a private Personal budget and every group you&rsquo;re in. This choice helps us decide what to set up first.</p>
               <div className="mt-5 rounded-2xl border border-primary/20 bg-primary/[0.05] p-4"><p className="font-semibold text-foreground">Personalize Jamvi in a few quick steps</p><p className="mt-1 text-sm leading-relaxed text-muted-foreground">Jamvi will recommend categories, priorities, income streams, and a starting plan that fit your needs. Everything remains editable later.</p></div>
               <div className="mt-6 grid gap-3 sm:grid-cols-3">
                 {([

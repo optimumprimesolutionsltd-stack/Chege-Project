@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { groupKindPresentation } from "@/components/group-kind";
 import { Check, Loader2, UsersRound, Wallet } from "lucide-react";
 import { DEFAULT_WORKSPACE_ACCENT } from "@/lib/workspace-accent";
+import { RemoveUnusedPersonalBudget } from "@/components/budget-conversion";
 
 /**
  * Everything this person has, in one place.
@@ -192,7 +193,7 @@ export default function MyGroups() {
           <div className="rounded-xl border border-dashed border-border p-4">
             <p className="font-medium text-foreground">You do not have your own budget yet</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              A private budget for your own money — nobody else can see it. You do not need one to run a group.
+              A private budget for your own money — nobody else can see it. Your Jamvi subscription covers it, along with every group you are in. You do not need one to run a group.
             </p>
             <Button
               className="mt-3"
@@ -204,6 +205,9 @@ export default function MyGroups() {
             </Button>
           </div>
         )}
+        {personal.length > 0 ? (
+          <RemoveUnusedPersonalBudget />
+        ) : null}
       </section>
 
       <section className="space-y-3">

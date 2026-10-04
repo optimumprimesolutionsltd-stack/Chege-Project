@@ -8,7 +8,8 @@ import {
 import { eq } from "drizzle-orm";
 
 /**
- * Every Jamvi login identity owns one free Personal budget. The unique
+ * Every Jamvi login identity may own one Personal budget (covered by the
+ * person's subscription, like every group they are in). The unique
  * privateOwnerUserId constraint makes this safe to call from onboarding,
  * workspace discovery, and Shared group creation paths.
  */
@@ -30,7 +31,7 @@ export async function ensurePersonalWorkspace(userId: string): Promise<number> {
       .from(groupsTable)
       .where(eq(groupsTable.privateOwnerUserId, userId))
       .limit(1);
-    if (!workspace) throw new Error("Could not establish the free Personal budget.");
+    if (!workspace) throw new Error("Could not establish the Personal budget.");
 
     await tx
       .insert(groupMembershipsTable)
