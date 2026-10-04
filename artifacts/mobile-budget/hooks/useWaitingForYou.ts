@@ -56,3 +56,16 @@ export function waitingTotal({ toSortCount, newSmsCount, canAct }: { toSortCount
 
 /** The badge: a number, "99+" past that, nothing at none. */
 export const waitingBadge = (total: number): string | undefined => (total <= 0 ? undefined : total > 99 ? '99+' : String(total));
+
+/**
+ * Where tapping Home goes when Home is already open and something is waiting:
+ * straight to the thing to fix, new M-Pesa messages first (they are the newer
+ * news), then entries saved as Not sure. Null when there is nothing to fix,
+ * or nothing this person is shown.
+ */
+export function waitingDestination({ toSortCount, newSmsCount, canAct }: { toSortCount: number; newSmsCount: number; canAct: boolean }): string | null {
+  if (!canAct) return null;
+  if (newSmsCount > 0) return '/mpesa-import?fromSms=new';
+  if (toSortCount > 0) return '/sort-entries';
+  return null;
+}
