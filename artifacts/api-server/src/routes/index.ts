@@ -28,6 +28,7 @@ import importSaveJobsRouter from "./import-save-jobs";
 import debtLinksRouter from "./debt-links";
 import mpesaNamesRouter from "./mpesa-names";
 import entriesToSortRouter from "./entries-to-sort";
+import deleteYearRouter from "./delete-year";
 import {
   publicSubscriptionPlansRouter,
   subscriptionPlansRouter,
@@ -77,6 +78,7 @@ router.use(importSaveJobsRouter);
 router.use(debtLinksRouter);
 router.use(mpesaNamesRouter);
 router.use(entriesToSortRouter);
+router.use(deleteYearRouter);
 router.use(incomeSourcesRouter);
 router.use(invitationsRouter);
 router.use(inviteLinksRouter);
