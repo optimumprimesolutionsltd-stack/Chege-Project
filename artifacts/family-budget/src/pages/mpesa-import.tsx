@@ -1,4 +1,4 @@
-import { clearSavePending, hasPendingSave, markSavePending } from "@/lib/import-save-job";
+import { clearSavePending, hasPendingSave, markSavePending, pendingSaveJob } from "@/lib/import-save-job";
 import { Input } from "@/components/ui/input";
 import { CategoryGroupPicker, resolveGroupChoice, type GroupChoice } from "@/components/category-group-picker";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -113,7 +113,8 @@ type Outcome = { saved: number; repeats: number; failed: Array<{ what: string; w
 import { readStatementPages, StatementPasswordError } from "@/lib/statement-file";
 import { rememberMpesaCard } from "@/lib/mpesa-card";
 import { keepScreenAwakeWhileSaving, letScreenSleepAgain } from "@/lib/keep-awake";
-import { runPool, savePosting, SAVE_CONCURRENCY, type PostingApi } from "@/lib/save-posting";
+import { runPool, savePosting, SAVE_CONCURRENCY, type PostingApi, type Posted } from "@/lib/save-posting";
+import { EarlierSaveRunning, followServerSave, isFollowingServerSave, setSaveProgressBar, startServerSave, type ServerJob } from "@/lib/server-save";
 import { parseStoredRules, payeeKey, payeeName, ruleLabel, rulesStorageKey, withRule, withoutRule, type PayeeRules } from "@/lib/payee-learning";
 import { applyOtherBudgetRules, otherBudgetRuleFor, otherBudgetRuleLabel, otherBudgetRulesKey, parseOtherBudgetRules, rememberOtherBudgetLabel, withOtherBudgetRule, withoutOtherBudgetRule, type OtherBudgetRules } from "@/lib/other-budget-rules";
 import { saveDebtLinks } from "@/lib/debt-reversal";
@@ -252,6 +253,7 @@ export default function MpesaImportPage() {
   const [lastSave, setLastSave] = useState<Outcome | null>(null);
   // A save cut short (the tab closed part way) is finished when the import opens again.
   const [resumeSave, setResumeSave] = useState(false);
+  const [resumeJob, setResumeJob] = useState<number | null>(null);
   // Names the person gave payees, kept in this browser for this budget.
   const [nicknames, setNicknames] = useState<NicknameMap>({});
   const [naming, setNaming] = useState<{ index: number; original: string; text: string } | null>(null);
@@ -498,7 +500,15 @@ export default function MpesaImportPage() {
         .then((checked) => {
           setLines(checked);
           setStatementReading((current) => (current ? { ...current, lines: checked } : current));
-          if (hasPendingSave(group?.id)) {
+          // A save on the server (lib/server-save) went on while the tab was closed:
+          // it is followed to its end here, unless this page already is.
+          const serverJob = pendingSaveJob(group?.id);
+          if (serverJob) {
+            if (isFollowingServerSave(serverJob)) return;
+            setStatementNote("Your save carried on while Jamvi was closed. Showing how it went.");
+            setResumeJob(serverJob);
+            setResumeSave(true);
+          } else if (hasPendingSave(group?.id)) {
             setStatementNote("Carrying on with the save you started. Entries already saved are skipped.");
             setResumeSave(true);
           }
@@ -1009,7 +1019,9 @@ export default function MpesaImportPage() {
   // charge as much as the entry it came with (lib/save-retry).
   const postingApi: PostingApi = withRetries(rawPostingApi, (task) => retrySave(task));
 
-  const saveAll = async (resuming = false) => {
+  // `resumeJob`: a save already running on the server, from before the tab was
+  // closed, followed to its end instead of being started again.
+  const saveAll = async (resuming = false, resumeJob?: number) => {
     if (!lines || !accountId || saving) return;
     // A statement is worked through over days: only what has been confirmed
     // goes, and only after saying so. Pasted messages save everything ready.
@@ -1034,7 +1046,7 @@ export default function MpesaImportPage() {
     void keepScreenAwakeWhileSaving();
     // Remembered until it finishes: closed part way, it is carried on next time.
     const savingFor = group?.id;
-    markSavePending(savingFor);
+    if (!resumeJob) markSavePending(savingFor);
     const result: Outcome = { saved: 0, repeats: 0, failed: [] };
     const savedIndexes = new Set<number>();
     // What each saved line became, for marking money in left on "Not sure".
@@ -1049,7 +1061,7 @@ export default function MpesaImportPage() {
     // there, or added once, and both lines linked to it.
     let saveChoices = choices;
     let saveParties = parties;
-    if (needsFulizaParty(lines, choices)) {
+    if (!resumeJob && needsFulizaParty(lines, choices)) {
       try {
         const found = findFulizaParty(parties);
         const fuliza: PartyLite = found ?? await fetch("/api/contributors", {
@@ -1070,7 +1082,7 @@ export default function MpesaImportPage() {
     }
     // "Not sure yet" is a real category, made the first time it is needed, so
     // the entry still counts as spending (lib/entriesToSort).
-    if (needsNotSureCategory(lines, choices, categoryList.map((row) => row.name))) {
+    if (!resumeJob && needsNotSureCategory(lines, choices, categoryList.map((row) => row.name))) {
       try {
         await createCategory.mutateAsync({ data: { name: NOT_SURE_CATEGORY, budgetAmount: 0, priority: 3, isRecurring: true, activeMonth: null, activeYear: null } });
         void queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
@@ -1099,40 +1111,93 @@ export default function MpesaImportPage() {
     // Set by the first refusal for a lapsed trial or subscription: the rest
     // would be refused the same way, so they are not sent.
     let lapsed = false;
+    let doneCount = 0;
+    // What one line became, the same whether the server or this page saved it.
+    const onSaved = (item: PreviewLine, choice: Choice | undefined, posted: Omit<Posted, "feeFailed"> & { feeFailed?: boolean }) => {
+      if (choice?.debt && posted.id) debtLinks.push({ transactionId: posted.id, partyId: choice.debt.partyId, kind: choice.debt.kind });
+      const named = mpesaNameFor(posted.id, item.original, item.description);
+      if (named) mpesaNames.push(named);
+      if (posted.feeFailed) result.failed.push({ what: `${item.description} charge`, why: `The entry saved, but its M-Pesa charge${item.fee ? ` of KES ${item.fee}` : ""} did not. Add it on Bank accounts as money out.` });
+      result.saved += 1;
+      savedIndexes.add(item.index);
+      if (posted.id !== undefined && item.direction === "in") depositIds.set(item.index, posted.id);
+      if (posted.otherBudget) otherBudgetMade.set(item.index, posted.otherBudget);
+    };
+    const onRepeat = (item: PreviewLine) => {
+      result.repeats += 1;
+      // Already on the server: shown as recorded, not left looking unsaved.
+      savedIndexes.add(item.index);
+    };
+    const onFailed = (item: PreviewLine, why: string) => result.failed.push({ what: item.description ?? "A message", why });
+    const showProgress = (done: number, total: number) => {
+      doneCount = done;
+      setSaveProgress({ done, total });
+      setSaveProgressBar({ stage: "saving", done, total });
+    };
+    // Set when this page could not hear how the server's save ended: it is still pending.
+    let lostTouch = false;
     try {
-      await runPool(toSave, SAVE_CONCURRENCY, async ({ item, choice, built }) => {
-        if (lapsed) return;
+      // The whole list handed to the server, which saves it whether or not this
+      // tab stays open (lib/server-save). This page only asks how far it has got.
+      let job: ServerJob | null = null;
+      let serverFailed: unknown = null;
+      try {
+        job = resumeJob
+          ? { id: resumeJob, status: "running", total: toSave.length, done: 0 }
+          : await startServerSave(toSave.map(({ item, built }) => ({ key: item.index, built })), accountId);
+      } catch (error) {
+        serverFailed = error;
+      }
+      if (job) {
+        markSavePending(savingFor, job.id);
+        let finished: ServerJob | null = null;
         try {
-          const posted = await savePosting(built, postingApi, accountId);
-          if (choice.debt && posted.id) debtLinks.push({ transactionId: posted.id, partyId: choice.debt.partyId, kind: choice.debt.kind });
-          const named = mpesaNameFor(posted.id, item.original, item.description);
-          if (named) mpesaNames.push(named);
-          if (posted.feeFailed) result.failed.push({ what: `${item.description} charge`, why: `The entry saved, but its M-Pesa charge${item.fee ? ` of KES ${item.fee}` : ""} did not. Add it on Bank accounts as money out.` });
-          result.saved += 1;
-          savedIndexes.add(item.index);
-          if (posted.id !== undefined && item.direction === "in") depositIds.set(item.index, posted.id);
-          if (posted.otherBudget) otherBudgetMade.set(item.index, posted.otherBudget);
-        } catch (error) {
-          if (isLapsedRefusal(error)) {
-            lapsed = true;
-            return;
-          }
-          const message = plainSaveError(error);
-          if (/already recorded/i.test(message)) {
-            result.repeats += 1;
-            // Already on the server: shown as recorded, not left looking unsaved.
-            savedIndexes.add(item.index);
-          }
-          else result.failed.push({ what: item.description ?? "A message", why: message });
-        } finally {
-          setSaveProgress((current) => (current ? { ...current, done: current.done + 1 } : current));
+          finished = await followServerSave(job.id, showProgress);
+        } catch {
+          // The save goes on on the server; this page just could not ask. Kept
+          // pending, so opening the import again shows how it ended.
+          lostTouch = true;
         }
-      });
+        const byIndex = new Map(lines.map((item) => [item.index, item]));
+        for (const done of finished?.results ?? []) {
+          const item = byIndex.get(done.key);
+          if (!item) continue;
+          if (done.outcome === "saved") onSaved(item, saveChoices[item.index], { id: done.id, otherBudget: done.otherBudget, feeFailed: done.feeFailed });
+          else if (done.outcome === "repeat") onRepeat(item);
+          else if (done.outcome === "lapsed") lapsed = true;
+          else onFailed(item, done.why);
+        }
+        if (lostTouch) result.failed.push({ what: "Still saving", why: "Your entries are still being saved on Jamvi's server, but this page lost touch with it. Open the M-Pesa import again later to see how it went." });
+        else if (!finished) result.failed.push({ what: "This save", why: "Jamvi could not find how it went. Open Bank accounts to see what was saved, or save again - anything saved already is skipped." });
+      } else if (serverFailed) {
+        if (isLapsedRefusal(serverFailed)) lapsed = true;
+        else if (serverFailed instanceof EarlierSaveRunning) result.failed.push({ what: "Not saved yet", why: serverFailed.message });
+        else result.failed.push({ what: `${toSave.length} ${toSave.length === 1 ? "entry" : "entries"}`, why: plainSaveError(serverFailed) });
+      } else if (!resumeJob) {
+        // A server that cannot save them itself yet: sent from this page, as before.
+        await runPool(toSave, SAVE_CONCURRENCY, async ({ item, choice, built }) => {
+          if (lapsed) return;
+          try {
+            onSaved(item, choice, await savePosting(built, postingApi, accountId));
+          } catch (error) {
+            if (isLapsedRefusal(error)) {
+              lapsed = true;
+              return;
+            }
+            const message = plainSaveError(error);
+            if (/already recorded/i.test(message)) onRepeat(item);
+            else onFailed(item, message);
+          } finally {
+            showProgress(doneCount + 1, toSave.length);
+          }
+        });
+      }
     } finally {
       setSaveProgress(null);
       setSaving(false);
       letScreenSleepAgain();
-      clearSavePending(savingFor);
+      if (!lostTouch) clearSavePending(savingFor);
+      setSaveProgressBar({ stage: "done", saved: result.saved, repeats: result.repeats, failed: result.failed.length });
       if (lapsed) result.lapsed = { waiting: toSave.length - result.saved - result.repeats };
       let leftToSave = 0;
       if (statementReading) {
@@ -1230,6 +1295,11 @@ export default function MpesaImportPage() {
   useEffect(() => {
     if (!resumeSave || !lines || !accountId || saving) return;
     setResumeSave(false);
+    if (resumeJob) {
+      setResumeJob(null);
+      void saveAll(true, resumeJob);
+      return;
+    }
     // Cut short after the last entry went: nothing is left, so only the note goes.
     if (!lines.some((item) => isConfirmedToSave(item, choices[item.index]))) {
       clearSavePending(group?.id);

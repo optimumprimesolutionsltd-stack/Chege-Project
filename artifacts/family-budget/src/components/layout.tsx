@@ -12,6 +12,7 @@ import { BrandLogo } from '@/components/brand-logo';
 import { useQuery } from '@tanstack/react-query';
 import { daysUntil, type MemberEntitlements } from '@/lib/subscription-status';
 import { ViewerBanner } from '@/components/viewer-banner';
+import { ImportSavingBar } from '@/components/import-saving-bar';
 import { readSimpleNav, SIMPLE_NAV_KEY, splitNav } from '@/lib/nav-plan';
 import { useEntitlements } from '@/hooks/use-entitlements';
 
@@ -571,6 +572,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <main className="min-w-0 flex-1 flex flex-col min-h-screen overflow-x-hidden pb-40 pt-16 md:pb-0 md:pt-0">
         <div className="min-w-0 flex-1 w-full max-w-6xl mx-auto p-4 md:p-8">
           {group?.role === 'viewer' ? <ViewerBanner groupName={group?.name} /> : null}
+          {/* An M-Pesa import saving on the server, or just saved, seen from any page. */}
+          <ImportSavingBar />
           {children}
         </div>
       </main>
