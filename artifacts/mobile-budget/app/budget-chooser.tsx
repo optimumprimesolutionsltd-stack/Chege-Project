@@ -482,12 +482,12 @@ export default function BudgetChooserScreen() {
         {loadingWorkspaces ? <ActivityIndicator color={colors.primary} style={styles.loader} /> : (() => {
           const personalSection = (
             <React.Fragment key="personal-section">
-              <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>PERSONAL BUDGET · FREE</Text>
+              <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>PERSONAL BUDGET</Text>
               {privateWorkspace ? workspaceRow(privateWorkspace, true) : (
                 <View style={[styles.createCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                   <View style={styles.createCardCopy}>
                     <Text style={[styles.createTitle, { color: colors.foreground }]}>Add a Personal budget</Text>
-                    <Text style={[styles.createText, { color: colors.mutedForeground }]}>A free, private budget for your own money. Optional — you can run Shared groups without one.</Text>
+                    <Text style={[styles.createText, { color: colors.mutedForeground }]}>A private budget for your own money, covered by your Jamvi subscription. Optional — you can run Shared groups without one.</Text>
                   </View>
                   <Pressable
                     testID="create-personal-budget"
@@ -952,7 +952,7 @@ function MobileOnboardingFlow({
         <Text style={[styles.onboardingIntro, { color: colors.mutedForeground }]}>
           {isShared
             ? "You're setting up a group you'll run as its treasurer. Answer a few questions so it's ready — you can change everything later."
-            : 'Every Jamvi account includes a free, private Personal budget. Answer a few questions so the budget you use first is ready.'}
+            : 'Your Jamvi subscription covers a private Personal budget and every group you’re in. Answer a few questions so the budget you use first is ready.'}
         </Text>
         <View style={[styles.benefitsCard, { backgroundColor: colors.accent, borderColor: colors.primary + '45' }]}>
           <Text style={[styles.choiceTitle, { color: colors.foreground }]}>

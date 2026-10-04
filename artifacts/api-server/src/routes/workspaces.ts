@@ -7,11 +7,20 @@ import {
 } from "@workspace/api-zod";
 import { db, groupMembershipsTable, groupsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
-import { Router } from "express";
-import { setActiveWorkspaceCookie } from "../lib/activeGroup";
+import { Router, type Response } from "express";
+import { clearActiveWorkspaceCookie, setActiveWorkspaceCookie } from "../lib/activeGroup";
+import { refuseStartingGroup } from "../lib/group-start";
 import { logger } from "../lib/logger";
 import { resolvePhotoUrl } from "../lib/photoStorage";
 import { ensurePersonalWorkspace } from "../lib/personalWorkspace";
+import {
+  isSharedGroupKind,
+  makeGroupPersonal,
+  makePersonalBudgetShared,
+  personalBudgetStatus,
+  removeEmptyPersonalBudget,
+  WorkspaceConversionError,
+} from "../lib/workspace-conversion";
 
 const router = Router();
 
@@ -129,6 +138,82 @@ router.post("/workspaces/personal", async (req, res): Promise<void> => {
   // to use it, and making them find it afterwards is a step for nothing.
   setActiveWorkspaceCookie(res, workspaceId);
   res.status(201).json({ id: workspaceId });
+});
+
+/**
+ * Whether the person has a Personal budget and whether anything was ever
+ * recorded in it, so the apps can offer "Remove my unused Personal budget"
+ * and word the swap confirmation honestly.
+ */
+router.get("/workspaces/personal/status", async (req, res): Promise<void> => {
+  const status = await personalBudgetStatus(req.user!.id);
+  res.json({ exists: status.exists, empty: status.empty, id: status.id });
+});
+
+/** Answers a refusal from lib/workspace-conversion with its own sentence. */
+function sendConversionError(res: Response, error: unknown): boolean {
+  if (!(error instanceof WorkspaceConversionError)) return false;
+  res.status(error.status).json({ error: error.message });
+  return true;
+}
+
+/**
+ * Removes the person's Personal budget, only while it is unused (see
+ * lib/workspace-conversion.ts). A new one is made only when they ask, through
+ * POST /workspaces/personal. DELETE /group still refuses a Personal budget:
+ * that path erases records, this one never has any to erase.
+ */
+router.delete("/workspaces/personal", async (req, res): Promise<void> => {
+  try {
+    const { removedId } = await removeEmptyPersonalBudget(req.user!.id);
+    if (req.group?.id === removedId) clearActiveWorkspaceCookie(res);
+    res.json({ removed: true, id: removedId });
+  } catch (error) {
+    if (!sendConversionError(res, error)) throw error;
+  }
+});
+
+/** Personal budget -> Shared group, in place. Same rules as starting a group. */
+router.post("/workspaces/personal/make-shared", async (req, res): Promise<void> => {
+  const name = typeof req.body?.name === "string" ? req.body.name : "";
+  const kind: unknown = req.body?.kind;
+  if (!isSharedGroupKind(kind)) {
+    res.status(400).json({ error: "Choose what kind of group this is." });
+    return;
+  }
+  // Only while the person's own trial or subscription is active, exactly as
+  // POST /groups (lib/group-start).
+  const refusal = await refuseStartingGroup(req.user!.id);
+  if (refusal) {
+    res.status(402).json({ error: refusal });
+    return;
+  }
+  try {
+    const group = await makePersonalBudgetShared(req.user!.id, { name, kind });
+    setActiveWorkspaceCookie(res, group.id);
+    res.json(group);
+  } catch (error) {
+    if (!sendConversionError(res, error)) throw error;
+  }
+});
+
+/**
+ * Shared group -> the caller's Personal budget (the swap). Owner only, and
+ * only while nobody else - not even a viewer - is in it.
+ */
+router.post("/workspaces/:id/make-personal", async (req, res): Promise<void> => {
+  const groupId = Number(req.params.id);
+  if (!Number.isSafeInteger(groupId) || groupId <= 0) {
+    res.status(400).json({ error: "Choose a valid group." });
+    return;
+  }
+  try {
+    const result = await makeGroupPersonal(req.user!.id, groupId);
+    setActiveWorkspaceCookie(res, result.id);
+    res.json(result);
+  } catch (error) {
+    if (!sendConversionError(res, error)) throw error;
+  }
 });
 
 router.post("/workspaces/select", async (req, res): Promise<void> => {

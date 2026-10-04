@@ -26,6 +26,7 @@ import {
 } from "../lib/activeGroup";
 import { resolvePhotoUrl, verifyPhotoObject } from "../lib/photoStorage";
 import { refuseStartingGroup } from "../lib/group-start";
+import { hasAccessibleSharedBudgetWithName } from "../lib/shared-group-names";
 import {
   confirmGroupDeletionCode,
   eraseGroupData,
@@ -36,10 +37,6 @@ import { accountDeletionCodeLimiter, accountDeletionConfirmLimiter } from "../mi
 
 const router = Router();
 
-function normalizedSharedBudgetName(name: string): string {
-  return name.trim().replace(/\s+/g, " ").toLocaleLowerCase("en-US");
-}
-
 function normalizedSlogan(slogan: string | null | undefined): string | null {
   const value = slogan?.trim().replace(/\s+/g, " ");
   return value || null;
@@ -48,29 +45,6 @@ function normalizedSlogan(slogan: string | null | undefined): string | null {
 function normalizedEmoji(emoji: string | null | undefined): string | null {
   const value = emoji?.trim();
   return value || null;
-}
-
-async function hasAccessibleSharedBudgetWithName(
-  userId: string,
-  name: string,
-  excludedGroupId?: number,
-): Promise<boolean> {
-  const workspaces = await db
-    .select({
-      id: groupsTable.id,
-      name: groupsTable.name,
-      privateOwnerUserId: groupsTable.privateOwnerUserId,
-    })
-    .from(groupMembershipsTable)
-    .innerJoin(groupsTable, eq(groupsTable.id, groupMembershipsTable.groupId))
-    .where(eq(groupMembershipsTable.userId, userId));
-
-  const normalizedName = normalizedSharedBudgetName(name);
-  return workspaces.some((workspace) =>
-    workspace.id !== excludedGroupId
-    && !workspace.privateOwnerUserId
-    && normalizedSharedBudgetName(workspace.name) === normalizedName,
-  );
 }
 
 router.post("/groups", async (req, res): Promise<void> => {
