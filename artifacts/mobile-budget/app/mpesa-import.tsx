@@ -1077,7 +1077,10 @@ export default function MpesaImportScreen() {
     }
   };
   // Opened from Home's "new M-Pesa messages": everything since Jamvi last looked.
-  const params = useLocalSearchParams<{ fromSms?: string; smsFrom?: string; smsTo?: string }>();
+  const params = useLocalSearchParams<{ fromSms?: string; smsFrom?: string; smsTo?: string; notSure?: string }>();
+  // Opened by "Fix all" on Find the difference: what is read is put under Not
+  // sure yet and saved straight away - the person confirmed it there.
+  const [autoSaveNotSure, setAutoSaveNotSure] = useState(false);
   // Opened from "Find the difference" for the days where Jamvi and M-Pesa parted:
   // those days' messages, read straight away, with what is already saved marked.
   const openedForRange = React.useRef(false);
@@ -1092,7 +1095,11 @@ export default function MpesaImportScreen() {
         Alert.alert('Could not read your messages', smsRefusal(result.reason));
         return;
       }
-      return readSmsMessages(result.messages);
+      return readSmsMessages(result.messages).then((shown) => {
+        if (!shown || params.notSure !== '1') return;
+        setChoices((current) => putUnderNotSure(notSureableLines(shown, current), current));
+        setAutoSaveNotSure(true);
+      });
     }).catch((error: unknown) => Alert.alert('Could not read your messages', plainSaveError(error)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.smsFrom, params.smsTo]);
@@ -1846,6 +1853,20 @@ export default function MpesaImportScreen() {
     void saveLines();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resumeSave, lines, accountId, saving]);
+
+  // "Fix all": once the lines are under Not sure yet, saved without another
+  // tap. Something that still needs a choice (the charges' category, say) stops
+  // it and says so, and the list stays here to finish by hand.
+  useEffect(() => {
+    if (!autoSaveNotSure || !lines || !accountId || saving) return;
+    setAutoSaveNotSure(false);
+    if (firstProblem) {
+      Alert.alert('Almost there', `${firstProblem} Then tap Save.`);
+      return;
+    }
+    void saveLines();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSaveNotSure, lines, accountId, saving, choices]);
 
   // `resumeJob`: a save already running on the server, from before Jamvi was
   // closed, followed to its end instead of being started again.

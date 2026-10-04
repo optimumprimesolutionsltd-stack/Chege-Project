@@ -75,6 +75,39 @@ describe.skipIf(!hasDb)("POST /mpesa/difference (integration)", () => {
     expect(result.spans[1].extra).toMatchObject([{ description: "Rent (typed)", amount: -500, receipt: null }]);
   });
 
+  it("Fix all moves the mis-saved money in to M-Pesa, and the check then finds only the hand-typed entry", async () => {
+    const fixed = await request(app()).post("/mpesa/difference/fix").send({ move: [`R${STAMP}`.slice(0, 12)] });
+    expect(fixed.status).toBe(200);
+    expect(fixed.body).toEqual({ moved: 1, redated: 0 });
+
+    const again = await request(app()).post("/mpesa/difference").send({
+      messages: [
+        { receipt: `S${STAMP}`.slice(0, 12), balance: 700, at: at("2026-10-01"), day: "2026-10-01" },
+        { receipt: `R${STAMP}`.slice(0, 12), balance: 2700, at: at("2026-10-02"), day: "2026-10-02" },
+        { receipt: `T${STAMP}`.slice(0, 12), balance: 2200, at: at("2026-10-03"), day: "2026-10-03" },
+      ],
+    });
+    const { result } = again.body;
+    expect(result.endGap).toBe(500);
+    expect(result.spans).toHaveLength(1);
+    expect(result.spans[0].missing).toEqual([]);
+    // Nothing is deleted: the hand-typed rent is still there for the person to look at.
+    expect(result.spans[0].extra).toMatchObject([{ description: "Rent (typed)" }]);
+  });
+
+  it("Fix all gives an entry its message's day, only in the M-Pesa account and only one with a code", async () => {
+    const [entry] = await db.select({ id: jointAccountTxTable.id }).from(jointAccountTxTable)
+      .where(eq(jointAccountTxTable.mpesaReceipt, `T${STAMP}`.slice(0, 12)));
+    const [typed] = await db.select({ id: jointAccountTxTable.id }).from(jointAccountTxTable)
+      .where(eq(jointAccountTxTable.description, "Rent (typed)"));
+    const fixed = await request(app()).post("/mpesa/difference/fix").send({
+      redate: [{ id: entry.id, date: "2026-10-04" }, { id: typed.id, date: "2026-10-04" }],
+    });
+    expect(fixed.body).toEqual({ moved: 0, redated: 1 });
+    const [after] = await db.select({ date: jointAccountTxTable.date }).from(jointAccountTxTable).where(eq(jointAccountTxTable.id, typed.id));
+    expect(String(after.date)).toBe("2026-10-03");
+  });
+
   it("refuses an empty list", async () => {
     const response = await request(app()).post("/mpesa/difference").send({ messages: [] });
     expect(response.status).toBe(400);

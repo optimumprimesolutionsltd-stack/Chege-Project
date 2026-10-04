@@ -100,6 +100,14 @@ router.post("/entries-to-sort/money-in-without-source", async (req, res): Promis
     res.status(503).json({ error: "Entries to sort cannot be kept yet." });
     return;
   }
+  // From a day on - the phone sends 1 January of the year being worked on
+  // ("I want to work with 2026 only"). Without it, every year.
+  const from = z.object({ from: z.string().date().optional() }).safeParse(req.body ?? {});
+  if (!from.success) {
+    res.status(400).json({ error: "Send the day to start from as YYYY-MM-DD." });
+    return;
+  }
+  const since = from.data.from ? sql`AND t."date" >= ${from.data.from}` : sql``;
   const added = await db.execute(sql`
     INSERT INTO "entries_to_sort" ("transaction_id", "group_id")
     SELECT t."id", t."group_id"
@@ -117,6 +125,7 @@ router.post("/entries-to-sort/money-in-without-source", async (req, res): Promis
         WHERE s."transaction_id" = t."id" AND s."contributor_id" IS NOT NULL)
       AND NOT EXISTS (
         SELECT 1 FROM "reversal_links" r WHERE r."reversal_transaction_id" = t."id")
+      ${since}
     ON CONFLICT ("transaction_id") DO NOTHING
     RETURNING "transaction_id"`);
   res.json({ added: added.rows.length });

@@ -54,7 +54,7 @@ describe('Find the difference, on the phone', () => {
   it('can open the import on just the days that parted', () => {
     expect(read('app/mpesa-difference.tsx')).toContain('router.push(`/mpesa-import?smsFrom=${span.from}&smsTo=${span.to}` as never)');
     const importScreen = read('app/mpesa-import.tsx');
-    expect(importScreen).toContain('const params = useLocalSearchParams<{ fromSms?: string; smsFrom?: string; smsTo?: string }>();');
+    expect(importScreen).toContain('const params = useLocalSearchParams<{ fromSms?: string; smsFrom?: string; smsTo?: string; notSure?: string }>();');
     expect(importScreen).toContain('void readMpesaSms(params.smsFrom, params.smsTo).then((result) => {');
   });
 });
@@ -69,5 +69,90 @@ describe('when the check cannot reach the server', () => {
   });
   it('tries again by itself through a hiccup: the check only reads', () => {
     expect(read('app/mpesa-difference.tsx')).toContain("setAnswer(await retrySave(() => customFetch<Answer>('/api/mpesa/difference', {");
+  });
+});
+
+describe('after days are brought in or fixed', () => {
+  // "Once the days have been brought in and sorted, Jamvi should clear that
+  // tab, which it's not doing" (4 Oct 2026): it checked once, on opening.
+  const screen = read('app/mpesa-difference.tsx');
+  it('checks again each time the screen is shown, so sorted days drop off the list', () => {
+    expect(screen).toContain('useFocusEffect(useCallback(() => { void check(); }, [check]));');
+    expect(screen).not.toContain('useEffect(() => { void check(); }, [check]);');
+  });
+  it('keeps the last result on screen while it checks again', () => {
+    expect(screen).toContain("if (shownRef.current) setRechecking(true);\n    else setState('reading');");
+    expect(screen).toContain('testID="mpesa-difference-rechecking"');
+  });
+});
+
+describe('Fix all', () => {
+  // "Can the user be asked to confirm all in one go and the app sorts it out
+  // all at once" (4 Oct 2026).
+  const span = (from: string, to: string, over: Partial<import('../mpesaLiveBalance').DifferenceSpan> = {}) =>
+    ({ from, to, change: 100, missing: [], extra: [], redated: [], ...over });
+
+  it('moves what was saved elsewhere, re-dates what was saved on another day, and brings in the rest over the days they span', async () => {
+    const { fixPlan, hasFixes } = await import('../mpesaLiveBalance');
+    const plan = fixPlan([
+      span('2026-03-02', '2026-03-02', { missing: [{ receipt: 'AAA0000001', day: '2026-03-02', savedIn: 'Equity', savedOn: '2026-03-02' }] }),
+      span('2026-05-10', '2026-05-12', {
+        missing: [{ receipt: 'AAA0000002', day: '2026-05-11', savedIn: null, savedOn: null }],
+        redated: [{ id: 7, receipt: 'AAA0000003', messageDay: '2026-05-12', savedDate: '2026-05-13', amount: -50, description: 'x' }],
+      }),
+      span('2026-08-01', '2026-08-01', {
+        missing: [{ receipt: 'AAA0000004', day: '2026-08-01', savedIn: null, savedOn: null }],
+        extra: [{ id: 9, date: '2026-08-01', amount: -500, description: 'Rent (typed)', receipt: null }],
+      }),
+    ]);
+    expect(plan).toEqual({
+      move: ['AAA0000001'],
+      redate: [{ id: 7, date: '2026-05-12' }],
+      bringIn: { count: 2, from: '2026-05-10', to: '2026-08-01' },
+      leftToCheck: 1,
+    });
+    expect(hasFixes(plan)).toBe(true);
+    expect(hasFixes(fixPlan([span('2026-01-01', '2026-01-01', { extra: [{ id: 1, date: '2026-01-01', amount: -1, description: 'x', receipt: null }] })]))).toBe(false);
+  });
+
+  it('says in one confirmation what changes, and that nothing is deleted', async () => {
+    const { fixConfirmation } = await import('../mpesaLiveBalance');
+    const { title, message } = fixConfirmation({ move: ['A'], redate: [{ id: 1, date: '2026-01-01' }], bringIn: { count: 12, from: '2026-01-01', to: '2026-02-01' }, leftToCheck: 3 }, 'Chege Mpesa');
+    expect(title).toBe('Fix all of these?');
+    expect(message).toContain('Bring in 12 payments not saved anywhere, as Not sure yet');
+    expect(message).toContain('Move 1 saved in another account to Chege Mpesa.');
+    expect(message).toContain('Give 1 entry the day of its M-Pesa message.');
+    expect(message).toContain('Nothing is deleted. 3 entries in Chege Mpesa that are in none of your messages stay for you to look at');
+  });
+
+  it('asks first, fixes on the server, then brings the missing days in under Not sure yet and saves them', () => {
+    const screen = read('app/mpesa-difference.tsx');
+    expect(screen.indexOf('Alert.alert(title, message, [')).toBeLessThan(screen.indexOf("'/api/mpesa/difference/fix'"));
+    expect(screen).toContain('router.push(`/mpesa-import?smsFrom=${plan.bringIn.from}&smsTo=${plan.bringIn.to}&notSure=1` as never);');
+    const importScreen = read('app/mpesa-import.tsx');
+    expect(importScreen).toContain("setChoices((current) => putUnderNotSure(notSureableLines(shown, current), current));");
+    expect(importScreen).toContain('if (firstProblem) {\n      Alert.alert(\'Almost there\', `${firstProblem} Then tap Save.`);');
+  });
+});
+
+describe('2026 only', () => {
+  // "I want to work with 2026 only" (4 Oct 2026).
+  it('works from 1 January of this year, by Kenya’s calendar, and drops anything earlier', async () => {
+    const { workingYear, inWorkingYear } = await import('../mpesaLiveBalance');
+    const now = Date.UTC(2026, 9, 4, 12);
+    const year = workingYear(now);
+    expect(year.year).toBe(2026);
+    expect(year.from).toBe('2026-01-01');
+    expect(year.days).toBeGreaterThanOrEqual(277);
+    const rows = [
+      { body: 'a', date: Date.UTC(2025, 11, 31, 20, 59) }, // 23:59 on 31 Dec in Nairobi
+      { body: 'b', date: Date.UTC(2025, 11, 31, 21, 0) },  // 00:00 on 1 Jan in Nairobi
+    ];
+    expect(inWorkingYear(rows, year.from).map((row) => row.body)).toEqual(['b']);
+  });
+  it('is what Find the difference reads and what Find money in with no source gathers', () => {
+    const screen = read('app/mpesa-difference.tsx');
+    expect(screen).toContain('const rows = inWorkingYear(read.rows, yearFrom);');
+    expect(read('app/sort-entries.tsx')).toContain('body: JSON.stringify({ from: workingYear().from }),');
   });
 });

@@ -463,4 +463,77 @@ router.post("/mpesa/difference", async (req, res): Promise<void> => {
   res.json({ account: { id: account.id, name: account.name, openingBalance: account.openingBalance }, result });
 });
 
+const differenceFixSchema = z.object({
+  move: z.array(z.string().trim().regex(/^[A-Z0-9]{8,15}$/)).max(2_000).default([]),
+  redate: z.array(z.object({ id: z.number().int().positive(), date: z.string().date() })).max(2_000).default([]),
+});
+
+/**
+ * "Fix all" on Find the difference, after one confirmation on the phone:
+ * - `move`: payments M-Pesa's messages show, saved to another of this budget's
+ *   accounts, moved to the M-Pesa account - with their own M-Pesa charge.
+ *   A move between accounts or to savings is left alone: both sides belong.
+ * - `redate`: entries in the M-Pesa account saved under another day than their
+ *   message, given the message's day.
+ * Only entries carrying an M-Pesa code are touched, and nothing is deleted:
+ * an entry in none of the messages is left for the person to look at.
+ */
+router.post("/mpesa/difference/fix", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  if (!requireGroupManager(req, res)) return;
+  const parsed = differenceFixSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Those fixes could not be read." });
+    return;
+  }
+  const account = await findMpesaAccount(groupId);
+  if (!account) {
+    res.status(404).json({ error: "This budget has no M-Pesa account." });
+    return;
+  }
+  const result = await db.transaction(async (tx) => {
+    let moved = 0;
+    if (parsed.data.move.length > 0) {
+      const rows = await tx
+        .update(jointAccountTxTable)
+        .set({ accountId: account.id })
+        .where(and(
+          eq(jointAccountTxTable.groupId, groupId),
+          inArray(jointAccountTxTable.mpesaReceipt, parsed.data.move),
+          ne(jointAccountTxTable.accountId, account.id),
+          isNull(jointAccountTxTable.bankTransferId),
+          isNull(jointAccountTxTable.savingsGoalId),
+        ))
+        .returning({ id: jointAccountTxTable.id });
+      moved = rows.length;
+      if (rows.length > 0) {
+        await tx
+          .update(jointAccountTxTable)
+          .set({ accountId: account.id })
+          .where(and(
+            eq(jointAccountTxTable.groupId, groupId),
+            inArray(jointAccountTxTable.chargeForTransactionId, rows.map((row) => row.id)),
+          ));
+      }
+    }
+    let redated = 0;
+    for (const change of parsed.data.redate) {
+      const rows = await tx
+        .update(jointAccountTxTable)
+        .set({ date: change.date })
+        .where(and(
+          eq(jointAccountTxTable.groupId, groupId),
+          eq(jointAccountTxTable.id, change.id),
+          eq(jointAccountTxTable.accountId, account.id),
+          isNotNull(jointAccountTxTable.mpesaReceipt),
+        ))
+        .returning({ id: jointAccountTxTable.id });
+      redated += rows.length;
+    }
+    return { moved, redated };
+  });
+  res.json(result);
+});
+
 export default router;

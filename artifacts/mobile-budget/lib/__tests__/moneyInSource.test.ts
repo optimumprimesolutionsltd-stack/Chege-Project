@@ -50,14 +50,29 @@ describe('Sort them out, for a year already saved', () => {
 
   const screen = read('app/sort-entries.tsx');
   it('asks before doing all of them, and offers just this one', () => {
-    expect(screen).toContain("{ text: 'Just this one', onPress: () => void sortEach([entry], change) },");
-    expect(screen).toContain('onPress: () => void sortEach([entry, ...others], change) },');
+    expect(screen).toContain("{ text: 'Just this one', onPress: () => void sortEach([entry], change, label) },");
+    expect(screen).toContain('onPress: () => void sortEach([entry, ...others], change, label) },');
   });
   it('gathers money in with no source, in a Personal budget only', () => {
-    expect(screen).toContain("customFetch<{ added: number }>('/api/entries-to-sort/money-in-without-source', { method: 'POST' })");
+    expect(screen).toContain("customFetch<{ added: number }>('/api/entries-to-sort/money-in-without-source', {");
     expect(screen).toContain('{group?.isPrivate ? (');
   });
   it('can add a source right from an entry', () => {
     expect(screen).toContain('testID={`sort-entry-${entry.id}-add-source`}');
+  });
+});
+
+describe('Sort them out can be undone', () => {
+  // "There is no undo button in Sort them out" (4 Oct 2026).
+  const screen = read('app/sort-entries.tsx');
+  it('keeps the last change - one entry or All N - and puts each back as it was', () => {
+    expect(screen).toContain('testID="sort-entries-undo"');
+    expect(screen).toContain("...(one.direction === 'out' ? { expenseCategory: NOT_SURE_CATEGORY } : { incomeSourceId: null })");
+    expect(screen).toContain('undo: async () => { for (const one of changed) await putBack(one); },');
+  });
+  it('undoes "Leave it with no source" by putting it back on the list', () => {
+    const leave = screen.slice(screen.indexOf('const leave = async'));
+    expect(leave).toContain("await customFetch('/api/entries-to-sort', {");
+    expect(leave).toContain('body: JSON.stringify({ transactionIds: [entry.id] }),');
   });
 });

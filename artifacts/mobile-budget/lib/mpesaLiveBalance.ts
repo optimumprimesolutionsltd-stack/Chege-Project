@@ -114,3 +114,90 @@ export function startingBalanceAdvice(startGap: number, opening: number, account
   return `On ${firstDay}, when your messages begin, Jamvi was already ${kes(Math.abs(startGap))} ${startGap > 0 ? 'below' : 'above'} M-Pesa. `
     + `That is what ${account} held before Jamvi's records start: set its opening balance to ${kes(needed)} in Bank.`;
 }
+
+/** One day the check found, as the server sends it. */
+export type DifferenceSpan = {
+  from: string;
+  to: string;
+  change: number;
+  missing: Array<{ receipt: string; day: string; savedIn: string | null; savedOn: string | null }>;
+  extra: Array<{ id: number; date: string; amount: number; description: string; receipt: string | null }>;
+  redated: Array<{ id: number; receipt: string; messageDay: string; savedDate: string; amount: number; description: string }>;
+};
+
+export type FixPlan = {
+  /** Saved to another account: moved to the M-Pesa account. */
+  move: string[];
+  /** Saved under another day: given the message's day. */
+  redate: Array<{ id: number; date: string }>;
+  /** Not saved anywhere: brought in, as Not sure yet, from these days. */
+  bringIn: { count: number; from: string; to: string } | null;
+  /** In the account but in none of the messages: never touched, left to look at. */
+  leftToCheck: number;
+};
+
+/**
+ * "Fix all": everything the check found that can be put right without a
+ * person's judgement, done after one confirmation. An entry in none of the
+ * messages may be cash or typed on purpose, so it is never deleted - only
+ * counted, to be looked at.
+ */
+export function fixPlan(spans: readonly DifferenceSpan[]): FixPlan {
+  const move = new Set<string>();
+  const redate = new Map<number, string>();
+  let count = 0;
+  let from: string | null = null;
+  let to: string | null = null;
+  let leftToCheck = 0;
+  for (const span of spans) {
+    for (const item of span.missing) {
+      if (item.savedIn) move.add(item.receipt);
+      else {
+        count += 1;
+        if (!from || span.from < from) from = span.from;
+        if (!to || span.to > to) to = span.to;
+      }
+    }
+    for (const item of span.redated) redate.set(item.id, item.messageDay);
+    leftToCheck += span.extra.length;
+  }
+  return {
+    move: [...move],
+    redate: [...redate].map(([id, date]) => ({ id, date })),
+    bringIn: count > 0 && from && to ? { count, from, to } : null,
+    leftToCheck,
+  };
+}
+
+export const hasFixes = (plan: FixPlan): boolean => plan.move.length > 0 || plan.redate.length > 0 || plan.bringIn !== null;
+
+/** The one confirmation: what will change, and what will not. */
+export function fixConfirmation(plan: FixPlan, account: string): { title: string; message: string } {
+  const parts: string[] = [];
+  if (plan.bringIn) parts.push(`Bring in ${plan.bringIn.count} payment${plan.bringIn.count === 1 ? '' : 's'} not saved anywhere, as Not sure yet - you say what each was for later, in Sort them out.`);
+  if (plan.move.length > 0) parts.push(`Move ${plan.move.length} saved in another account to ${account}.`);
+  if (plan.redate.length > 0) parts.push(`Give ${plan.redate.length} ${plan.redate.length === 1 ? 'entry' : 'entries'} the day of ${plan.redate.length === 1 ? 'its' : 'their'} M-Pesa message.`);
+  const left = plan.leftToCheck > 0
+    ? `\n\nNothing is deleted. ${plan.leftToCheck} ${plan.leftToCheck === 1 ? 'entry' : 'entries'} in ${account} that ${plan.leftToCheck === 1 ? 'is' : 'are'} in none of your messages ${plan.leftToCheck === 1 ? 'stays' : 'stay'} for you to look at: ${plan.leftToCheck === 1 ? 'it may be' : 'they may be'} cash, or saved twice.`
+    : '\n\nNothing is deleted.';
+  return { title: 'Fix all of these?', message: `${parts.map((part) => `• ${part}`).join('\n')}${left}` };
+}
+
+/**
+ * The year being worked on: "I want to work with 2026 only" (4 Oct 2026).
+ * Find the difference and Find money in with no source both start on 1
+ * January of this year, by Kenya's calendar; earlier years are left as they are.
+ */
+export function workingYear(now = Date.now()): { year: number; from: string; days: number } {
+  const year = Number(kenyaDay(now).slice(0, 4));
+  const from = `${year}-01-01`;
+  // Days to read back: from midnight on 1 January in Kenya (UTC+3), plus one
+  // spare, and anything before it is dropped by `inWorkingYear`.
+  const start = Date.UTC(year, 0, 1) - 3 * 3_600_000;
+  return { year, from, days: Math.ceil((now - start) / 86_400_000) + 1 };
+}
+
+/** Keeps only the messages from 1 January of the working year on. */
+export function inWorkingYear<T extends { date: number }>(rows: readonly T[], from: string): T[] {
+  return rows.filter((row) => kenyaDay(row.date) >= from);
+}

@@ -1,27 +1,18 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { customFetch } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
 import { formatDisplayDate } from '@/lib/displayFormat';
 import { readMpesaRows, smsRefusal } from '@/lib/mpesaSms';
 import { retrySave } from '@/lib/saveRetry';
 import { differenceError } from '@/lib/differenceError';
-import { differenceMessages, kes, receiptOf, spanChangeText, startingBalanceAdvice } from '@/lib/mpesaLiveBalance';
+import { differenceMessages, fixConfirmation, fixPlan, hasFixes, inWorkingYear, kes, receiptOf, spanChangeText, startingBalanceAdvice, workingYear, type DifferenceSpan } from '@/lib/mpesaLiveBalance';
 
-/** How far back to read: a year of messages is what most phones still hold. */
-const DAYS = 365;
 
-type Span = {
-  from: string;
-  to: string;
-  change: number;
-  missing: Array<{ receipt: string; day: string; savedIn: string | null; savedOn: string | null }>;
-  extra: Array<{ id: number; date: string; amount: number; description: string; receipt: string | null }>;
-  redated: Array<{ id: number; receipt: string; messageDay: string; savedDate: string; amount: number; description: string }>;
-};
+type Span = DifferenceSpan;
 type Answer = {
   account: { id: number; name: string; openingBalance: number };
   result: { from: string; to: string; checkedDays: number; startGap: number; endGap: number; spans: Span[]; moreSpans: number } | null;
@@ -48,24 +39,32 @@ export default function MpesaDifferenceScreen() {
   const [answer, setAnswer] = useState<Answer | null>(null);
   const [bodies, setBodies] = useState<Map<string, string>>(new Map());
 
+  // Checking again over a result already shown keeps it on screen, with a
+  // line saying so, rather than blanking it for a spinner each time.
+  const shownRef = useRef(false);
+  const [rechecking, setRechecking] = useState(false);
   const check = useCallback(async () => {
-    setState('reading');
+    if (shownRef.current) setRechecking(true);
+    else setState('reading');
     setError(null);
     try {
-      const read = await readMpesaRows(DAYS);
+      // This year only, from 1 January.
+      const { from: yearFrom, days } = workingYear();
+      const read = await readMpesaRows(days);
       if (!read.ok) {
         setError(smsRefusal(read.reason));
         setState('error');
         return;
       }
-      const messages = differenceMessages(read.rows);
+      const rows = inWorkingYear(read.rows, yearFrom);
+      const messages = differenceMessages(rows);
       if (messages.length === 0) {
-        setError('No M-Pesa messages with a balance are on this phone for the last year.');
+        setError(`No M-Pesa messages with a balance are on this phone since 1 January ${workingYear().year}.`);
         setState('error');
         return;
       }
       const byReceipt = new Map<string, string>();
-      for (const row of read.rows) {
+      for (const row of rows) {
         const code = receiptOf(row.body);
         if (code) byReceipt.set(code, row.body.trim());
       }
@@ -77,13 +76,56 @@ export default function MpesaDifferenceScreen() {
         body: JSON.stringify({ messages }),
       })));
       setState('done');
+      shownRef.current = true;
     } catch (reason) {
       setError(differenceError(reason));
       setState('error');
+    } finally {
+      setRechecking(false);
     }
   }, []);
 
-  useEffect(() => { void check(); }, [check]);
+  // Checked each time this screen is shown, not only the first: days brought
+  // in or fixed from here ("Bring these days in", Bank) have to drop off the
+  // list on the way back, or it goes on listing what is already sorted.
+  useFocusEffect(useCallback(() => { void check(); }, [check]));
+
+  // "Fix all": one confirmation, then everything that needs no judgement.
+  const [fixing, setFixing] = useState(false);
+  const fixAll = () => {
+    if (!answer?.result) return;
+    const plan = fixPlan(answer.result.spans);
+    const { title, message } = fixConfirmation(plan, answer.account.name);
+    Alert.alert(title, message, [
+      { text: 'Not now', style: 'cancel' },
+      {
+        text: 'Fix all',
+        onPress: async () => {
+          setFixing(true);
+          try {
+            if (plan.move.length > 0 || plan.redate.length > 0) {
+              await retrySave(() => customFetch('/api/mpesa/difference/fix', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ move: plan.move, redate: plan.redate }),
+              }));
+            }
+            if (plan.bringIn) {
+              // Brought in and saved as Not sure yet by the import; coming back
+              // here checks again.
+              router.push(`/mpesa-import?smsFrom=${plan.bringIn.from}&smsTo=${plan.bringIn.to}&notSure=1` as never);
+            } else {
+              await check();
+            }
+          } catch (reason) {
+            Alert.alert('Could not fix them', differenceError(reason));
+          } finally {
+            setFixing(false);
+          }
+        },
+      },
+    ]);
+  };
 
   const result = answer?.result ?? null;
   const account = answer?.account.name ?? 'M-Pesa';
@@ -107,7 +149,7 @@ export default function MpesaDifferenceScreen() {
           <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, alignItems: 'center' }]}>
             <ActivityIndicator color={colors.primary} />
             <Text style={{ color: colors.mutedForeground, fontSize: 13, textAlign: 'center' }}>
-              Reading a year of M-Pesa messages and checking each day…
+              Reading your M-Pesa messages since 1 January {workingYear().year} and checking each day…
             </Text>
           </View>
         ) : state === 'error' ? (
@@ -118,6 +160,12 @@ export default function MpesaDifferenceScreen() {
         ) : result ? (
           <>
             <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]} testID="mpesa-difference-summary">
+              {rechecking ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }} testID="mpesa-difference-rechecking">
+                  <ActivityIndicator size="small" color={colors.primary} />
+                  <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>Checking again with what you have saved since…</Text>
+                </View>
+              ) : null}
               <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>
                 Checked {result.checkedDays} days, {formatDisplayDate(result.from)} to {formatDisplayDate(result.to)}
               </Text>
@@ -140,6 +188,21 @@ export default function MpesaDifferenceScreen() {
                 </Text>
               ) : null}
             </View>
+
+            {result.spans.length > 0 && hasFixes(fixPlan(result.spans)) ? (
+              <Pressable
+                onPress={fixAll}
+                disabled={fixing || rechecking}
+                accessibilityRole="button"
+                testID="mpesa-difference-fix-all"
+                style={{ backgroundColor: colors.primary, borderRadius: 8, padding: 14, alignItems: 'center', opacity: fixing || rechecking ? 0.6 : 1 }}
+              >
+                <Text style={{ color: '#fff', fontFamily: 'Inter_700Bold', fontSize: 15 }}>{fixing ? 'Fixing…' : 'Fix all of these'}</Text>
+                <Text style={{ color: '#ffffffcc', fontSize: 12, marginTop: 2, textAlign: 'center' }}>
+                  You see exactly what changes first. Nothing is deleted.
+                </Text>
+              </Pressable>
+            ) : null}
 
             {advice ? (
               <View style={[styles.card, { backgroundColor: colors.card, borderColor: '#F59E0B' }]} testID="mpesa-difference-start">

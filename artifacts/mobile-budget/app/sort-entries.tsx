@@ -13,8 +13,9 @@ import {
   useUpdateJointAccountTransaction,
 } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
-import { isNotSure, sameParty, type EntryToSort } from '@/lib/entriesToSort';
+import { isNotSure, NOT_SURE_CATEGORY, sameParty, type EntryToSort } from '@/lib/entriesToSort';
 import { AddIncomeSourceChip } from '@/components/AddIncomeSourceChip';
+import { workingYear } from '@/lib/mpesaLiveBalance';
 import { inMonth, monthsOf } from '@/lib/mpesaImport';
 import { plainSaveError } from '@/lib/saveRetry';
 import { formatDisplayDate } from '@/lib/displayFormat';
@@ -58,15 +59,46 @@ export default function SortEntriesScreen() {
       queryClient.invalidateQueries({ queryKey: getGetJointAccountQueryKey() }),
     ]);
   };
-  const sortEach = async (list: readonly EntryToSort[], change: { expenseCategory: string } | { incomeSourceId: number }) => {
+  // The last change, kept so it can be undone: "there is no undo button in
+  // Sort them out" (4 Oct 2026) - and "All 12" is a lot to take back by hand.
+  const [lastChange, setLastChange] = useState<{ text: string; undo: () => Promise<void> } | null>(null);
+  const [undoing, setUndoing] = useState(false);
+  const undoLast = async () => {
+    if (!lastChange || undoing) return;
+    setUndoing(true);
+    try {
+      await lastChange.undo();
+      setLastChange(null);
+    } catch (error) {
+      Alert.alert('Could not undo it', plainSaveError(error));
+    } finally {
+      await done();
+      setUndoing(false);
+    }
+  };
+  // Back to where it was: money out under Not sure yet, money in with no source
+  // (still marked, so it is listed again as soon as it has none).
+  const putBack = (one: EntryToSort) => updateTransaction({
+    id: one.id,
+    data: { amount: one.amount, date: one.date, ...(one.direction === 'out' ? { expenseCategory: NOT_SURE_CATEGORY } : { incomeSourceId: null }) } as never,
+  });
+  const sortEach = async (list: readonly EntryToSort[], change: { expenseCategory: string } | { incomeSourceId: number }, label: string) => {
     setBusy(list[0]?.id ?? null);
+    const changed: EntryToSort[] = [];
     try {
       for (const one of list) {
         await updateTransaction({ id: one.id, data: { amount: one.amount, date: one.date, ...change } as never });
+        changed.push(one);
       }
     } catch (error) {
       Alert.alert('Could not change them all', plainSaveError(error));
     } finally {
+      if (changed.length > 0) {
+        setLastChange({
+          text: `${changed.length === 1 ? changed[0].description : `${changed.length} entries`} put under ${label}`,
+          undo: async () => { for (const one of changed) await putBack(one); },
+        });
+      }
       await done();
       setBusy(null);
     }
@@ -75,15 +107,15 @@ export default function SortEntriesScreen() {
   const sort = (entry: EntryToSort, change: { expenseCategory: string } | { incomeSourceId: number }, label: string) => {
     const others = sameParty(entries, entry);
     if (others.length === 0) {
-      void sortEach([entry], change);
+      void sortEach([entry], change, label);
       return;
     }
     Alert.alert(
       `${others.length + 1} entries from ${entry.description}`,
       `Put all ${others.length + 1} under ${label}, or just this one?`,
       [
-        { text: 'Just this one', onPress: () => void sortEach([entry], change) },
-        { text: `All ${others.length + 1}`, onPress: () => void sortEach([entry, ...others], change) },
+        { text: 'Just this one', onPress: () => void sortEach([entry], change, label) },
+        { text: `All ${others.length + 1}`, onPress: () => void sortEach([entry, ...others], change, label) },
       ],
     );
   };
@@ -94,7 +126,12 @@ export default function SortEntriesScreen() {
   const gather = async () => {
     setGathering(true);
     try {
-      const { added } = await customFetch<{ added: number }>('/api/entries-to-sort/money-in-without-source', { method: 'POST' });
+      // This year only: earlier years are left as they are.
+      const { added } = await customFetch<{ added: number }>('/api/entries-to-sort/money-in-without-source', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from: workingYear().from }),
+      });
       await done();
       Alert.alert(
         added > 0 ? `${added} found` : 'Nothing new found',
@@ -112,6 +149,16 @@ export default function SortEntriesScreen() {
     setBusy(entry.id);
     try {
       await customFetch(`/api/entries-to-sort/${entry.id}`, { method: 'DELETE' });
+      setLastChange({
+        text: `${entry.description} left with no source`,
+        undo: async () => {
+          await customFetch('/api/entries-to-sort', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ transactionIds: [entry.id] }),
+          });
+        },
+      });
       await done();
     } catch (error) {
       Alert.alert('Could not change it', plainSaveError(error));
@@ -158,7 +205,7 @@ export default function SortEntriesScreen() {
                 testID="sort-entries-gather-money-in"
                 style={{ borderWidth: 1, borderColor: colors.primary, borderRadius: 8, padding: 12, opacity: gathering ? 0.6 : 1 }}
               >
-                <Text style={{ color: colors.primary, fontFamily: 'Inter_700Bold', fontSize: 14 }}>{gathering ? 'Looking…' : 'Find money in with no source'}</Text>
+                <Text style={{ color: colors.primary, fontFamily: 'Inter_700Bold', fontSize: 14 }}>{gathering ? 'Looking…' : `Find ${workingYear().year} money in with no source`}</Text>
                 <Text style={{ color: colors.mutedForeground, fontSize: 12, marginTop: 2 }}>
                   Money in you have already saved without saying where it came from. Loans, repayments and moves between your accounts are left out.
                 </Text>
@@ -227,6 +274,20 @@ export default function SortEntriesScreen() {
           )}
         />
       )}
+      {lastChange ? (
+        <View
+          testID="sort-entries-undo-bar"
+          style={{ position: 'absolute', left: 16, right: 16, bottom: insets.bottom + 16, flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.foreground, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12 }}
+        >
+          <Text style={{ flex: 1, color: colors.background, fontSize: 13 }} numberOfLines={2}>{lastChange.text}</Text>
+          <Pressable onPress={() => void undoLast()} disabled={undoing} accessibilityRole="button" testID="sort-entries-undo" hitSlop={8}>
+            <Text style={{ color: colors.background, fontFamily: 'Inter_700Bold', fontSize: 14, opacity: undoing ? 0.6 : 1 }}>{undoing ? 'Undoing…' : 'Undo'}</Text>
+          </Pressable>
+          <Pressable onPress={() => setLastChange(null)} accessibilityRole="button" accessibilityLabel="Dismiss" hitSlop={8}>
+            <Feather name="x" size={16} color={colors.background} />
+          </Pressable>
+        </View>
+      ) : null}
     </View>
   );
 }
