@@ -82,7 +82,7 @@ import { keepScreenAwakeWhileSaving, letScreenSleepAgain } from '@/lib/keepAwake
 import { getImportProgress, importSaveStalled, setImportProgress, useImportProgress } from '@/lib/importProgress';
 import { clearSavePending, hasPendingSave, markSavePending, pendingSaveJob } from '@/lib/importSaveJob';
 import { retryWhenCutOff } from '@/lib/saveWhileAway';
-import { plainReadError, plainSaveError, retrySave, withRetries } from '@/lib/saveRetry';
+import { plainReadFailure, plainSaveError, ReadRequestFailed, retrySave, withRetries } from '@/lib/saveRetry';
 import { isNotSure, needsNotSureCategory, NOT_SURE_CATEGORY, notSureableLines, otherBudgetToMark, putUnderNotSure, toMarkAfterSave } from '@/lib/entriesToSort';
 import { handleLapsedError } from '@/lib/lapsedError';
 import { runPool, savePosting, SAVE_CONCURRENCY, type PostingApi, type Posted } from '@/lib/savePosting';
@@ -955,7 +955,9 @@ export default function MpesaImportScreen() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: pasted }),
       }),
-    );
+    ).catch((error: unknown) => {
+      throw new ReadRequestFailed(error);
+    });
 
   const readMessages = async (pasted: string = text) => {
     if (!pasted.trim()) {
@@ -979,7 +981,7 @@ export default function MpesaImportScreen() {
         setChoices((current) => ({ ...current, ...restoredChoices }));
       }
     } catch (error: unknown) {
-      Alert.alert('Could not read them', plainReadError(error));
+      Alert.alert('Could not read them', plainReadFailure(error));
     } finally {
       setReading(false);
     }
@@ -1051,7 +1053,7 @@ export default function MpesaImportScreen() {
       setLines(shown);
       setChoices(initialChoices(shown, history, categories.map((row) => row.name), effectiveChargeCategory, rules, canManageBudget));
     } catch (error: unknown) {
-      Alert.alert('Could not read them', plainReadError(error));
+      Alert.alert('Could not read them', plainReadFailure(error));
     } finally {
       setReading(false);
     }

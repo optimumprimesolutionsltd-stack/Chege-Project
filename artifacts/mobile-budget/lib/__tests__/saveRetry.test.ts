@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
-import { isServerHiccup, plainReadError, plainSaveError, retrySave, withRetries } from '@/lib/saveRetry';
+import { isServerHiccup, plainReadError, plainReadFailure, ReadRequestFailed, plainSaveError, retrySave, withRetries } from '@/lib/saveRetry';
 import type { PostingApi } from '@/lib/savePosting';
 
 const failed = (status: number, message: string, data?: unknown) => Object.assign(new Error(message), { status, data });
@@ -44,11 +44,23 @@ describe('reading M-Pesa messages through a server hiccup', () => {
     expect(plainReadError(failed(413, 'HTTP 413 : <html>'))).toBe('They could not be read. Please try again.');
   });
 
+  // "Could not read error is still showing" (4 Oct): a fault on the phone after
+  // the answer came back was reported as the server not being reachable.
+  it('blames the server only for what happened on the way there', () => {
+    expect(plainReadFailure(new ReadRequestFailed(new TypeError('Network request failed')))).toContain('could not reach its server');
+    const local = plainReadFailure(new TypeError("Cannot read properties of undefined (reading 'map')"));
+    expect(local).not.toContain('could not reach');
+    expect(local).toContain('could not show them');
+    expect(local).toContain("reading 'map'");
+  });
+
   it('waits out a hiccup before giving up on a reading', () => {
     const phone = readFileSync('app/mpesa-import.tsx', 'utf8');
     expect(phone).toMatch(/retrySave\(\(\) =>\s*customFetch<\{ lines: PreviewLine\[\] \}>\('\/api\/mpesa\/import\/preview'/);
     expect(phone.match(/'\/api\/mpesa\/import\/preview'/g)).toHaveLength(1);
     expect(phone).not.toMatch(/'Could not read them', plainSaveError/);
+    expect(phone).toContain('throw new ReadRequestFailed(error);');
+    expect(phone.match(/'Could not read them', plainReadFailure\(error\)/g)).toHaveLength(2);
   });
 });
 
