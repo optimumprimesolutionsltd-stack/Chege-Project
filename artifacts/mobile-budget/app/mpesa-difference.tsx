@@ -1,8 +1,8 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { customFetch } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
 import { formatDisplayDate } from '@/lib/displayFormat';
@@ -48,8 +48,13 @@ export default function MpesaDifferenceScreen() {
   const [answer, setAnswer] = useState<Answer | null>(null);
   const [bodies, setBodies] = useState<Map<string, string>>(new Map());
 
+  // Checking again over a result already shown keeps it on screen, with a
+  // line saying so, rather than blanking it for a spinner each time.
+  const shownRef = useRef(false);
+  const [rechecking, setRechecking] = useState(false);
   const check = useCallback(async () => {
-    setState('reading');
+    if (shownRef.current) setRechecking(true);
+    else setState('reading');
     setError(null);
     try {
       const read = await readMpesaRows(DAYS);
@@ -77,13 +82,19 @@ export default function MpesaDifferenceScreen() {
         body: JSON.stringify({ messages }),
       })));
       setState('done');
+      shownRef.current = true;
     } catch (reason) {
       setError(differenceError(reason));
       setState('error');
+    } finally {
+      setRechecking(false);
     }
   }, []);
 
-  useEffect(() => { void check(); }, [check]);
+  // Checked each time this screen is shown, not only the first: days brought
+  // in or fixed from here ("Bring these days in", Bank) have to drop off the
+  // list on the way back, or it goes on listing what is already sorted.
+  useFocusEffect(useCallback(() => { void check(); }, [check]));
 
   const result = answer?.result ?? null;
   const account = answer?.account.name ?? 'M-Pesa';
@@ -118,6 +129,12 @@ export default function MpesaDifferenceScreen() {
         ) : result ? (
           <>
             <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]} testID="mpesa-difference-summary">
+              {rechecking ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }} testID="mpesa-difference-rechecking">
+                  <ActivityIndicator size="small" color={colors.primary} />
+                  <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>Checking again with what you have saved since…</Text>
+                </View>
+              ) : null}
               <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>
                 Checked {result.checkedDays} days, {formatDisplayDate(result.from)} to {formatDisplayDate(result.to)}
               </Text>

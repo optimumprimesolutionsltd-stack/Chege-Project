@@ -71,3 +71,17 @@ describe('when the check cannot reach the server', () => {
     expect(read('app/mpesa-difference.tsx')).toContain("setAnswer(await retrySave(() => customFetch<Answer>('/api/mpesa/difference', {");
   });
 });
+
+describe('after days are brought in or fixed', () => {
+  // "Once the days have been brought in and sorted, Jamvi should clear that
+  // tab, which it's not doing" (4 Oct 2026): it checked once, on opening.
+  const screen = read('app/mpesa-difference.tsx');
+  it('checks again each time the screen is shown, so sorted days drop off the list', () => {
+    expect(screen).toContain('useFocusEffect(useCallback(() => { void check(); }, [check]));');
+    expect(screen).not.toContain('useEffect(() => { void check(); }, [check]);');
+  });
+  it('keeps the last result on screen while it checks again', () => {
+    expect(screen).toContain("if (shownRef.current) setRechecking(true);\n    else setState('reading');");
+    expect(screen).toContain('testID="mpesa-difference-rechecking"');
+  });
+});
