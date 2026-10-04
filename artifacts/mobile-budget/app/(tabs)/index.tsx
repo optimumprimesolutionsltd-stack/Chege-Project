@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -21,7 +21,7 @@ import Animated, {
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
-import { Redirect, router, useFocusEffect } from 'expo-router';
+import { Redirect, router, useFocusEffect, useNavigation } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -320,6 +320,14 @@ export default function DashboardScreen() {
   // the Home tab's badge). New messages are looked for each time Home is shown
   // and each time Jamvi comes back to the front.
   const { toSortCount, newSmsCount: newSms, recheckSms } = useWaitingForYou();
+  // The Home tab carries a badge counting these. Tapping it while already on
+  // Home, scrolled down, did nothing, so the cards it counts stayed out of
+  // sight: a second tap now brings Home back to the top, where they lead.
+  const homeScrollRef = useRef<AskScroll>(null);
+  const navigation = useNavigation();
+  useEffect(() => navigation.addListener('tabPress' as never, () => {
+    if (navigation.isFocused()) homeScrollRef.current?.scrollTo({ y: 0, animated: true });
+  }), [navigation]);
   useFocusEffect(React.useCallback(() => { if (canReadSms()) void recheckSms(); }, [recheckSms]));
   useEffect(() => {
     if (!canReadSms()) return;
@@ -396,7 +404,7 @@ export default function DashboardScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <PageScrollView scroller={{ top: 12, bottom: insets.bottom + 110 }}
+      <PageScrollView ref={homeScrollRef} scroller={{ top: 12, bottom: insets.bottom + 110 }}
         style={{ backgroundColor: colors.background }}
         overScrollMode="never"
         // Which budget you are looking at should not scroll away. Index 1 is
