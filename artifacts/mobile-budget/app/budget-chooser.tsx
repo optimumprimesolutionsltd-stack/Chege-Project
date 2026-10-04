@@ -952,7 +952,7 @@ function MobileOnboardingFlow({
         <Text style={[styles.onboardingIntro, { color: colors.mutedForeground }]}>
           {isShared
             ? "You're setting up a group you'll run as its treasurer. Answer a few questions so it's ready — you can change everything later."
-            : 'Your Jamvi subscription covers a private Personal budget and every group you're in. Answer a few questions so the budget you use first is ready.'}
+            : 'Your Jamvi subscription covers a private Personal budget and every group you’re in. Answer a few questions so the budget you use first is ready.'}
         </Text>
         <View style={[styles.benefitsCard, { backgroundColor: colors.accent, borderColor: colors.primary + '45' }]}>
           <Text style={[styles.choiceTitle, { color: colors.foreground }]}>

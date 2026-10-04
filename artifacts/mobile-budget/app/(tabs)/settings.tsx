@@ -60,6 +60,17 @@ import {
 } from '@/lib/workspace';
 import { clearQueryClientCache } from '@/lib/queryPersist';
 import {
+  canMakeGroupPersonal,
+  canRemovePersonalBudget,
+  makePersonalConfirmation,
+  makeSharedConfirmation,
+  MAKE_SHARED_WARNING,
+  PERSONAL_STATUS_QUERY_KEY,
+  REMOVE_PERSONAL_CONFIRMATION,
+  settleAfterConversion,
+  type PersonalBudgetStatus,
+} from '@/lib/budgetConversion';
+import {
   budgetDurationEditError,
   budgetDurationLabels,
   isoDate,
@@ -171,6 +182,10 @@ export default function SettingsScreen() {
   const [groupAccentColor, setGroupAccentColor] = useState<SharedBudgetAccent>('#003383');
   const [savingGroupName, setSavingGroupName] = useState(false);
   const [createGroupOpen, setCreateGroupOpen] = useState(false);
+  // The same name-and-type form serves two purposes: starting a new Shared
+  // group, and turning this Personal budget into one in place.
+  const [groupFormMode, setGroupFormMode] = useState<'create' | 'convert'>('create');
+  const [convertingBudget, setConvertingBudget] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupKind, setNewGroupKind] = useState<SharedGroupKind | null>(null);
   const [editingGroupKind, setEditingGroupKind] = useState(false);
@@ -194,6 +209,11 @@ export default function SettingsScreen() {
   const { data: members = [] } = useQuery<GroupMember[]>({
     queryKey: ['members'],
     queryFn: () => customFetch<GroupMember[]>('/api/members'),
+    enabled: !!user?.id,
+  });
+  const { data: personalStatus } = useQuery<PersonalBudgetStatus>({
+    queryKey: PERSONAL_STATUS_QUERY_KEY,
+    queryFn: () => customFetch<PersonalBudgetStatus>('/api/workspaces/personal/status'),
     enabled: !!user?.id,
   });
   const { data: budgetPlan } = useQuery<BudgetPlanSummary | null>({
@@ -556,8 +576,116 @@ export default function SettingsScreen() {
       ]);
       return;
     }
+    setGroupFormMode('create');
     setCreateGroupOpen(true);
   }
+  // Same rule as starting a group: the budget becomes a group they run.
+  function openConvertToShared() {
+    if (entitlements && !mayStartGroup(entitlements)) {
+      Alert.alert('Subscription needed', START_GROUP_NEEDS_SUBSCRIPTION, [
+        { text: 'Not now', style: 'cancel' },
+        { text: 'Subscribe', onPress: () => router.push('/subscription') },
+      ]);
+      return;
+    }
+    setNewGroupName('');
+    setNewGroupKind(null);
+    setGroupFormMode('convert');
+    setCreateGroupOpen(true);
+  }
+  /** Points the phone at the right budget and drops every cached answer. */
+  const settleConversion = (groupId: number | null) => settleAfterConversion({
+    groupId,
+    storage: AsyncStorage,
+    clearPersistedCache: clearQueryClientCache,
+    resetQueries: () => queryClient.resetQueries(),
+  });
+  const convertToShared = async (name: string, kind: SharedGroupKind) => {
+    setConvertingBudget(true);
+    try {
+      const converted = await customFetch<{ id: number }>('/api/workspaces/personal/make-shared', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, kind }),
+      });
+      setCreateGroupOpen(false);
+      setNewGroupName('');
+      setNewGroupKind(null);
+      await settleConversion(converted.id);
+      router.replace('/(tabs)/');
+      Alert.alert('Now a Shared group', `"${name}" keeps everything it had. Invite people from Settings when you're ready. You can create a new Personal budget any time.`);
+    } catch (error) {
+      if (handleLapsedError(error)) {
+        setCreateGroupOpen(false);
+        return;
+      }
+      Alert.alert('Could not turn it into a group', error instanceof Error ? error.message : 'Please try again.');
+    } finally {
+      setConvertingBudget(false);
+    }
+  };
+  const handleMakePersonal = () => {
+    if (!group) return;
+    const groupId = group.id;
+    const { title, message } = makePersonalConfirmation(workspaceBudgetName(group), personalStatus);
+    Alert.alert(title, message, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Make it my Personal budget',
+        onPress: async () => {
+          setConvertingBudget(true);
+          try {
+            const result = await customFetch<{ id: number; previousPersonal: { outcome: string; name?: string } | null }>(
+              `/api/workspaces/${groupId}/make-personal`,
+              { method: 'POST' },
+            );
+            await settleConversion(result.id);
+            router.replace('/(tabs)/');
+            Alert.alert(
+              'This is now your Personal budget',
+              result.previousPersonal?.outcome === 'kept-as-group'
+                ? `Your old Personal budget is kept as the group "${result.previousPersonal.name}".`
+                : 'Everything in it is just as it was.',
+            );
+          } catch (error) {
+            Alert.alert('Could not make it your Personal budget', error instanceof Error ? error.message : 'Please try again.');
+          } finally {
+            setConvertingBudget(false);
+          }
+        },
+      },
+    ]);
+  };
+  const handleRemovePersonal = () => {
+    Alert.alert(REMOVE_PERSONAL_CONFIRMATION.title, REMOVE_PERSONAL_CONFIRMATION.message, [
+      { text: 'Keep it', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: async () => {
+          setConvertingBudget(true);
+          const wasActive = group?.isPrivate === true;
+          try {
+            await customFetch('/api/workspaces/personal', { method: 'DELETE' });
+            if (wasActive) {
+              await settleConversion(null);
+              router.replace('/budget-chooser');
+            } else {
+              await Promise.all([
+                queryClient.invalidateQueries({ queryKey: PERSONAL_STATUS_QUERY_KEY }),
+                queryClient.invalidateQueries({ queryKey: getGetWorkspacesQueryKey() }),
+              ]);
+            }
+            Alert.alert('Personal budget removed', 'You can create a new one any time.');
+          } catch (error) {
+            Alert.alert('Could not remove it', error instanceof Error ? error.message : 'Please try again.');
+          } finally {
+            setConvertingBudget(false);
+          }
+        },
+      },
+    ]);
+  };
   const handleCreateSharedGroup = async () => {
     const name = newGroupName.trim();
     if (name.length < 2) {
@@ -566,6 +694,15 @@ export default function SettingsScreen() {
     }
     if (!newGroupKind) {
       Alert.alert('Choose a group type', 'Select the kind of Shared group you are creating.');
+      return;
+    }
+    if (groupFormMode === 'convert') {
+      const kind = newGroupKind;
+      const { title, message } = makeSharedConfirmation(name);
+      Alert.alert(title, message, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Turn into a group', onPress: () => void convertToShared(name, kind) },
+      ]);
       return;
     }
     try {
@@ -1159,6 +1296,18 @@ export default function SettingsScreen() {
                 <Feather name="plus" size={16} color={colors.primary} />
                  <Text style={[styles.createGroupButtonText, { color: colors.primary }]}>Create a Shared group</Text>
               </Pressable>
+              <Pressable
+                testID="convert-personal-to-shared"
+                disabled={convertingBudget}
+                onPress={openConvertToShared}
+                style={[styles.createGroupButton, { borderColor: colors.primary }]}
+              >
+                <Feather name="users" size={16} color={colors.primary} />
+                <Text style={[styles.createGroupButtonText, { color: colors.primary }]}>Turn into a shared group</Text>
+              </Pressable>
+              <Text style={{ width: '100%', color: colors.mutedForeground, fontSize: 11, fontFamily: 'Inter_400Regular' }}>
+                Keeps everything recorded here. {MAKE_SHARED_WARNING}
+              </Text>
             </View>
            ) : null}
         </View>
@@ -1737,6 +1886,28 @@ export default function SettingsScreen() {
                   ? 'Owners stay in the group so it always has someone responsible for access. Tap "Make owner" next to another member above to hand it off — you can leave once you are no longer the owner.'
                   : 'Owners stay in the group so it always has someone responsible for access. Add another member, then hand off ownership to leave.'}
               </Text>
+              {canMakeGroupPersonal({ group, members, userId: user?.id }) ? (
+                <View style={{ marginTop: 12, marginBottom: editingAccess ? 16 : 0 }}>
+                  <Text style={[styles.rowLabel, { color: colors.foreground }]}>Make this my Personal budget</Text>
+                  <Text style={[styles.rowSub, { color: colors.mutedForeground, marginTop: 4, marginBottom: 12 }]}>
+                    {personalStatus?.exists
+                      ? personalStatus.empty
+                        ? 'You are the only one here. It keeps everything; your unused Personal budget is removed.'
+                        : 'You are the only one here. It keeps everything; your current Personal budget is kept as the group "Old personal budget".'
+                      : 'You are the only one here. It keeps everything and becomes your Personal budget.'}
+                  </Text>
+                  <Pressable
+                    testID="make-group-personal"
+                    disabled={convertingBudget}
+                    onPress={handleMakePersonal}
+                    style={{ alignSelf: 'flex-start', borderWidth: 1, borderColor: colors.primary, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 9 }}
+                  >
+                    <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>
+                      {convertingBudget ? 'Working…' : 'Make this my Personal budget'}
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : null}
               {editingAccess ? (
                 <>
                   <Text style={[styles.rowLabel, { color: colors.foreground }]}>Delete this group</Text>
@@ -1795,6 +1966,22 @@ export default function SettingsScreen() {
                 Tap Member to choose Admin instead. They only join after signing in and accepting the email invitation.
               </Text>
               <GroupInviteLinkCard groupName={group?.name} />
+            </View>
+          ) : null}
+          {canRemovePersonalBudget(personalStatus) ? (
+            <View style={[styles.workspaceInfo, { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth }]}>
+              <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>
+                Your Personal budget has nothing recorded in it. You can remove it and create a new one any time.
+              </Text>
+              <Pressable
+                testID="remove-unused-personal-budget"
+                disabled={convertingBudget}
+                onPress={handleRemovePersonal}
+                style={[styles.createGroupButton, { borderColor: '#ef444466' }]}
+              >
+                <Feather name="trash-2" size={16} color="#ef4444" />
+                <Text style={[styles.createGroupButtonText, { color: '#ef4444' }]}>Remove my unused Personal budget</Text>
+              </Pressable>
             </View>
           ) : null}
           {!canManageShared ? (
@@ -2071,9 +2258,13 @@ export default function SettingsScreen() {
           <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.modalHeader}>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.modalTitle, { color: colors.foreground }]}>Create a Shared group</Text>
+                <Text style={[styles.modalTitle, { color: colors.foreground }]}>
+                  {groupFormMode === 'convert' ? 'Turn into a shared group' : 'Create a Shared group'}
+                </Text>
                 <Text style={[styles.rowSub, { color: colors.mutedForeground, marginTop: 5 }]}>
-                  You will be the owner. Nothing from your Personal budget will be copied into this Shared group.
+                  {groupFormMode === 'convert'
+                    ? `Your Personal budget becomes this group, with everything already in it. ${MAKE_SHARED_WARNING}`
+                    : 'You will be the owner. Nothing from your Personal budget will be copied into this Shared group.'}
                 </Text>
               </View>
               <Pressable onPress={() => setCreateGroupOpen(false)} hitSlop={10}>
@@ -2108,11 +2299,13 @@ export default function SettingsScreen() {
             </View>
             <Pressable
               testID="confirm-create-private-group"
-              disabled={createSharedGroup.isPending || !newGroupKind}
+              disabled={createSharedGroup.isPending || convertingBudget || !newGroupKind}
               onPress={() => void handleCreateSharedGroup()}
-              style={[styles.modalCreateButton, { backgroundColor: colors.primary, opacity: createSharedGroup.isPending || !newGroupKind ? 0.55 : 1 }]}
+              style={[styles.modalCreateButton, { backgroundColor: colors.primary, opacity: createSharedGroup.isPending || convertingBudget || !newGroupKind ? 0.55 : 1 }]}
             >
-              {createSharedGroup.isPending ? <ActivityIndicator color="#fff" /> : <Text style={styles.modalCreateText}>Create Shared group</Text>}
+              {createSharedGroup.isPending || convertingBudget
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={styles.modalCreateText}>{groupFormMode === 'convert' ? 'Continue' : 'Create Shared group'}</Text>}
             </Pressable>
           </View>
           </ScrollView>
