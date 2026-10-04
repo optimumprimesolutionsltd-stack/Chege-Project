@@ -1,0 +1,124 @@
+name: Phone update
+
+# Publishes the Android app's JavaScript as an over-the-air update after CI
+# passes on main, so a change merged for the phone reaches phones without
+# anybody running `eas update` by hand. Until now nothing did: fixes were
+# merged, the server and website went live, and the phone kept the old code.
+#
+# The installed APK (eas.json "production" and "play") listens on the
+# "production" channel, and its runtime version follows the app version, so
+# an update only ever reaches an app it can run on. A change that needs new
+# native code (a new module or permission) still needs a new APK: an update
+# cannot add it, and the app version should be raised for that build.
+#
+# Needs the repository secret EXPO_TOKEN (an Expo access token for the
+# optimumprimesolutions account: expo.dev > Account settings > Access tokens).
+# Without it this workflow says so and stops, and nothing else is affected.
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  # By hand from the Actions tab, e.g. to publish again with a note.
+  workflow_dispatch:
+    inputs:
+      note:
+        description: 'What the "Update ready" prompt lists (items separated by |). Defaults to the last commit title.'
+        required: false
+
+permissions:
+  contents: read
+
+# One publish at a time, in order; a newer one waits rather than racing.
+concurrency:
+  group: phone-update
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    # Only a CI run that passed, on a push to main (not a pull request).
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The commit CI passed on, not whatever main is now.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 2
+
+      - name: Is there anything for the phone?
+        id: changed
+        env:
+          MANUAL: ${{ github.event_name == 'workflow_dispatch' }}
+          HAS_TOKEN: ${{ secrets.EXPO_TOKEN != '' }}
+        run: |
+          if [ "$HAS_TOKEN" != "true" ]; then
+            echo "::warning::EXPO_TOKEN is not set, so no phone update was published. Add it under Settings > Secrets and variables > Actions."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$MANUAL" = "true" ]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Main is squash-merged, so one commit is one pull request. The app
+          # also bundles the shared libraries under lib/. A change to this
+          # workflow publishes too, so the commit adding it sends phones what
+          # was merged before it.
+          changed=$(git diff --name-only HEAD~1 HEAD -- artifacts/mobile-budget lib pnpm-lock.yaml .github/workflows/phone-update.yml | grep -v -E '(__tests__/|\.test\.ts$)' || true)
+          if [ -z "$changed" ]; then
+            echo "Nothing the phone runs changed; no update."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Changed for the phone:"
+            echo "$changed"
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: pnpm/action-setup@v4
+        if: steps.changed.outputs.publish == 'true'
+
+      - uses: actions/setup-node@v4
+        if: steps.changed.outputs.publish == 'true'
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install
+        if: steps.changed.outputs.publish == 'true'
+        run: pnpm install --frozen-lockfile --config.strictDepBuilds=false
+
+      - name: What the update says
+        if: steps.changed.outputs.publish == 'true'
+        id: note
+        env:
+          GIVEN: ${{ github.event.inputs.note }}
+        run: |
+          note="$GIVEN"
+          if [ -z "$note" ]; then
+            # The pull request's title, without its "(#123)".
+            note=$(git log -1 --format=%s | sed -E 's/ *\(#[0-9]+\)$//')
+          fi
+          # A single line, and short enough for the prompt.
+          note=$(printf '%s' "$note" | tr '\n' ' ' | cut -c1-300)
+          echo "note=$note" >> "$GITHUB_OUTPUT"
+
+      - name: Publish the update
+        if: steps.changed.outputs.publish == 'true'
+        working-directory: artifacts/mobile-budget
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          # The same as the APK's build profile: without it the app has no server to talk to.
+          EXPO_PUBLIC_DOMAIN: jamvi.co.ke
+          # Shown in the app's "Update ready" prompt (app.config.js).
+          JAMVI_UPDATE_NOTE: ${{ steps.note.outputs.note }}
+        run: |
+          npx --yes eas-cli@latest update \
+            --channel production \
+            --platform android \
+            --message "$JAMVI_UPDATE_NOTE" \
+            --non-interactive
