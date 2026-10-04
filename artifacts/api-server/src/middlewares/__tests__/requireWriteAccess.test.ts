@@ -100,3 +100,24 @@ describe("everybody else", () => {
     expect(response.status).toBe(200);
   });
 });
+
+describe("a viewer and their own Personal budget", () => {
+  // Creating, removing or converting it is about the person, not the budget
+  // they happen to be viewing.
+  it.each([
+    ["post", "/workspaces/personal"],
+    ["delete", "/workspaces/personal"],
+    ["post", "/workspaces/personal/make-shared"],
+  ])("can still %s %s", async (method, path) => {
+    const agent = request(appAs("viewer")) as unknown as Record<string, (p: string) => request.Test>;
+    const response = await agent[method](path).send({});
+
+    expect(response.status).toBe(200);
+  });
+
+  it("cannot turn the viewed group into anything", async () => {
+    const response = await request(appAs("viewer")).post("/workspaces/7/make-personal").send({});
+
+    expect(response.status).toBe(403);
+  });
+});
