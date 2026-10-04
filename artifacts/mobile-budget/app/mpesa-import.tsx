@@ -50,6 +50,7 @@ import { CategorySearchBox } from '@/components/CategorySearchBox';
 import { PageScrollView } from '@/components/PageScrollReset';
 import { ScreenHint } from '@/components/ScreenHint';
 import { useColors } from '@/hooks/useColors';
+import { AddIncomeSourceChip } from '@/components/AddIncomeSourceChip';
 import { canReceiveShares } from '@/lib/shareIntent';
 import {
   balanceChanges,
@@ -2064,7 +2065,7 @@ export default function MpesaImportScreen() {
     void saveDebtLinks(debtLinks);
     // Money in left on "Not sure" is kept to sort out later; Home says so.
     {
-      const toMark = toMarkAfterSave(lines, choices, depositIds, incomeSources.length > 0);
+      const toMark = toMarkAfterSave(lines, choices, depositIds);
       if (toMark.length > 0) {
         void customFetch('/api/entries-to-sort', {
           method: 'POST',
@@ -3046,13 +3047,11 @@ export default function MpesaImportScreen() {
                       Suggested by Jamvi. Tap to choose a different one.
                     </Text>
                   ) : null}
-                  {openMore.has(item.index) || destinationOf(choice) !== 'category' || transferHints.has(item.index) ? (
-                    <>
-                  {item.direction === 'in' && choice?.include && !choice.debt && !isMove(choice) && !choice.contributorId && incomeSources.length > 0 ? (
+                  {item.direction === 'in' && choice?.include && !choice.debt && !isMove(choice) && !choice.contributorId && destinationOf(choice) === 'category' && !item.type?.startsWith('fuliza_') && item.type !== 'reversal' ? (
                     <View style={{ gap: 6 }} testID={`mpesa-line-source-${item.index}`}>
-                      <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0 }]}>Where did this come from? (optional)</Text>
+                      <Text style={[styles.hint, { color: colors.foreground, marginTop: 0, fontFamily: 'Inter_600SemiBold' }]}>Where did this come from?</Text>
                       <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
-                        {[{ id: null as number | null, name: 'Not sure' }, ...incomeSources].map((source) => {
+                        {[{ id: null as number | null, name: 'Not sure yet' }, ...incomeSources].map((source) => {
                           const on = (choice.incomeSourceId ?? null) === source.id;
                           return (
                             <Pressable
@@ -3074,7 +3073,16 @@ export default function MpesaImportScreen() {
                             </Pressable>
                           );
                         })}
+                        <AddIncomeSourceChip
+                          testID={`mpesa-line-source-add-${item.index}`}
+                          onCreated={(created) => setChoices((current) => chooseIncomeSource(lines ?? [], current, item.index, created.id))}
+                        />
                       </ScrollView>
+                      {(choice.incomeSourceId ?? null) === null ? (
+                        <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0 }]} testID={`mpesa-line-source-unsure-${item.index}`}>
+                          Not sure yet: it still counts in {accounts.find((option) => option.id === accountId)?.name ?? 'the account'}, and Home will remind you to say where it came from.
+                        </Text>
+                      ) : null}
                       {choice.sourceAuto && choice.incomeSourceId ? (
                         <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0 }]} testID={`mpesa-line-source-suggested-${item.index}`}>
                           Suggested by Jamvi. Tap another to change it.
@@ -3082,6 +3090,8 @@ export default function MpesaImportScreen() {
                       ) : null}
                     </View>
                   ) : null}
+                  {openMore.has(item.index) || destinationOf(choice) !== 'category' || transferHints.has(item.index) ? (
+                    <>
                   {canManageBudget && choice?.include && !choice.debt && !choice.contributorId && otherAccounts.length > 0 ? (
                     <View style={{ gap: 6 }} testID={`mpesa-line-move-${item.index}`}>
                       <Text style={[styles.hint, { color: transferHints.has(item.index) ? colors.primary : colors.mutedForeground, marginTop: 0, fontFamily: transferHints.has(item.index) ? 'Inter_600SemiBold' : undefined }]}>

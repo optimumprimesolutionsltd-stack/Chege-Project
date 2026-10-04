@@ -18,7 +18,7 @@ describe('choosing Not sure is an answer', () => {
     const after = chooseIncomeSource([line(1)], before, 1, null);
     expect(after[1]).toMatchObject({ incomeSourceId: null, confirmed: true });
     expect(isConfirmedToSave(line(1), after[1])).toBe(true);
-    expect(toMarkAfterSave([line(1)], after, new Map([[1, 11]]), true)).toEqual([11]);
+    expect(toMarkAfterSave([line(1)], after, new Map([[1, 11]]))).toEqual([11]);
   });
 
   it('choosing a source does not confirm the other lines it fills in', () => {

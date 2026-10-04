@@ -77,6 +77,51 @@ router.get("/entries-to-sort", async (req, res): Promise<void> => {
   });
 });
 
+/**
+ * Money in already saved with no income source, gathered into the list to sort
+ * out. An import used to ask nothing of money in when the budget had no income
+ * sources, so a whole year could be saved with the balance right and the income
+ * picture empty (4 Oct 2026). Personal budget only: in a Shared group money in
+ * is members' contributions, which need no source.
+ *
+ * Only plain money in: not borrowing (Fuliza included), a repayment, a move
+ * between accounts or to and from savings, a member's contribution or a
+ * reversal. Gathered when asked, so what was "left without a source" stays off
+ * until the person asks again.
+ */
+router.post("/entries-to-sort/money-in-without-source", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  if (!req.group?.isPrivate) {
+    res.status(403).json({ error: "This is for a Personal budget: money in to a group is members' contributions." });
+    return;
+  }
+  if (!entriesToSortReady()) {
+    res.status(503).json({ error: "Entries to sort cannot be kept yet." });
+    return;
+  }
+  const added = await db.execute(sql`
+    INSERT INTO "entries_to_sort" ("transaction_id", "group_id")
+    SELECT t."id", t."group_id"
+    FROM "joint_account_transactions" t
+    WHERE t."group_id" = ${groupId}
+      AND t."type" = 'deposit'
+      AND t."income_source_id" IS NULL
+      AND t."is_borrowing" = false
+      AND t."settles_contributor_id" IS NULL
+      AND t."savings_goal_id" IS NULL
+      AND t."bank_transfer_id" IS NULL
+      AND t."transfer_direction" IS NULL
+      AND NOT EXISTS (
+        SELECT 1 FROM "joint_account_deposit_splits" s
+        WHERE s."transaction_id" = t."id" AND s."contributor_id" IS NOT NULL)
+      AND NOT EXISTS (
+        SELECT 1 FROM "reversal_links" r WHERE r."reversal_transaction_id" = t."id")
+    ON CONFLICT ("transaction_id") DO NOTHING
+    RETURNING "transaction_id"`);
+  res.json({ added: added.rows.length });
+});
+
 /** "Leave it without a source": money in taken off the list as it is. */
 router.delete("/entries-to-sort/:transactionId", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
