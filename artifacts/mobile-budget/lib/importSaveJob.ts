@@ -16,10 +16,14 @@ const KEY = (groupId: number) => `jamvi:import-save-pending:${groupId}`;
 /** An interrupted save older than this is not resumed by itself. */
 export const PENDING_SAVE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
-export async function markSavePending(groupId: number | null | undefined): Promise<void> {
+/**
+ * `jobId` is the save running on the server (lib/serverSave), when it is one:
+ * coming back, that save is followed to its end rather than started again.
+ */
+export async function markSavePending(groupId: number | null | undefined, jobId?: number): Promise<void> {
   if (!groupId) return;
   try {
-    await AsyncStorage.setItem(KEY(groupId), JSON.stringify({ startedAt: Date.now() }));
+    await AsyncStorage.setItem(KEY(groupId), JSON.stringify(jobId ? { startedAt: Date.now(), jobId } : { startedAt: Date.now() }));
   } catch {
     // Without it, an interrupted save simply waits for Save again, as before.
   }
@@ -44,5 +48,19 @@ export async function hasPendingSave(groupId: number | null | undefined, now: nu
     return typeof startedAt === 'number' && now - startedAt < PENDING_SAVE_MAX_AGE_MS;
   } catch {
     return false;
+  }
+}
+
+/** The server's save, when the one cut short was running there. */
+export async function pendingSaveJob(groupId: number | null | undefined, now: number = Date.now()): Promise<number | null> {
+  if (!groupId) return null;
+  try {
+    const raw = await AsyncStorage.getItem(KEY(groupId));
+    if (!raw) return null;
+    const { startedAt, jobId } = JSON.parse(raw) as { startedAt?: number; jobId?: number };
+    if (typeof startedAt !== 'number' || now - startedAt >= PENDING_SAVE_MAX_AGE_MS) return null;
+    return typeof jobId === 'number' ? jobId : null;
+  } catch {
+    return null;
   }
 }

@@ -74,6 +74,7 @@ describe('an entry whose request was cut off is tried again', () => {
   it('is what the import save uses, on the entry and its charge alike', () => {
     const screen = readFileSync('app/mpesa-import.tsx', 'utf8');
     expect(screen).toContain('const postingApi: PostingApi = withRetries(rawPostingApi, (task) => retryWhenCutOff(task));');
-    expect(screen).toContain('const posted = await savePosting(built, postingApi, accountId);');
+    // The phone saves entry by entry only when the server cannot save them itself.
+    expect(screen).toContain('onSaved(item, choice, await savePosting(built, postingApi, accountId));');
   });
 });

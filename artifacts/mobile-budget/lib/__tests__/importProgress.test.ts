@@ -23,7 +23,8 @@ describe('the import saving bar', () => {
     const screen = readFileSync('app/mpesa-import.tsx', 'utf8');
     expect(bar).toContain("if (!progress || pathname === '/mpesa-import') return null;");
     expect(layout).toContain('<ImportSavingBar />');
-    expect(screen).toContain("setImportProgress({ stage: 'saving', done: doneCount, total: toSave.length });");
+    expect(screen).toContain("setImportProgress({ stage: 'saving', done, total });");
+    expect(screen).toContain('await followServerSave(job.id, showProgress);');
     expect(screen).toContain("setImportProgress({ stage: 'done', saved: result.saved, repeats: result.repeats, failed: result.failed.length });");
   });
 });

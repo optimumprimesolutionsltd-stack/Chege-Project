@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
-import { isServerHiccup, plainSaveError, retrySave, withRetries } from '@/lib/saveRetry';
+import { isServerHiccup, plainReadError, plainSaveError, retrySave, withRetries } from '@/lib/saveRetry';
 import type { PostingApi } from '@/lib/savePosting';
 
 const failed = (status: number, message: string, data?: unknown) => Object.assign(new Error(message), { status, data });
@@ -29,6 +29,26 @@ describe('saving through a server restart', () => {
     expect(plainSaveError(failed(409, 'HTTP 409 Conflict: Already recorded', { error: 'Already recorded on 3 Jan.' }))).toBe('Already recorded on 3 Jan.');
     expect(plainSaveError(failed(400, 'HTTP 400 Bad Request: Choose a category'))).toBe('Choose a category');
     expect(plainSaveError(failed(400, 'HTTP 400 : <html>'))).toBe('It was not saved. Tap Save again to try it.');
+  });
+});
+
+// Reported 4 Oct 2026: reading M-Pesa messages failed with "tap Save again",
+// on a screen with nothing to save yet, and was never tried a second time.
+describe('reading M-Pesa messages through a server hiccup', () => {
+  it('says to try again, not to tap Save', () => {
+    const text = plainReadError(new TypeError('Network request failed'));
+    expect(text).toContain('could not reach its server');
+    expect(text).not.toContain('Save');
+    expect(plainReadError(failed(502, 'HTTP 502 Bad Gateway: <!DOCTYPE html>'))).toBe(text);
+    expect(plainReadError(failed(400, 'HTTP 400 Bad Request', { error: 'Paste at least one M-Pesa message.' }))).toBe('Paste at least one M-Pesa message.');
+    expect(plainReadError(failed(413, 'HTTP 413 : <html>'))).toBe('They could not be read. Please try again.');
+  });
+
+  it('waits out a hiccup before giving up on a reading', () => {
+    const phone = readFileSync('app/mpesa-import.tsx', 'utf8');
+    expect(phone).toMatch(/retrySave\(\(\) =>\s*customFetch<\{ lines: PreviewLine\[\] \}>\('\/api\/mpesa\/import\/preview'/);
+    expect(phone.match(/'\/api\/mpesa\/import\/preview'/g)).toHaveLength(1);
+    expect(phone).not.toMatch(/'Could not read them', plainSaveError/);
   });
 });
 
