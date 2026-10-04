@@ -1032,10 +1032,10 @@ export default function MpesaImportScreen() {
     else if (result.on && !smsAuto.on) keepSmsAuto({ on: true, since: smsAuto.since || Date.now() });
   };
   // The messages read through the same reader as pasted ones, a batch at a time.
-  const readSmsMessages = async (messages: string[]) => {
+  const readSmsMessages = async (messages: string[]): Promise<PreviewLine[] | null> => {
     if (messages.length === 0) {
       Alert.alert('No M-Pesa messages', 'There are no M-Pesa messages on this phone for those dates.');
-      return;
+      return null;
     }
     setReading(true);
     try {
@@ -1052,8 +1052,10 @@ export default function MpesaImportScreen() {
       setSmsMessages(messages);
       setLines(shown);
       setChoices(initialChoices(shown, history, categories.map((row) => row.name), effectiveChargeCategory, rules, canManageBudget));
+      return shown;
     } catch (error: unknown) {
       Alert.alert('Could not read them', plainReadFailure(error));
+      return null;
     } finally {
       setReading(false);
     }
@@ -1079,10 +1081,18 @@ export default function MpesaImportScreen() {
   useEffect(() => {
     if (params.fromSms !== 'new' || openedForNew.current || !smsAuto.on || lines) return;
     openedForNew.current = true;
-    void newMpesaSms(smsAuto.since).then((found) => {
+    void newMpesaSms(smsAuto.since).then(async (found) => {
       if (!found) return;
       smsNewestRef.current = found.newest;
-      return readSmsMessages(found.messages);
+      const shown = await readSmsMessages(found.messages);
+      // Every one already recorded (or none a payment): there is nothing to
+      // save, so Save can never move the mark on. Moved on here instead, or
+      // the same messages counted as new on Home's badge for ever.
+      if (shown && !shown.some(isRecordable)) {
+        keepSmsAuto({ on: true, since: found.newest });
+        smsNewestRef.current = null;
+        void queryClient.invalidateQueries({ queryKey: ['new-mpesa-sms'] });
+      }
     }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.fromSms, smsAuto.on, smsAuto.since]);
