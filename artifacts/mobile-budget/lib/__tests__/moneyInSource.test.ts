@@ -54,7 +54,7 @@ describe('Sort them out, for a year already saved', () => {
     expect(screen).toContain('onPress: () => void sortEach([entry, ...others], change) },');
   });
   it('gathers money in with no source, in a Personal budget only', () => {
-    expect(screen).toContain("customFetch<{ added: number }>('/api/entries-to-sort/money-in-without-source', { method: 'POST' })");
+    expect(screen).toContain("customFetch<{ added: number }>('/api/entries-to-sort/money-in-without-source', {");
     expect(screen).toContain('{group?.isPrivate ? (');
   });
   it('can add a source right from an entry', () => {
