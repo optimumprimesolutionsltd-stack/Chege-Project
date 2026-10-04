@@ -7,6 +7,8 @@ import { customFetch } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
 import { formatDisplayDate } from '@/lib/displayFormat';
 import { readMpesaRows, smsRefusal } from '@/lib/mpesaSms';
+import { retrySave } from '@/lib/saveRetry';
+import { differenceError } from '@/lib/differenceError';
 import { differenceMessages, kes, receiptOf, spanChangeText, startingBalanceAdvice } from '@/lib/mpesaLiveBalance';
 
 /** How far back to read: a year of messages is what most phones still hold. */
@@ -68,14 +70,15 @@ export default function MpesaDifferenceScreen() {
         if (code) byReceipt.set(code, row.body.trim());
       }
       setBodies(byReceipt);
-      setAnswer(await customFetch<Answer>('/api/mpesa/difference', {
+      // Only reads, so trying again through a server hiccup is always safe.
+      setAnswer(await retrySave(() => customFetch<Answer>('/api/mpesa/difference', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages }),
-      }));
+      })));
       setState('done');
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Could not check. Please try again.');
+      setError(differenceError(reason));
       setState('error');
     }
   }, []);
