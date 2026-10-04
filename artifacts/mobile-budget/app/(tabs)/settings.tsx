@@ -1308,6 +1308,14 @@ export default function SettingsScreen() {
               <Text style={{ width: '100%', color: colors.mutedForeground, fontSize: 11, fontFamily: 'Inter_400Regular' }}>
                 Keeps everything recorded here. {MAKE_SHARED_WARNING}
               </Text>
+              <Pressable
+                testID="delete-past-year"
+                onPress={() => router.push('/delete-year' as never)}
+                style={[styles.createGroupButton, { borderColor: '#ef444466' }]}
+              >
+                <Feather name="calendar" size={16} color="#ef4444" />
+                <Text style={[styles.createGroupButtonText, { color: '#ef4444' }]}>Delete a past year</Text>
+              </Pressable>
             </View>
            ) : null}
         </View>

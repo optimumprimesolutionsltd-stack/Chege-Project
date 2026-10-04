@@ -415,6 +415,82 @@ export async function confirmGroupDeletionCode(
     .where(eq(accountDeletionCodesTable.id, pending.id));
 }
 
+/**
+ * Deleting a whole past year from a Personal budget ("delete 2025 for good",
+ * 4 Oct 2026): the same emailed-code approval, scoped to the budget and the
+ * year, so a code for one purpose can never confirm another.
+ */
+function hashYearDeletionCode(groupId: number, year: number, code: string): string {
+  return crypto.createHash("sha256").update(`year:${groupId}:${year}:${code}`).digest("hex");
+}
+
+export async function requestYearDeletionCode(
+  userId: string,
+  groupId: number,
+  year: number,
+  now: Date = new Date(),
+): Promise<void> {
+  const [user] = await db
+    .select({ email: usersTable.email, firstName: usersTable.firstName })
+    .from(usersTable)
+    .where(eq(usersTable.id, userId))
+    .limit(1);
+  if (!user?.email) {
+    throw new Error("This account has no email on file to send a code to.");
+  }
+  const code = generateDeletionCode();
+  await db.insert(accountDeletionCodesTable).values({
+    userId,
+    codeHash: hashYearDeletionCode(groupId, year, code),
+    expiresAt: new Date(now.getTime() + DELETION_CODE_TTL_MS),
+  });
+  const greeting = user.firstName ? `Hi ${user.firstName},` : "Hi,";
+  try {
+    await sendEmail({
+      from: fromAddress(),
+      to: [user.email],
+      subject: `Your Jamvi code to delete ${year}`,
+      html: `<p>${greeting}</p><p>Use this code to confirm you want to delete every entry dated in ${year} from your Personal budget:</p>`
+        + `<p style="font-size:28px;font-weight:700;letter-spacing:4px;">${code}</p>`
+        + `<p>It expires in 10 minutes. This cannot be undone. If you did not ask for it, ignore this message - nothing happens without the code.</p>`,
+    });
+  } catch (error) {
+    if (error instanceof EmailNotConfiguredError) {
+      logger.error("Could not send a year-deletion code: no mailer is configured");
+    } else {
+      logger.error({ err: error }, "Could not send a year-deletion code");
+    }
+    throw new Error("Could not send a confirmation code. Try again shortly.");
+  }
+}
+
+/** Spends a year-deletion code. Single-use, and only for this budget and year. */
+export async function confirmYearDeletionCode(
+  userId: string,
+  groupId: number,
+  year: number,
+  code: string,
+  now: Date = new Date(),
+): Promise<void> {
+  const [pending] = await db
+    .select({ id: accountDeletionCodesTable.id, codeHash: accountDeletionCodesTable.codeHash })
+    .from(accountDeletionCodesTable)
+    .where(and(
+      eq(accountDeletionCodesTable.userId, userId),
+      isNull(accountDeletionCodesTable.usedAt),
+      gt(accountDeletionCodesTable.expiresAt, now),
+    ))
+    .orderBy(desc(accountDeletionCodesTable.createdAt))
+    .limit(1);
+  if (!pending || pending.codeHash !== hashYearDeletionCode(groupId, year, code)) {
+    throw new IncorrectDeletionCodeError();
+  }
+  await db
+    .update(accountDeletionCodesTable)
+    .set({ usedAt: now })
+    .where(eq(accountDeletionCodesTable.id, pending.id));
+}
+
 /** Every account whose grace period has run out and has not been erased yet. */
 export async function accountsDueForErasure(now: Date = new Date()): Promise<string[]> {
   const cutoff = new Date(now.getTime() - ACCOUNT_DELETION_GRACE_DAYS * DAY_MS);
