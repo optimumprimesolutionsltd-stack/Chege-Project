@@ -89,8 +89,9 @@ app.use(
 );
 app.use(cookieParser());
 // The M-Pesa reader takes up to 100,000 characters of messages at once, which
-// as JSON can pass Express's default 100kb and be refused before it is read.
-app.use(express.json({ limit: "1mb" }));
+// as JSON can pass Express's default 100kb and be refused before it is read;
+// and a whole statement's entries go to the server in one save.
+app.use(express.json({ limit: "5mb" }));
 app.use(express.urlencoded({ extended: true }));
 
 // Public, before the SPA catch-all and before auth: the report-verification

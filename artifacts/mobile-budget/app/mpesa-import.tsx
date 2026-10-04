@@ -80,12 +80,13 @@ import { READER_STOPPED, StatementReader, type ReaderJob } from '@/components/St
 import { rememberMpesaCard } from '@/lib/mpesaCard';
 import { keepScreenAwakeWhileSaving, letScreenSleepAgain } from '@/lib/keepAwake';
 import { getImportProgress, importSaveStalled, setImportProgress, useImportProgress } from '@/lib/importProgress';
-import { clearSavePending, hasPendingSave, markSavePending } from '@/lib/importSaveJob';
+import { clearSavePending, hasPendingSave, markSavePending, pendingSaveJob } from '@/lib/importSaveJob';
 import { retryWhenCutOff } from '@/lib/saveWhileAway';
 import { plainReadError, plainSaveError, retrySave, withRetries } from '@/lib/saveRetry';
 import { isNotSure, needsNotSureCategory, NOT_SURE_CATEGORY, notSureableLines, otherBudgetToMark, putUnderNotSure, toMarkAfterSave } from '@/lib/entriesToSort';
 import { handleLapsedError } from '@/lib/lapsedError';
-import { runPool, savePosting, SAVE_CONCURRENCY, type PostingApi } from '@/lib/savePosting';
+import { runPool, savePosting, SAVE_CONCURRENCY, type PostingApi, type Posted } from '@/lib/savePosting';
+import { EarlierSaveRunning, followServerSave, isFollowingServerSave, startServerSave, type ServerJob } from '@/lib/serverSave';
 import { parseStoredRules, payeeKey, payeeName, ruleLabel, rulesStorageKey, withRule, withoutRule, type PayeeRules } from '@/lib/payeeLearning';
 import { saveDebtLinks } from '@/lib/debtReversal';
 import { mpesaNameFor, saveMpesaNames, type MpesaName } from '@/lib/mpesaNames';
@@ -656,8 +657,15 @@ export default function MpesaImportScreen() {
           // A save started before is either still running (left this screen,
           // came back) or was cut short (the app was closed): wait for the
           // first, finish the second. Either way nothing has to be redone.
-          if (getImportProgress()?.stage === 'saving') {
+          // A save on the server (lib/serverSave) went on while Jamvi was closed:
+          // it is followed to its end here, unless this run of the app already is.
+          const serverJob = await pendingSaveJob(group?.id);
+          if (getImportProgress()?.stage === 'saving' && (!serverJob || isFollowingServerSave(serverJob))) {
             setWaitingForSave(true);
+          } else if (serverJob) {
+            setStatementNote('Your save carried on while Jamvi was closed. Showing how it went.');
+            setResumeJob(serverJob);
+            setResumeSave(true);
           } else if (await hasPendingSave(group?.id)) {
             setStatementNote('Carrying on with the save you started. Entries already saved are skipped.');
             setResumeSave(true);
@@ -670,6 +678,7 @@ export default function MpesaImportScreen() {
   // and the list brought up to date when it ends.
   const [waitingForSave, setWaitingForSave] = useState(false);
   const [resumeSave, setResumeSave] = useState(false);
+  const [resumeJob, setResumeJob] = useState<number | null>(null);
   const liveProgress = useImportProgress();
   // A save from an earlier visit to this screen, still running: its progress
   // is shown here, since the bar the rest of Jamvi shows is off on this screen.
@@ -678,9 +687,16 @@ export default function MpesaImportScreen() {
     if (!waitingForSave || liveProgress?.stage === 'saving' || !lines) return;
     setWaitingForSave(false);
     markRecorded(lines)
-      .then((checked) => {
+      .then(async (checked) => {
         setLines(checked);
         setStatementReading((current) => (current ? { ...current, lines: checked } : current));
+        // Followed by the bar, not this screen: what each entry became is read
+        // back here, so the rest (remembered payees, debts, names) is done too.
+        const serverJob = await pendingSaveJob(group?.id);
+        if (serverJob && !isFollowingServerSave(serverJob)) {
+          setResumeJob(serverJob);
+          setResumeSave(true);
+        }
       })
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1785,6 +1801,11 @@ export default function MpesaImportScreen() {
   useEffect(() => {
     if (!resumeSave || !lines || !accountId || saving) return;
     setResumeSave(false);
+    if (resumeJob) {
+      setResumeJob(null);
+      void saveLines(resumeJob);
+      return;
+    }
     // Cut short after the last entry went: nothing is left, so only the note goes.
     if (!lines.some((item) => isConfirmedToSave(item, choices[item.index]))) {
       void clearSavePending(group?.id);
@@ -1795,14 +1816,16 @@ export default function MpesaImportScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resumeSave, lines, accountId, saving]);
 
-  const saveLines = async () => {
+  // `resumeJob`: a save already running on the server, from before Jamvi was
+  // closed, followed to its end instead of being started again.
+  const saveLines = async (resumeJob?: number) => {
     if (!lines || !accountId || saving) return;
     const onlyConfirmed = statementReading !== null;
     setSaving(true);
     void keepScreenAwakeWhileSaving();
     // Remembered until it finishes: closed part way, it is carried on next time.
     const savingFor = group?.id;
-    void markSavePending(savingFor);
+    if (!resumeJob) void markSavePending(savingFor);
     const result: Outcome = { saved: 0, repeats: 0, failed: [] };
     const savedIndexes = new Set<number>();
     // What each saved line became, for marking money in left on "Not sure".
@@ -1817,7 +1840,7 @@ export default function MpesaImportScreen() {
     // there, or added once, and both lines linked to it.
     let saveChoices = choices;
     let saveParties = parties;
-    if (needsFulizaParty(lines, choices)) {
+    if (!resumeJob && needsFulizaParty(lines, choices)) {
       try {
         const found = findFulizaParty(parties);
         const fuliza: PartyLite = found ?? await customFetch<PartyLite>('/api/contributors', {
@@ -1834,7 +1857,7 @@ export default function MpesaImportScreen() {
     }
     // "Not sure yet" is a real category, made the first time it is needed, so
     // the entry still counts as spending (lib/entriesToSort).
-    if (needsNotSureCategory(lines, choices, categories.map((row) => row.name))) {
+    if (!resumeJob && needsNotSureCategory(lines, choices, categories.map((row) => row.name))) {
       try {
         await createNotSureCategory({ data: { name: NOT_SURE_CATEGORY, budgetAmount: 0, priority: 3, isRecurring: true, activeMonth: null, activeYear: null } });
         void queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
@@ -1867,44 +1890,94 @@ export default function MpesaImportScreen() {
     // would be refused the same way, so they are not sent.
     let lapsed = false;
     setImportProgress({ stage: 'saving', done: 0, total: toSave.length });
+    // What one line became, the same whether the server or this phone saved it.
+    const onSaved = (item: PreviewLine, choice: Choice | undefined, posted: Omit<Posted, 'feeFailed'> & { feeFailed?: boolean }) => {
+      if (choice?.debt && posted.id) debtLinks.push({ transactionId: posted.id, partyId: choice.debt.partyId, kind: choice.debt.kind });
+      const named = mpesaNameFor(posted.id, item.original, item.description);
+      if (named) mpesaNames.push(named);
+      if (posted.feeFailed) result.failed.push({ what: `${item.description} charge`, why: `The entry saved, but its M-Pesa charge${item.fee ? ` of KES ${item.fee}` : ''} did not. Add it on the Bank tab as money out.` });
+      result.saved += 1;
+      savedIndexes.add(item.index);
+      if (posted.id !== undefined && item.direction === 'in') depositIds.set(item.index, posted.id);
+      if (posted.otherBudget) otherBudgetMade.set(item.index, posted.otherBudget);
+    };
+    const onRepeat = (item: PreviewLine) => {
+      result.repeats += 1;
+      // Already on the server: shown as recorded, not left looking unsaved.
+      savedIndexes.add(item.index);
+    };
+    const onFailed = (item: PreviewLine, why: string) => result.failed.push({ what: item.description ?? 'A message', why });
+    const showProgress = (done: number, total: number) => {
+      doneCount = done;
+      setSaveProgress({ done, total });
+      setImportProgress({ stage: 'saving', done, total });
+    };
+    // Set when this phone could not hear how the server's save ended: it is still pending.
+    let lostTouch = false;
     try {
-      await runPool(toSave, SAVE_CONCURRENCY, async ({ item, choice, built }) => {
-        if (lapsed) return;
+      // The whole list handed to the server, which saves it whether or not Jamvi
+      // stays open (lib/serverSave). This phone only asks how far it has got.
+      let job: ServerJob | null = null;
+      let serverFailed: unknown = null;
+      try {
+        job = resumeJob
+          ? { id: resumeJob, status: 'running', total: toSave.length, done: 0 }
+          : await startServerSave(toSave.map(({ item, built }) => ({ key: item.index, built })), accountId);
+      } catch (error: unknown) {
+        serverFailed = error;
+      }
+      if (job) {
+        void markSavePending(savingFor, job.id);
+        let finished: ServerJob | null = null;
         try {
-          // Waits while Jamvi is behind another app, and tries again an entry whose
-          // request the phone cut off (lib/saveWhileAway).
-          const posted = await savePosting(built, postingApi, accountId);
-          if (choice.debt && posted.id) debtLinks.push({ transactionId: posted.id, partyId: choice.debt.partyId, kind: choice.debt.kind });
-          const named = mpesaNameFor(posted.id, item.original, item.description);
-          if (named) mpesaNames.push(named);
-          if (posted.feeFailed) result.failed.push({ what: `${item.description} charge`, why: `The entry saved, but its M-Pesa charge${item.fee ? ` of KES ${item.fee}` : ''} did not. Add it on the Bank tab as money out.` });
-          result.saved += 1;
-          savedIndexes.add(item.index);
-          if (posted.id !== undefined && item.direction === 'in') depositIds.set(item.index, posted.id);
-          if (posted.otherBudget) otherBudgetMade.set(item.index, posted.otherBudget);
-        } catch (error: unknown) {
-          if (isLapsedRefusal(error)) {
-            lapsed = true;
-            return;
-          }
-          const message = plainSaveError(error);
-          if (/already recorded/i.test(message)) {
-            result.repeats += 1;
-            // Already on the server: shown as recorded, not left looking unsaved.
-            savedIndexes.add(item.index);
-          }
-          else result.failed.push({ what: item.description ?? 'A message', why: message });
-        } finally {
-          setSaveProgress((current) => (current ? { ...current, done: current.done + 1 } : current));
-          doneCount += 1;
-          setImportProgress({ stage: 'saving', done: doneCount, total: toSave.length });
+          finished = await followServerSave(job.id, showProgress);
+        } catch {
+          // The save goes on on the server; this phone just could not ask. Kept
+          // pending, so opening the import again shows how it ended.
+          lostTouch = true;
         }
-      });
+        const byIndex = new Map(lines.map((item) => [item.index, item]));
+        for (const done of finished?.results ?? []) {
+          const item = byIndex.get(done.key);
+          if (!item) continue;
+          if (done.outcome === 'saved') onSaved(item, saveChoices[item.index], { id: done.id, otherBudget: done.otherBudget, feeFailed: done.feeFailed });
+          else if (done.outcome === 'repeat') onRepeat(item);
+          else if (done.outcome === 'lapsed') lapsed = true;
+          else onFailed(item, done.why);
+        }
+        if (lostTouch) result.failed.push({ what: 'Still saving', why: 'Your entries are still being saved on Jamvi\'s server, but this phone lost touch with it. Open the M-Pesa import again later to see how it went.' });
+        else if (!finished) result.failed.push({ what: 'This save', why: 'Jamvi could not find how it went. Open Bank to see what was saved, or save again - anything saved already is skipped.' });
+      } else if (serverFailed) {
+        if (isLapsedRefusal(serverFailed)) lapsed = true;
+        else if (serverFailed instanceof EarlierSaveRunning) result.failed.push({ what: 'Not saved yet', why: serverFailed.message });
+        else result.failed.push({ what: `${toSave.length} ${toSave.length === 1 ? 'entry' : 'entries'}`, why: plainSaveError(serverFailed) });
+      } else if (!resumeJob) {
+        // A server that cannot save them itself yet: sent from this phone, as before.
+        await runPool(toSave, SAVE_CONCURRENCY, async ({ item, choice, built }) => {
+          if (lapsed) return;
+          try {
+            // Waits while Jamvi is behind another app, and tries again an entry whose
+            // request the phone cut off (lib/saveWhileAway).
+            onSaved(item, choice, await savePosting(built, postingApi, accountId));
+          } catch (error: unknown) {
+            if (isLapsedRefusal(error)) {
+              lapsed = true;
+              return;
+            }
+            const message = plainSaveError(error);
+            if (/already recorded/i.test(message)) onRepeat(item);
+            else onFailed(item, message);
+          } finally {
+            showProgress(doneCount + 1, toSave.length);
+          }
+        });
+      }
     } finally {
       setSaveProgress(null);
       setSaving(false);
       letScreenSleepAgain();
-      void clearSavePending(savingFor);
+      // Before the bar says it is done, so this screen opened again does not take it up a second time.
+      if (!lostTouch) await clearSavePending(savingFor);
       // New messages taken in and saved: the next check starts after them.
       if (smsNewestRef.current !== null && result.saved + result.repeats > 0) {
         keepSmsAuto({ on: true, since: smsNewestRef.current });

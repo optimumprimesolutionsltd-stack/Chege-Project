@@ -1,9 +1,32 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { AppState, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { router, usePathname } from 'expo-router';
-import { importProgressText, setImportProgress, useImportProgress } from '@/lib/importProgress';
+import { getImportProgress, importProgressText, setImportProgress, useImportProgress } from '@/lib/importProgress';
+import { lookForServerSave } from '@/lib/serverSave';
+import { useAuth } from '@/lib/auth';
+
+/**
+ * A save carries on on the server after Jamvi is closed (lib/serverSave), so
+ * opening the app again - or coming back to it - asks whether one is still
+ * going, and the bar picks it up where it has got to.
+ */
+function useServerSaveWatcher() {
+  const { isAuthenticated } = useAuth();
+  React.useEffect(() => {
+    if (!isAuthenticated) return;
+    const look = () => {
+      if (getImportProgress()?.stage === 'saving') return;
+      void lookForServerSave(setImportProgress);
+    };
+    look();
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') look();
+    });
+    return () => subscription.remove();
+  }, [isAuthenticated]);
+}
 
 /**
  * A thin bar at the top of every screen while an M-Pesa import saves, and
@@ -11,6 +34,7 @@ import { importProgressText, setImportProgress, useImportProgress } from '@/lib/
  * went. The import screen shows its own progress, so the bar stays off there.
  */
 export function ImportSavingBar() {
+  useServerSaveWatcher();
   const progress = useImportProgress();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();

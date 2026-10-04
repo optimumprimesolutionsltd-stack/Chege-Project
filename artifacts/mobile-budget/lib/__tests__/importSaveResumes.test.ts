@@ -35,8 +35,10 @@ describe('the import screen finishes or waits for an earlier save', () => {
   const screen = readFileSync('app/mpesa-import.tsx', 'utf8');
 
   it('marks a save pending as it starts and clears it when it ends', () => {
-    expect(screen).toContain('void markSavePending(savingFor);');
-    expect(screen).toContain('void clearSavePending(savingFor);');
+    expect(screen).toContain('if (!resumeJob) void markSavePending(savingFor);');
+    // And which job on the server it is, so coming back follows it rather than starting again.
+    expect(screen).toContain('void markSavePending(savingFor, job.id);');
+    expect(screen).toContain('await clearSavePending(savingFor);');
   });
 
   it('carries on a save that was cut short, skipping what already saved', () => {
