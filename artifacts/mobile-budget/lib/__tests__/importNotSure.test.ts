@@ -34,8 +34,9 @@ describe('saving an old entry as Not sure, to sort out later', () => {
       5: { include: true, category: 'Food' },
     };
     const saved = new Map([[1, 101], [2, 102], [3, 103], [4, 104], [5, 105]]);
-    expect(toMarkAfterSave(lines, choices, saved, true)).toEqual([101]);
-    expect(toMarkAfterSave(lines, choices, saved, false)).toEqual([]);
+    expect(toMarkAfterSave(lines, choices, saved)).toEqual([101]);
+    // It used to be only when the budget had income sources: in one with none,
+    // money in was never asked about and the income picture stayed empty.
     expect(toSortTitle(1)).toBe('1 entry to sort out');
   });
 });
@@ -67,7 +68,7 @@ describe('both import screens, the reminder and Sort them out', () => {
     expect(phone).toContain('Not sure yet - save it and sort it out later');
     expect(web).toContain('Not sure yet - sort it out later');
     for (const screen of [phone, web]) {
-      expect(screen).toContain('toMarkAfterSave(lines, choices, depositIds, incomeSources.length > 0)');
+      expect(screen).toContain('toMarkAfterSave(lines, choices, depositIds)');
       expect(screen).toContain('!isNotSure(choice.category)) {');
     }
   });

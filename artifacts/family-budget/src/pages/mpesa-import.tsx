@@ -1239,7 +1239,7 @@ export default function MpesaImportPage() {
     void saveDebtLinks(debtLinks);
     // Money in left on "Not sure" is kept to sort out later; Home says so.
     {
-      const toMark = toMarkAfterSave(lines, choices, depositIds, incomeSources.length > 0);
+      const toMark = toMarkAfterSave(lines, choices, depositIds);
       if (toMark.length > 0) {
         void fetch("/api/entries-to-sort", {
           method: "POST",

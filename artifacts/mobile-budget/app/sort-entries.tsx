@@ -8,11 +8,13 @@ import {
   customFetch,
   getGetJointAccountQueryKey,
   useGetBudgetCategories,
+  useGetGroup,
   useGetIncomeSources,
   useUpdateJointAccountTransaction,
 } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
-import { isNotSure, type EntryToSort } from '@/lib/entriesToSort';
+import { isNotSure, sameParty, type EntryToSort } from '@/lib/entriesToSort';
+import { AddIncomeSourceChip } from '@/components/AddIncomeSourceChip';
 import { inMonth, monthsOf } from '@/lib/mpesaImport';
 import { plainSaveError } from '@/lib/saveRetry';
 import { formatDisplayDate } from '@/lib/displayFormat';
@@ -56,15 +58,54 @@ export default function SortEntriesScreen() {
       queryClient.invalidateQueries({ queryKey: getGetJointAccountQueryKey() }),
     ]);
   };
-  const sort = async (entry: EntryToSort, change: { expenseCategory: string } | { incomeSourceId: number }) => {
-    setBusy(entry.id);
+  const sortEach = async (list: readonly EntryToSort[], change: { expenseCategory: string } | { incomeSourceId: number }) => {
+    setBusy(list[0]?.id ?? null);
     try {
-      await updateTransaction({ id: entry.id, data: { amount: entry.amount, date: entry.date, ...change } as never });
-      await done();
+      for (const one of list) {
+        await updateTransaction({ id: one.id, data: { amount: one.amount, date: one.date, ...change } as never });
+      }
     } catch (error) {
-      Alert.alert('Could not change it', plainSaveError(error));
+      Alert.alert('Could not change them all', plainSaveError(error));
     } finally {
+      await done();
       setBusy(null);
+    }
+  };
+  // The same payer, many times over: offered all at once, never done without asking.
+  const sort = (entry: EntryToSort, change: { expenseCategory: string } | { incomeSourceId: number }, label: string) => {
+    const others = sameParty(entries, entry);
+    if (others.length === 0) {
+      void sortEach([entry], change);
+      return;
+    }
+    Alert.alert(
+      `${others.length + 1} entries from ${entry.description}`,
+      `Put all ${others.length + 1} under ${label}, or just this one?`,
+      [
+        { text: 'Just this one', onPress: () => void sortEach([entry], change) },
+        { text: `All ${others.length + 1}`, onPress: () => void sortEach([entry, ...others], change) },
+      ],
+    );
+  };
+  // Money in saved before every money in was asked about (4 Oct 2026): a year of
+  // it can have no source. Gathered here when asked, Personal budget only.
+  const { data: group } = useGetGroup();
+  const [gathering, setGathering] = useState(false);
+  const gather = async () => {
+    setGathering(true);
+    try {
+      const { added } = await customFetch<{ added: number }>('/api/entries-to-sort/money-in-without-source', { method: 'POST' });
+      await done();
+      Alert.alert(
+        added > 0 ? `${added} found` : 'Nothing new found',
+        added > 0
+          ? 'Money in with no income source is now on this list. Give each a source, or several at once from the same payer.'
+          : 'All your money in already has a source, is a loan or a move between accounts, or is on this list.',
+      );
+    } catch (error) {
+      Alert.alert('Could not look', plainSaveError(error));
+    } finally {
+      setGathering(false);
     }
   };
   const leave = async (entry: EntryToSort) => {
@@ -107,7 +148,23 @@ export default function SortEntriesScreen() {
           keyboardShouldPersistTaps="handled"
           initialNumToRender={12}
           windowSize={7}
-          ListHeaderComponent={months.length > 1 ? (
+          ListHeaderComponent={(
+            <View style={{ gap: 10 }}>
+            {group?.isPrivate ? (
+              <Pressable
+                onPress={() => void gather()}
+                disabled={gathering}
+                accessibilityRole="button"
+                testID="sort-entries-gather-money-in"
+                style={{ borderWidth: 1, borderColor: colors.primary, borderRadius: 8, padding: 12, opacity: gathering ? 0.6 : 1 }}
+              >
+                <Text style={{ color: colors.primary, fontFamily: 'Inter_700Bold', fontSize: 14 }}>{gathering ? 'Looking…' : 'Find money in with no source'}</Text>
+                <Text style={{ color: colors.mutedForeground, fontSize: 12, marginTop: 2 }}>
+                  Money in you have already saved without saying where it came from. Loans, repayments and moves between your accounts are left out.
+                </Text>
+              </Pressable>
+            ) : null}
+            {months.length > 1 ? (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 2 }} testID="sort-entries-months">
               {[{ key: null as string | null, label: 'All months', count: entries.length }, ...months].map((option) => {
                 const on = month === option.key;
@@ -119,7 +176,9 @@ export default function SortEntriesScreen() {
                 );
               })}
             </ScrollView>
-          ) : null}
+            ) : null}
+            </View>
+          )}
           ListEmptyComponent={(
             <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, alignItems: 'center' }]} testID="sort-entries-empty">
               <Feather name="check-circle" size={28} color={colors.success} />
@@ -142,15 +201,22 @@ export default function SortEntriesScreen() {
               <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
                 {entry.direction === 'out'
                   ? categories.map((name) => (
-                      <Pressable key={name} disabled={busy !== null} onPress={() => void sort(entry, { expenseCategory: name })} accessibilityRole="button" testID={`sort-entry-${entry.id}-category-${name}`} style={chip}>
+                      <Pressable key={name} disabled={busy !== null} onPress={() => sort(entry, { expenseCategory: name }, name)} accessibilityRole="button" testID={`sort-entry-${entry.id}-category-${name}`} style={chip}>
                         <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>{name}</Text>
                       </Pressable>
                     ))
-                  : incomeSources.map((source) => (
-                      <Pressable key={source.id} disabled={busy !== null} onPress={() => void sort(entry, { incomeSourceId: source.id })} accessibilityRole="button" testID={`sort-entry-${entry.id}-source-${source.id}`} style={chip}>
-                        <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>{source.name}</Text>
-                      </Pressable>
-                    ))}
+                  : [
+                      ...incomeSources.map((source) => (
+                        <Pressable key={source.id} disabled={busy !== null} onPress={() => sort(entry, { incomeSourceId: source.id }, source.name)} accessibilityRole="button" testID={`sort-entry-${entry.id}-source-${source.id}`} style={chip}>
+                          <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>{source.name}</Text>
+                        </Pressable>
+                      )),
+                      <AddIncomeSourceChip
+                        key="add"
+                        testID={`sort-entry-${entry.id}-add-source`}
+                        onCreated={(created) => sort(entry, { incomeSourceId: created.id }, created.name)}
+                      />,
+                    ]}
               </ScrollView>
               {entry.direction === 'in' ? (
                 <Pressable disabled={busy !== null} onPress={() => void leave(entry)} accessibilityRole="button" testID={`sort-entry-${entry.id}-leave`} style={{ alignSelf: 'flex-start', paddingVertical: 4 }}>

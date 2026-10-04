@@ -1,4 +1,5 @@
 import { destinationOf, isRecordable, NOT_SURE_CATEGORY, reviewStatus, type Choice, type PreviewLine } from './mpesaImport';
+import { payeeKey } from './payeeLearning';
 
 /**
  * Saving an entry as "Not sure" and sorting it out later.
@@ -37,18 +38,20 @@ export function needsNotSureCategory(lines: readonly PreviewLine[], choices: Rec
 }
 
 /**
- * Money in just saved with no income source - left on "Not sure" - to be
+ * Money in just saved with no income source - left on "Not sure yet" - to be
  * marked for sorting out. Not a debt, a member's contribution, a move, savings
- * or another budget's, which need no source; not Fuliza or a reversal. Only
- * when the budget has income sources to choose from at all.
+ * or another budget's, which need no source; not Fuliza or a reversal.
+ *
+ * Whether or not the budget has any income sources yet: it used to need one,
+ * so in a budget with none, money in was never asked about at all and the
+ * income picture stayed empty though the balance was right (4 Oct 2026). One
+ * can now be added from the line itself, or from Sort them out.
  */
 export function toMarkAfterSave(
   lines: readonly PreviewLine[],
   choices: Record<number, Choice>,
   savedIds: ReadonlyMap<number, number>,
-  hasIncomeSources: boolean,
 ): number[] {
-  if (!hasIncomeSources) return [];
   const ids: number[] = [];
   for (const line of lines) {
     const id = savedIds.get(line.index);
@@ -116,3 +119,14 @@ export function otherBudgetToMark(
 
 /** "3 entries to sort out" - the words for Home. */
 export const toSortTitle = (count: number): string => `${count} ${count === 1 ? 'entry' : 'entries'} to sort out`;
+
+/**
+ * The other entries still to sort from the same payer, the same way (in or
+ * out): a year saved at once holds the same few names many times over, and
+ * "Victor Akwir" should be sorted once, not fifty times.
+ */
+export function sameParty(entries: readonly EntryToSort[], entry: EntryToSort): EntryToSort[] {
+  const key = payeeKey(entry.description);
+  if (!key) return [];
+  return entries.filter((other) => other.id !== entry.id && other.direction === entry.direction && payeeKey(other.description) === key);
+}
