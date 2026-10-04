@@ -134,3 +134,25 @@ describe('Fix all', () => {
     expect(importScreen).toContain('if (firstProblem) {\n      Alert.alert(\'Almost there\', `${firstProblem} Then tap Save.`);');
   });
 });
+
+describe('2026 only', () => {
+  // "I want to work with 2026 only" (4 Oct 2026).
+  it('works from 1 January of this year, by Kenya’s calendar, and drops anything earlier', async () => {
+    const { workingYear, inWorkingYear } = await import('../mpesaLiveBalance');
+    const now = Date.UTC(2026, 9, 4, 12);
+    const year = workingYear(now);
+    expect(year.year).toBe(2026);
+    expect(year.from).toBe('2026-01-01');
+    expect(year.days).toBeGreaterThanOrEqual(277);
+    const rows = [
+      { body: 'a', date: Date.UTC(2025, 11, 31, 20, 59) }, // 23:59 on 31 Dec in Nairobi
+      { body: 'b', date: Date.UTC(2025, 11, 31, 21, 0) },  // 00:00 on 1 Jan in Nairobi
+    ];
+    expect(inWorkingYear(rows, year.from).map((row) => row.body)).toEqual(['b']);
+  });
+  it('is what Find the difference reads and what Find money in with no source gathers', () => {
+    const screen = read('app/mpesa-difference.tsx');
+    expect(screen).toContain('const rows = inWorkingYear(read.rows, yearFrom);');
+    expect(read('app/sort-entries.tsx')).toContain('body: JSON.stringify({ from: workingYear().from }),');
+  });
+});

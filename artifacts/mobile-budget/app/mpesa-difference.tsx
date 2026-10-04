@@ -9,10 +9,8 @@ import { formatDisplayDate } from '@/lib/displayFormat';
 import { readMpesaRows, smsRefusal } from '@/lib/mpesaSms';
 import { retrySave } from '@/lib/saveRetry';
 import { differenceError } from '@/lib/differenceError';
-import { differenceMessages, fixConfirmation, fixPlan, hasFixes, kes, receiptOf, spanChangeText, startingBalanceAdvice, type DifferenceSpan } from '@/lib/mpesaLiveBalance';
+import { differenceMessages, fixConfirmation, fixPlan, hasFixes, inWorkingYear, kes, receiptOf, spanChangeText, startingBalanceAdvice, workingYear, type DifferenceSpan } from '@/lib/mpesaLiveBalance';
 
-/** How far back to read: a year of messages is what most phones still hold. */
-const DAYS = 365;
 
 type Span = DifferenceSpan;
 type Answer = {
@@ -50,20 +48,23 @@ export default function MpesaDifferenceScreen() {
     else setState('reading');
     setError(null);
     try {
-      const read = await readMpesaRows(DAYS);
+      // This year only, from 1 January.
+      const { from: yearFrom, days } = workingYear();
+      const read = await readMpesaRows(days);
       if (!read.ok) {
         setError(smsRefusal(read.reason));
         setState('error');
         return;
       }
-      const messages = differenceMessages(read.rows);
+      const rows = inWorkingYear(read.rows, yearFrom);
+      const messages = differenceMessages(rows);
       if (messages.length === 0) {
-        setError('No M-Pesa messages with a balance are on this phone for the last year.');
+        setError(`No M-Pesa messages with a balance are on this phone since 1 January ${workingYear().year}.`);
         setState('error');
         return;
       }
       const byReceipt = new Map<string, string>();
-      for (const row of read.rows) {
+      for (const row of rows) {
         const code = receiptOf(row.body);
         if (code) byReceipt.set(code, row.body.trim());
       }
@@ -148,7 +149,7 @@ export default function MpesaDifferenceScreen() {
           <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, alignItems: 'center' }]}>
             <ActivityIndicator color={colors.primary} />
             <Text style={{ color: colors.mutedForeground, fontSize: 13, textAlign: 'center' }}>
-              Reading a year of M-Pesa messages and checking each day…
+              Reading your M-Pesa messages since 1 January {workingYear().year} and checking each day…
             </Text>
           </View>
         ) : state === 'error' ? (

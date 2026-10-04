@@ -182,3 +182,22 @@ export function fixConfirmation(plan: FixPlan, account: string): { title: string
     : '\n\nNothing is deleted.';
   return { title: 'Fix all of these?', message: `${parts.map((part) => `• ${part}`).join('\n')}${left}` };
 }
+
+/**
+ * The year being worked on: "I want to work with 2026 only" (4 Oct 2026).
+ * Find the difference and Find money in with no source both start on 1
+ * January of this year, by Kenya's calendar; earlier years are left as they are.
+ */
+export function workingYear(now = Date.now()): { year: number; from: string; days: number } {
+  const year = Number(kenyaDay(now).slice(0, 4));
+  const from = `${year}-01-01`;
+  // Days to read back: from midnight on 1 January in Kenya (UTC+3), plus one
+  // spare, and anything before it is dropped by `inWorkingYear`.
+  const start = Date.UTC(year, 0, 1) - 3 * 3_600_000;
+  return { year, from, days: Math.ceil((now - start) / 86_400_000) + 1 };
+}
+
+/** Keeps only the messages from 1 January of the working year on. */
+export function inWorkingYear<T extends { date: number }>(rows: readonly T[], from: string): T[] {
+  return rows.filter((row) => kenyaDay(row.date) >= from);
+}

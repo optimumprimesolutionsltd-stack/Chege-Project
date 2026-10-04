@@ -15,6 +15,7 @@ import {
 import { useColors } from '@/hooks/useColors';
 import { isNotSure, sameParty, type EntryToSort } from '@/lib/entriesToSort';
 import { AddIncomeSourceChip } from '@/components/AddIncomeSourceChip';
+import { workingYear } from '@/lib/mpesaLiveBalance';
 import { inMonth, monthsOf } from '@/lib/mpesaImport';
 import { plainSaveError } from '@/lib/saveRetry';
 import { formatDisplayDate } from '@/lib/displayFormat';
@@ -94,7 +95,12 @@ export default function SortEntriesScreen() {
   const gather = async () => {
     setGathering(true);
     try {
-      const { added } = await customFetch<{ added: number }>('/api/entries-to-sort/money-in-without-source', { method: 'POST' });
+      // This year only: earlier years are left as they are.
+      const { added } = await customFetch<{ added: number }>('/api/entries-to-sort/money-in-without-source', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from: workingYear().from }),
+      });
       await done();
       Alert.alert(
         added > 0 ? `${added} found` : 'Nothing new found',
@@ -158,7 +164,7 @@ export default function SortEntriesScreen() {
                 testID="sort-entries-gather-money-in"
                 style={{ borderWidth: 1, borderColor: colors.primary, borderRadius: 8, padding: 12, opacity: gathering ? 0.6 : 1 }}
               >
-                <Text style={{ color: colors.primary, fontFamily: 'Inter_700Bold', fontSize: 14 }}>{gathering ? 'Looking…' : 'Find money in with no source'}</Text>
+                <Text style={{ color: colors.primary, fontFamily: 'Inter_700Bold', fontSize: 14 }}>{gathering ? 'Looking…' : `Find ${workingYear().year} money in with no source`}</Text>
                 <Text style={{ color: colors.mutedForeground, fontSize: 12, marginTop: 2 }}>
                   Money in you have already saved without saying where it came from. Loans, repayments and moves between your accounts are left out.
                 </Text>

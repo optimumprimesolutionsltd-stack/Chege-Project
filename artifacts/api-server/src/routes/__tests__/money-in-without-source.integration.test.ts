@@ -72,6 +72,18 @@ describe.skipIf(!hasDb)("gathering money in with no source (integration)", () =>
     expect((await request(app()).post("/entries-to-sort/money-in-without-source")).body).toEqual({ added: 0 });
   });
 
+  it("can be kept to one year: earlier money in is left out", async () => {
+    const [old] = await db.insert(jointAccountTxTable).values({
+      groupId, accountId: (await db.select({ id: bankAccountsTable.id }).from(bankAccountsTable).where(eq(bankAccountsTable.groupId, groupId)))[0].id,
+      type: "deposit", amount: 900, description: "December gift", date: "2025-12-20",
+    } as never).returning({ id: jointAccountTxTable.id });
+    const thisYear = await request(app()).post("/entries-to-sort/money-in-without-source").send({ from: "2026-01-01" });
+    expect(thisYear.body).toEqual({ added: 0 });
+    const listed = await request(app()).get("/entries-to-sort");
+    expect(listed.body.entries.map((entry: { id: number }) => entry.id)).not.toContain(old.id);
+    expect((await request(app()).post("/entries-to-sort/money-in-without-source").send({ from: "26-1-1" })).status).toBe(400);
+  });
+
   it("is refused in a Shared group, where money in is members' contributions", async () => {
     const response = await request(app(false)).post("/entries-to-sort/money-in-without-source");
     expect(response.status).toBe(403);
