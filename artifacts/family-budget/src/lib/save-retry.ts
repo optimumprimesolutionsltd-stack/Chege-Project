@@ -117,3 +117,22 @@ export function plainReadError(error: unknown): string {
   const plain = message.replace(/^HTTP \d{3}[^:]*:\s*/, "").trim();
   return plain && !/<[a-z!]/i.test(plain) ? plain : "They could not be read. Please try again.";
 }
+
+/**
+ * A reading that failed on the way to or from the server, as opposed to after
+ * the answer came back. Only these are "could not reach its server": anything
+ * that goes wrong on the phone afterwards used to be reported the same way,
+ * which sent everybody looking at the server for a fault in the app.
+ */
+export class ReadRequestFailed extends Error {
+  constructor(readonly reason: unknown) {
+    super(reason instanceof Error ? reason.message : "The reading did not reach the server.");
+  }
+}
+
+/** Why a reading failed, in a sentence - the server"s part or the phone"s. */
+export function plainReadFailure(error: unknown): string {
+  if (error instanceof ReadRequestFailed) return plainReadError(error.reason);
+  const detail = error instanceof Error && error.message.trim() ? ` (${error.message.trim().slice(0, 160)})` : "";
+  return `Jamvi got your messages back from its server but could not show them${detail}. Nothing was saved. Please try again, and if it happens again send this message to Jamvi.`;
+}
