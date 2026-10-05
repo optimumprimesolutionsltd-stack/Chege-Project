@@ -5,8 +5,10 @@ import React, {
   useEffect,
   useState,
   type ReactNode,
+  useRef,
 } from 'react';
-import { clearSessionToken, readSessionToken, writeSessionToken } from '@/lib/sessionToken';
+import { clearSessionToken, readSessionToken, readSessionTokenState, writeSessionToken } from '@/lib/sessionToken';
+import { recordSignOut } from '@/lib/signOutReason';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
@@ -79,14 +81,25 @@ async function cacheUser(user: AuthUser | null): Promise<void> {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
+  // For fetchUser, which is made once: who is signed in now, and itself, to try again.
+  const userRef = useRef<AuthUser | null>(null);
+  userRef.current = user;
+  const fetchUserRef = useRef<() => Promise<void>>(async () => {});
   // Starts true only until the cached user is read (a fast local read), not
   // until the network answers. `revalidating` covers the background check.
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchUser = useCallback(async () => {
     try {
-      const token = await readSessionToken();
+      const { token, failed } = await readSessionTokenState();
+      if (failed) {
+        // The phone would not hand the sign-in over just now. Keep whoever
+        // was signed in, and ask again shortly - never sign out over this.
+        setTimeout(() => void fetchUserRef.current(), 3_000);
+        return;
+      }
       if (!token) {
+        if (userRef.current) await recordSignOut('no-token-on-phone');
         setUser(null);
         await cacheUser(null);
         return;
@@ -99,6 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (res.status === 401) {
         // The session is genuinely gone — only then sign the person out.
+        await recordSignOut('server-said-401');
         await clearSessionToken();
         setUser(null);
         await cacheUser(null);
@@ -115,6 +129,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(data.user as AuthUser);
         await cacheUser(data.user as AuthUser);
       } else {
+        await recordSignOut('server-has-no-user');
         await clearSessionToken();
         setUser(null);
         await cacheUser(null);
@@ -126,6 +141,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsLoading(false);
     }
   }, []);
+  fetchUserRef.current = fetchUser;
 
   // Hydrate from the cached user first so the app can render immediately,
   // then revalidate against the server in the background.
@@ -133,8 +149,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let active = true;
     (async () => {
       try {
-        const token = await readSessionToken();
-        const cached = token ? await AsyncStorage.getItem(AUTH_USER_CACHE_KEY) : null;
+        const { token, failed } = await readSessionTokenState();
+        const cached = token || failed ? await AsyncStorage.getItem(AUTH_USER_CACHE_KEY) : null;
         if (active && cached) {
           setUser(JSON.parse(cached) as AuthUser);
           setIsLoading(false);
@@ -221,6 +237,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       // swallow
     } finally {
+      await recordSignOut('you-signed-out');
       await clearSessionToken();
       await AsyncStorage.removeItem(ACTIVE_WORKSPACE_STORAGE_KEY);
       await cacheUser(null);

@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import { clearImportStep, noteImportStep } from '@/lib/importBreadcrumb';
 
 /**
  * How an M-Pesa import's saving is going, for the bar the rest of the app
@@ -20,6 +21,10 @@ const listeners = new Set<() => void>();
 export function setImportProgress(next: ImportProgress | null): void {
   current = next;
   changedAt = Date.now();
+  // Kept on the phone too, so a save the app was closed in the middle of is
+  // reported the next time the import screen opens (lib/importBreadcrumb).
+  if (next?.stage === 'saving') noteImportStep(`saving ${next.done.toLocaleString('en-KE')} of ${next.total.toLocaleString('en-KE')} entries`, 'saving');
+  else clearImportStep();
   for (const listener of listeners) listener();
 }
 

@@ -82,6 +82,7 @@ import { READER_STOPPED, StatementReader, type ReaderJob } from '@/components/St
 import { rememberMpesaCard } from '@/lib/mpesaCard';
 import { keepScreenAwakeWhileSaving, letScreenSleepAgain } from '@/lib/keepAwake';
 import { getImportProgress, importSaveStalled, setImportProgress, useImportProgress } from '@/lib/importProgress';
+import { clearImportStep, noteImportStep, readUnfinishedImport, type ImportStep } from '@/lib/importBreadcrumb';
 import { clearSavePending, hasPendingSave, markSavePending, pendingSaveJob } from '@/lib/importSaveJob';
 import { retryWhenCutOff } from '@/lib/saveWhileAway';
 import { plainReadFailure, plainSaveError, ReadRequestFailed, retrySave, withRetries } from '@/lib/saveRetry';
@@ -527,6 +528,30 @@ export default function MpesaImportScreen() {
   // How far a statement has got, so a long one does not look frozen: opening
   // the file, reading page by page, then checking what is already recorded.
   const [readProgress, setReadProgress] = useState<{ stage: 'opening' | 'reading' | 'checking'; page?: number; of?: number } | null>(null);
+  // Reading is noted on the phone as it goes; a read that ends - in a review
+  // or a message on screen - leaves nothing behind.
+  // Only a read this screen ran is cleared when it ends: on opening, the step
+  // an earlier run left must survive long enough to be read below.
+  const readThisRun = React.useRef(false);
+  useEffect(() => {
+    if (readProgress) {
+      readThisRun.current = true;
+      noteImportStep(
+        readProgress.stage === 'reading' && readProgress.page ? `reading page ${readProgress.page} of ${readProgress.of ?? '?'}` : readProgress.stage === 'checking' ? 'checking what is already recorded' : 'opening the statement',
+        readProgress.stage,
+      );
+    } else if (readThisRun.current && getImportProgress()?.stage !== 'saving') {
+      clearImportStep();
+    }
+  }, [readProgress]);
+  // The app was closed in the middle of an import the last time: said here,
+  // with where it had got to, rather than leaving an empty screen to explain.
+  const [unfinished, setUnfinished] = useState<ImportStep | null>(null);
+  useEffect(() => {
+    void readUnfinishedImport().then((step) => {
+      if (step) setUnfinished(step);
+    });
+  }, []);
   // A read that stops moving is given up on, so the buttons are not left
   // spinning for ever. Restarted on every page, so a long statement that is
   // still going is never cut off - only one that has gone quiet.
@@ -2323,6 +2348,17 @@ export default function MpesaImportScreen() {
             </Pressable>
           ) : null}
         </View>
+        {unfinished ? (
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.destructive }]} testID="mpesa-unfinished">
+            <Text style={[styles.lineTitle, { color: colors.foreground }]}>Jamvi closed during your last import</Text>
+            <Text style={[styles.hint, { color: colors.mutedForeground }]}>
+              {`It stopped while ${unfinished.step}, on ${new Date(unfinished.at).toLocaleDateString('en-KE', { day: 'numeric', month: 'short' })} at ${new Date(unfinished.at).toLocaleTimeString('en-KE', { hour: 'numeric', minute: '2-digit' })}. Read the statement again: everything already saved is recognised and skipped.`}
+            </Text>
+            <Pressable onPress={() => { setUnfinished(null); clearImportStep(); }} hitSlop={8} accessibilityRole="button" testID="mpesa-unfinished-dismiss">
+              <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', marginTop: 6 }}>OK</Text>
+            </Pressable>
+          </View>
+        ) : null}
         {restored ? (
           <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.primary }]} testID="mpesa-restored">
             <Text style={[styles.lineTitle, { color: colors.foreground }]}>Picked up where you left off</Text>

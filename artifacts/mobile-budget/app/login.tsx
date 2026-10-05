@@ -13,11 +13,20 @@ import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/lib/auth';
 import { BrandLogo } from '@/components/BrandLogo';
+import { describeSignOut, readLastSignOut } from '@/lib/signOutReason';
 
 export default function LoginScreen() {
   const { login, isLoading } = useAuth();
   const insets = useSafeAreaInsets();
   const [signingIn, setSigningIn] = React.useState(false);
+  // Why the app last signed this phone out, unless the person did it - so a
+  // sign-out nobody asked for names its cause (lib/signOutReason).
+  const [lastSignOut, setLastSignOut] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    void readLastSignOut().then((record) => {
+      if (record && record.reason !== 'you-signed-out' && Date.now() - record.at < 7 * 24 * 3_600_000) setLastSignOut(describeSignOut(record));
+    });
+  }, []);
 
   async function handleLogin() {
     setSigningIn(true);
@@ -89,6 +98,11 @@ export default function LoginScreen() {
         <Text style={styles.disclaimer}>
           Your account works on web and mobile
         </Text>
+        {lastSignOut ? (
+          <Text style={[styles.disclaimer, { marginTop: 8, opacity: 0.8 }]} testID="login-last-sign-out">
+            {lastSignOut}
+          </Text>
+        ) : null}
       </View>
     </LinearGradient>
   );

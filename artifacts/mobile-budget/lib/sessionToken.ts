@@ -14,19 +14,38 @@ export const AUTH_TOKEN_KEY = 'auth_session_token';
  */
 let cached: string | null = null;
 
-async function readStore(): Promise<string | null> {
-  try {
-    return await SecureStore.getItemAsync(AUTH_TOKEN_KEY);
-  } catch {
-    return null;
+const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Secure storage either answers - with the token, or with nothing saved - or
+ * fails. A failure is not "signed out": Android's key store can refuse for a
+ * moment, notably when the app has just been restarted after the phone closed
+ * it in the background (opening the file picker, or the password SMS, during
+ * an import). It is asked again a few times before anything is concluded.
+ */
+async function readStore(): Promise<{ token: string | null; failed: boolean }> {
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    try {
+      const token = await SecureStore.getItemAsync(AUTH_TOKEN_KEY);
+      if (token || attempt >= 1) return { token, failed: false };
+    } catch {
+      // Tried again below.
+    }
+    await pause(150 * (attempt + 1));
   }
+  return { token: null, failed: true };
+}
+
+/** The token, and whether the phone could not be asked for it at all. */
+export async function readSessionTokenState(): Promise<{ token: string | null; failed: boolean }> {
+  if (cached) return { token: cached, failed: false };
+  const state = await readStore();
+  if (state.token) cached = state.token;
+  return state;
 }
 
 export async function readSessionToken(): Promise<string | null> {
-  if (cached) return cached;
-  const token = (await readStore()) ?? (await readStore());
-  if (token) cached = token;
-  return token;
+  return (await readSessionTokenState()).token;
 }
 
 export async function writeSessionToken(token: string): Promise<void> {
@@ -51,7 +70,9 @@ let checking: Promise<boolean> | null = null;
 export function sessionHasEnded(apiBase: string): Promise<boolean> {
   checking ??= (async () => {
     try {
-      const token = await readSessionToken();
+      const { token, failed } = await readSessionTokenState();
+      // The phone could not be asked: that says nothing about the session.
+      if (failed) return false;
       if (!token) return true;
       const res = await fetch(`${apiBase}/api/auth/user`, {
         headers: { Authorization: `Bearer ${token}` },

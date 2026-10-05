@@ -11,6 +11,7 @@ import {
   __resetSessionTokenForTests,
   clearSessionToken,
   readSessionToken,
+  readSessionTokenState,
   sessionHasEnded,
   writeSessionToken,
 } from '../sessionToken';
@@ -75,5 +76,27 @@ describe('sessionHasEnded', () => {
     fetchMock.mockResolvedValue(reply(200, { user: { id: 'u1' } }));
     await Promise.all(Array.from({ length: 50 }, () => sessionHasEnded('https://x')));
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+// "Still lapsing out": a phone that could not be asked for the sign-in - its key
+// store refusing just after Android restarted the app - is not a signed-out phone.
+describe('a secure storage failure', () => {
+  it('is reported as a failure, not as no token, after trying again', async () => {
+    store.getItemAsync.mockRejectedValue(new Error('keystore unavailable'));
+    expect(await readSessionTokenState()).toEqual({ token: null, failed: true });
+    expect(store.getItemAsync).toHaveBeenCalledTimes(4);
+  });
+
+  it('never makes a 401 count as the session ending', async () => {
+    store.getItemAsync.mockRejectedValue(new Error('keystore unavailable'));
+    expect(await sessionHasEnded('https://jamvi.test')).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('still believes a store that answers with nothing, after asking twice', async () => {
+    store.getItemAsync.mockResolvedValue(null);
+    expect(await readSessionTokenState()).toEqual({ token: null, failed: false });
+    expect(store.getItemAsync).toHaveBeenCalledTimes(2);
   });
 });
