@@ -62,7 +62,8 @@ describe('Find the difference, on the phone', () => {
 
   it('is opened from the Home card when Jamvi and M-Pesa disagree, and nothing on it changes anything by itself', () => {
     const card = read('components/MpesaImportCard.tsx');
-    expect(card).toContain('{comparison && !comparison.agrees ? (');
+    // Unless the two are known to agree - also while Jamvi's figure is loading.
+    expect(card).toContain('{!comparison?.agrees ? (');
     expect(card).toContain("router.push('/mpesa-difference' as never)");
     expect(card).not.toContain('Match M-Pesa');
     const screen = read('app/mpesa-difference.tsx');

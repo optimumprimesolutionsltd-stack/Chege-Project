@@ -67,7 +67,10 @@ describe('the Home M-Pesa card', () => {
     expect(card.indexOf('{live ? (')).toBeLessThan(card.indexOf('testID="mpesa-home-card-balance"'));
   });
   it('reads it again each time Home is shown', () => {
-    expect(card).toContain('useFocusEffect(useCallback(() => { if (personal) void refetchLive(); }, [personal, refetchLive]));');
+    expect(card).toContain('if (personal) void refetchLive();');
+    // Jamvi's own figure too, and a failed load is tried again.
+    expect(card).toContain('if (groupId !== null) void refetchSummary();');
+    expect(card).toContain('retry: 2,');
   });
   it('shows it only in a Personal budget: a group\u2019s account is not this person\u2019s M-Pesa', () => {
     expect(card).toContain('const personal = group?.isPrivate === true;');
