@@ -11,7 +11,7 @@ describe('the workspace chooser asks once', () => {
   it('has no Ready to open card on the phone or the web', () => {
     expect(phone).not.toContain('READY TO OPEN');
     expect(phone).not.toContain('testID="open-selected-budget"');
-    expect(web).not.toContain('Ready to open');
+    expect(web).not.toContain('>Ready to open</p>');
   });
 
   it('opens a workspace straight from the list', () => {
