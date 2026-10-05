@@ -38,6 +38,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/lib/auth';
+import { SwitchAccountLink } from '@/components/SwitchAccountLink';
 import {
   activateMobileWorkspace,
   completeMobileBudgetChooser,
@@ -425,6 +426,7 @@ export default function BudgetChooserScreen() {
           <Pressable onPress={() => setInvitesDismissed(true)} hitSlop={8} style={{ paddingVertical: 12, alignSelf: 'center' }}>
             <Text style={[styles.skipLink, { color: colors.mutedForeground }]}>Not now — set up my own budget</Text>
           </Pressable>
+          <SwitchAccountLink color={colors.mutedForeground} />
         </ScrollView>
       </View>
     );
@@ -558,6 +560,7 @@ export default function BudgetChooserScreen() {
             </>
           );
         })()}
+        <SwitchAccountLink color={colors.mutedForeground} />
       </ScrollView>
       <Modal visible={createSharedOpen} transparent animationType="fade" onRequestClose={() => setCreateSharedOpen(false)}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.scrim}>
@@ -1110,6 +1113,7 @@ function MobileOnboardingFlow({
           {step > 0 ? <Pressable testID="onboarding-back" onPress={goBack} style={[styles.backButton, { borderColor: colors.border }]}><Feather name="arrow-left" size={17} color={colors.foreground} /><Text style={[styles.backButtonText, { color: colors.foreground }]}>Back</Text></Pressable> : <View />}
           <Pressable testID="onboarding-continue" disabled={saving} onPress={() => void goNext()} style={[styles.primaryButton, { backgroundColor: colors.primary }, saving && styles.disabled]}>{saving ? <ActivityIndicator color={colors.primaryForeground} /> : <><Text style={[styles.primaryText, { color: colors.primaryForeground }]}>{step === 5 ? 'Finish setup' : 'Continue'}</Text><Feather name="arrow-right" size={18} color={colors.primaryForeground} /></>}</Pressable>
         </View>
+        <SwitchAccountLink color={colors.mutedForeground} testID="onboarding-switch-account" />
       </ScrollView>
     </KeyboardAvoidingView>
   );
