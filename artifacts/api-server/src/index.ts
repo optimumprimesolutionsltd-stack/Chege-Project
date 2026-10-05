@@ -1,5 +1,6 @@
 import { ensureMpesaNames } from "./lib/mpesa-names";
 import { ensureEntriesToSort } from "./lib/entries-to-sort";
+import { ensurePossibleDuplicates } from "./lib/possible-duplicates";
 import { ensureImportSaveJobs } from "./lib/import-save-jobs";
 import { ensureIncomeMonths } from "./lib/income-months";
 import app from "./app";
@@ -76,6 +77,7 @@ async function startServer() {
   void ensureIncomeMonths();
   void ensureMpesaNames();
   void ensureEntriesToSort();
+  void ensurePossibleDuplicates();
   void ensureImportSaveJobs();
 
   void ensureSubscriptionPlanCatalogue()

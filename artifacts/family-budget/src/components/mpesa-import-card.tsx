@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, Smartphone } from "lucide-react";
 import { useGetGroup } from "@workspace/api-client-react";
 import type { EntryToSort } from "@/lib/entries-to-sort";
+import { duplicatesTitle } from "@/lib/possible-duplicates";
 import { readMpesaCard, rememberMpesaCard, shouldShowMpesaCard } from "@/lib/mpesa-card";
 
 /**
@@ -63,6 +64,18 @@ export function MpesaImportCard() {
     retry: false,
   });
   const toSortCount = toSort?.entries.length ?? 0;
+  // One payment typed by hand and brought in from M-Pesa (lib/possible-duplicates).
+  const { data: duplicates } = useQuery<{ count: number }>({
+    queryKey: ["possible-duplicates"],
+    queryFn: async () => {
+      const response = await fetch("/api/possible-duplicates", { credentials: "include" });
+      if (!response.ok) throw new Error("Could not load possible duplicates.");
+      return response.json();
+    },
+    staleTime: 60_000,
+    retry: false,
+  });
+  const duplicateCount = duplicates?.count ?? 0;
 
   const monthName = MONTHS[(summary?.month ?? new Date().getMonth() + 1) - 1];
   const showIntro = introOpen && !summary?.imported;
@@ -134,6 +147,11 @@ export function MpesaImportCard() {
             >
               <Smartphone className="h-4 w-4" aria-hidden="true" />
               {summary?.imported ? "Bring in more M-Pesa" : "Import my M-Pesa"}
+            </Link>
+          ) : null}
+          {duplicateCount > 0 && canImport ? (
+            <Link href="/possible-duplicates" data-testid="possible-duplicates-cta" className="inline-flex items-center gap-1 text-sm font-bold underline decoration-destructive decoration-2 underline-offset-4">
+              {duplicatesTitle(duplicateCount)}: check them <ArrowRight className="h-4 w-4" aria-hidden="true" />
             </Link>
           ) : null}
           {toSortCount > 0 && canImport ? (

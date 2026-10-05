@@ -81,6 +81,7 @@ import { buildCategoryTree, filterCategoryTree, type CategoryRow } from '@worksp
 import { CategorySearchBox } from '@/components/CategorySearchBox';
 import { workspaceBudgetName } from '@/lib/workspaceIdentity';
 import { formatDisplayDate } from '@/lib/displayFormat';
+import { confirmNotAlreadyFromMpesa } from '@/lib/alreadyFromMpesa';
 
 /**
  * Where the last bank-charge category is kept.
@@ -1869,6 +1870,12 @@ export default function BankScreen() {
         return;
       }
     }
+    // Jamvi may already have this payment from M-Pesa: asked before it is counted twice (lib/alreadyFromMpesa).
+    if (
+      editingTransactionId === null &&
+      (txType === 'deposit' || txType === 'disbursement') &&
+      !(await confirmNotAlreadyFromMpesa({ amount: parsed, date, direction: txType === 'deposit' ? 'in' : 'out', accountId: selectedAccountId }))
+    ) return;
     setSubmitting(true);
     try {
       // The posting the fee belongs to. Undefined on an edit, where the fee

@@ -33,7 +33,7 @@ import { GROUP_ATTRIBUTION } from "../lib/attribution";
 import { reversalLinksReady, soleReversalCandidate } from "../lib/reversal-links";
 import { importTidyKeptReady } from "../lib/import-tidy-kept";
 import { createBankStatementPdf } from "../lib/bank-statement-pdf";
-import { alreadyThere, completeAt, isSavingsAccount, roomIn } from "../lib/savings-accounts";
+import { absorbedByOpening, alreadyThere, completeAt, isSavingsAccount, OPENING_NOTE_PATTERN, openingNote, roomIn } from "../lib/savings-accounts";
 
 const router = Router();
 /**
@@ -1349,7 +1349,7 @@ async function createSavingsTransfer(
         groupId,
         goalId: goal.id,
         amount: opening,
-        note: `Already in ${goal.name} before Jamvi's records began`,
+        note: openingNote(goal.name),
         isBalanceCorrection: true,
         createdByUserId: null,
         accountId,
@@ -1379,7 +1379,44 @@ async function createSavingsTransfer(
       .returning();
 
     const delta = direction === "to_savings" ? amount : -amount;
-    const nextAmount = goal.currentAmount + opening + delta;
+    // An older deposit read after a newer withdrawal: it was part of the opening correction.
+    let absorbed = 0;
+    if (direction === "to_savings" && isSavingsAccount(goal)) {
+      const corrections = await tx
+        .select({ id: savingsGoalContributionsTable.id, amount: savingsGoalContributionsTable.amount })
+        .from(savingsGoalContributionsTable)
+        .where(and(
+          eq(savingsGoalContributionsTable.goalId, goal.id),
+          eq(savingsGoalContributionsTable.groupId, groupId),
+          eq(savingsGoalContributionsTable.isBalanceCorrection, true),
+          isNull(savingsGoalContributionsTable.createdByUserId),
+          sql`${savingsGoalContributionsTable.note} LIKE ${OPENING_NOTE_PATTERN}`,
+        ));
+      const [first] = await tx
+        .select({ date: sql<string | null>`min(${jointAccountTxTable.date})::text` })
+        .from(jointAccountTxTable)
+        .where(and(
+          eq(jointAccountTxTable.groupId, groupId),
+          eq(jointAccountTxTable.savingsGoalId, goal.id),
+          eq(jointAccountTxTable.transferDirection, "from_savings"),
+        ));
+      const opened = corrections.reduce((sum, row) => sum + row.amount, 0);
+      absorbed = absorbedByOpening(amount, opened, date, first?.date ?? null);
+      let left = absorbed;
+      for (const row of corrections) {
+        if (left <= 0) break;
+        const take = Math.min(left, row.amount);
+        left -= take;
+        if (take === row.amount) {
+          await tx.delete(savingsGoalContributionsTable).where(eq(savingsGoalContributionsTable.id, row.id));
+        } else {
+          await tx.update(savingsGoalContributionsTable)
+            .set({ amount: row.amount - take })
+            .where(eq(savingsGoalContributionsTable.id, row.id));
+        }
+      }
+    }
+    const nextAmount = goal.currentAmount + opening + delta - absorbed;
     await tx
       .update(savingsGoalsTable)
       .set({

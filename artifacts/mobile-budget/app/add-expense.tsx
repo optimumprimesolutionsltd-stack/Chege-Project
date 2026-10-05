@@ -58,6 +58,7 @@ import {
   customFetch,
   ApiError,
 } from '@workspace/api-client-react';
+import { confirmNotAlreadyFromMpesa } from '@/lib/alreadyFromMpesa';
 import { getCategoryIcon } from '@/lib/categoryIcons';
 import { buildCategoryTree, filterCategoryTree, parentOf, type CategoryRow } from '@workspace/category-tree';
 import { CategorySearchBox } from '@/components/CategorySearchBox';
@@ -1269,6 +1270,9 @@ export default function AddExpenseSheet() {
       }
       return;
     }
+
+    // Jamvi may already have this payment from M-Pesa: asked before it is counted twice (lib/alreadyFromMpesa).
+    if (!(await confirmNotAlreadyFromMpesa({ amount: parsed, date, direction: 'out', accountId: effectivePaidFromBank ? selectedBankAccountId : null }))) return;
 
     const sourceCount = effectivePayerIds.length + (effectivePaidFromBank ? 1 : 0);
     const isSplitPayment = sourceCount > 1;

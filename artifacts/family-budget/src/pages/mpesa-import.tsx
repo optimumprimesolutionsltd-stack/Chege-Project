@@ -76,6 +76,11 @@ import {
   summarise,
   type Choice,
   type PreviewLine,
+  mergeTwins,
+  twinNotes,
+  twinQuestions,
+  untickElsewhere,
+  withTwins,
 } from "@/lib/mpesa-import";
 import { findSavingsGoal, ledgersToMake, loanOf, productNote, productOf, savingsNeeded, savingsOf, withSavingsAccounts, type LenderId, type SavingsAccountId } from "@/lib/mpesa-products";
 import {
@@ -387,6 +392,7 @@ export default function MpesaImportPage() {
     if (codes.length === 0) return all;
     // A year's statement holds thousands of codes; the server takes 2,000 at a time.
     const body: { recorded: Array<{ receipt: string; date: string; description: string; category?: string | null; editable?: boolean }> } = { recorded: [] };
+    const elsewhere: Array<{ receipt: string; budget: string }> = [];
     for (let start = 0; start < codes.length; start += RECEIPT_BATCH) {
       const response = await fetch("/api/mpesa/import/check-receipts", {
         method: "POST",
@@ -397,12 +403,36 @@ export default function MpesaImportPage() {
       const part = (await response.json().catch(() => ({}))) as { recorded?: typeof body.recorded; error?: string };
       if (!response.ok || !part.recorded) throw new Error(part.error ?? "Could not check what is already recorded.");
       body.recorded.push(...part.recorded);
+      // Codes already in another of the person's budgets. Only a warning: a failure is passed over.
+      const other = await fetch("/api/possible-duplicates/elsewhere", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ receipts: codes.slice(start, start + RECEIPT_BATCH) }),
+      }).then((reply) => (reply.ok ? reply.json() : { elsewhere: [] })).catch(() => ({ elsewhere: [] })) as { elsewhere?: typeof elsewhere };
+      elsewhere.push(...(other.elsewhere ?? []));
     }
     const recorded = new Map(body.recorded.map((row) => [row.receipt, { date: row.date, description: row.description, category: row.category ?? null, editable: row.editable === true }]));
-    return all.map((line) => {
+    const marked = all.map((line) => {
       const existing = line.receipt ? recorded.get(line.receipt) : undefined;
       return existing ? { ...line, alreadyRecorded: existing } : line;
     });
+    // Entries typed by hand that look like the same payment (lib/mpesa-import withTwins).
+    // Only a warning: a failed check never stops the reading.
+    const matches: Array<{ key: string; entries: Array<{ description: string; date: string; amount: number }> }> = [];
+    const questions = twinQuestions(marked);
+    for (let start = 0; start < questions.length; start += RECEIPT_BATCH) {
+      const response = await fetch("/api/possible-duplicates/check", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ against: "typed", items: questions.slice(start, start + RECEIPT_BATCH) }),
+      }).catch(() => null);
+      const part = response?.ok ? ((await response.json().catch(() => ({}))) as { matches?: typeof matches }) : null;
+      if (!part?.matches) break;
+      matches.push(...part.matches);
+    }
+    return withTwins(marked, matches, elsewhere);
   };
 
   const readStatement = async () => {
@@ -473,6 +503,13 @@ export default function MpesaImportPage() {
       const shown = applyNicknames(body.lines, readStoredNicknames());
       setLines(shown);
       setChoices(initialChoices(shown, history, categories.map((row) => row.name), effectiveChargeCategory, rules, canManageBudget));
+      // Then: another of the person's budgets that has these codes, and entries typed by hand that look the same.
+      void markRecorded(shown)
+        .then((checked) => {
+          setLines((current) => mergeTwins(current, checked));
+          setChoices((current) => untickElsewhere(checked, current));
+        })
+        .catch(() => {});
     } catch (error) {
       toast({ variant: "destructive", title: "Could not read them", description: error instanceof Error ? error.message : "Please try again." });
     } finally {
@@ -1930,6 +1967,11 @@ export default function MpesaImportPage() {
                       {status === "needs" ? "Needs you" : status === "changed" ? (choice?.confirmed ? ((choice.auto && out && productOf(item)) || loanOf(item) || savingsOf(item) ? "Filed by Jamvi" : "Confirmed") : "You changed this - confirmed, it saves with the next Save") : "Suggested by Jamvi"}
                     </p>
                   ) : null}
+                  {twinNotes(item).map((note) => (
+                    <p key={note} className="text-xs font-medium text-destructive" data-testid={`mpesa-line-twin-${item.index}`}>
+                      {note}
+                    </p>
+                  ))}
                   {statementReading && choice?.include && (status === "suggested" || choice?.confirmed) ? (
                     <label className="flex w-fit cursor-pointer items-center gap-2 text-sm font-semibold text-primary" data-testid={`mpesa-line-confirm-${item.index}`}>
                       <input type="checkbox" checked={Boolean(choice?.confirmed)} onChange={(event) => confirm(item.index, event.target.checked)} />

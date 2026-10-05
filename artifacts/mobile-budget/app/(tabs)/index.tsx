@@ -150,6 +150,7 @@ const NEW_GROUP_SHORTCUT: Shortcut = {
 
 import { ArrangeSheet } from '@/components/ArrangeSheet';
 import { arrange, homeAreasKey, useArrangement } from '@/lib/layoutPrefs';
+import { duplicatesTitle } from '@/lib/possibleDuplicates';
 
 export default function DashboardScreen() {
   const colors = useColors();
@@ -322,6 +323,14 @@ export default function DashboardScreen() {
   // the Home tab's badge). New messages are looked for each time Home is shown
   // and each time Jamvi comes back to the front.
   const { toSortCount, newSmsCount: newSms, recheckSms } = useWaitingForYou();
+  // One payment typed by hand and brought in from M-Pesa (lib/possibleDuplicates).
+  const { data: duplicates } = useQuery<{ count: number }>({
+    queryKey: ['possible-duplicates'],
+    queryFn: () => customFetch('/api/possible-duplicates'),
+    retry: false,
+    staleTime: 60_000,
+  });
+  const duplicateCount = duplicates?.count ?? 0;
   // The Home tab carries a badge counting these. Tapping Home from another tab
   // opens Home, where they lead. Tapping it again, once Home is open, goes
   // straight to the thing to fix; with nothing waiting it returns to the top.
@@ -550,6 +559,30 @@ export default function DashboardScreen() {
               </View>
               <Text style={[styles.groupCtaText, { color: colors.mutedForeground }]}>
                 Review them and save what is right. Nothing is saved until you do.
+              </Text>
+            </Pressable>
+          ) : null}
+
+          {duplicateCount > 0 && canManageBudget ? (
+            <Pressable
+              testID="possible-duplicates-cta"
+              accessibilityRole="button"
+              accessibilityLabel={`${duplicatesTitle(duplicateCount)}. Open Possible duplicates`}
+              onPress={() => router.push('/possible-duplicates' as never)}
+              style={({ pressed }) => [styles.uncategorizedCtaCard, { backgroundColor: colors.card, borderColor: colors.destructive, opacity: pressed ? 0.85 : 1 }]}
+            >
+              <View style={styles.groupCtaHeader}>
+                <View style={[styles.groupCtaIcon, { backgroundColor: `${colors.destructive}22` }]}>
+                  <Feather name="copy" size={20} color={colors.destructive} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.groupCtaEyebrow, { color: colors.destructive }]}>POSSIBLE DUPLICATES</Text>
+                  <Text style={[styles.groupCtaTitle, { color: colors.foreground }]}>{duplicatesTitle(duplicateCount)}</Text>
+                </View>
+                <Feather name="chevron-right" size={18} color={colors.primary} />
+              </View>
+              <Text style={[styles.groupCtaText, { color: colors.mutedForeground }]}>
+                Typed by hand and also brought in from M-Pesa. Say which are the same payment, so nothing counts twice.
               </Text>
             </Pressable>
           ) : null}
