@@ -1062,7 +1062,12 @@ export default function MpesaImportPage() {
   // `resumeJob`: a save already running on the server, from before the tab was
   // closed, followed to its end instead of being started again.
   const saveAll = async (resuming = false, resumeJob?: number) => {
-    if (!lines || !accountId || saving) return;
+    if (!lines || saving) return;
+    // Said, never silent: Save used to do nothing at all here (5 Oct 2026).
+    if (!accountId) {
+      toast({ variant: "destructive", title: "No account to save into", description: "This budget has no account for M-Pesa yet. Close this screen and open it again - Jamvi adds one - or add an account on the Bank tab." });
+      return;
+    }
     // A statement is worked through over days: only what has been confirmed
     // goes, and only after saying so. Pasted messages save everything ready.
     // A save being finished after it was cut short was asked for already.

@@ -2,6 +2,7 @@ import { ensureMpesaNames } from "./lib/mpesa-names";
 import { ensureEntriesToSort } from "./lib/entries-to-sort";
 import { ensurePossibleDuplicates } from "./lib/possible-duplicates";
 import { ensureImportSaveJobs } from "./lib/import-save-jobs";
+import { ensureEveryBudgetHasAnAccount } from "./lib/default-account";
 import { ensureIncomeMonths } from "./lib/income-months";
 import app from "./app";
 import { logger } from "./lib/logger";
@@ -79,6 +80,7 @@ async function startServer() {
   void ensureEntriesToSort();
   void ensurePossibleDuplicates();
   void ensureImportSaveJobs();
+  void ensureEveryBudgetHasAnAccount();
 
   void ensureSubscriptionPlanCatalogue()
     .then(() => logger.info("Subscription plan catalogue is seeded"))
