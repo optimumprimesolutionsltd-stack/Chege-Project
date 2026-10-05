@@ -1097,6 +1097,12 @@ export default function MpesaImportScreen() {
       }
       return readSmsMessages(result.messages).then((shown) => {
         if (!shown || params.notSure !== '1') return;
+        // Nothing on these days is Jamvi's to save by itself: said so, rather
+        // than a save of nothing ("0 entries saved").
+        if (!shown.some(isRecordable)) {
+          Alert.alert('Nothing to bring in', 'Every message on these days is already saved, or is one Jamvi does not save by itself (each says why below). Go back and tap Check again.');
+          return;
+        }
         setChoices((current) => putUnderNotSure(notSureableLines(shown, current), current));
         setAutoSaveNotSure(true);
       });

@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { getActiveGroupId } from "../lib/activeGroup";
 import { getSessionId } from "../lib/auth";
+import { logger } from "../lib/logger";
 import { createJob, importSaveJobsReady, readJob, runJob, type JobItem } from "../lib/import-save-jobs";
 
 /**
@@ -46,11 +47,14 @@ router.post("/mpesa/import/save-jobs", async (req, res): Promise<void> => {
   }
   const parsed = saveJobSchema.safeParse(req.body);
   if (!parsed.success) {
+    // Where it failed, never what was in it: enough to find the cause.
+    logger.warn({ issues: parsed.error.issues.slice(0, 5).map((issue) => ({ path: issue.path.join("."), code: issue.code, message: issue.message })) }, "import save job refused");
     res.status(400).json({ error: "Those entries could not be read. Save them again." });
     return;
   }
   const keys = new Set(parsed.data.items.map((item) => item.key));
   if (keys.size !== parsed.data.items.length) {
+    logger.warn({ items: parsed.data.items.length, keys: keys.size }, "import save job refused: repeated keys");
     res.status(400).json({ error: "Those entries could not be read. Save them again." });
     return;
   }

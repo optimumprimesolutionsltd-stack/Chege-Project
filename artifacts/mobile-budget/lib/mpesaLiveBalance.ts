@@ -72,7 +72,11 @@ export function balanceComparison(live: number, inJamvi: number, account: string
  * "Find the difference": what is sent to the server for each message is only
  * its receipt code, the balance it states and when it came - never the message.
  */
-export type DifferenceMessage = { receipt: string | null; balance: number; at: number; day: string };
+/**
+ * `record: false` marks a message that moves the balance but is never saved as
+ * an entry of its own (a Fuliza loan notice or repayment): not "missing".
+ */
+export type DifferenceMessage = { receipt: string | null; balance: number; at: number; day: string; record?: false };
 
 /** M-Pesa's receipt code, which every transaction message starts with ("TJ4AB1CD2E Confirmed…"). */
 export function receiptOf(body: string): string | null {
@@ -83,13 +87,46 @@ export function receiptOf(body: string): string | null {
 /** A moment's day in Kenya (UTC+3 all year), as YYYY-MM-DD: the day Jamvi dates entries by. */
 export const kenyaDay = (ms: number): string => new Date(ms + 3 * 3_600_000).toISOString().slice(0, 10);
 
-/** The messages that state a balance, as the server is sent them. */
+const FULIZA_NOTICE = /Fuliza\s+M-?PESA\s+amount\s+is\s+Ksh/i;
+const FULIZA_OUTSTANDING = /Total\s+Fuliza\s+M-?PESA\s+outstanding\s+amount\s+is\s+Ksh\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)/i;
+const FULIZA_REPAYMENT = /has\s+been\s+used\s+to\s+(fully|partially|partly)\s+(?:re)?pay\s+(?:your\s+)?outstanding\s+Fuliza/i;
+const FIRST_AMOUNT = /Ksh\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)/i;
+const amountOf = (text: string | undefined) => (text ? Number(text.replace(/,/g, '')) : NaN);
+const cents = (n: number) => Math.round(n * 100) / 100;
+
+/**
+ * The messages that state a balance, as the server is sent them.
+ *
+ * Fuliza is counted in: a payment Fuliza covered is saved in full while
+ * M-Pesa's balance stops at nothing, and paying the loan back takes money from
+ * M-Pesa that is never saved as spending. So the balance sent is M-Pesa's less
+ * the Fuliza still owed - what Jamvi's own figure shows - and the loan notices
+ * and repayments are sent as `record: false`: they move the balance, but there
+ * is nothing in them to bring in (Fix all once brought them in and saved
+ * nothing, 5 Oct 2026).
+ */
 export function differenceMessages(rows: ReadonlyArray<{ body: string; date: number }>): DifferenceMessage[] {
   const out: DifferenceMessage[] = [];
-  for (const row of rows) {
-    const balance = balanceInMessage(row.body);
-    if (balance === null) continue;
-    out.push({ receipt: receiptOf(row.body), balance, at: row.date, day: kenyaDay(row.date) });
+  let owed = 0;
+  let last: number | null = null;
+  for (const row of [...rows].sort((a, b) => a.date - b.date)) {
+    const receipt = receiptOf(row.body);
+    const stated = balanceInMessage(row.body);
+    const repaid = row.body.match(FULIZA_REPAYMENT);
+    if (FULIZA_NOTICE.test(row.body) || repaid) {
+      if (repaid) {
+        owed = repaid[1].toLowerCase() === 'fully' ? 0 : Math.max(0, cents(owed - (amountOf(row.body.match(FIRST_AMOUNT)?.[1]) || 0)));
+      } else {
+        const total = amountOf(row.body.match(FULIZA_OUTSTANDING)?.[1]);
+        if (Number.isFinite(total)) owed = total;
+      }
+      if (stated !== null) last = stated;
+      if (last !== null) out.push({ receipt, balance: cents(last - owed), at: row.date, day: kenyaDay(row.date), record: false });
+      continue;
+    }
+    if (stated === null) continue;
+    last = stated;
+    out.push({ receipt, balance: cents(stated - owed), at: row.date, day: kenyaDay(row.date) });
   }
   return out;
 }

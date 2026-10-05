@@ -48,8 +48,8 @@ describe('an import saved on the server', () => {
     expect(JSON.parse(init.body)).toEqual({ mpesaAccountId: 11, items: [{ key: 0, built: { kind: 'deposit' } }, { key: 3, built: { kind: 'disbursement' } }] });
   });
 
-  it('falls back to saving from the phone on a server that cannot yet', async () => {
-    for (const status of [404, 503]) {
+  it('falls back to saving from the phone on a server that cannot yet, or cannot take the list whole', async () => {
+    for (const status of [400, 404, 503]) {
       const fetcher = vi.fn().mockRejectedValue(refusal(status));
       // 503 is waited out first, like any server hiccup; it still ends in the fallback.
       vi.useFakeTimers();
