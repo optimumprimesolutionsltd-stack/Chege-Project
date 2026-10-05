@@ -9,7 +9,7 @@ import { homeAnswers } from '@/lib/homeAnswers';
 
 /**
  * Three questions, three answers, at the top of Home:
- *   How much do I have?  What did I spend this month?  Am I on track?
+ *   How much do I have?  Spent on your budget this month  Am I on track?
  * Everything else on the screen is detail behind these.
  */
 export function HomeAnswersCard({
@@ -62,7 +62,7 @@ export function HomeAnswersCard({
       <Pressable
         onPress={() => router.push('/expense-ledger')}
         accessibilityRole="button"
-        accessibilityLabel="What did I spend this month? See all expenses"
+        accessibilityLabel="Spent on your budget this month. See all expenses"
         style={styles.row}
         testID="home-answer-spent"
       >
@@ -70,9 +70,13 @@ export function HomeAnswersCard({
           <Feather name="shopping-bag" size={18} color={colors.primary} />
         </View>
         <View style={styles.text}>
-          <Text style={[styles.question, { color: colors.mutedForeground }]}>What did I spend this month?</Text>
+          <Text style={[styles.question, { color: colors.mutedForeground }]}>Spent on your budget this month</Text>
           <Text style={[styles.answer, { color: colors.foreground }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
             {money(answers.spent)}
+          </Text>
+          {/* Why it is less than "Left M-Pesa" ("why the difference", 5 Oct 2026). */}
+          <Text style={[styles.question, { color: colors.mutedForeground, fontSize: 11 }]} numberOfLines={2}>
+            Spending only - not savings, transfers, money lent or repayments
           </Text>
         </View>
         <Feather name="chevron-right" size={16} color={colors.mutedForeground} />

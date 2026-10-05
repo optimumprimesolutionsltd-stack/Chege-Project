@@ -94,9 +94,12 @@ export function MpesaImportCard() {
 
   const monthName = MONTHS[(summary?.month ?? new Date().getMonth() + 1) - 1];
   const showIntro = introOpen && !summary?.imported;
+  // Named for what they count: every entry that came into or left M-Pesa,
+  // savings, transfers and repayments too - not what was spent, which Home's
+  // "Spent on your budget" answers ("why the difference", 5 Oct 2026).
   const figures = [
-    { label: 'Came in', value: summary ? kes(summary.moneyIn) : '…' },
-    { label: 'Went out', value: summary ? kes(summary.moneyOut) : '…' },
+    { label: 'Into M-Pesa', value: summary ? kes(summary.moneyIn) : '…' },
+    { label: 'Left M-Pesa', value: summary ? kes(summary.moneyOut) : '…' },
     { label: 'Entries', value: summary ? String(summary.entries) : '…' },
   ];
 
@@ -171,6 +174,9 @@ export function MpesaImportCard() {
               </View>
             ))}
           </View>
+          <Text style={[styles.figureLabel, { color: colors.mutedForeground, marginTop: 6 }]} testID="mpesa-home-card-figures-note">
+            All money in and out of M-Pesa, savings, transfers and repayments included. What you spent is below, under Spent on your budget.
+          </Text>
           </>
         )}
 
