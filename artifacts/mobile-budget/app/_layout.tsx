@@ -34,6 +34,7 @@ import {
 import { ApiError } from '@workspace/api-client-react';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { clearSessionToken, readSessionToken, sessionHasEnded } from '@/lib/sessionToken';
+import { recordSignOut } from '@/lib/signOutReason';
 import { useSharedText } from '@/lib/shareIntent';
 import { looksLikeMpesa, queueSharedMessages } from '@/lib/sharedMessages';
 import { AppearanceProvider } from '@/hooks/useAppearance';
@@ -129,6 +130,7 @@ const queryClient: QueryClient = new QueryClient({
       // a single request sent without its token signed people out. The server
       // is asked first, and only a session it no longer knows ends here.
       if (error instanceof ApiError && error.status === 401 && (await sessionHasEnded(API_BASE))) {
+        await recordSignOut('request-401-confirmed');
         await clearSessionToken();
         router.replace('/login');
       }
