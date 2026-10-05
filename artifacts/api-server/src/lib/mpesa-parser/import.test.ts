@@ -19,6 +19,8 @@ const CASH_DEPOSIT =
   "TESTDEPOSIT2 Confirmed. On 28/8/26 at 6:30 PM Give Ksh500.00 cash to SAMPLE AGENT - SAMPLE LOCATION New M-PESA balance is Ksh500.00. You can now access M-PESA via *334#";
 const REVERSAL =
   "TESTREVERSAL1 confirmed. Reversal of transaction TESTORIGINAL1 has been successfully reversed on 13/8/26 at 11:00 AM and Ksh1.00 is credited to your M-PESA account. New M-PESA account balance is Ksh1.00.";
+const REVERSAL_TAKEN_BACK =
+  "TESTREVERSAL4 Confirmed. Reversal of transaction TESTORIGINAL4 has been successfully reversed on 25/5/26 at 3:15 PM and Ksh8,000.00 is debited from your M-PESA account. New M-PESA account balance is Ksh1,264.97.";
 
 describe("splitMpesaMessages", () => {
   it("splits a paste into one string per message, however they are separated", () => {
@@ -92,6 +94,14 @@ describe("toImportItem: money in", () => {
     expect(item).toMatchObject({ status: "ready", direction: "in", type: "reversal", amount: 1, fee: null, date: "2026-08-13", named: false });
     expect(item.receipt).toBe("TESTREVERSAL1");
     expect(item.description).toBe("Money back: reversal of TESTORIGINAL1");
+  });
+
+  it("reads a reversal of money received as money out, not money back", () => {
+    const item = toImportItem(REVERSAL_TAKEN_BACK, 0);
+    expect(item).toMatchObject({ status: "ready", direction: "out", type: "reversal", amount: 8000, fee: null, date: "2026-05-25", named: false, mpesaBalance: 1264.97 });
+    expect(item.receipt).toBe("TESTREVERSAL4");
+    expect(item.description).toBe("Taken back: reversal of TESTORIGINAL4");
+    expect(item.description).not.toMatch(/^Money back/);
   });
 });
 

@@ -58,6 +58,21 @@ const OUT_TYPES = new Set<MpesaTransactionType>([
 ]);
 const IN_TYPES = new Set<MpesaTransactionType>(["person_receipt", "bank_receipt", "reversal"]);
 
+// A reversal goes either way. Undoing a payment you made says the money "is
+// credited to your M-PESA account" - money back. Undoing money somebody sent
+// you says it "is debited from your M-PESA account": it leaves, and must not be
+// counted as a second lot of money in (5 Oct 2026, an 8,000 receipt reversed
+// showed as +8,000 twice).
+/**
+ * How a reversal of money received is filed: a payment out, followed by the
+ * receipt code it undid. The two cancel once saved - the take-back carries no
+ * category, so it is not spending, and the receipt it names is left out of
+ * income (lib/reversal-links.ts) - so the money is counted neither way.
+ */
+export const TAKEN_BACK_PREFIX = "Taken back: reversal of ";
+
+const REVERSAL_TAKEN_BACK = /\bis\s+debited\s+from\s+your\b/i;
+
 // Recorded only when the person decides. Guessing what these mean for their
 // books would be inventing an answer about their money.
 const NEEDS_A_DECISION: Partial<Record<MpesaTransactionType, string>> = {
@@ -190,6 +205,25 @@ export function toImportItem(message: string, index: number): ImportItem {
     mpesaBalance: tx.mpesaBalance,
   };
   if (decision) return skipped(index, decision, base);
+
+  if (tx.transactionType === "reversal" && REVERSAL_TAKEN_BACK.test(message)) {
+    // Money out, never money back. Its description names the receipt it
+    // undid, which is what makes the two cancel (TAKEN_BACK_PREFIX).
+    return {
+      index,
+      status: "ready",
+      reason: null,
+      receipt,
+      direction: "out",
+      type: "reversal",
+      amount: tx.amount,
+      description: tx.originalTransactionId ? `${TAKEN_BACK_PREFIX}${tx.originalTransactionId}` : "Taken back: a reversed receipt",
+      named: false,
+      date: tx.date,
+      fee: null,
+      mpesaBalance: tx.mpesaBalance,
+    };
+  }
 
   const direction: ImportDirection | null = OUT_TYPES.has(tx.transactionType)
     ? "out"
