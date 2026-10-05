@@ -59,6 +59,7 @@ import { AlertTriangle } from "lucide-react";
 import { useAuth } from "@workspace/replit-auth-web";
 import { workspaceLabel } from "@/lib/workspace-identity";
 import { isSavingsAccount } from "@/lib/mpesa-products";
+import { confirmNotAlreadyFromMpesa } from "@/lib/already-from-mpesa";
 
 function GoalProgress({ current, target }: { current: number; target: number }) {
   const pct = target > 0 ? Math.min((current / target) * 100, 100) : 0;
@@ -720,6 +721,9 @@ export default function SavingsGoals() {
       setContributePayers([]); setContributePayerAmounts({}); setContributeFromBank(true);
     };
 
+    // Jamvi may already have this from M-Pesa - an M-Shwari deposit read from a statement,
+    // say: asked before it is counted twice (lib/already-from-mpesa). The date is today's.
+    if (!(await confirmNotAlreadyFromMpesa({ amount: total, date: new Date().toISOString().slice(0, 10), direction: "out", goalId: goal.id }))) return;
     try {
       await contributeToGoal.mutateAsync({
         id: goal.id,

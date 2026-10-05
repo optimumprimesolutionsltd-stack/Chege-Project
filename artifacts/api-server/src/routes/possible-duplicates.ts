@@ -41,6 +41,7 @@ const checkSchema = z.object({
     date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     direction: z.enum(["in", "out"]),
     accountId: z.number().int().positive().nullable().optional(),
+    goalId: z.number().int().positive().nullable().optional(),
   })).min(1).max(2_000),
 });
 

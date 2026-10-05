@@ -42,6 +42,7 @@ import { useListEditor } from "@/hooks/use-list-editor";
 import { EditableName, ListEditButton, ListEditorFooter, RemoveRowButton } from "@/components/list-editor";
 import { GROUP_ATTRIBUTION } from "@/lib/attribution";
 import { ImportTidyBanner } from "@/components/import-tidy-banner";
+import { confirmNotAlreadyFromMpesa } from "@/lib/already-from-mpesa";
 
 // GROUP_ATTRIBUTION is represented as null — never implicitly attributed to the signed-in user.
 const JOINT_BANK_ID = null as null;
@@ -1077,6 +1078,8 @@ export default function Bank() {
           invalidate();
           return;
         }
+        // Jamvi may already have this move from M-Pesa: asked before it is counted twice (lib/already-from-mpesa).
+        if (!(await confirmNotAlreadyFromMpesa({ amount: total, date, direction: transferDirection === "to_savings" ? "out" : "in", accountId: selectedAccountId, goalId: transferGoalId }))) return;
         if (transferDirection === "to_savings") {
           await transferToSavings.mutateAsync({ data });
           await postBankCharge("transfer");
@@ -1095,6 +1098,11 @@ export default function Bank() {
           toast({ variant: "destructive", title: "Choose another account", description: "Source and destination bank accounts must be different." });
           return;
         }
+        // Jamvi may already have this move from M-Pesa: asked before it is counted twice (lib/already-from-mpesa).
+        if (!(await confirmNotAlreadyFromMpesa([
+          { amount: total, date, direction: "out", accountId: selectedAccountId },
+          { amount: total, date, direction: "in", accountId: bankTransferDestinationId },
+        ]))) return;
         await transferBankToBank.mutateAsync({
           data: {
             sourceAccountId: selectedAccountId,

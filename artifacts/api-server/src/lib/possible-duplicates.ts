@@ -78,6 +78,14 @@ const IMPORTED = sql`
   FROM joint_account_transactions
   WHERE mpesa_receipt IS NOT NULL AND charge_for_transaction_id IS NULL AND savings_goal_id IS NULL`;
 
+// Every entry from M-Pesa but its charges - savings moves and transfers too - for checking
+// a move being typed by hand (a transfer between accounts, into or out of savings).
+const IMPORTED_ANY = sql`
+  SELECT id, group_id, account_id, type, amount::numeric AS amount, date, description,
+         expense_category AS category, mpesa_receipt AS receipt, savings_goal_id
+  FROM joint_account_transactions
+  WHERE mpesa_receipt IS NOT NULL AND charge_for_transaction_id IS NULL`;
+
 // Typed by hand, both kinds, in one shape.
 const TYPED = sql`
   SELECT 'entry'::text AS kind, id, group_id, account_id, type, amount::numeric AS amount, date, description,
@@ -143,6 +151,12 @@ export type Candidate = {
   date: string;
   direction: "in" | "out";
   accountId?: number | null;
+  /**
+   * A savings goal or account the money moves into or out of: then only M-Pesa
+   * entries moving money for that same goal match (a Contribute typed by hand
+   * against an M-Shwari deposit read from a statement).
+   */
+  goalId?: number | null;
 };
 
 /**
@@ -158,19 +172,20 @@ export async function findTwins(
 ): Promise<Array<{ key: string; entries: DuplicateSide[] }>> {
   if (candidates.length === 0) return [];
   const values = sql.join(
-    candidates.map((c) => sql`(${c.key}, ${c.amount}::numeric, ${c.date}::date, ${c.direction === "in" ? "deposit" : "disbursement"}, ${c.accountId ?? null}::integer)`),
+    candidates.map((c) => sql`(${c.key}, ${c.amount}::numeric, ${c.date}::date, ${c.direction === "in" ? "deposit" : "disbursement"}, ${c.accountId ?? null}::integer, ${c.goalId ?? null}::integer)`),
     sql`, `,
   );
-  const pool = against === "typed" ? TYPED : IMPORTED;
+  const pool = against === "typed" ? TYPED : IMPORTED_ANY;
   const result = await db.execute(sql`
     SELECT c.key, p.id, p.date, p.amount, p.description, p.category,
            ${against === "typed" ? sql`p.kind` : sql`'imported'::text`} AS kind,
            ${against === "typed" ? sql`NULL` : sql`p.receipt`} AS receipt
-    FROM (VALUES ${values}) AS c(key, amount, date, type, account_id)
+    FROM (VALUES ${values}) AS c(key, amount, date, type, account_id, goal_id)
     JOIN (${pool}) p
       ON p.group_id = ${groupId} AND p.type = c.type AND p.amount = c.amount
      AND abs(p.date - c.date) <= 1
      AND (c.account_id IS NULL OR p.account_id IS NULL OR p.account_id = c.account_id)
+     ${against === "imported" ? sql`AND (c.goal_id IS NULL OR p.savings_goal_id = c.goal_id)` : sql``}
     ORDER BY c.key, abs(p.date - c.date), p.id
     LIMIT 2000`);
   const byKey = new Map<string, DuplicateSide[]>();

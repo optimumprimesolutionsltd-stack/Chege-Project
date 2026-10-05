@@ -1737,6 +1737,11 @@ export default function BankScreen() {
         Alert.alert('Narration required', 'Add a short narration for this transfer.');
         return;
       }
+      // Jamvi may already have this move from M-Pesa: asked before it is counted twice (lib/alreadyFromMpesa).
+      if (
+        editingTransactionId === null &&
+        !(await confirmNotAlreadyFromMpesa({ amount: parsed, date, direction: transferDirection === 'to_savings' ? 'out' : 'in', accountId: selectedAccountId, goalId: selectedGoal.id }))
+      ) return;
       setSubmitting(true);
       try {
         const transfer = {
@@ -1797,6 +1802,11 @@ export default function BankScreen() {
         Alert.alert('Narration required', 'Add a short narration for this transfer.');
         return;
       }
+      // Jamvi may already have this move from M-Pesa: asked before it is counted twice (lib/alreadyFromMpesa).
+      if (!(await confirmNotAlreadyFromMpesa([
+        { amount: parsed, date, direction: 'out', accountId: selectedAccountId },
+        { amount: parsed, date, direction: 'in', accountId: bankTransferDestinationId },
+      ]))) return;
       setSubmitting(true);
       try {
         await transferBankToBank({ data: { sourceAccountId: selectedAccountId, destinationAccountId: bankTransferDestinationId, amount: parsed, narration: description.trim(), date } });
