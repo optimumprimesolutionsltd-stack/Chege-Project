@@ -13,6 +13,8 @@ const dbMocks = vi.hoisted(() => ({
   update: vi.fn(),
   insert: vi.fn(),
   transaction: vi.fn(),
+  // Asking to delete signs the account out everywhere (its sessions go).
+  delete: vi.fn(() => ({ where: () => Promise.resolve() })),
 }));
 
 const { sendEmail } = vi.hoisted(() => ({
@@ -42,6 +44,7 @@ vi.mock("@workspace/db", () => ({
   savingsGoalsTable: makeTable("savings_goals"),
   subscriptionRemindersTable: makeTable("subscription_reminders"),
   accountDeletionCodesTable: makeTable("account_deletion_codes"),
+  sessionsTable: makeTable("sessions"),
   GROUP_ROLE: { OWNER: "owner", ADMIN: "admin", MEMBER: "member", VIEWER: "viewer" },
 }));
 
@@ -320,21 +323,44 @@ describe("sendAccountDeletionReminders", () => {
 });
 
 describe("cancelPendingAccountDeletion", () => {
-  it("clears the request, scoped to accounts not already erased", async () => {
+  function stubCancel(rows: unknown[]) {
     const captured: { set?: unknown; where?: unknown } = {};
     dbMocks.update.mockReturnValue({
       set: (values: unknown) => {
         captured.set = values;
-        return { where: (clause: unknown) => { captured.where = clause; return Promise.resolve(); } };
+        return { where: (clause: unknown) => { captured.where = clause; return { returning: () => Promise.resolve(rows) }; } };
       },
     });
+    return captured;
+  }
 
-    await cancelPendingAccountDeletion("user-1");
+  it("clears the request, scoped to accounts not already erased", async () => {
+    sendEmail.mockClear();
+    const captured = stubCancel([]);
+
+    expect(await cancelPendingAccountDeletion("user-1")).toBe(false);
 
     expect(captured.set).toMatchObject({ deletionRequestedAt: null });
     // Scoped by deletedAt as well as the user id, so a call after erasure has
     // already run is a no-op rather than reviving a scrubbed account.
     expect(JSON.stringify(captured.where)).toContain('"_table":"users","_col":"deletedAt"');
+    // Nothing was pending: no email.
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  // "A user should also get a welcome back message" (5 Oct 2026).
+  it("welcomes back, by email, somebody whose deletion it cancelled", async () => {
+    sendEmail.mockClear();
+    stubCancel([{ email: "ann@example.com", firstName: "Ann", preferredName: null }]);
+
+    expect(await cancelPendingAccountDeletion("user-1")).toBe(true);
+
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+    const email = sendEmail.mock.calls[0][0];
+    expect(email.to).toEqual(["ann@example.com"]);
+    expect(email.subject).toContain("Welcome back");
+    expect(email.html).toContain("Hi Ann,");
+    expect(email.html).toContain("has been cancelled");
   });
 });
 

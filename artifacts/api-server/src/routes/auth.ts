@@ -244,6 +244,10 @@ export async function upsertUser(claims: Record<string, unknown>) {
         .set(refreshable)
         .where(eq(usersTable.id, existing.id))
         .returning();
+      // Signing back in cancels a pending deletion - on this path too. It
+      // returned early without it, and an account in daily use was erased
+      // 14 days after a deletion asked for and never cancelled (5 Oct 2026).
+      await cancelPendingAccountDeletion(updated.id);
       return updated;
     }
   }
