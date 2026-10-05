@@ -9,7 +9,7 @@ import { formatDisplayDate } from '@/lib/displayFormat';
 import { readMpesaRows, smsRefusal } from '@/lib/mpesaSms';
 import { retrySave } from '@/lib/saveRetry';
 import { differenceError } from '@/lib/differenceError';
-import { differenceMessages, fixConfirmation, fixPlan, hasFixes, inWorkingYear, kes, receiptOf, spanChangeText, startingBalanceAdvice, workingYear, type DifferenceSpan } from '@/lib/mpesaLiveBalance';
+import { differenceMessages, fixConfirmation, fixPlan, hasFixes, inWorkingYear, kes, missingCharge, receiptOf, spanChangeText, startingBalanceAdvice, workingYear, type DifferenceSpan } from '@/lib/mpesaLiveBalance';
 
 
 type Span = DifferenceSpan;
@@ -43,6 +43,7 @@ export default function MpesaDifferenceScreen() {
   // line saying so, rather than blanking it for a spinner each time.
   const shownRef = useRef(false);
   const [rechecking, setRechecking] = useState(false);
+  const [checkedAt, setCheckedAt] = useState<number | null>(null);
   const check = useCallback(async () => {
     if (shownRef.current) setRechecking(true);
     else setState('reading');
@@ -76,6 +77,7 @@ export default function MpesaDifferenceScreen() {
         body: JSON.stringify({ messages }),
       })));
       setState('done');
+      setCheckedAt(Date.now());
       shownRef.current = true;
     } catch (reason) {
       setError(differenceError(reason));
@@ -103,11 +105,11 @@ export default function MpesaDifferenceScreen() {
         onPress: async () => {
           setFixing(true);
           try {
-            if (plan.move.length > 0 || plan.redate.length > 0) {
+            if (plan.move.length > 0 || plan.redate.length > 0 || plan.charges.length > 0) {
               await retrySave(() => customFetch('/api/mpesa/difference/fix', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ move: plan.move, redate: plan.redate }),
+                body: JSON.stringify({ move: plan.move, redate: plan.redate, charges: plan.charges }),
               }));
             }
             if (plan.bringIn) {
@@ -282,7 +284,26 @@ export default function MpesaDifferenceScreen() {
                   </View>
                 ) : null}
 
-                {span.missing.length + span.extra.length + span.redated.length === 0 ? (
+                {(span.amounts ?? []).length > 0 ? (
+                  <View style={styles.group}>
+                    <Text style={[styles.groupTitle, { color: colors.foreground }]}>Saved for a different amount</Text>
+                    {(span.amounts ?? []).map((item) => {
+                      const charge = missingCharge(item);
+                      return (
+                        <View key={item.receipt} style={[styles.item, { borderColor: colors.border }]}>
+                          <Text style={{ color: colors.foreground, fontSize: 13 }} numberOfLines={2}>{item.description} · {formatDisplayDate(item.day)}</Text>
+                          <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>
+                            {charge !== null
+                              ? `M-Pesa took ${kes(Math.abs(item.inMessages))}, Jamvi has ${kes(Math.abs(item.inJamvi))}: a ${kes(charge)} M-Pesa charge never saved. Fix all adds it.`
+                              : `M-Pesa: ${item.inMessages < 0 ? '−' : '+'}${kes(Math.abs(item.inMessages))}, Jamvi: ${item.inJamvi < 0 ? '−' : '+'}${kes(Math.abs(item.inJamvi))}. Check its amount in Bank.`}
+                          </Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                ) : null}
+
+                {span.missing.length + span.extra.length + span.redated.length + (span.amounts ?? []).length === 0 ? (
                   <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>
                     No single entry explains this: often an M-Pesa charge or Fuliza that was not saved. Bring these days in to see them.
                   </Text>
@@ -302,9 +323,17 @@ export default function MpesaDifferenceScreen() {
               </Text>
             ) : null}
 
-            <Pressable onPress={() => void check()} accessibilityRole="button" style={[styles.action, { alignSelf: 'center', borderColor: colors.primary }]} testID="mpesa-difference-again">
-              <Text style={[styles.actionText, { color: colors.primary }]}>Check again</Text>
+            {/* Its own "checking" and "checked at", here at the bottom where it was
+                tapped: the notice at the top was out of sight, and the same
+                result again looked like nothing happened (5 Oct 2026). */}
+            <Pressable onPress={() => void check()} disabled={rechecking} accessibilityRole="button" style={[styles.action, { alignSelf: 'center', borderColor: colors.primary, opacity: rechecking ? 0.6 : 1 }]} testID="mpesa-difference-again">
+              <Text style={[styles.actionText, { color: colors.primary }]}>{rechecking ? 'Checking…' : 'Check again'}</Text>
             </Pressable>
+            {checkedAt && !rechecking ? (
+              <Text style={{ color: colors.mutedForeground, fontSize: 12, textAlign: 'center' }} testID="mpesa-difference-checked-at">
+                Checked at {new Date(checkedAt).toLocaleTimeString('en-KE', { hour: 'numeric', minute: '2-digit' })}
+              </Text>
+            ) : null}
           </>
         ) : null}
       </ScrollView>

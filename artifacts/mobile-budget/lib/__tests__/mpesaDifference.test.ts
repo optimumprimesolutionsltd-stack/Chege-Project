@@ -132,18 +132,38 @@ describe('Fix all', () => {
       redate: [{ id: 7, date: '2026-05-12' }],
       bringIn: { count: 2, from: '2026-05-10', to: '2026-08-01' },
       leftToCheck: 1,
+      charges: [],
     });
     expect(hasFixes(plan)).toBe(true);
     expect(hasFixes(fixPlan([span('2026-01-01', '2026-01-01', { extra: [{ id: 1, date: '2026-01-01', amount: -1, description: 'x', receipt: null }] })]))).toBe(false);
   });
 
+  // "No single entry explains this" was nearly always a charge never saved (5 Oct 2026).
+  it('adds a charge M-Pesa took but Jamvi never saved, and leaves any other amount to look at', async () => {
+    const { fixPlan, hasFixes, missingCharge } = await import('../mpesaLiveBalance');
+    expect(missingCharge({ inMessages: -107, inJamvi: -100 })).toBe(7);
+    expect(missingCharge({ inMessages: -100, inJamvi: -120 })).toBeNull(); // Jamvi has more out
+    expect(missingCharge({ inMessages: 990, inJamvi: 1000 })).toBeNull(); // money in
+    const plan = fixPlan([span('2026-09-13', '2026-09-13', { amounts: [
+      { receipt: 'TJ1', day: '2026-09-13', entryId: 4, description: 'Shop', inMessages: -57, inJamvi: -50 },
+      { receipt: 'TJ2', day: '2026-09-13', entryId: 5, description: 'Rent', inMessages: -100, inJamvi: -120 },
+    ] })]);
+    expect(plan.charges).toEqual([{ entryId: 4, amount: 7 }]);
+    expect(plan.leftToCheck).toBe(1);
+    expect(hasFixes(plan)).toBe(true);
+    const screen = read('app/mpesa-difference.tsx');
+    expect(screen).toContain('body: JSON.stringify({ move: plan.move, redate: plan.redate, charges: plan.charges }),');
+    expect(screen).toContain("{rechecking ? 'Checking…' : 'Check again'}");
+  });
+
   it('says in one confirmation what changes, and that nothing is deleted', async () => {
     const { fixConfirmation } = await import('../mpesaLiveBalance');
-    const { title, message } = fixConfirmation({ move: ['A'], redate: [{ id: 1, date: '2026-01-01' }], bringIn: { count: 12, from: '2026-01-01', to: '2026-02-01' }, leftToCheck: 3 }, 'Chege Mpesa');
+    const { title, message } = fixConfirmation({ move: ['A'], redate: [{ id: 1, date: '2026-01-01' }], bringIn: { count: 12, from: '2026-01-01', to: '2026-02-01' }, leftToCheck: 3, charges: [{ entryId: 9, amount: 7 }, { entryId: 10, amount: 13 }] }, 'Chege Mpesa');
     expect(title).toBe('Fix all of these?');
     expect(message).toContain('Bring in 12 payments not saved anywhere, as Not sure yet');
     expect(message).toContain('Move 1 saved in another account to Chege Mpesa.');
     expect(message).toContain('Give 1 entry the day of its M-Pesa message.');
+    expect(message).toContain('Add 2 M-Pesa charges M-Pesa took but Jamvi never saved (KES 20 in all), each to its payment.');
     expect(message).toContain('Nothing is deleted. 3 entries in Chege Mpesa that are in none of your messages stay for you to look at');
   });
 

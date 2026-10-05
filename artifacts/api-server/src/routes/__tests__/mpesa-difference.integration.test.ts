@@ -78,7 +78,7 @@ describe.skipIf(!hasDb)("POST /mpesa/difference (integration)", () => {
   it("Fix all moves the mis-saved money in to M-Pesa, and the check then finds only the hand-typed entry", async () => {
     const fixed = await request(app()).post("/mpesa/difference/fix").send({ move: [`R${STAMP}`.slice(0, 12)] });
     expect(fixed.status).toBe(200);
-    expect(fixed.body).toEqual({ moved: 1, redated: 0 });
+    expect(fixed.body).toEqual({ moved: 1, redated: 0, charged: 0 });
 
     const again = await request(app()).post("/mpesa/difference").send({
       messages: [
@@ -103,9 +103,26 @@ describe.skipIf(!hasDb)("POST /mpesa/difference (integration)", () => {
     const fixed = await request(app()).post("/mpesa/difference/fix").send({
       redate: [{ id: entry.id, date: "2026-10-04" }, { id: typed.id, date: "2026-10-04" }],
     });
-    expect(fixed.body).toEqual({ moved: 0, redated: 1 });
+    expect(fixed.body).toEqual({ moved: 0, redated: 1, charged: 0 });
     const [after] = await db.select({ date: jointAccountTxTable.date }).from(jointAccountTxTable).where(eq(jointAccountTxTable.id, typed.id));
     expect(String(after.date)).toBe("2026-10-03");
+  });
+
+  it("Fix all adds an M-Pesa charge to its payment, and only to a payment in the M-Pesa account", async () => {
+    const [payment] = await db.select({ id: jointAccountTxTable.id, date: jointAccountTxTable.date }).from(jointAccountTxTable)
+      .where(eq(jointAccountTxTable.mpesaReceipt, `T${STAMP}`.slice(0, 12)));
+    const [typed] = await db.select({ id: jointAccountTxTable.id }).from(jointAccountTxTable)
+      .where(eq(jointAccountTxTable.description, "Rent (typed)"));
+    const fixed = await request(app()).post("/mpesa/difference/fix").send({
+      charges: [{ entryId: payment.id, amount: 7 }, { entryId: typed.id, amount: 7 }],
+    });
+    expect(fixed.body).toEqual({ moved: 0, redated: 0, charged: 1 });
+    const charges = await db.select({ amount: jointAccountTxTable.amount, date: jointAccountTxTable.date, type: jointAccountTxTable.type })
+      .from(jointAccountTxTable).where(eq(jointAccountTxTable.chargeForTransactionId, payment.id));
+    expect(charges).toHaveLength(1);
+    expect(Number(charges[0].amount)).toBe(7);
+    expect(charges[0].type).toBe("disbursement");
+    expect(String(charges[0].date)).toBe(String(payment.date));
   });
 
   it("refuses an empty list", async () => {
