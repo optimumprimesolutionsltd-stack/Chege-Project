@@ -744,6 +744,7 @@ function MobileOnboardingFlow({
   onComplete: (draft: MobileOnboardingDraft) => Promise<void>;
   onSkip: () => Promise<void>;
 }) {
+  const prices = usePrices();
   const [skipping, setSkipping] = useState(false);
   const [step, setStep] = useState(0);
   const [draft, setDraft] = useState<MobileOnboardingDraft>({
@@ -1128,6 +1129,11 @@ function MobileOnboardingFlow({
           {step > 0 ? <Pressable testID="onboarding-back" onPress={goBack} style={[styles.backButton, { borderColor: colors.border }]}><Feather name="arrow-left" size={17} color={colors.foreground} /><Text style={[styles.backButtonText, { color: colors.foreground }]}>Back</Text></Pressable> : <View />}
           <Pressable testID="onboarding-continue" disabled={saving} onPress={() => void goNext()} style={[styles.primaryButton, { backgroundColor: colors.primary }, saving && styles.disabled]}>{saving ? <ActivityIndicator color={colors.primaryForeground} /> : <><Text style={[styles.primaryText, { color: colors.primaryForeground }]}>{step === 5 ? 'Finish setup' : 'Continue'}</Text><Feather name="arrow-right" size={18} color={colors.primaryForeground} /></>}</Pressable>
         </View>
+        {/* The trial note above scrolls out of sight; this stays by the button.
+            "No where in the app it shows me I am on trial" (5 Oct 2026). */}
+        <Text testID="onboarding-trial-line" style={{ color: colors.mutedForeground, fontSize: 12, textAlign: 'center', fontFamily: 'Inter_600SemiBold' }}>
+          Free trial: 14 days free, then {kesLabel(prices.monthly)} a month or {kesLabel(prices.annual)} a year.
+        </Text>
         <SwitchAccountLink color={colors.mutedForeground} testID="onboarding-switch-account" />
       </ScrollView>
     </KeyboardAvoidingView>
