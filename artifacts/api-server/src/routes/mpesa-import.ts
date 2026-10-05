@@ -556,4 +556,44 @@ router.post("/mpesa/difference/fix", async (req, res): Promise<void> => {
   res.json(result);
 });
 
+const matchSchema = z.object({ liveBalance: z.number().finite().min(-10_000_000).max(10_000_000) });
+
+/**
+ * "Match M-Pesa now", the one tap ("you are telling me this can't be fixed by
+ * a single tap?", 5 Oct 2026): what is left between Jamvi's M-Pesa figure and
+ * M-Pesa's own goes into the account's opening balance. Not an entry: one
+ * would count as income or spending that nobody can name. Nothing else
+ * changes, and the phone says the old opening balance so it can be put back.
+ */
+router.post("/mpesa/difference/match", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  if (!requireGroupManager(req, res)) return;
+  const parsed = matchSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Send the M-Pesa balance to match." });
+    return;
+  }
+  const account = await findMpesaAccount(groupId);
+  const now = account ? await mpesaBalance(groupId, nairobiToday()) : null;
+  if (!account || !now) {
+    res.status(404).json({ error: "This budget has no M-Pesa account." });
+    return;
+  }
+  const change = Math.round((parsed.data.liveBalance - now.balance) * 100) / 100;
+  const openingAfter = Math.round((account.openingBalance + change) * 100) / 100;
+  if (Math.abs(change) >= 0.01) {
+    await db.update(bankAccountsTable).set({ openingBalance: openingAfter })
+      .where(and(eq(bankAccountsTable.groupId, groupId), eq(bankAccountsTable.id, account.id)));
+  }
+  res.json({
+    account: account.name,
+    before: now.balance,
+    after: Math.round((now.balance + change) * 100) / 100,
+    change,
+    openingBefore: account.openingBalance,
+    openingAfter: Math.abs(change) >= 0.01 ? openingAfter : account.openingBalance,
+  });
+});
+
 export default router;

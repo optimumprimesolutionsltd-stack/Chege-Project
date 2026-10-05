@@ -6,7 +6,7 @@
 import express from "express";
 import request from "supertest";
 import { afterAll, describe, expect, it } from "vitest";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { bankAccountsTable, db, groupsTable, jointAccountTxTable, pool, usersTable } from "@workspace/db";
 import router from "../mpesa-import";
 
@@ -123,6 +123,27 @@ describe.skipIf(!hasDb)("POST /mpesa/difference (integration)", () => {
     expect(Number(charges[0].amount)).toBe(7);
     expect(charges[0].type).toBe("disbursement");
     expect(String(charges[0].date)).toBe(String(payment.date));
+  });
+
+  // "Can't this be fixed by a single tap?" (5 Oct 2026).
+  it("Match M-Pesa now moves what is left into the opening balance, and nothing else", async () => {
+    const [account] = await db.select({ opening: bankAccountsTable.openingBalance }).from(bankAccountsTable)
+      .where(and(eq(bankAccountsTable.groupId, groupId), eq(bankAccountsTable.name, "Chege Mpesa")));
+    const entriesBefore = await db.select({ id: jointAccountTxTable.id }).from(jointAccountTxTable).where(eq(jointAccountTxTable.groupId, groupId));
+    const first = await request(app()).post("/mpesa/difference/match").send({ liveBalance: 5000 });
+    expect(first.status).toBe(200);
+    expect(first.body.after).toBe(5000);
+    expect(first.body.openingBefore).toBe(Number(account.opening));
+    expect(first.body.openingAfter).toBe(Math.round((Number(account.opening) + first.body.change) * 100) / 100);
+    const [after] = await db.select({ opening: bankAccountsTable.openingBalance }).from(bankAccountsTable)
+      .where(and(eq(bankAccountsTable.groupId, groupId), eq(bankAccountsTable.name, "Chege Mpesa")));
+    expect(Number(after.opening)).toBe(first.body.openingAfter);
+    // No entry is added: nothing counts as income or spending.
+    expect(await db.select({ id: jointAccountTxTable.id }).from(jointAccountTxTable).where(eq(jointAccountTxTable.groupId, groupId))).toHaveLength(entriesBefore.length);
+    // Matching again changes nothing.
+    const again = await request(app()).post("/mpesa/difference/match").send({ liveBalance: 5000 });
+    expect(again.body.change).toBe(0);
+    expect(again.body.openingAfter).toBe(first.body.openingAfter);
   });
 
   it("refuses an empty list", async () => {

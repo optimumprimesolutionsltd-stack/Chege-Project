@@ -62,6 +62,7 @@ export default function MpesaDifferenceScreen() {
       }
       const rows = inWorkingYear(read.rows, yearFrom);
       const messages = differenceMessages(rows);
+      setLatest(messages.length > 0 ? messages[messages.length - 1].balance : null);
       if (messages.length === 0) {
         setError(`No M-Pesa messages with a balance are on this phone since 1 January ${workingYear().year}.`);
         setState('error');
@@ -104,6 +105,47 @@ export default function MpesaDifferenceScreen() {
 
   // "Fix all": one confirmation, then everything that needs no judgement.
   const [fixing, setFixing] = useState(false);
+
+  // "Match M-Pesa now", the one tap ("can't this be fixed by a single tap?",
+  // 5 Oct 2026): what is left goes into the account's opening balance, so
+  // Jamvi shows what M-Pesa does. M-Pesa's figure is its newest message's, less
+  // any Fuliza still owed, as the check counts it.
+  const [latest, setLatest] = useState<number | null>(null);
+  const [matching, setMatching] = useState(false);
+  const matchNow = () => {
+    if (!answer?.result || latest === null) return;
+    const change = Math.round(answer.result.endGap * 100) / 100;
+    const opening = answer.account.openingBalance;
+    const after = Math.round((opening + change) * 100) / 100;
+    Alert.alert(
+      `Make ${answer.account.name} match M-Pesa?`,
+      `M-Pesa: ${kes(latest)}. Jamvi: ${kes(latest - change)}.\n\n`
+        + `${answer.account.name}'s opening balance goes from ${kes(opening)} to ${kes(after)}, so Jamvi shows ${kes(latest)} too.\n\n`
+        + 'No entry is added, so nothing counts as income or spending, and nothing is deleted. You can change the opening balance back in Bank.',
+      [
+        { text: 'Not now', style: 'cancel' },
+        {
+          text: 'Match M-Pesa',
+          onPress: async () => {
+            setMatching(true);
+            try {
+              const done = await retrySave(() => customFetch<{ account: string; after: number; openingBefore: number; openingAfter: number }>('/api/mpesa/difference/match', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ liveBalance: latest }),
+              }));
+              Alert.alert('Done', `${done.account} now shows ${kes(done.after)}. Its opening balance was ${kes(done.openingBefore)} and is now ${kes(done.openingAfter)}.`);
+              await check();
+            } catch (reason) {
+              Alert.alert('Could not match it', differenceError(reason));
+            } finally {
+              setMatching(false);
+            }
+          },
+        },
+      ],
+    );
+  };
   const fixAll = () => {
     if (!answer?.result) return;
     const plan = fixPlan(answer.result.spans, chargeOf);
@@ -212,6 +254,21 @@ export default function MpesaDifferenceScreen() {
                 <Text style={{ color: '#fff', fontFamily: 'Inter_700Bold', fontSize: 15 }}>{fixing ? 'Fixing…' : 'Fix all of these'}</Text>
                 <Text style={{ color: '#ffffffcc', fontSize: 12, marginTop: 2, textAlign: 'center' }}>
                   You see exactly what changes first. Nothing is deleted.
+                </Text>
+              </Pressable>
+            ) : null}
+
+            {!allAgree && latest !== null && Math.abs(result.endGap) >= 1 ? (
+              <Pressable
+                onPress={matchNow}
+                disabled={matching || fixing || rechecking}
+                accessibilityRole="button"
+                testID="mpesa-difference-match"
+                style={[styles.card, { borderColor: colors.primary, backgroundColor: colors.card, alignItems: 'center', opacity: matching || fixing || rechecking ? 0.6 : 1 }]}
+              >
+                <Text style={{ color: colors.primary, fontFamily: 'Inter_700Bold', fontSize: 15 }}>{matching ? 'Matching…' : 'Match M-Pesa now'}</Text>
+                <Text style={{ color: colors.mutedForeground, fontSize: 12, textAlign: 'center' }}>
+                  One tap: puts what is left into the opening balance, so Jamvi shows what M-Pesa does. Fix all first if it is offered.
                 </Text>
               </Pressable>
             ) : null}
