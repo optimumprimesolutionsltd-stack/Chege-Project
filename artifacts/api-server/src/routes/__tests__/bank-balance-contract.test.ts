@@ -10,14 +10,15 @@ const routeSource = readFileSync(
 describe("bank balance contract", () => {
   it("calculates closing balance from opening balance, deposits, and disbursements", () => {
     expect(routeSource).toContain(
-      "const balance = openingBalance + ledgerDeposits - ledgerDisbursements;",
+      "const balance = openingBalance + totals.ledgerDeposits - totals.ledgerDisbursements;",
     );
     expect(routeSource).toContain("closingBalance: balance");
   });
 
   it("keeps internal transfers in account balances but out of ordinary in/out totals", () => {
-    expect(routeSource).toContain('t.type === "deposit" && t.bankTransferId == null');
-    expect(routeSource).toContain('t.type === "disbursement" && t.bankTransferId == null');
+    const ledger = readFileSync(new URL("../../lib/account-ledger.ts", import.meta.url), "utf8");
+    expect(ledger).toContain("FILTER (WHERE ${tx.type} = 'deposit' AND ${happened} AND ${tx.bankTransferId} IS NULL)");
+    expect(ledger).toContain("FILTER (WHERE ${tx.type} = 'disbursement' AND ${happened} AND ${tx.bankTransferId} IS NULL)");
   });
 
   it("creates and removes bank-to-bank transfer pairs atomically", () => {

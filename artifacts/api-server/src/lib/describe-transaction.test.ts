@@ -58,7 +58,7 @@ describe("the account list does not query once per entry", () => {
   const route = readFileSync("src/routes/joint-account.ts", "utf8");
 
   it("describes the whole list in one go", () => {
-    expect(route).toContain("const enriched = await enrichTransactions(txs, groupId);");
+    expect(route).toContain("const enriched = await enrichTransactions(entries.map(({ entry }) => entry), groupId);");
     expect(route).not.toMatch(/txs\.map\(\(tx\) => enrichTx\(/);
   });
 });
