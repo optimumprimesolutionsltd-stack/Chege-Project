@@ -31,6 +31,7 @@ import { headingAmong, postingToHeadingError } from "../lib/category-headings";
 import { memberLedgerName } from "../lib/contributor-name";
 import { GROUP_ATTRIBUTION } from "../lib/attribution";
 import { reversalLinksReady, soleReversalCandidate } from "../lib/reversal-links";
+import { enrichTransactions } from "../lib/transaction-details";
 import { importTidyKeptReady } from "../lib/import-tidy-kept";
 import { createBankStatementPdf } from "../lib/bank-statement-pdf";
 import { absorbedByOpening, alreadyThere, completeAt, isSavingsAccount, OPENING_NOTE_PATTERN, openingNote, roomIn } from "../lib/savings-accounts";
@@ -361,42 +362,6 @@ async function requireAccountId(accountId: number | undefined, groupId: number, 
   return resolved;
 }
 
-/**
- * The person or business a debt entry was with. A repayment names them on the
- * row itself; a borrowing or a loan out names them in debt_entry_links. Read
- * defensively: that table is newer than most rows, and a title is never worth
- * failing the list over.
- */
-async function debtPartyNameFor(
-  tx: typeof jointAccountTxTable.$inferSelect,
-  groupId: number,
-): Promise<string | null> {
-  if (!tx.isBorrowing && !tx.isLending && !tx.settlesContributorId) return null;
-  try {
-    // The row's own party is the one somebody chose on this posting, and wins.
-    // A link written earlier - an M-Pesa import's guess - could name somebody
-    // else, and titling the row after it said "Paid to Ujenzi" on a payment
-    // the form showed going to Hermda.
-    if (tx.settlesContributorId) {
-      const [party] = await db
-        .select({ name: groupContributorsTable.name })
-        .from(groupContributorsTable)
-        .where(and(eq(groupContributorsTable.id, tx.settlesContributorId), eq(groupContributorsTable.groupId, groupId)))
-        .limit(1);
-      if (party) return party.name;
-    }
-    const [linked] = await db
-      .select({ name: groupContributorsTable.name })
-      .from(debtEntryLinksTable)
-      .innerJoin(groupContributorsTable, eq(groupContributorsTable.id, debtEntryLinksTable.partyId))
-      .where(and(eq(debtEntryLinksTable.transactionId, tx.id), eq(debtEntryLinksTable.groupId, groupId)))
-      .limit(1);
-    return linked?.name ?? null;
-  } catch {
-    return null;
-  }
-}
-
 type ReversalLinkRow = typeof reversalLinksTable.$inferSelect;
 
 /** The link this entry is half of, whichever half it is, or null. */
@@ -416,36 +381,6 @@ async function reversalLinkFor(transactionId: number, groupId: number): Promise<
   return link ?? null;
 }
 
-/**
- * How the list should show an entry that is half of a reversal. Read
- * defensively, like debtPartyNameFor: a label is never worth failing the list.
- */
-async function reversalPairingFor(
-  tx: typeof jointAccountTxTable.$inferSelect,
-  groupId: number,
-): Promise<{ role: "money_back" | "reversed_payment"; otherTransactionId: number; otherDescription: string; otherDate: string } | null> {
-  try {
-    const link = await reversalLinkFor(tx.id, groupId);
-    if (!link) return null;
-    const isMoneyBack = link.reversalTransactionId === tx.id;
-    const otherId = isMoneyBack ? link.originalTransactionId : link.reversalTransactionId;
-    const [other] = await db
-      .select({ description: jointAccountTxTable.description, date: jointAccountTxTable.date })
-      .from(jointAccountTxTable)
-      .where(and(eq(jointAccountTxTable.id, otherId), eq(jointAccountTxTable.groupId, groupId)))
-      .limit(1);
-    if (!other) return null;
-    return {
-      role: isMoneyBack ? "money_back" : "reversed_payment",
-      otherTransactionId: otherId,
-      otherDescription: other.description ?? "",
-      otherDate: String(other.date),
-    };
-  } catch {
-    return null;
-  }
-}
-
 /** A refusal for touching either half of a linked reversal, or null when it is not one. */
 async function refuseWhileReversed(transactionId: number, groupId: number): Promise<string | null> {
   const link = await reversalLinkFor(transactionId, groupId);
@@ -455,91 +390,13 @@ async function refuseWhileReversed(transactionId: number, groupId: number): Prom
     : "This payment was reversed and is linked to its money back. Unlink it first.";
 }
 
+/** One entry as the routes return it (lib/transaction-details). */
 async function enrichTx(
   tx: typeof jointAccountTxTable.$inferSelect,
   groupId: number,
 ) {
-  const [user, savingsGoal, contributorSplits, bankTransferAccount] = await Promise.all([
-    tx.madeById
-      ? db.select({ firstName: usersTable.firstName })
-          .from(groupMembershipsTable)
-          .innerJoin(usersTable, eq(usersTable.id, groupMembershipsTable.userId))
-          .where(and(
-            eq(groupMembershipsTable.groupId, groupId),
-            eq(groupMembershipsTable.userId, tx.madeById),
-          ))
-          .then((rows) => rows[0] ?? null)
-      : null,
-    tx.savingsGoalId
-      ? db.query.savingsGoalsTable.findFirst({
-          where: and(
-            eq(savingsGoalsTable.id, tx.savingsGoalId),
-            eq(savingsGoalsTable.groupId, groupId),
-          ),
-        })
-      : null,
-    tx.type === "deposit"
-      ? db.select({
-        userId: jointAccountDepositSplitsTable.userId,
-        amount: jointAccountDepositSplitsTable.amount,
-        incomeSourceId: jointAccountDepositSplitsTable.incomeSourceId,
-        userName: usersTable.firstName,
-      })
-        .from(jointAccountDepositSplitsTable)
-        .leftJoin(usersTable, eq(jointAccountDepositSplitsTable.userId, usersTable.id))
-        .where(and(
-          eq(jointAccountDepositSplitsTable.transactionId, tx.id),
-          eq(jointAccountDepositSplitsTable.groupId, groupId),
-        ))
-      : Promise.resolve([]),
-    tx.bankTransferAccountId
-      ? db.query.bankAccountsTable.findFirst({
-          where: and(
-            eq(bankAccountsTable.id, tx.bankTransferAccountId),
-            eq(bankAccountsTable.groupId, groupId),
-          ),
-        })
-      : null,
-  ]);
-  const debtPartyName = await debtPartyNameFor(tx, groupId);
-  const reversal = await reversalPairingFor(tx, groupId);
-  const madeByName = contributorSplits.length === 1
-    ? (contributorSplits[0].userName ?? "Member")
-    : contributorSplits.length > 1
-      ? `${contributorSplits.length} contributors`
-      : (user?.firstName ?? null);
-  return {
-    ...tx,
-    // null madeById = Joint bank (shared household); name resolves to null so UI can show GROUP_ATTRIBUTION
-    madeByName,
-    notes: tx.notes ?? null,
-    expenseCategory: tx.expenseCategory ?? null,
-    isLending: tx.isLending ?? false,
-    chargeForTransactionId: tx.chargeForTransactionId ?? null,
-    isBorrowing: tx.isBorrowing ?? false,
-    // Which party a repayment settled. Without it the editor reopens a
-    // repayment as ordinary money in, and says so on screen.
-    settlesContributorId: tx.settlesContributorId ?? null,
-    // Who the money was borrowed from, lent to, or paid back by, so the entry
-    // can be titled by them ("Borrowed from KCB") rather than by the bank's text.
-    debtPartyName,
-    // Half of a reversal: a money-back deposit, or the payment it undid.
-    reversal,
-    savingsGoalId: tx.savingsGoalId ?? null,
-    savingsGoalName: savingsGoal?.name ?? null,
-    transferDirection: tx.transferDirection ?? null,
-    bankTransferId: tx.bankTransferId ?? null,
-    bankTransferAccountId: tx.bankTransferAccountId ?? null,
-    bankTransferAccountName: bankTransferAccount?.name ?? null,
-    expenseId: tx.expenseId ?? null,
-    contributorSplits: contributorSplits.map((split) => ({
-      userId: split.userId,
-      userName: split.userName ?? "Member",
-      amount: split.amount,
-      incomeSourceId: split.incomeSourceId ?? null,
-    })),
-    createdAt: tx.createdAt instanceof Date ? tx.createdAt.toISOString() : tx.createdAt,
-  };
+  const [enriched] = await enrichTransactions([tx], groupId);
+  return enriched;
 }
 
 /** Validate that a non-null member ID belongs to the active group. Returns an error string or null. */
@@ -909,7 +766,8 @@ router.get("/joint-account", async (req, res): Promise<void> => {
       : and(eq(jointAccountTxTable.groupId, groupId), eq(jointAccountTxTable.accountId, selectedAccount!.id)))
     .orderBy(sql`${jointAccountTxTable.date} DESC, ${jointAccountTxTable.createdAt} DESC`);
 
-  const enriched = await Promise.all(txs.map((tx) => enrichTx(tx, groupId)));
+  // The whole list in a handful of queries, never several per entry (lib/describe-transaction).
+  const enriched = await enrichTransactions(txs, groupId);
 
   // The balance is as at today (Kenyan date). An entry dated in the future has
   // not happened yet, so it is listed but not counted - the headline used to

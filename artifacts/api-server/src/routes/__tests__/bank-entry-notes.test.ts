@@ -33,6 +33,7 @@ describe("bank entries can carry a note", () => {
   });
 
   it("comes back on every read of a transaction", () => {
-    expect(route).toContain("notes: tx.notes ?? null,");
+    // Every read goes through describeTransaction (lib/describe-transaction).
+    expect(readFileSync("src/lib/describe-transaction.ts", "utf8")).toContain("notes: tx.notes ?? null,");
   });
 });

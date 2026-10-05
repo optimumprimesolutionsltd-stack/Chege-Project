@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { debtPartyName, emptyTransactionDetails, type TxRow } from "../../lib/describe-transaction";
 
 const bank = readFileSync("src/routes/joint-account.ts", "utf8");
 
@@ -8,19 +9,30 @@ const bank = readFileSync("src/routes/joint-account.ts", "utf8");
 // is who it really went to - but the list still said "Paid to Ujenzi", and
 // deleting it would have handed the 75,000 back to Ujenzi's balance.
 describe("the payee on a posting outranks an older debt link", () => {
-  const lookup = bank.slice(bank.indexOf("async function debtPartyNameFor"), bank.indexOf("async function debtPartyNameFor") + 1600);
+  const tx = (fields: Partial<TxRow>) => ({ id: 7, isBorrowing: false, isLending: false, settlesContributorId: null, ...fields }) as TxRow;
+  const details = () => {
+    const found = emptyTransactionDetails();
+    found.partyNames.set(3, "Hermda trders");
+    found.linkedPartyNames.set(7, "Ujenzi Distributors");
+    return found;
+  };
 
   it("titles the row after the party chosen on it", () => {
-    expect(lookup).toContain("if (tx.settlesContributorId) {");
-    expect(lookup.indexOf("if (tx.settlesContributorId) {")).toBeLessThan(lookup.indexOf(".from(debtEntryLinksTable)"));
+    expect(debtPartyName(tx({ settlesContributorId: 3 }), details())).toBe("Hermda trders");
   });
 
   it("still reads the link for borrowing, which names nobody on the row", () => {
-    expect(lookup).toContain("return linked?.name ?? null;");
+    expect(debtPartyName(tx({ isBorrowing: true }), details())).toBe("Ujenzi Distributors");
+  });
+
+  it("falls back to the link when the row's party is not in this budget", () => {
+    expect(debtPartyName(tx({ settlesContributorId: 99 }), details())).toBe("Ujenzi Distributors");
   });
 
   it("stays scoped to this budget", () => {
-    expect(lookup).toContain("eq(groupContributorsTable.groupId, groupId)");
+    const loader = readFileSync("src/lib/transaction-details.ts", "utf8");
+    expect(loader).toContain("eq(groupContributorsTable.groupId, groupId)");
+    expect(loader).toContain("eq(debtEntryLinksTable.groupId, groupId)");
   });
 });
 
