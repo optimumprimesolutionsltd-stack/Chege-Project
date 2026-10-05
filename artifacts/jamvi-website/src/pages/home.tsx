@@ -1,6 +1,6 @@
 import { useSeo } from "@/hooks/use-seo";
 import { SITE_SEO } from "@/lib/site-seo";
-import { ArrowRight, ArrowDown, Lock } from "lucide-react";
+import { ArrowRight, ArrowDown, Download, Lock } from "lucide-react";
 import { Link } from "wouter";
 import { JAMVI_APP_PATH } from "@/lib/site-links";
 import { SEGMENTS } from "@/lib/segments";
@@ -45,13 +45,15 @@ export default function Home() {
                 <a href={JAMVI_APP_PATH} className="btn-mat h-14 px-7 text-base">
                   Try {TRIAL_DAYS} days free <ArrowRight className="h-5 w-5" />
                 </a>
+                <Link href="/download" className="btn-line h-14 px-6 text-base" data-testid="home-get-android">
+                  <Download className="h-5 w-5" aria-hidden="true" /> Get the Android app
+                </Link>
                 <Link href="/guides/how-jamvi-reads-mpesa" className="font-bold text-primary underline decoration-accent decoration-[3px] underline-offset-[6px] hover:decoration-primary">
                   How it reads your M-Pesa
                 </Link>
               </div>
               <p className="mt-6 text-sm text-muted-foreground">
-                KES {price} a month after the trial. Groups cost nothing extra.{" "}
-                <Link href="/download" className="font-bold text-primary underline underline-offset-2">Get the Android app</Link>
+                KES {price} a month after the trial. Groups cost nothing extra.
               </p>
             </div>
 

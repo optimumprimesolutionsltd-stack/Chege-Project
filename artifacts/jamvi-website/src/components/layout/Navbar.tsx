@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Menu, X } from "lucide-react";
+import { Download, Menu, X } from "lucide-react";
 import { useState, useEffect } from "react";
 import { JAMVI_APP_PATH } from "@/lib/site-links";
 
@@ -63,14 +63,20 @@ export function Navbar() {
               </a>
             </div>
 
-            <button
-              className="md:hidden p-2 -mr-2 text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
-              onClick={() => setIsOpen(!isOpen)}
-              aria-label="Toggle menu"
-              aria-expanded={isOpen}
-            >
-              {isOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-            </button>
+            {/* On phones the nav links sit behind the menu, so the app gets its own button. */}
+            <div className="md:hidden flex items-center gap-2">
+              <Link href="/download" className="btn-line h-9 px-3 text-sm" data-testid="nav-get-app">
+                <Download className="h-4 w-4" aria-hidden="true" /> Get the app
+              </Link>
+              <button
+                className="md:hidden p-2 -mr-2 text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+                onClick={() => setIsOpen(!isOpen)}
+                aria-label="Toggle menu"
+                aria-expanded={isOpen}
+              >
+                {isOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+              </button>
+            </div>
           </div>
         </div>
       </div>
