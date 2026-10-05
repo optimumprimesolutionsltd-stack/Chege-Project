@@ -1868,7 +1868,13 @@ export default function MpesaImportScreen() {
   };
 
   const saveAll = () => {
-    if (!lines || !accountId || saving) return;
+    if (!lines || saving) return;
+    // Said, never silent: a new person's Save did nothing at all, because their
+    // budget had no account to save into (5 Oct 2026).
+    if (!accountId) {
+      Alert.alert('No account to save into', 'This budget has no account for M-Pesa yet. Close this screen and open it again - Jamvi adds one - or add an account on the Bank tab.');
+      return;
+    }
     const running = getImportProgress();
     if (running?.stage === 'saving') {
       // Stopped, not slow: let the rest be saved now. What the stopped save did

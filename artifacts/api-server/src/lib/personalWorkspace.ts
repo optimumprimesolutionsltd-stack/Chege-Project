@@ -6,6 +6,7 @@ import {
   groupsTable,
 } from "@workspace/db";
 import { eq } from "drizzle-orm";
+import { ensureBudgetHasAnAccount } from "./default-account";
 
 /**
  * Every Jamvi login identity may own one Personal budget (covered by the
@@ -42,6 +43,9 @@ export async function ensurePersonalWorkspace(userId: string): Promise<number> {
         addedByUserId: userId,
       })
       .onConflictDoNothing();
+
+    // Somewhere to record money from the first save on (lib/default-account).
+    await ensureBudgetHasAnAccount(workspace.id, tx);
 
     return workspace.id;
   });
