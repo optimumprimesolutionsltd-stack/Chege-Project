@@ -21,7 +21,8 @@ export type ServerResult =
 
 export type ServerJob = { id: number; status: 'running' | 'done'; total: number; done: number; results?: ServerResult[] };
 
-export type ServerItem = { key: number; built: unknown };
+/** The person a debt line was with goes with it, so the server links it even if Jamvi is closed mid-save. */
+export type ServerItem = { key: number; built: unknown; debt?: { partyId: number; kind: 'borrowed' | 'pay-back' | 'lend' | 'repaid' } };
 
 /** A save started before is still going on the server. */
 export class EarlierSaveRunning extends Error {

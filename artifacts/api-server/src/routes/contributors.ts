@@ -366,7 +366,7 @@ async function workedOutBalances(groupId: number) {
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Nairobi", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
   const [rows, parties] = await Promise.all([
     db.execute(sql`
-      SELECT tx.id, tx.type, tx.amount::float8 AS amount, tx.is_lending AS "isLending",
+      SELECT tx.id, tx.type, tx.amount::float8 AS amount, tx.is_lending AS "isLending", tx.is_borrowing AS "isBorrowing",
              tx.settles_contributor_id AS "settlesContributorId", tx.mpesa_receipt AS "receipt",
              link.party_id AS "linkPartyId", link.kind AS "linkKind"
       FROM joint_account_transactions tx
@@ -374,7 +374,7 @@ async function workedOutBalances(groupId: number) {
       WHERE tx.group_id = ${groupId}
         AND tx.date <= ${today}
         AND (link.party_id IS NOT NULL OR tx.settles_contributor_id IS NOT NULL OR tx.mpesa_receipt ~ '^F[BR][0-9]{12}$')
-    `).then((result) => result.rows as Array<{ id: number; type: string; amount: number; isLending: boolean | null; settlesContributorId: number | null; receipt: string | null; linkPartyId: number | null; linkKind: string | null }>),
+    `).then((result) => result.rows as Array<{ id: number; type: string; amount: number; isLending: boolean | null; isBorrowing: boolean | null; settlesContributorId: number | null; receipt: string | null; linkPartyId: number | null; linkKind: string | null }>),
     db.select({
       id: groupContributorsTable.id,
       name: groupContributorsTable.name,
@@ -419,6 +419,56 @@ async function workedOutBalances(groupId: number) {
     .filter((party) => party.now.owedToUs !== party.workedOut.owedToUs || party.now.owedByUs !== party.workedOut.owedByUs);
   return { changes, fulizaLinks, fulizaId: fuliza?.id ?? null };
 }
+
+/**
+ * Borrowed and lent entries with nobody behind them: money in marked as
+ * borrowed, or out marked as lent, that no person is linked to - so Who owes
+ * who cannot count them. Entries saved before people were kept with them, or
+ * by a save the phone was closed in the middle of. Fuliza's own lines are not
+ * here: Work it out puts them against Fuliza by their receipt codes.
+ *
+ * Each comes with the person its description names, when one does, to be
+ * offered first. Linking is the ordinary POST /debt-links.
+ */
+router.get("/contributors/unlinked-debts", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  const [rows, parties] = await Promise.all([
+    db.execute(sql`
+      SELECT tx.id, tx.type, tx.amount::float8 AS amount, tx.date::text AS date, tx.description
+      FROM joint_account_transactions tx
+      LEFT JOIN debt_entry_links link ON link.transaction_id = tx.id AND link.group_id = tx.group_id
+      WHERE tx.group_id = ${groupId}
+        AND link.party_id IS NULL
+        AND tx.settles_contributor_id IS NULL
+        AND ((tx.type = 'deposit' AND tx.is_borrowing) OR (tx.type = 'disbursement' AND tx.is_lending))
+        AND (tx.mpesa_receipt IS NULL OR tx.mpesa_receipt !~ '^F[BR][0-9]{12}$')
+      ORDER BY tx.date DESC, tx.id DESC
+      LIMIT 500
+    `).then((result) => result.rows as Array<{ id: number; type: string; amount: number; date: string; description: string | null }>),
+    db.select({ id: groupContributorsTable.id, name: groupContributorsTable.name })
+      .from(groupContributorsTable)
+      .where(and(eq(groupContributorsTable.groupId, groupId), isNull(groupContributorsTable.archivedAt))),
+  ]);
+  const named = parties
+    .map((party) => ({ id: party.id, name: party.name.trim().toLowerCase() }))
+    .filter((party) => party.name.length >= 3)
+    .sort((a, b) => b.name.length - a.name.length);
+  res.json({
+    entries: rows.map((row) => {
+      const text = (row.description ?? "").toLowerCase();
+      const suggested = named.find((party) => text.includes(party.name));
+      return {
+        id: Number(row.id),
+        kind: row.type === "deposit" ? "borrowed" : "lend",
+        amount: Number(row.amount),
+        date: String(row.date).slice(0, 10),
+        description: row.description ?? "",
+        suggestedPartyId: suggested?.id ?? null,
+      };
+    }),
+  });
+});
 
 router.get("/contributors/worked-out", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);

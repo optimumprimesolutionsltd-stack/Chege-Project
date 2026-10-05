@@ -128,7 +128,7 @@ describe('the import screen and the bar', () => {
   const bar = readFileSync('components/ImportSavingBar.tsx', 'utf8');
 
   it('saves on the server, and from the phone only when the server cannot', () => {
-    expect(screen).toContain('await startServerSave(toSave.map(({ item, built }) => ({ key: item.index, built })), accountId)');
+    expect(screen).toContain('await startServerSave(toSave.map(({ item, choice, built }) => ({ key: item.index, built, ...(choice.debt ? { debt: { partyId: choice.debt.partyId, kind: choice.debt.kind } } : {}) })), accountId)');
     expect(screen).toMatch(/\} else if \(!resumeJob\) \{\s*\/\/ A server that cannot save them itself yet/);
   });
 

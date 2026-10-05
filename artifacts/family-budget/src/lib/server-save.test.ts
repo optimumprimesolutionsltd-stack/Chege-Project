@@ -130,7 +130,7 @@ describe("the import page and the bar", () => {
   const layout = readFileSync(new URL("../components/layout.tsx", import.meta.url), "utf8");
 
   it("saves on the server, and from the page only when the server cannot", () => {
-    expect(page).toContain("await startServerSave(toSave.map(({ item, built }) => ({ key: item.index, built })), accountId)");
+    expect(page).toContain("await startServerSave(toSave.map(({ item, choice, built }) => ({ key: item.index, built, ...(choice.debt ? { debt: { partyId: choice.debt.partyId, kind: choice.debt.kind } } : {}) })), accountId)");
     expect(page).toMatch(/\} else if \(!resumeJob\) \{\s*\/\/ A server that cannot save them itself yet/);
   });
 
