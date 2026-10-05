@@ -30,6 +30,11 @@ export type DifferenceMessage = {
   at: number;
   /** Its day in Kenya, as YYYY-MM-DD. */
   day: string;
+  /**
+   * false: it moves the balance but is never an entry of its own (a Fuliza
+   * loan notice or repayment), so it is never "missing".
+   */
+  record?: boolean;
 };
 
 export type LedgerEntry = {
@@ -39,6 +44,11 @@ export type LedgerEntry = {
   signed: number;
   receipt: string | null;
   description: string;
+  /**
+   * The payment's code for an entry that belongs to one without carrying it:
+   * its M-Pesa charge, or a Fuliza access fee ("<code>FEE").
+   */
+  covers?: string | null;
 };
 
 export type ProblemSpan = {
@@ -107,7 +117,10 @@ export function findDifference(
   const ledgerReceipts = new Map<string, LedgerEntry>();
   for (const entry of ledger) if (entry.receipt) ledgerReceipts.set(entry.receipt, entry);
   const messageDay = new Map<string, string>();
-  for (const message of withBalance) if (message.receipt) messageDay.set(message.receipt, message.day);
+  // A Fuliza notice shares its payment's code: the payment's own day wins.
+  for (const message of withBalance) {
+    if (message.receipt && (message.record !== false || !messageDay.has(message.receipt))) messageDay.set(message.receipt, message.day);
+  }
   const messageReceipts = new Set(messageDay.keys());
 
   const spans: ProblemSpan[] = [];
@@ -123,13 +136,13 @@ export function findDifference(
     const upTo = days[i];
     const inSpan = (day: string) => day > after && day <= upTo;
     const missing = withBalance
-      .filter((message) => message.receipt && inSpan(message.day) && !ledgerReceipts.has(message.receipt))
+      .filter((message) => message.record !== false && message.receipt && inSpan(message.day) && !ledgerReceipts.has(message.receipt))
       .map((message) => {
         const other = elsewhere.get(message.receipt!);
         return { receipt: message.receipt!, day: message.day, savedIn: other?.account ?? null, savedOn: other?.date ?? null };
       });
     const extra = entries
-      .filter((entry) => inSpan(entry.date) && (!entry.receipt || !messageReceipts.has(entry.receipt)))
+      .filter((entry) => inSpan(entry.date) && !(entry.receipt && messageReceipts.has(entry.receipt)) && !(entry.covers && messageReceipts.has(entry.covers)))
       .map((entry) => ({ id: entry.id, date: entry.date, amount: entry.signed, description: entry.description, receipt: entry.receipt }));
     const redated = entries
       .filter((entry) => {

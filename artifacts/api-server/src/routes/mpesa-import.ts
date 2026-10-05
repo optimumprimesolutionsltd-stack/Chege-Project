@@ -399,6 +399,7 @@ const differenceSchema = z.object({
     balance: z.number().finite(),
     at: z.number().finite(),
     day: z.string().date(),
+    record: z.literal(false).optional(),
   })).min(1, "No M-Pesa messages with a balance were found.").max(6_000),
 });
 
@@ -431,15 +432,22 @@ router.post("/mpesa/difference", async (req, res): Promise<void> => {
       amount: jointAccountTxTable.amount,
       receipt: jointAccountTxTable.mpesaReceipt,
       description: jointAccountTxTable.description,
+      chargeFor: jointAccountTxTable.chargeForTransactionId,
     })
     .from(jointAccountTxTable)
     .where(and(eq(jointAccountTxTable.groupId, groupId), eq(jointAccountTxTable.accountId, account.id)));
+  // A charge carries no code of its own, and a Fuliza fee carries its
+  // payment's with "FEE" on the end: both belong to that payment's message.
+  const receiptOfId = new Map(rows.map((row) => [row.id, row.receipt]));
   const ledger = rows.map((row) => ({
     id: row.id,
     date: String(row.date).slice(0, 10),
     signed: row.type === "deposit" ? Number(row.amount) : -Number(row.amount),
     receipt: row.receipt,
     description: row.description,
+    covers: row.chargeFor !== null
+      ? receiptOfId.get(row.chargeFor) ?? null
+      : row.receipt?.endsWith("FEE") ? row.receipt.slice(0, -3) : null,
   }));
 
   // Messages this account does not have: saved to another of this budget's accounts?
@@ -530,6 +538,13 @@ router.post("/mpesa/difference/fix", async (req, res): Promise<void> => {
         ))
         .returning({ id: jointAccountTxTable.id });
       redated += rows.length;
+      // Its M-Pesa charge goes with it, or the day stays out by the charge.
+      if (rows.length > 0) {
+        await tx
+          .update(jointAccountTxTable)
+          .set({ date: change.date })
+          .where(and(eq(jointAccountTxTable.groupId, groupId), eq(jointAccountTxTable.chargeForTransactionId, change.id)));
+      }
     }
     return { moved, redated };
   });

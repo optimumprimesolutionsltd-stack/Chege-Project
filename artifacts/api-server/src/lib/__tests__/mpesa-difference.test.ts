@@ -80,6 +80,24 @@ describe("find the difference", () => {
     expect(findDifference([], right, 0)).toBeNull();
   });
 
+  // Fix all once brought in Fuliza repayments, which the import never saves (5 Oct 2026).
+  it("never calls a Fuliza message missing, nor a charge or Fuliza fee extra", () => {
+    const withFuliza: DifferenceMessage[] = [
+      ...messages,
+      { receipt: "AAA0000004", balance: 2200, at: at("2026-10-04", 9), day: "2026-10-04" },
+      { receipt: "FUL0000005", balance: 1900, at: at("2026-10-05", 9), day: "2026-10-05", record: false },
+    ];
+    const ledger: LedgerEntry[] = [
+      ...right,
+      { id: 4, date: "2026-10-04", signed: -500, receipt: "AAA0000004", description: "Shop on Fuliza" },
+      { id: 5, date: "2026-10-04", signed: -5, receipt: "AAA0000004FEE", description: "Fuliza access fee", covers: "AAA0000004" },
+      { id: 6, date: "2026-10-04", signed: -7, receipt: null, description: "M-Pesa charge", covers: "AAA0000004" },
+    ];
+    const result = findDifference(withFuliza, ledger, 1000)!;
+    expect(result.spans.flatMap((span) => span.missing)).toEqual([]);
+    expect(result.spans.flatMap((span) => span.extra)).toEqual([]);
+  });
+
   it("counts days across a month end", () => {
     expect(nextDay("2026-09-30")).toBe("2026-10-01");
     expect(nextDay("2026-12-31")).toBe("2027-01-01");

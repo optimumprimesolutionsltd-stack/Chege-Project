@@ -54,7 +54,10 @@ export async function startServerSave(
     );
   } catch (error: unknown) {
     const status = statusOf(error);
-    if (status === 404 || status === 503) return null;
+    // 400: the server could not take the list as a whole ("Those entries could
+    // not be read", every entry of a Fix all left unsaved, 5 Oct 2026). Saved
+    // one by one instead, each goes in or says what is wrong with it.
+    if (status === 400 || status === 404 || status === 503) return null;
     const running = status === 409 ? (error as { data?: { job?: ServerJob } }).data?.job : undefined;
     if (running?.id) throw new EarlierSaveRunning(running);
     throw error;

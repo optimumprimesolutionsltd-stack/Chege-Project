@@ -21,9 +21,30 @@ describe('Find the difference, on the phone', () => {
   });
 
   it('sends only the code, the balance and the time of messages that state a balance - never the message', () => {
-    const sent = differenceMessages([{ body: PAID, date: Date.UTC(2026, 6, 13, 10, 37) }, { body: FULIZA, date: 1 }]);
+    const sent = differenceMessages([{ body: PAID, date: Date.UTC(2026, 6, 13, 10, 37) }, { body: 'Thank you for using M-PESA', date: 1 }]);
     expect(sent).toEqual([{ receipt: 'TJ4AB1CD2E', balance: 206.52, at: Date.UTC(2026, 6, 13, 10, 37), day: '2026-07-13' }]);
     expect(Object.keys(sent[0]).sort()).toEqual(['at', 'balance', 'day', 'receipt']);
+  });
+
+  // Fix all once brought in Fuliza repayments, which the import never saves,
+  // and saved nothing (5 Oct 2026).
+  it('counts the Fuliza still owed, and marks the loan messages as nothing to bring in', () => {
+    const at = (h: number) => Date.UTC(2026, 6, 13, h);
+    const sent = differenceMessages([
+      { body: 'TJ5PAY0001 Confirmed. Ksh500.00 paid to SAMPLE SHOP. on 13/7/26 at 1:00 PM.New M-PESA balance is Ksh0.00. Transaction cost, Ksh0.00.', date: at(10) },
+      { body: 'TJ5PAY0001 Confirmed. Fuliza M-PESA amount is Ksh 500.00. Access Fee charged Ksh 5.00. Total Fuliza M-PESA outstanding amount is Ksh 505.00 due on 12/8/26.', date: at(10) + 1000 },
+      { body: 'TJ5GOT0002 Confirmed. You have received Ksh1,000.00 from JANE DOE on 13/7/26 at 3:00 PM New M-PESA balance is Ksh1,000.00.', date: at(12) },
+      { body: 'TJ5FUL0003 Confirmed. Ksh 300.00 from your M-PESA has been used to partially pay your outstanding Fuliza M-PESA. Available Fuliza M-PESA limit is Ksh 2,000.00. M-PESA balance is Ksh 700.00.', date: at(12) + 1000 },
+      { body: 'TJ5FUL0004 Confirmed. Ksh 205.00 from your M-PESA has been used to fully pay your outstanding Fuliza M-PESA. Available Fuliza M-PESA limit is Ksh 2,000.00. M-PESA balance is Ksh 495.00.', date: at(13) },
+    ]);
+    expect(sent.map((message) => [message.receipt, message.balance, message.record])).toEqual([
+      ['TJ5PAY0001', 0, undefined],
+      // The payment is saved in full and the fee as a charge: Jamvi is 505 below nothing.
+      ['TJ5PAY0001', -505, false],
+      ['TJ5GOT0002', 495, undefined],
+      ['TJ5FUL0003', 495, false],
+      ['TJ5FUL0004', 495, false],
+    ]);
   });
 
   it('says which way each day moved', () => {
