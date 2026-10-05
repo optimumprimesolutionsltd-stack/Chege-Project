@@ -247,11 +247,12 @@ describe("ownership transfer", () => {
     expect(db.transaction).not.toHaveBeenCalled();
   });
 
-  it("refuses on a Personal budget, which has no ownership to hand off", async () => {
+  it("refuses on a Personal budget, and says how to hand it over instead", async () => {
     const response = await request(appFor("owner", "current-user", true)).post("/members/member-1/transfer-ownership");
 
     expect(response.status).toBe(403);
-    expect(response.body.error).toMatch(/no ownership to hand off/i);
+    expect(response.body.error).toMatch(/turn it into a shared group first/i);
+    expect(response.body.error).toMatch(/give this budget to someone else/i);
     expect(db.transaction).not.toHaveBeenCalled();
   });
 

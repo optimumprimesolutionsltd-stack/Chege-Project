@@ -1308,6 +1308,17 @@ export default function SettingsScreen() {
               <Text style={{ width: '100%', color: colors.mutedForeground, fontSize: 11, fontFamily: 'Inter_400Regular' }}>
                 Keeps everything recorded here. {MAKE_SHARED_WARNING}
               </Text>
+              {/* A Personal budget cannot be handed over as it is - it has to
+                  become a Shared group first - and nothing said so. The guide
+                  walks through that and the rest, in order. */}
+              <Pressable
+                testID="open-budget-handover"
+                onPress={() => router.push('/budget-handover' as never)}
+                style={[styles.createGroupButton, { borderColor: colors.primary }]}
+              >
+                <Feather name="repeat" size={16} color={colors.primary} />
+                <Text style={[styles.createGroupButtonText, { color: colors.primary }]}>Give this budget to someone else</Text>
+              </Pressable>
               <Pressable
                 testID="delete-past-year"
                 onPress={() => router.push('/delete-year' as never)}
@@ -1894,9 +1905,18 @@ export default function SettingsScreen() {
             <View testID="owner-access-actions" style={[styles.row, { flexDirection: 'column', borderTopColor: colors.border, borderTopWidth: members.length ? StyleSheet.hairlineWidth : 0, alignItems: 'stretch' }]}>
               <Text style={[styles.rowSub, { color: colors.mutedForeground, marginBottom: editingAccess && members.some((m) => m.role !== 'owner') ? 12 : 0 }]}>
                 {editingAccess && members.some((m) => m.role !== 'owner')
-                  ? 'Owners stay in the group so it always has someone responsible for access. Tap "Make owner" next to another member above to hand it off — you can leave once you are no longer the owner.'
-                  : 'Owners stay in the group so it always has someone responsible for access. Add another member, then hand off ownership to leave.'}
+                  ? 'Owners stay in the group so it always has someone responsible for access. Tap "Make owner" next to another member above, or use the guide below, to hand it off — you can leave once you are no longer the owner.'
+                  : 'Owners stay in the group so it always has someone responsible for access. To leave, hand it to someone else first — the guide below walks you through it.'}
               </Text>
+              <Pressable
+                testID="open-group-handover"
+                onPress={() => router.push('/budget-handover' as never)}
+                style={{ alignSelf: 'flex-start', marginTop: 12, marginBottom: 4, borderWidth: 1, borderColor: colors.primary, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 9 }}
+              >
+                <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>
+                  Give this group to someone else
+                </Text>
+              </Pressable>
               {canMakeGroupPersonal({ group, members, userId: user?.id }) ? (
                 <View style={{ marginTop: 12, marginBottom: editingAccess ? 16 : 0 }}>
                   <Text style={[styles.rowLabel, { color: colors.foreground }]}>Make this my Personal budget</Text>

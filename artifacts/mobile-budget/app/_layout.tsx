@@ -457,6 +457,7 @@ function RootLayoutNav() {
       <Stack.Screen name="delete-account-code" options={{ headerShown: false, gestureEnabled: false }} />
       <Stack.Screen name="delete-group-code" options={{ headerShown: false, gestureEnabled: false }} />
       <Stack.Screen name="delete-year" options={{ headerShown: false, gestureEnabled: false }} />
+      <Stack.Screen name="budget-handover" options={{ headerShown: false }} />
     </Stack>
     <FeedbackModal
       visible={feedbackPromptOpen}

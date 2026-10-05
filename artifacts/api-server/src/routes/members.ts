@@ -144,7 +144,11 @@ router.post("/members/:userId/transfer-ownership", async (req, res): Promise<voi
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
   if (req.group?.isPrivate) {
-    res.status(403).json({ error: "A Personal budget has no ownership to hand off." });
+    // Not a dead end: the budget can be handed over, just not as it is.
+    res.status(403).json({
+      error: "A Personal budget can't be handed over as it is. Turn it into a Shared group first - "
+        + "Settings > Give this budget to someone else walks you through it.",
+    });
     return;
   }
   if (!requireGroupOwner(req, res)) return;

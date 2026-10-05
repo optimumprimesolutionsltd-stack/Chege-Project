@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Link } from "wouter";
 import {
   useGetMembers,
   useLeaveGroup,
@@ -26,7 +27,7 @@ import { GroupInviteLinks } from "@/components/group-invite-links";
 import { ReadOnlyLink } from "@/components/read-only-link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getGetMembersQueryKey } from "@workspace/api-client-react";
-import { Award, BookOpen, BriefcaseBusiness, Camera, Coffee, Gift, Heart, Home, LockKeyhole, LogOut, MapPin, Monitor, Moon, Palette, Pencil, ShoppingBag, Star, Sun, Trash2, TrendingUp, Truck, User, UserPlus, Users, Shield, Send, RotateCcw, Wrench, X, MessageSquare } from "lucide-react";
+import { Award, BookOpen, BriefcaseBusiness, Camera, Coffee, Gift, Heart, Home, LockKeyhole, LogOut, MapPin, Monitor, Moon, Palette, Pencil, ShoppingBag, Star, Sun, Trash2, TrendingUp, Truck, User, UserPlus, Users, Shield, Send, RotateCcw, Wrench, X, MessageSquare, ArrowRightLeft } from "lucide-react";
 import { FeedbackDialog } from "@/components/feedback-dialog";
 import { MakeGroupMyPersonalBudget, RemoveUnusedPersonalBudget, TurnPersonalIntoGroup } from "@/components/budget-conversion";
 import { canMakeGroupPersonal } from "@/lib/budget-conversion";
@@ -1358,6 +1359,28 @@ export default function Settings() {
           {group && canMakeGroupPersonal({ group, members, userId: user?.id }) ? (
             <MakeGroupMyPersonalBudget groupId={group.id} groupName={budgetName} />
           ) : null}
+          {isPrivateWorkspace || myMembership?.role === "owner" ? (
+            // A Personal budget cannot be handed over as it is - it has to
+            // become a Shared group first - and nothing said so. The guide
+            // walks through that and the rest, in order.
+            <div className="rounded-xl border border-border/60 p-4" data-testid="handover-entry">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">
+                    {isPrivateWorkspace ? "Give this budget to someone else" : "Give this group to someone else"}
+                  </p>
+                  <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                    Hand it to another Jamvi account - someone taking over, or a different email of your own. A step-by-step guide shows what to do.
+                  </p>
+                </div>
+                <Button asChild variant="outline" className="w-full sm:w-auto sm:shrink-0">
+                  <Link href="/handover" data-testid="button-handover">
+                    <ArrowRightLeft className="mr-2 h-4 w-4" /> Start
+                  </Link>
+                </Button>
+              </div>
+            </div>
+          ) : null}
           {canLeaveGroup && (
             <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -1383,8 +1406,8 @@ export default function Settings() {
             <>
               <p className="text-xs leading-relaxed text-muted-foreground">
                 {members?.some((m) => m.role !== "owner")
-                  ? 'Owners stay in the group so it always has someone responsible for access. Use "Make owner" next to another member above to hand it off — you can leave once you are no longer the owner.'
-                  : "Owners stay in the group so it always has someone responsible for access. Add another member, then hand off ownership to leave."}
+                  ? 'Owners stay in the group so it always has someone responsible for access. Use "Make owner" next to another member above, or "Give this group to someone else", to hand it off — you can leave once you are no longer the owner.'
+                  : 'Owners stay in the group so it always has someone responsible for access. To leave, use "Give this group to someone else" above.'}
               </p>
               <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
