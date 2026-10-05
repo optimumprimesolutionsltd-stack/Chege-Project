@@ -275,7 +275,8 @@ export function BudgetChooser({
   const [showPurposeSetup, setShowPurposeSetup] = useState(false);
   const [onboardingPurpose, setOnboardingPurpose] = useState<string | null>(null);
   const [showDurationSetup, setShowDurationSetup] = useState(false);
-  const [budgetDuration, setBudgetDuration] = useState<"ongoing" | "week" | "month" | "quarter" | "custom" | null>(null);
+  // Everyday budgeting is preselected unless somebody chooses otherwise.
+  const [budgetDuration, setBudgetDuration] = useState<"ongoing" | "week" | "month" | "quarter" | "custom" | null>("ongoing");
   const [customEndDate, setCustomEndDate] = useState("");
   const [showCategorySetup, setShowCategorySetup] = useState(false);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
@@ -361,7 +362,7 @@ export function BudgetChooser({
     const draft = savedOnboardingDraft;
     setOnboardingMode(draft.mode);
     setOnboardingPurpose(draft.purpose);
-    setBudgetDuration(draft.duration);
+    setBudgetDuration(draft.duration ?? "ongoing");
     setCustomEndDate(draft.customEndDate);
     setSelectedCategories(draft.selectedCategories);
     setCustomCategories(draft.customCategories);
