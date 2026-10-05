@@ -14,6 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useAuth } from '@/lib/auth';
+import { SwitchAccountLink } from '@/components/SwitchAccountLink';
 
 export default function ProfileSetupScreen() {
   const insets = useSafeAreaInsets();
@@ -102,6 +103,7 @@ export default function ProfileSetupScreen() {
             </>
           )}
         </Pressable>
+        <SwitchAccountLink color="#9fb3c8" />
       </KeyboardAvoidingView>
     </LinearGradient>
   );

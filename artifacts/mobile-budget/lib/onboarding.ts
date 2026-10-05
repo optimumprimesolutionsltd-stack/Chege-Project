@@ -184,7 +184,7 @@ export const ONBOARDING_CATEGORY_TIERS = [
     priority: 2,
     label: "Important",
     description: "Regular needs worth planning for.",
-    categories: ["Health", "Education", "Books & supplies", "Family support", "Personal care", "Insurance"],
+    categories: ["Health", "Education", "Books & supplies", "Family support", "Loans", "Emergencies", "Personal care", "Insurance"],
   },
   {
     priority: 3,
@@ -196,9 +196,51 @@ export const ONBOARDING_CATEGORY_TIERS = [
     priority: 4,
     label: "Flexible",
     description: "Optional spending and future plans.",
-    categories: ["Entertainment", "Dates & activities", "Events", "Events & programs", "Equipment", "Venue", "Clothing", "Gifts", "Member welfare", "Welfare & benevolence", "Building & upkeep", "Outreach & missions", "Projects", "Loans", "Other"],
+    categories: ["Entertainment", "Dates & activities", "Events", "Events & programs", "Equipment", "Venue", "Clothing", "Gifts", "Member welfare", "Welfare & benevolence", "Building & upkeep", "Outreach & missions", "Projects", "Tithe & giving", "Other"],
   },
 ] as const;
+
+/**
+ * What each category is for, in a line, where the names alone overlap ("Work
+ * & business", "Business supplies" and "Stock & inventory" read as the same
+ * thing - "there is a lot of confusion here", 5 Oct 2026).
+ */
+export const CATEGORY_HINTS: Readonly<Record<string, string>> = {
+  Food: "Groceries, market shopping and eating out.",
+  Housing: "Rent, or a mortgage, and service charge.",
+  Utilities: "Electricity tokens, water, gas and rubbish collection.",
+  "Shared bills": "Bills split with the people you live with.",
+  Transport: "Fare, fuel, boda boda and parking.",
+  Health: "Hospital, clinic, medicine and NHIF/SHA.",
+  Education: "School fees, uniform, trips and tuition.",
+  "Books & supplies": "Books, stationery and other things for school.",
+  "Family support": "Money you send to parents, siblings or relatives.",
+  Loans: "Paying back a loan: bank, Sacco, Fuliza, M-Shwari or a friend.",
+  Emergencies: "Unplanned costs you had to pay: a sudden hospital bill, a repair. Money set aside for emergencies is a Goal instead.",
+  "Personal care": "Salon, barber, toiletries and cosmetics.",
+  Insurance: "Cover you pay for: medical, car, life or property.",
+  "Airtime & data": "Airtime, bundles and home internet.",
+  Household: "Cleaning things, repairs and house help.",
+  Subscriptions: "DStv, Netflix, Showmax, Spotify and the like.",
+  "Work & business": "What earning your living costs you: tools, a work phone, permits, a shop's rent.",
+  "Business supplies": "Things your business uses up, not sells: packaging, receipt books, cleaning.",
+  "Stock & inventory": "Goods you buy to sell on.",
+  Entertainment: "Outings, games, shows and hobbies.",
+  "Dates & activities": "Going out together.",
+  Events: "Weddings, funerals, parties and harambees you give to.",
+  "Events & programs": "The group's own meetings, functions and programmes.",
+  Equipment: "Things the group buys and keeps.",
+  Venue: "Hiring a place to meet or hold an event.",
+  Clothing: "Clothes and shoes.",
+  Gifts: "Presents for others.",
+  "Member welfare": "Support for members in need: bereavement, illness.",
+  "Welfare & benevolence": "Helping people in need.",
+  "Building & upkeep": "Building, repairs and maintenance.",
+  "Outreach & missions": "Outreach work and missions.",
+  Projects: "A project the group is paying for.",
+  "Tithe & giving": "Tithe, offerings and other giving.",
+  Other: "Anything that fits nowhere else.",
+};
 
 export const ALL_ONBOARDING_CATEGORIES = dedupeCategoryNames(ONBOARDING_CATEGORY_TIERS.flatMap((tier) => tier.categories));
 
@@ -329,13 +371,13 @@ export function groupKindForPersona(persona: string | null | undefined): string 
 }
 
 const PURPOSE_CATEGORY_MAP: Record<string, readonly string[]> = {
-  student: ["Food", "Housing", "Transport", "Education", "Books & supplies", "Airtime & data", "Personal care", "Entertainment", "Other"],
-  working: ["Food", "Housing", "Utilities", "Transport", "Health", "Insurance", "Personal care", "Other"],
-  business: ["Food", "Transport", "Health", "Work & business", "Business supplies", "Stock & inventory", "Airtime & data", "Other"],
-  couple: ["Food", "Housing", "Shared bills", "Utilities", "Transport", "Health", "Dates & activities", "Other"],
+  student: ["Food", "Housing", "Transport", "Education", "Books & supplies", "Airtime & data", "Subscriptions", "Personal care", "Entertainment", "Emergencies", "Other"],
+  working: ["Food", "Housing", "Utilities", "Transport", "Health", "Education", "Family support", "Loans", "Emergencies", "Insurance", "Airtime & data", "Subscriptions", "Personal care", "Entertainment", "Tithe & giving", "Other"],
+  business: ["Food", "Housing", "Utilities", "Transport", "Health", "Education", "Family support", "Work & business", "Business supplies", "Stock & inventory", "Loans", "Emergencies", "Airtime & data", "Tithe & giving", "Other"],
+  couple: ["Food", "Housing", "Shared bills", "Utilities", "Transport", "Health", "Education", "Family support", "Loans", "Emergencies", "Airtime & data", "Dates & activities", "Other"],
   couple_wedding: ["Venue", "Catering", "Attire", "Photography & video", "Decor", "Invitations & stationery", "Gifts", "Transport", "Other"],
-  friends: ["Food", "Housing", "Shared bills", "Utilities", "Transport", "Entertainment", "Dates & activities", "Airtime & data"],
-  family: ["Food", "Housing", "Utilities", "Transport", "Health", "Education", "Family support", "Insurance", "Household"],
+  friends: ["Food", "Housing", "Shared bills", "Utilities", "Transport", "Entertainment", "Dates & activities", "Airtime & data", "Emergencies", "Other"],
+  family: ["Food", "Housing", "Utilities", "Transport", "Health", "Education", "Family support", "Loans", "Emergencies", "Insurance", "Household", "Airtime & data", "Other"],
   chama: ["Member welfare", "Loans", "Events", "Transport", "Projects", "Other"],
   church: ["Building & upkeep", "Utilities", "Outreach & missions", "Welfare & benevolence", "Events & programs", "Equipment", "Transport", "Other"],
   club: ["Member welfare", "Events", "Equipment", "Venue", "Transport", "Projects", "Entertainment", "Other"],
