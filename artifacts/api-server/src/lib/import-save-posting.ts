@@ -13,7 +13,9 @@ export type Built = {
   groupId?: number;
 };
 
-export type JobItem = { key: number; built: Built };
+/** The person a debt line was with, chosen on the phone: linked once the entry is saved. */
+export type JobDebt = { partyId: number; kind: "borrowed" | "pay-back" | "lend" | "repaid" };
+export type JobItem = { key: number; built: Built; debt?: JobDebt };
 
 export type ItemResult =
   | { key: number; outcome: "saved"; id?: number; otherBudget?: { groupId: number; id: number }; feeFailed?: boolean }
@@ -98,6 +100,18 @@ export const SIGNED_OUT = "You were signed out before this was saved. Sign in an
 export async function saveItem(item: JobItem, call: RouteCall, groupId: number, mpesaAccountId: number): Promise<ItemResult> {
   try {
     const posted = await saveBuilt(item.built, call, groupId, mpesaAccountId);
+    // Who it was with, linked here: the phone used to do it once the whole save
+    // had finished, so closing Jamvi mid-save - which a save on the server is
+    // meant to allow - left borrowing and lending with nobody behind them.
+    // Through the same route the phone uses, as the same person; a link that
+    // fails costs only the link, never the entry.
+    if (item.debt && posted.id !== undefined && !posted.otherBudget) {
+      try {
+        await call("/api/debt-links", { links: [{ transactionId: posted.id, partyId: item.debt.partyId, kind: item.debt.kind }] }, groupId);
+      } catch {
+        // The entry is saved; the link can be made from Who owes who.
+      }
+    }
     return {
       key: item.key,
       outcome: "saved",

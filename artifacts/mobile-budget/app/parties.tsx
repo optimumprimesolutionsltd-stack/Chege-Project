@@ -27,6 +27,7 @@ import { customFetch, getDashboardMonthlyReportPdf } from '@workspace/api-client
 import { Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { writePdf } from '@/lib/savePdf';
+import { UnlinkedDebts } from '@/components/UnlinkedDebts';
 
 type Party = {
   id: number;
@@ -377,6 +378,12 @@ export default function PartiesScreen() {
         {working ? <ActivityIndicator size="small" color={colors.primary} /> : <Feather name="refresh-cw" size={14} color={colors.primary} />}
         <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>Work it out from my entries</Text>
       </Pressable>
+      {/* Borrowing and lending nobody is linked to: given their person, then counted. */}
+      <UnlinkedDebts
+        parties={parties}
+        onLinked={() => void queryClient.invalidateQueries({ queryKey: ['parties'] })}
+        onWorkOut={() => void workOutFromEntries()}
+      />
       {/* Shown, never stored: the two columns stay apart so neither is hidden. */}
       <Text style={{ color: colors.mutedForeground, fontSize: 11, marginTop: 6 }} testID="parties-net">
         Net: {totals.net >= 0 ? 'KES ' + formatKES(totals.net) + ' in your favour' : 'KES ' + formatKES(Math.abs(totals.net)) + ' against you'}

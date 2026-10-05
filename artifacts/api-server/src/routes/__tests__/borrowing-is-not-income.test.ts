@@ -6,7 +6,11 @@ const migration = readFileSync("../../lib/db/migrations/0040_borrowing_is_not_in
 const journal = readFileSync("../../lib/db/migrations/meta/_journal.json", "utf8");
 const bank = readFileSync("src/routes/joint-account.ts", "utf8");
 const dashboard = readFileSync("src/routes/dashboard.ts", "utf8");
-const contributors = readFileSync("src/routes/contributors.ts", "utf8");
+// Income figures only: the list of borrowing and lending with nobody linked
+// filters on the same columns to find them, and is not a figure of money in.
+const contributorsSource = readFileSync("src/routes/contributors.ts", "utf8");
+const contributors = contributorsSource.slice(0, contributorsSource.indexOf('router.get("/contributors/unlinked-debts"'))
+  + contributorsSource.slice(contributorsSource.indexOf('router.get("/contributors/worked-out"'));
 
 // The mirror of 0038. A loan paid out to you reaches the account like any
 // deposit, but it is not earnings — you will pay it back. Counted as income,

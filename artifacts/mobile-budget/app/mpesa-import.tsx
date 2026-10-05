@@ -2096,7 +2096,7 @@ export default function MpesaImportScreen() {
       try {
         job = resumeJob
           ? { id: resumeJob, status: 'running', total: toSave.length, done: 0 }
-          : await startServerSave(toSave.map(({ item, built }) => ({ key: item.index, built })), accountId);
+          : await startServerSave(toSave.map(({ item, choice, built }) => ({ key: item.index, built, ...(choice.debt ? { debt: { partyId: choice.debt.partyId, kind: choice.debt.kind } } : {}) })), accountId);
       } catch (error: unknown) {
         serverFailed = error;
       }

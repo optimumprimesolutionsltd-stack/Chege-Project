@@ -23,7 +23,11 @@ const builtSchema = z.object({
 
 const saveJobSchema = z.object({
   mpesaAccountId: z.number().int().positive(),
-  items: z.array(z.object({ key: z.number().int().nonnegative(), built: builtSchema })).min(1).max(5_000),
+  items: z.array(z.object({
+    key: z.number().int().nonnegative(),
+    built: builtSchema,
+    debt: z.object({ partyId: z.number().int().positive(), kind: z.enum(["borrowed", "pay-back", "lend", "repaid"]) }).optional(),
+  })).min(1).max(5_000),
 });
 
 /**
