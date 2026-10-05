@@ -62,12 +62,15 @@ export function MpesaImportCard() {
     };
   }, [groupId]);
 
-  const { data: summary } = useQuery({
+  // Tried again on a failure and each time Home is shown: one that failed once
+  // left "…" on the card and hid Find the difference until Jamvi restarted
+  // ("can't see find the difference", 5 Oct 2026).
+  const { data: summary, refetch: refetchSummary } = useQuery({
     queryKey: ['mpesa-summary', groupId],
     queryFn: () => customFetch<MpesaSummary>('/api/mpesa/summary'),
     enabled: groupId !== null,
     staleTime: 60_000,
-    retry: false,
+    retry: 2,
   });
 
   // M-Pesa's own figure, from the newest message on this phone. Looked at again
@@ -82,7 +85,10 @@ export function MpesaImportCard() {
     staleTime: 15_000,
     retry: false,
   });
-  useFocusEffect(useCallback(() => { if (personal) void refetchLive(); }, [personal, refetchLive]));
+  useFocusEffect(useCallback(() => {
+    if (personal) void refetchLive();
+    if (groupId !== null) void refetchSummary();
+  }, [personal, refetchLive, groupId, refetchSummary]));
   const live = personal ? liveRead ?? null : null;
   const comparison = live && summary?.balance != null ? balanceComparison(live.balance, summary.balance, summary.balanceAccount) : null;
 
@@ -132,7 +138,9 @@ export function MpesaImportCard() {
                   {comparison.text}
                 </Text>
               ) : null}
-              {comparison && !comparison.agrees ? (
+              {/* Offered unless the two are known to agree - also while Jamvi's
+                  own figure is still loading or could not load. */}
+              {!comparison?.agrees ? (
                 <Pressable
                   testID="mpesa-home-card-find-difference"
                   accessibilityRole="button"
