@@ -20,7 +20,9 @@ const draftFor = (usageMode: MobileOnboardingDraft['usageMode']): MobileOnboardi
   customEndDate: '',
   selectedCategories: ['Food', 'Transport'],
   customCategories: [],
-  categoryBudgets: { Food: '12000', Transport: '5000' },
+  categoryBudgets: {},
+  // Both open into subcategories, so their amounts are set against those.
+  subcategoryBudgets: { Food: { Groceries: '8000', 'Eating out': '4000' }, Transport: { Fuel: '5000' } },
   selectedIncomeStreams: ['Salary'],
   incomeAmounts: { Salary: '45000' },
 });
@@ -53,6 +55,13 @@ describe('mobile onboarding API paths', () => {
       expect.objectContaining({ name: 'Food', plannedAmount: 12000, position: 0 }),
       expect.objectContaining({ name: 'Transport', plannedAmount: 5000, position: 1 }),
     ]);
+    // Each category goes with every one of its subcategories, blank or not,
+    // so Food arrives with somewhere to record groceries.
+    expect(planBody.categories[0].subcategories).toEqual([
+      { name: 'Groceries', plannedAmount: 8000 },
+      { name: 'Market shopping', plannedAmount: 0 },
+      { name: 'Eating out', plannedAmount: 4000 },
+    ]);
     expect(incomeBody).toMatchObject({ userId: 'user-41', name: 'Salary', expectedMonthlyAmount: 45000 });
   });
 
@@ -81,5 +90,24 @@ describe('mobile onboarding API paths', () => {
       categoryNames: ['Food', 'Transport'],
       completed: false,
     });
+  });
+
+  it('never sends a category amount of its own: a custom one is its added subcategories, or nothing', async () => {
+    const draft: MobileOnboardingDraft = {
+      ...draftFor('personal'),
+      selectedCategories: ['Farm', 'Pets'],
+      customCategories: ['Farm', 'Pets'],
+      // A parent figure left in an old draft is ignored.
+      categoryBudgets: { Farm: '9999', Pets: '700' },
+      customSubcategories: { Farm: ['Seeds', 'Feeds'] },
+      subcategoryBudgets: { Farm: { Seeds: '1200', Feeds: '800' } },
+    };
+    await applyMobileOnboardingToWorkspace({ workspace: { id: 7, isPrivate: true, role: 'owner' } as never, draft, userId: 'user-7' });
+    const planCall = customFetch.mock.calls.find((call) => call[0] === '/api/budget-plans/onboarding');
+    const planBody = JSON.parse(planCall![1].body);
+    expect(planBody.categories).toEqual([
+      expect.objectContaining({ name: 'Farm', plannedAmount: 2000, subcategories: [{ name: 'Seeds', plannedAmount: 1200 }, { name: 'Feeds', plannedAmount: 800 }] }),
+      expect.objectContaining({ name: 'Pets', plannedAmount: 0, subcategories: [] }),
+    ]);
   });
 });

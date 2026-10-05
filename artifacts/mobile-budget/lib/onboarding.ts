@@ -126,6 +126,14 @@ export type MobileOnboardingDraft = {
   selectedCategories: string[];
   customCategories: string[];
   categoryBudgets: Record<string, string>;
+  /** Monthly amounts against a category's subcategories, as plain KES
+   *  strings: `{ Food: { Groceries: "8000" } }`. A category with
+   *  subcategories is planned through them, so `categoryBudgets` is not read
+   *  for it. Absent on drafts saved before subcategories were asked. */
+  subcategoryBudgets?: Record<string, Record<string, string>>;
+  /** Subcategories somebody added themselves on the amounts step, by
+   *  category: how a custom category gets anywhere to put an amount. */
+  customSubcategories?: Record<string, string[]>;
   selectedIncomeStreams: string[];
   incomeAmounts: Record<string, string>;
   /** For a group: what each member is expected to contribute per month, as a
@@ -241,6 +249,105 @@ export const CATEGORY_HINTS: Readonly<Record<string, string>> = {
   "Tithe & giving": "Tithe, offerings and other giving.",
   Other: "Anything that fits nowhere else.",
 };
+
+/**
+ * The subcategories the amounts step opens a category into.
+ *
+ * Amounts are set against subcategories only; a category never takes one of
+ * its own and shows what its subcategories add up to (5 Oct 2026: "amount to
+ * only be with subcategories, parents to only have grand total of children").
+ * That is the same rule the Budget screen applies afterwards, where a
+ * category with subcategories is a heading. So every category offered
+ * anywhere in onboarding is listed here; a custom one gets a field to add
+ * its own.
+ *
+ * Every name is unique across the whole map and distinct from every category
+ * onboarding offers, because a budget's category names are unique: a
+ * subcategory sharing a name with a category somebody also picked would have
+ * nowhere to go. Loans avoids "Bank loan" and the like for the same reason -
+ * those are the debt categories.
+ */
+export const ONBOARDING_SUBCATEGORIES: Readonly<Record<string, readonly string[]>> = {
+  Food: ["Groceries", "Market shopping", "Eating out"],
+  Housing: ["Rent", "Mortgage", "Service charge"],
+  Utilities: ["Electricity", "Water", "Cooking gas", "Garbage collection"],
+  "Shared bills": ["Rent share", "Bills share", "Shopping share"],
+  Transport: ["Matatu & bus", "Fuel", "Boda boda", "Parking"],
+  Health: ["Hospital & clinic", "Medicine", "SHA contributions"],
+  Education: ["School fees", "Uniform", "School trips", "Tuition"],
+  "Books & supplies": ["Books", "Stationery"],
+  "Family support": ["Parents", "Siblings", "Other relatives"],
+  Loans: ["Loan repayments", "Loan interest"],
+  Emergencies: ["Medical emergencies", "Urgent repairs"],
+  "Personal care": ["Salon & barber", "Toiletries", "Cosmetics"],
+  Insurance: ["Medical cover", "Car insurance", "Life cover"],
+  "Airtime & data": ["Airtime", "Data bundles", "Home internet"],
+  Household: ["Cleaning supplies", "House repairs", "House help"],
+  Subscriptions: ["Pay TV", "Streaming & music"],
+  "Work & business": ["Tools", "Work phone", "Permits & licences", "Shop rent"],
+  "Business supplies": ["Packaging", "Receipt books", "Business cleaning"],
+  "Stock & inventory": ["Stock purchases", "Stock transport"],
+  Entertainment: ["Outings", "Games & shows", "Hobbies"],
+  "Dates & activities": ["Date nights", "Day trips"],
+  Events: ["Weddings", "Funerals", "Parties", "Harambees"],
+  "Events & programs": ["Meetings", "Functions"],
+  Equipment: ["Equipment purchases", "Equipment repairs"],
+  Venue: ["Venue hire", "Venue deposit"],
+  Clothing: ["Clothes", "Shoes"],
+  Gifts: ["Birthday gifts", "Holiday gifts", "Other gifts"],
+  "Member welfare": ["Bereavement", "Illness support"],
+  "Welfare & benevolence": ["Needy support", "Benevolence fund"],
+  "Building & upkeep": ["Building repairs", "Cleaning", "Security"],
+  "Outreach & missions": ["Missions", "Community outreach"],
+  Projects: ["Project materials", "Project labour"],
+  "Tithe & giving": ["Tithe", "Offerings", "Donations"],
+  Other: ["Miscellaneous"],
+  // A wedding's own categories.
+  Catering: ["Food & drinks", "Cake"],
+  Attire: ["Wedding gown", "Suits", "Bridal party outfits"],
+  "Photography & video": ["Photographer", "Videographer"],
+  Decor: ["Flowers", "Decorations"],
+  "Invitations & stationery": ["Invitation cards", "Wedding programmes"],
+  // A student group's own categories.
+  "School fees & classes": ["Class fees", "Exam fees"],
+  Meals: ["Lunch", "Snacks"],
+  "Events & activities": ["Trips", "Competitions"],
+  Welfare: ["Emergency help"],
+  Administration: ["Office supplies", "Meeting costs"],
+};
+
+/** The subcategories a category opens into on the amounts step: Jamvi's own
+ *  list, then any the person added. */
+export function onboardingSubcategoriesFor(
+  category: string,
+  draft?: Pick<MobileOnboardingDraft, "customSubcategories">,
+): string[] {
+  const listed = ONBOARDING_SUBCATEGORIES[canonicalCategoryName(category)] ?? [];
+  const added = draft?.customSubcategories?.[category] ?? [];
+  // Not dedupeCategoryNames: that folds aliases, and "Groceries" is a
+  // subcategory of Food here, not another name for it.
+  const seen = new Set<string>();
+  return [...listed, ...added].filter((name) => {
+    const key = normalizeCategoryName(name);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+const parseAmount = (value: string | undefined) => Math.max(0, Math.round(Number(value ?? 0) || 0));
+
+/**
+ * What a category is planned at: its subcategories added up. A category has
+ * no amount of its own.
+ */
+export function plannedCategoryAmount(
+  draft: Pick<MobileOnboardingDraft, "subcategoryBudgets" | "customSubcategories">,
+  category: string,
+): number {
+  const amounts = draft.subcategoryBudgets?.[category] ?? {};
+  return onboardingSubcategoriesFor(category, draft).reduce((sum, child) => sum + parseAmount(amounts[child]), 0);
+}
 
 export const ALL_ONBOARDING_CATEGORIES = dedupeCategoryNames(ONBOARDING_CATEGORY_TIERS.flatMap((tier) => tier.categories));
 
@@ -469,6 +576,25 @@ export function normalizeOnboardingDraft(value: unknown): MobileOnboardingDraft 
       return result;
     }, {})
     : {};
+  const subcategoryBudgets = raw.subcategoryBudgets && typeof raw.subcategoryBudgets === "object"
+    ? Object.entries(raw.subcategoryBudgets as Record<string, unknown>).reduce<Record<string, Record<string, string>>>((result, [name, amounts]) => {
+      if (!amounts || typeof amounts !== "object") return result;
+      const children = Object.entries(amounts as Record<string, unknown>).reduce<Record<string, string>>((kept, [child, amount]) => {
+        if (typeof amount === "string") kept[child] = amount;
+        return kept;
+      }, {});
+      result[canonicalCategoryName(name)] = { ...(result[canonicalCategoryName(name)] ?? {}), ...children };
+      return result;
+    }, {})
+    : {};
+  const customSubcategories = raw.customSubcategories && typeof raw.customSubcategories === "object"
+    ? Object.entries(raw.customSubcategories as Record<string, unknown>).reduce<Record<string, string[]>>((result, [name, children]) => {
+      if (!Array.isArray(children)) return result;
+      const kept = children.filter((child): child is string => typeof child === "string" && child.trim().length > 0).map((child) => child.trim());
+      if (kept.length > 0) result[canonicalCategoryName(name)] = kept;
+      return result;
+    }, {})
+    : {};
   return {
     usageMode: raw.usageMode,
     persona,
@@ -479,6 +605,8 @@ export function normalizeOnboardingDraft(value: unknown): MobileOnboardingDraft 
     selectedCategories,
     customCategories,
     categoryBudgets,
+    subcategoryBudgets,
+    customSubcategories,
     selectedIncomeStreams: dedupeIncomeStreamNames(raw.selectedIncomeStreams.filter((item): item is string => typeof item === "string")),
     incomeAmounts: raw.incomeAmounts && typeof raw.incomeAmounts === "object" ? raw.incomeAmounts as Record<string, string> : {},
     memberContribution: typeof raw.memberContribution === "string" ? raw.memberContribution.replace(/[^0-9]/g, "") : "",

@@ -5,6 +5,8 @@ import {
 } from "@workspace/api-client-react";
 import {
   categoryPriority,
+  onboardingSubcategoriesFor,
+  plannedCategoryAmount,
   type MobileOnboardingDraft,
 } from "@/lib/onboarding";
 
@@ -93,10 +95,17 @@ export async function applyMobileOnboardingToWorkspace({
         endDate: draft.budgetDuration === "custom" ? draft.customEndDate : null,
         categories: draft.selectedCategories.map((name, position) => ({
           name,
-          plannedAmount: Math.max(0, Math.round(Number(draft.categoryBudgets[name] ?? 0))),
+          plannedAmount: plannedCategoryAmount(draft, name),
           priority: categoryPriority(name),
           isCustom: draft.customCategories.includes(name),
           position,
+          // A category is planned only through its subcategories; the server
+          // makes each one under it. Sent even when blank, so Food arrives
+          // with Groceries and Eating out ready to record into.
+          subcategories: onboardingSubcategoriesFor(name, draft).map((child) => ({
+            name: child,
+            plannedAmount: Math.max(0, Math.round(Number(draft.subcategoryBudgets?.[name]?.[child] ?? 0) || 0)),
+          })),
         })),
       }),
     });

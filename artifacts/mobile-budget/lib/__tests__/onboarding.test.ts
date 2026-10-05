@@ -10,6 +10,11 @@ import {
   normalizeOnboardingDraft,
   normalizeIncomeStreamName,
   onboardingDraftStorageKey,
+  onboardingSubcategoriesFor,
+  plannedCategoryAmount,
+  ALL_ONBOARDING_CATEGORIES,
+  DEBT_ONBOARDING_CATEGORIES,
+  ONBOARDING_SUBCATEGORIES,
   readOnboardingDraft,
   recommendedCategoriesForPurpose,
   saveOnboardingDraft,
@@ -101,6 +106,8 @@ describe('mobile onboarding', () => {
       ...draft,
       budgetGoal: null,
       debtBalances: {},
+      subcategoryBudgets: {},
+      customSubcategories: {},
     });
     await expect(readOnboardingDraft({ userId: 'person/b', storage })).resolves.toBeNull();
   });
@@ -188,3 +195,45 @@ describe('budgetDurationLabels', () => {
     }
   });
 });
+
+describe('onboarding subcategories', () => {
+  it('opens every category onboarding offers into subcategories, so none needs an amount of its own', () => {
+    expect(onboardingSubcategoriesFor('Food')).toEqual(['Groceries', 'Market shopping', 'Eating out']);
+    const offered = dedupeCategoryNames([
+      ...ALL_ONBOARDING_CATEGORIES,
+      ...['student', 'working', 'business', 'couple', 'friends', 'family', 'chama', 'church', 'club', 'student_group'].flatMap((persona) => recommendedCategoriesForPurpose(persona)),
+      ...recommendedCategoriesForPurpose('couple', 'wedding'),
+    ]);
+    expect(offered.filter((category) => onboardingSubcategoriesFor(category).length === 0)).toEqual([]);
+    // A custom category has only what the person adds.
+    expect(onboardingSubcategoriesFor('Farm')).toEqual([]);
+    expect(onboardingSubcategoriesFor('Farm', { customSubcategories: { Farm: ['Seeds', 'seeds '] } })).toEqual(['Seeds']);
+  });
+
+  it('never repeats a name, nor reuses a category or debt name, since a budget allows each name once', () => {
+    const subNames = Object.values(ONBOARDING_SUBCATEGORIES).flat().map((name) => name.toLowerCase());
+    expect(new Set(subNames).size).toBe(subNames.length);
+    const taken = new Set([...Object.keys(ONBOARDING_SUBCATEGORIES), ...ALL_ONBOARDING_CATEGORIES, ...DEBT_ONBOARDING_CATEGORIES, 'Transaction charges', 'M-Pesa charges', 'Fuliza charges', 'Bank charges'].map((name) => name.toLowerCase()));
+    expect(subNames.filter((name) => taken.has(name))).toEqual([]);
+  });
+
+  it('plans a category at its subcategories added up, never an amount of its own', () => {
+    const amounts = { subcategoryBudgets: { Food: { Groceries: '8000', 'Eating out': '1500.6', Bogus: '700' }, Farm: { Seeds: '300' } }, customSubcategories: { Farm: ['Seeds'] } };
+    // A name that is not one of its subcategories does not count.
+    expect(plannedCategoryAmount(amounts, 'Food')).toBe(9501);
+    expect(plannedCategoryAmount(amounts, 'Farm')).toBe(300);
+    expect(plannedCategoryAmount(amounts, 'Housing')).toBe(0);
+    expect(plannedCategoryAmount(amounts, 'Pets')).toBe(0);
+  });
+
+  it('keeps subcategory amounts through a saved draft', () => {
+    const restored = normalizeOnboardingDraft({
+      usageMode: 'personal', budgetDuration: 'ongoing', selectedCategories: ['Food'], customCategories: [], selectedIncomeStreams: [],
+      subcategoryBudgets: { groceries: { Groceries: '8000', Junk: 5 }, Food: { 'Eating out': '400' } },
+      customSubcategories: { Farm: ['Seeds', 3, ' '] },
+    });
+    expect(restored?.subcategoryBudgets).toEqual({ Food: { Groceries: '8000', 'Eating out': '400' } });
+    expect(restored?.customSubcategories).toEqual({ Farm: ['Seeds'] });
+  });
+});
+

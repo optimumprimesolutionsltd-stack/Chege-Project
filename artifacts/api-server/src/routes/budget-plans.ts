@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db, budgetCategoriesTable, budgetPlanCategoriesTable, budgetPlansTable } from "@workspace/db";
 import { getActiveGroupId, requireGroupManager } from "../lib/activeGroup";
@@ -18,6 +18,12 @@ const createPlanSchema = z.object({
     priority: z.number().int().min(1).max(10).default(1),
     isCustom: z.boolean().default(false),
     position: z.number().int().min(0).default(0),
+    // Onboarding asks amounts against a category's subcategories rather than
+    // the category itself; each becomes a subcategory under it.
+    subcategories: z.array(z.object({
+      name: z.string().trim().min(1).max(80),
+      plannedAmount: z.number().int().min(0),
+    })).max(20).default([]),
   })).max(100),
 }).superRefine((value, context) => {
   if (value.endDate && value.endDate < value.startDate) context.addIssue({ code: z.ZodIssueCode.custom, path: ["endDate"], message: "End date must not be before the start date." });
@@ -43,9 +49,36 @@ router.post("/budget-plans/onboarding", async (req, res) => {
         status: "active",
       }).returning();
       if (!plan) throw new Error("Could not create budget plan");
+      const isRecurring = data.durationType === "ongoing" || data.durationType === "month" || data.durationType === "quarter";
+      // Names are unique per budget ignoring case and spaces, so look them up
+      // the same way: "food" must find "Food", not collide with it on insert.
+      const findByName = (name: string) => tx.query.budgetCategoriesTable.findFirst({ where: and(eq(budgetCategoriesTable.groupId, groupId), sql`lower(btrim(${budgetCategoriesTable.name})) = lower(btrim(${name}))`) });
       for (const [position, item] of data.categories.entries()) {
-        const existing = await tx.query.budgetCategoriesTable.findFirst({ where: and(eq(budgetCategoriesTable.groupId, groupId), eq(budgetCategoriesTable.name, item.name)) });
-        const category = existing ?? (await tx.insert(budgetCategoriesTable).values({ groupId, name: item.name, budgetAmount: item.plannedAmount, priority: item.priority, color: "#6B7280", isRecurring: data.durationType === "ongoing" || data.durationType === "month" || data.durationType === "quarter" }).returning())[0];
+        const existing = await findByName(item.name);
+        const hasChildren = item.subcategories.length > 0;
+        // A category planned through its subcategories is a heading: its
+        // budget is theirs added up, so it holds none of its own.
+        const category = existing ?? (await tx.insert(budgetCategoriesTable).values({ groupId, name: item.name, budgetAmount: hasChildren ? 0 : item.plannedAmount, priority: item.priority, color: "#6B7280", isRecurring }).returning())[0];
+        // Only one level deep, and a tracked debt is not a heading.
+        if (category && hasChildren && category.parentId === null && category.debtBalance === null) {
+          let addedChild = false;
+          for (const child of item.subcategories) {
+            const found = await findByName(child.name);
+            if (!found) {
+              await tx.insert(budgetCategoriesTable).values({ groupId, parentId: category.id, name: child.name, budgetAmount: child.plannedAmount, priority: item.priority, color: "#6B7280", isRecurring });
+              addedChild = true;
+            } else if (found.parentId === category.id && found.budgetAmount === 0 && child.plannedAmount > 0) {
+              // Already there under this category (a group's starter pack
+              // makes some): take the amount, never overwrite one already set.
+              await tx.update(budgetCategoriesTable).set({ budgetAmount: child.plannedAmount }).where(eq(budgetCategoriesTable.id, found.id));
+            }
+            // A same-named category elsewhere in the budget is left where it
+            // is; moving somebody's category is not onboarding's call.
+          }
+          if (addedChild && category.budgetAmount !== 0) {
+            await tx.update(budgetCategoriesTable).set({ budgetAmount: 0 }).where(eq(budgetCategoriesTable.id, category.id));
+          }
+        }
         await tx.insert(budgetPlanCategoriesTable).values({ budgetPlanId: plan.id, budgetCategoryId: category?.id ?? null, categoryName: item.name, plannedAmount: item.plannedAmount, priority: item.priority, isCustom: item.isCustom, position: item.position ?? position });
       }
       return plan;
