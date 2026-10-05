@@ -12,11 +12,13 @@ const NORMALISE = (text: string) =>
     .replace(/\.\/(mpesaImport|mpesa-import)/g, './mpesa-import')
     .replace(/\.\/(mpesaDebts|mpesa-debts)/g, './mpesa-debts')
     .replace(/\.\/(payeeLearning|payee-learning)/g, './payee-learning')
+    .replace(/\.\/(mpesaProducts|mpesa-products)/g, './mpesa-products')
     .replace(/\.\/(statementTable|statement-table)/g, './statement-table');
 
 const PAIRS: Array<[string, string]> = [
   ['lib/mpesaImport.ts', '../family-budget/src/lib/mpesa-import.ts'],
   ['lib/mpesaDebts.ts', '../family-budget/src/lib/mpesa-debts.ts'],
+  ['lib/mpesaProducts.ts', '../family-budget/src/lib/mpesa-products.ts'],
   ['lib/payeeLearning.ts', '../family-budget/src/lib/payee-learning.ts'],
   ['lib/savePosting.ts', '../family-budget/src/lib/save-posting.ts'],
   ['lib/statementTable.ts', '../family-budget/src/lib/statement-table.ts'],

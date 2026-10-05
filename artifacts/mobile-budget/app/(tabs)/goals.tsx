@@ -52,6 +52,7 @@ import {
   type SavingsGoalContribution,
 } from '@workspace/api-client-react';
 import { formatDisplayDate as formatDate } from '@/lib/displayFormat';
+import { isSavingsAccount } from '@/lib/mpesaProducts';
 
 function formatKES(n?: number | null): string {
   if (n === undefined || n === null) return '—';
@@ -885,7 +886,7 @@ export default function GoalsScreen() {
   };
 
   const openContribute = (goal: SavingsGoal) => {
-    if (goal.isCompleted || goal.currentAmount >= goal.targetAmount) {
+    if (!isSavingsAccount(goal) && (goal.isCompleted || goal.currentAmount >= goal.targetAmount)) {
       Alert.alert('Goal fully funded', 'This goal has reached its target, so contributions are locked.');
       return;
     }
@@ -994,7 +995,9 @@ export default function GoalsScreen() {
   };
 
   // ── Derived data ────────────────────────────────────────────────────────────
-  const active = (goals as SavingsGoal[]).filter((g) => !g.isCompleted);
+  // M-Shwari, KCB M-PESA, Ziidi, Mali: accounts with a balance, not goals with a target.
+  const savingsAccounts = (goals as SavingsGoal[]).filter(isSavingsAccount);
+  const active = (goals as SavingsGoal[]).filter((g) => !g.isCompleted && !isSavingsAccount(g));
   const done = (goals as SavingsGoal[]).filter((g) => g.isCompleted);
   const fundableGoals = active.filter((goal) => goal.targetAmount > goal.currentAmount);
   const shortcutGoal = fundableGoals[0];
@@ -1145,6 +1148,31 @@ export default function GoalsScreen() {
           </View>
         ) : (
           <View style={styles.list}>
+            {savingsAccounts.length > 0 && (
+              <>
+                <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>M-PESA SAVINGS</Text>
+                {savingsAccounts.map((goal) => (
+                  <View key={goal.id} style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]} testID={`savings-account-${goal.id}`}>
+                    <View style={styles.cardTop}>
+                      <View style={[styles.iconCircle, { backgroundColor: '#1a3320' }]}>
+                        <Feather name="briefcase" size={18} color="#4ade80" />
+                      </View>
+                      <View style={styles.cardInfo}>
+                        <Text style={[styles.cardName, { color: colors.foreground }]}>{goal.name}</Text>
+                        <Text style={[styles.cardSub, { color: colors.mutedForeground }]}>Moves in and out with your M-Pesa statement</Text>
+                      </View>
+                      <View style={styles.cardRight}>
+                        <Text style={[styles.cardPct, { color: '#4ade80' }]}>KES {formatKES(goal.currentAmount)}</Text>
+                        {canManageShared && <TouchableOpacity onPress={() => openGoalActions(goal)} hitSlop={8} style={styles.kebabBtn}>
+                          <Feather name="edit-2" size={14} color={colors.mutedForeground} />
+                          <Text style={[styles.kebabBtnText, { color: colors.mutedForeground }]}>Manage</Text>
+                        </TouchableOpacity>}
+                      </View>
+                    </View>
+                  </View>
+                ))}
+              </>
+            )}
             {active.length > 0 && (
               <>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -1417,7 +1445,7 @@ export default function GoalsScreen() {
                           {selectedGoal.name}
                         </Text>
                         <Text style={styles.goalPillSub}>
-                          KES {formatKES(selectedGoal.currentAmount)} / {formatKES(selectedGoal.targetAmount)}
+                          {isSavingsAccount(selectedGoal) ? `KES ${formatKES(selectedGoal.currentAmount)}` : `KES ${formatKES(selectedGoal.currentAmount)} / ${formatKES(selectedGoal.targetAmount)}`}
                         </Text>
                       </View>
                     )}

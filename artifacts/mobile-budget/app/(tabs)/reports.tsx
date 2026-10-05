@@ -575,8 +575,9 @@ export default function ReportsScreen() {
 
   // Savings goals
   const { data: goalsRaw = [] } = useGetSavingsGoals();
+  // Goals with a target only: M-Shwari and the other savings accounts have none to report progress on (lib/mpesaProducts).
   const goals = useMemo(() =>
-    [...(goalsRaw as any[])].sort((a, b) => {
+    [...(goalsRaw as any[])].filter((goal) => goal.targetAmount > 0).sort((a, b) => {
       if (a.isCompleted !== b.isCompleted) return a.isCompleted ? 1 : -1;
       const aDeadline = a.deadline ? new Date(a.deadline).getTime() : Infinity;
       const bDeadline = b.deadline ? new Date(b.deadline).getTime() : Infinity;

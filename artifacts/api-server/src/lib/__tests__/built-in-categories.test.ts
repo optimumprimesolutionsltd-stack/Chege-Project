@@ -4,7 +4,9 @@ import {
   BUILT_IN_LOCKED_MESSAGE,
   CHARGES_HEADING,
   FULIZA_CHARGES,
+  LEDGERS,
   MPESA_CHARGES,
+  MPESA_HEADING,
   isBuiltInCategoryName,
 } from "../built-in-categories";
 
@@ -13,16 +15,21 @@ const routes = readFileSync("src/routes/budget-categories.ts", "utf8");
 
 // Fees were filed wherever a picker was pointed each time, so they could not
 // be followed and a statement import stopped to ask. Now every budget has one
-// place for each.
-describe("the built-in charge categories", () => {
-  it("are a Transaction charges heading holding M-Pesa charges and Fuliza charges", () => {
-    expect([CHARGES_HEADING, MPESA_CHARGES, FULIZA_CHARGES]).toEqual(["Transaction charges", "M-Pesa charges", "Fuliza charges"]);
+// place for each - and since 5 Oct 2026 for airtime, bundles and Home Fibre too,
+// all under one M-Pesa heading.
+describe("the built-in M-Pesa categories", () => {
+  it("are an M-Pesa heading holding a ledger for each charge and product", () => {
+    expect(MPESA_HEADING).toBe("M-Pesa");
+    expect([MPESA_CHARGES, FULIZA_CHARGES]).toEqual(["M-Pesa charges", "Fuliza charges"]);
+    expect(LEDGERS).toEqual(["M-Pesa charges", "Fuliza charges", "Airtime", "Data bundles", "Home Fibre"]);
   });
 
   it("are recognised whatever the spacing or capitals", () => {
-    expect(isBuiltInCategoryName("  transaction CHARGES ")).toBe(true);
+    expect(isBuiltInCategoryName("  m-pesa ")).toBe(true);
     expect(isBuiltInCategoryName("m-pesa charges")).toBe(true);
     expect(isBuiltInCategoryName("Fuliza charges")).toBe(true);
+    expect(isBuiltInCategoryName("data BUNDLES")).toBe(true);
+    expect(isBuiltInCategoryName("Home Fibre")).toBe(true);
     expect(isBuiltInCategoryName("charges")).toBe(false);
     expect(isBuiltInCategoryName("Bank charges")).toBe(false);
     expect(isBuiltInCategoryName("Rent")).toBe(false);
@@ -30,12 +37,18 @@ describe("the built-in charge categories", () => {
   });
 
   it("are created with a budget of 0, tracked rather than judged", () => {
-    expect(lib).toContain("values({ groupId, name: CHARGES_HEADING, budgetAmount: 0 })");
+    expect(lib).toContain("values({ groupId, name: MPESA_HEADING, budgetAmount: 0 })");
     expect(lib).toContain("values({ groupId, name, budgetAmount: 0, parentId: top.id })");
   });
 
   it("settle a race on the unique name index rather than failing", () => {
     expect((lib.match(/\.onConflictDoNothing\(\)/g) ?? []).length).toBe(2);
+  });
+
+  it("rename the old Transaction charges heading to M-Pesa, keeping what is under it", () => {
+    expect(CHARGES_HEADING).toBe("Transaction charges");
+    expect(lib).toContain("if (former && former.hasChildren) {");
+    expect(lib).toContain("await renameWithHistory(groupId, former, MPESA_HEADING);");
   });
 
   it("adopt one already there, moving it under the heading only from the top level", () => {

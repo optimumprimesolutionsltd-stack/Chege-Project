@@ -18,8 +18,9 @@ WEB = os.path.join(HERE, '..', '..', 'family-budget', 'src', 'lib')
 
 # phone file -> (web file, import paths to rename)
 TWINS = {
-    'mpesaImport.ts': ('mpesa-import.ts', {'./mpesaDebts': './mpesa-debts', './payeeLearning': './payee-learning'}),
-    'mpesaDebts.ts': ('mpesa-debts.ts', {'./mpesaImport': './mpesa-import'}),
+    'mpesaImport.ts': ('mpesa-import.ts', {'./mpesaDebts': './mpesa-debts', './payeeLearning': './payee-learning', './mpesaProducts': './mpesa-products'}),
+    'mpesaProducts.ts': ('mpesa-products.ts', {'./mpesaImport': './mpesa-import'}),
+    'mpesaDebts.ts': ('mpesa-debts.ts', {'./mpesaImport': './mpesa-import', './mpesaProducts': './mpesa-products'}),
     'payeeLearning.ts': ('payee-learning.ts', {}),
     'savePosting.ts': ('save-posting.ts', {'./mpesaImport': './mpesa-import'}),
     'otherBudgetOptions.ts': ('other-budget-options.ts', {}),
@@ -27,7 +28,7 @@ TWINS = {
     'groupStart.ts': ('group-start.ts', {}),
     'undoDelete.ts': ('undo-delete.ts', {}),
     'saveRetry.ts': ('save-retry.ts', {'./savePosting': './save-posting'}),
-    'entriesToSort.ts': ('entries-to-sort.ts', {'./mpesaImport': './mpesa-import'}),
+    'entriesToSort.ts': ('entries-to-sort.ts', {'./mpesaImport': './mpesa-import', './payeeLearning': './payee-learning'}),
     'otherBudgetRules.ts': ('other-budget-rules.ts', {'./mpesaImport': './mpesa-import', './payeeLearning': './payee-learning'}),
     'budgetPlan.ts': ('budget-plan-rows.ts', {}),
     'budgetReport.ts': ('budget-report.ts', {}),

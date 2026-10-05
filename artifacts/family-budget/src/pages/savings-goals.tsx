@@ -58,6 +58,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle } from "lucide-react";
 import { useAuth } from "@workspace/replit-auth-web";
 import { workspaceLabel } from "@/lib/workspace-identity";
+import { isSavingsAccount } from "@/lib/mpesa-products";
 
 function GoalProgress({ current, target }: { current: number; target: number }) {
   const pct = target > 0 ? Math.min((current / target) * 100, 100) : 0;
@@ -455,7 +456,9 @@ export default function SavingsGoals() {
     }
   };
 
-  const activeGoals = goals?.filter((g) => !g.isCompleted) ?? [];
+  // M-Shwari, KCB M-PESA, Ziidi, Mali: accounts with a balance, not goals with a target.
+  const savingsAccounts = goals?.filter(isSavingsAccount) ?? [];
+  const activeGoals = goals?.filter((g) => !g.isCompleted && !isSavingsAccount(g)) ?? [];
   const completedGoals = goals?.filter((g) => g.isCompleted) ?? [];
   const isPending = createGoal.isPending || updateGoal.isPending;
 
@@ -664,7 +667,7 @@ export default function SavingsGoals() {
 
   const handleContribute = async (e: React.FormEvent, goal: SavingsGoal) => {
     e.preventDefault();
-    if (goal.isCompleted || goal.currentAmount >= goal.targetAmount) {
+    if (!isSavingsAccount(goal) && (goal.isCompleted || goal.currentAmount >= goal.targetAmount)) {
       toast({
         variant: "destructive",
         title: "Goal is fully funded",
@@ -1163,6 +1166,25 @@ export default function SavingsGoals() {
                 </div>
               ))}
               <p className="text-xs text-amber-600/70 pl-6 pt-0.5">Use the balance-correction form on each goal to reconcile.</p>
+            </div>
+          )}
+
+          {savingsAccounts.length > 0 && (
+            <div className="space-y-3" data-testid="savings-accounts">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">M-Pesa savings</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {savingsAccounts.map((goal) => (
+                  <Card key={goal.id} className="border-none shadow-md" data-testid={`savings-account-${goal.id}`}>
+                    <CardContent className="flex items-center justify-between gap-4 p-5">
+                      <div>
+                        <p className="font-semibold text-foreground">{goal.name}</p>
+                        <p className="text-xs text-muted-foreground">Moves in and out with your M-Pesa statement</p>
+                      </div>
+                      <p className="text-lg font-bold text-emerald-600">{formatKes(goal.currentAmount)}</p>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
             </div>
           )}
 

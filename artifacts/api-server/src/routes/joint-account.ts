@@ -33,6 +33,7 @@ import { GROUP_ATTRIBUTION } from "../lib/attribution";
 import { reversalLinksReady, soleReversalCandidate } from "../lib/reversal-links";
 import { importTidyKeptReady } from "../lib/import-tidy-kept";
 import { createBankStatementPdf } from "../lib/bank-statement-pdf";
+import { alreadyThere, completeAt, isSavingsAccount, roomIn } from "../lib/savings-accounts";
 
 const router = Router();
 /**
@@ -1332,13 +1333,27 @@ async function createSavingsTransfer(
       .for("update");
     if (!goal) return { error: "Savings goal not found.", status: 404 as const };
 
+    // What a savings account (M-Shwari, KCB M-PESA...) already held before Jamvi's
+    // records began, worked out from a withdrawal bigger than what Jamvi knows of.
+    const opening = direction === "from_savings" ? alreadyThere(goal, amount) : 0;
     if (direction === "to_savings") {
-      const remaining = goal.targetAmount - goal.currentAmount;
+      const remaining = roomIn(goal);
       if (amount > remaining) {
         return { error: `Only KES ${remaining} can be moved into this goal.`, status: 400 as const };
       }
-    } else if (amount > goal.currentAmount) {
+    } else if (amount > goal.currentAmount + opening) {
       return { error: `Only KES ${goal.currentAmount} is available in this goal.`, status: 400 as const };
+    }
+    if (opening > 0) {
+      await tx.insert(savingsGoalContributionsTable).values({
+        groupId,
+        goalId: goal.id,
+        amount: opening,
+        note: `Already in ${goal.name} before Jamvi's records began`,
+        isBalanceCorrection: true,
+        createdByUserId: null,
+        accountId,
+      });
     }
 
     const type = direction === "to_savings" ? "disbursement" : "deposit";
@@ -1364,12 +1379,12 @@ async function createSavingsTransfer(
       .returning();
 
     const delta = direction === "to_savings" ? amount : -amount;
-    const nextAmount = goal.currentAmount + delta;
+    const nextAmount = goal.currentAmount + opening + delta;
     await tx
       .update(savingsGoalsTable)
       .set({
         currentAmount: nextAmount,
-        isCompleted: nextAmount >= goal.targetAmount,
+        isCompleted: completeAt(goal, nextAmount),
       })
       .where(and(eq(savingsGoalsTable.id, goal.id), eq(savingsGoalsTable.groupId, groupId)));
     await tx.insert(savingsGoalContributionsTable).values({
@@ -1691,7 +1706,7 @@ router.put("/joint-account/:id", async (req, res): Promise<void> => {
         if (nextAmount < 0) {
           return { error: `Only KES ${goal.currentAmount} is available in ${goal.name}.`, status: 409 as const };
         }
-        if (nextAmount > goal.targetAmount) {
+        if (!isSavingsAccount(goal) && nextAmount > goal.targetAmount) {
           return { error: `Only KES ${goal.targetAmount - newGoalAmountAfterReversal} can be moved into ${goal.name}.`, status: 400 as const };
         }
       }
@@ -1700,7 +1715,7 @@ router.put("/joint-account/:id", async (req, res): Promise<void> => {
         const nextAmount = nextAmounts.get(goal.id)!;
         await tx
           .update(savingsGoalsTable)
-          .set({ currentAmount: nextAmount, isCompleted: nextAmount >= goal.targetAmount })
+          .set({ currentAmount: nextAmount, isCompleted: completeAt(goal, nextAmount) })
           .where(and(eq(savingsGoalsTable.id, goal.id), eq(savingsGoalsTable.groupId, groupId)));
       }
 
@@ -2236,7 +2251,7 @@ router.delete("/joint-account/:id", async (req, res): Promise<void> => {
         .update(savingsGoalsTable)
         .set({
           currentAmount: nextAmount,
-          isCompleted: nextAmount >= goal.targetAmount,
+          isCompleted: completeAt(goal, nextAmount),
         })
         .where(and(eq(savingsGoalsTable.id, goal.id), eq(savingsGoalsTable.groupId, groupId)));
       await tx

@@ -20,12 +20,14 @@ import {
   requireTransactionEligibility,
 } from "../lib/activeGroup";
 import { GROUP_ATTRIBUTION } from "../lib/attribution";
+import { completeAt, isSavingsAccount, roomIn } from "../lib/savings-accounts";
 
 const router = Router();
 
 const CreateGoalBody = z.object({
   name: z.string().min(1),
-  targetAmount: z.number().positive(),
+  // 0 makes a savings account (M-Shwari, KCB M-PESA...), not a goal: lib/savings-accounts.
+  targetAmount: z.number().min(0),
   deadline: z.string().optional(),
 });
 
@@ -235,6 +237,8 @@ router.post("/savings-goals/cascade-contribute", async (req, res): Promise<void>
 
     for (const goal of goals) {
       if (remaining <= 0) break;
+      // A savings account has no target to fill; money reaches it by name, not by spreading.
+      if (isSavingsAccount(goal)) continue;
       const needed = goal.targetAmount - goal.currentAmount;
       if (needed <= 0) continue; // already full
 
@@ -348,14 +352,13 @@ router.post("/savings-goals/:id/contribute", async (req, res): Promise<void> => 
 
     // A completed or fully funded goal cannot accept another contribution.
     // Without this guard a stale client could create a zero-value history row.
-    if (goal.isCompleted || goal.currentAmount >= goal.targetAmount) {
+    if (!isSavingsAccount(goal) && (goal.isCompleted || goal.currentAmount >= goal.targetAmount)) {
       return { kind: "fully-funded" as const };
     }
 
-    // Cap the applied amount so the balance never exceeds the target.
-    const needed = goal.targetAmount - goal.currentAmount;
-    const actualAmount = Math.min(amount, needed);
-    const willComplete = goal.currentAmount + actualAmount >= goal.targetAmount;
+    // Cap the applied amount so the balance never exceeds the target (an account has none).
+    const actualAmount = Math.min(amount, roomIn(goal));
+    const willComplete = completeAt(goal, goal.currentAmount + actualAmount);
 
     const [updated] = await tx
       .update(savingsGoalsTable)
@@ -501,7 +504,7 @@ router.delete("/savings-goals/:id/contributions/:contributionId", async (req, re
       .update(savingsGoalsTable)
       .set({
         currentAmount: nextAmount,
-        isCompleted: nextAmount >= goal.targetAmount,
+        isCompleted: completeAt(goal, nextAmount),
       })
       .where(and(eq(savingsGoalsTable.id, goal.id), eq(savingsGoalsTable.groupId, groupId)));
 

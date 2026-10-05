@@ -24,6 +24,7 @@ import {
   createDisbursement as createDisbursementInOtherBudget,
   customFetch,
   getGetBudgetCategoriesQueryKey,
+  getGetSavingsGoalsQueryKey,
   useCreateBudgetCategory,
   useCreateDeposit,
   useGetSavingsGoals,
@@ -62,7 +63,7 @@ import {
   type DebtKind,
   type PartyLite,
 } from '@/lib/mpesaDebts';
-import { findFulizaParty, FULIZA_PARTY_NAME, needsFulizaParty, withFulizaDebt } from '@/lib/mpesaDebts';
+import { findLenderParty, lendersNeeded, withLenderDebts } from '@/lib/mpesaDebts';
 import {
   applyNicknames,
   canNickname,
@@ -153,6 +154,7 @@ import {
   type Choice,
   type PreviewLine,
 } from '@/lib/mpesaImport';
+import { findSavingsGoal, ledgersToMake, loanOf, productNote, productOf, savingsNeeded, savingsOf, withSavingsAccounts, type LenderId, type SavingsAccountId } from '@/lib/mpesaProducts';
 
 // Shared with the day of banking and the Bank form: a fee is the same expense every time.
 const CHARGE_CATEGORY_KEY = 'jamvi:last-charge-category';
@@ -648,7 +650,8 @@ export default function MpesaImportScreen() {
       if (saved.accountId) setSelectedAccountId(saved.accountId);
       setStatementReading(saved.reading);
       setLines(saved.reading.lines);
-      setChoices(saved.choices);
+      // What the person chose comes back as it was; what Jamvi files itself is filed again (lib/mpesaProducts).
+      setChoices(refreshSuggestions(saved.reading.lines, saved.choices, history, categories.map((row) => row.name), effectiveChargeCategory, rules));
       setStatementNote('Picked up where you left off with your statement. Anything saved since is marked as recorded.');
       // Some may have been saved from another screen since: ask again which are recorded.
       markRecorded(saved.reading.lines)
@@ -979,7 +982,7 @@ export default function MpesaImportScreen() {
       const restoredChoices = pendingChoicesRef.current;
       if (restoredChoices) {
         pendingChoicesRef.current = null;
-        setChoices((current) => ({ ...current, ...restoredChoices }));
+        setChoices((current) => refreshSuggestions(shown, { ...current, ...restoredChoices }, history, categories.map((row) => row.name), effectiveChargeCategory, rules));
       }
     } catch (error: unknown) {
       Alert.alert('Could not read them', plainReadFailure(error));
@@ -1894,30 +1897,71 @@ export default function MpesaImportScreen() {
     const debtLinks: DebtEntryLink[] = [];
     // M-Pesa's own name for each entry saved under a nickname, for Search.
     const mpesaNames: MpesaName[] = [];
-    // Fuliza still owed, or repaid, is a debt to Fuliza in Who owes who: found
-    // there, or added once, and both lines linked to it.
+    // A loan still owed, or repaid - Fuliza, M-Shwari, KCB M-PESA, Hustler Fund - is a
+    // debt to that lender in Who owes who: found there, or added once, and its lines linked to it.
     let saveChoices = choices;
     let saveParties = parties;
-    if (!resumeJob && needsFulizaParty(lines, choices)) {
-      try {
-        const found = findFulizaParty(parties);
-        const fuliza: PartyLite = found ?? await customFetch<PartyLite>('/api/contributors', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: FULIZA_PARTY_NAME, kind: 'institution' }),
-          });
-        if (!found) saveParties = [...parties, fuliza];
-        saveChoices = withFulizaDebt(lines, choices, fuliza.id);
-        setChoices(saveChoices);
-      } catch {
-        // Saved unlinked: the borrowing still is not income; a repayment says why it failed.
+    if (!resumeJob) {
+      const partyIds: Partial<Record<LenderId, number>> = {};
+      for (const lender of lendersNeeded(lines, choices)) {
+        try {
+          const found = findLenderParty(lender, saveParties);
+          const party: PartyLite = found ?? await customFetch<PartyLite>('/api/contributors', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name: lender.name, kind: 'institution' }),
+            });
+          if (!found) saveParties = [...saveParties, party];
+          partyIds[lender.id] = party.id;
+        } catch {
+          // Saved unlinked: the borrowing still is not income; a repayment says why it failed.
+        }
       }
+      if (Object.keys(partyIds).length > 0) {
+        saveChoices = withLenderDebts(lines, choices, partyIds);
+        setChoices(saveChoices);
+      }
+    }
+    // Money into or out of M-Shwari, KCB M-PESA, Ziidi or Mali moves between M-Pesa and that
+    // account in Savings: found there, or made once with no target, and its lines linked to it (lib/mpesaProducts).
+    if (!resumeJob) {
+      const goalIds: Partial<Record<SavingsAccountId, number>> = {};
+      let madeOne = false;
+      for (const account of savingsNeeded(lines, saveChoices)) {
+        try {
+          const found = findSavingsGoal(account, savingsGoals);
+          const goal = found ?? await customFetch<{ id: number; name: string }>('/api/savings-goals', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name: account.name, targetAmount: 0 }),
+            });
+          if (!found) madeOne = true;
+          goalIds[account.id] = goal.id;
+        } catch {
+          // Left unlinked: it fails with a reason of its own, to be sorted by hand.
+        }
+      }
+      if (Object.keys(goalIds).length > 0) {
+        saveChoices = withSavingsAccounts(lines, saveChoices, goalIds);
+        setChoices(saveChoices);
+      }
+      if (madeOne) void queryClient.invalidateQueries({ queryKey: getGetSavingsGoalsQueryKey() });
     }
     // "Not sure yet" is a real category, made the first time it is needed, so
     // the entry still counts as spending (lib/entriesToSort).
     if (!resumeJob && needsNotSureCategory(lines, choices, categories.map((row) => row.name))) {
       try {
         await createNotSureCategory({ data: { name: NOT_SURE_CATEGORY, budgetAmount: 0, priority: 3, isRecurring: true, activeMonth: null, activeYear: null } });
+        void queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
+      } catch {
+        // Already there, or it fails each entry with a reason of its own.
+      }
+    }
+    // Airtime, Data bundles and Home Fibre are built-in ledgers under M-Pesa, made by the
+    // server whenever categories are listed; one still missing is made here (lib/mpesaProducts).
+    for (const ledger of resumeJob ? [] : ledgersToMake(lines, saveChoices, categories.map((row) => row.name))) {
+      try {
+        await createNotSureCategory({ data: { name: ledger, budgetAmount: 0, priority: 4, isRecurring: true, activeMonth: null, activeYear: null } });
         void queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
       } catch {
         // Already there, or it fails each entry with a reason of its own.
@@ -2976,7 +3020,7 @@ export default function MpesaImportScreen() {
                       style={[styles.hint, { marginTop: 0, fontFamily: 'Inter_600SemiBold', color: status === 'needs' ? colors.destructive : status === 'changed' ? colors.primary : colors.mutedForeground }]}
                       testID={`mpesa-line-status-${item.index}`}
                     >
-                      {status === 'needs' ? 'Needs you' : status === 'changed' ? (choice?.confirmed ? 'Confirmed' : 'You changed this - confirmed, it saves with the next Save') : 'Suggested by Jamvi'}
+                      {status === 'needs' ? 'Needs you' : status === 'changed' ? (choice?.confirmed ? ((choice.auto && out && productOf(item)) || loanOf(item) || savingsOf(item) ? 'Filed by Jamvi' : 'Confirmed') : 'You changed this - confirmed, it saves with the next Save') : 'Suggested by Jamvi'}
                     </Text>
                   ) : null}
                   {statementReading && choice?.include && (status === 'suggested' || choice?.confirmed) ? (
@@ -3071,7 +3115,7 @@ export default function MpesaImportScreen() {
                   ) : null}
                   {out && choice?.include && !isMove(choice) && choice.auto && choice.category ? (
                     <Text style={[styles.hint, { color: colors.mutedForeground }]} testID={`mpesa-line-suggested-${item.index}`}>
-                      Suggested by Jamvi. Tap to choose a different one.
+                      {productOf(item) ? `${productNote(productOf(item)!, choice.category)} Tap to choose a different one.` : 'Suggested by Jamvi. Tap to choose a different one.'}
                     </Text>
                   ) : null}
                   {item.direction === 'in' && choice?.include && !choice.debt && !isMove(choice) && !choice.contributorId && destinationOf(choice) === 'category' && !item.type?.startsWith('fuliza_') && item.type !== 'reversal' ? (

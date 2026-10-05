@@ -57,6 +57,8 @@ type Kind = 'person_payment' | 'merchant_payment' | 'paybill_payment' | 'airtime
 
 const KINDS: Array<[RegExp, Kind, 'out' | 'in']> = [
   [/^Customer Bundle Purchase/i, 'airtime_purchase', 'out'],
+  // Airtime bought for this line, as a statement words it. "Buy Bundles Online" stays as it is worded: lib/mpesaProducts files it under Data bundles.
+  [/^(?:Airtime Purchase|Recharge for Customer)/i, 'airtime_purchase', 'out'],
   [/^Customer (?:Transfer|Send Money)/i, 'person_payment', 'out'],
   // Pochi la Biashara: paying a small business on its phone number.
   [/^Customer Payment to Small Business/i, 'person_payment', 'out'],
