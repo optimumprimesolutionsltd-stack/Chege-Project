@@ -1,5 +1,6 @@
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Download as DownloadIcon, ShieldCheck, Smartphone, MessageSquare, Globe } from "lucide-react";
+import { Download as DownloadIcon, ShieldCheck, Smartphone, MessageSquare, Globe, ExternalLink, Copy, Check } from "lucide-react";
 import { useSeo } from "@/hooks/use-seo";
 import { SITE_SEO } from "@/lib/site-seo";
 import { JAMVI_APK_PATH, JAMVI_APP_PATH, JAMVI_SUPPORT_EMAIL } from "@/lib/site-links";
@@ -13,6 +14,19 @@ const STEPS = [
 ];
 
 /**
+ * Browsers inside other apps (WhatsApp, Facebook, Instagram...) cannot save
+ * files, so the Download button does nothing there. Android System WebView
+ * marks itself with "; wv)"; the social apps add their own names.
+ */
+const IN_APP_BROWSER = /; wv\)|FBAN|FBAV|FB_IAB|Instagram|WhatsApp|Snapchat|TikTok|musical_ly|Line\//i;
+
+/** Opens this page in Chrome from an Android in-app browser. */
+function openInChromeHref(): string {
+  const { host, pathname, href } = window.location;
+  return `intent://${host}${pathname}#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(href)};end`;
+}
+
+/**
  * jamvi.co.ke/download - the one link to give people for the Android app,
  * until Jamvi is in the Play Store. The button goes through /download/jamvi.apk,
  * which the server points at the newest build, so this page never needs
@@ -20,6 +34,41 @@ const STEPS = [
  */
 export default function Download() {
   useSeo(SITE_SEO["/download"]);
+
+  // Decided after hydration: the page is prerendered, and the server cannot know the browser.
+  const [inAppBrowser, setInAppBrowser] = useState(false);
+  const [isAndroid, setIsAndroid] = useState(false);
+  const [tapped, setTapped] = useState(false);
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    setInAppBrowser(IN_APP_BROWSER.test(navigator.userAgent));
+    setIsAndroid(/Android/i.test(navigator.userAgent));
+  }, []);
+
+  const copyLink = async () => {
+    const pageUrl = `${window.location.origin}/download`;
+    try {
+      await navigator.clipboard.writeText(pageUrl);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2500);
+    } catch {
+      window.prompt("Copy this link and open it in Chrome:", pageUrl);
+    }
+  };
+
+  const helpButtons = (size: string) => (
+    <div className="mt-3 flex flex-wrap gap-3">
+      {isAndroid && (
+        <a href={openInChromeHref()} className={`btn-line ${size}`} data-testid="open-in-chrome">
+          <ExternalLink className="h-4 w-4" aria-hidden="true" /> Open in Chrome
+        </a>
+      )}
+      <button type="button" onClick={copyLink} className={`btn-line ${size}`}>
+        {copied ? <Check className="h-4 w-4" aria-hidden="true" /> : <Copy className="h-4 w-4" aria-hidden="true" />}
+        {copied ? "Link copied" : "Copy link"}
+      </button>
+    </div>
+  );
 
   return (
     <div className="flex flex-col min-h-screen bg-muted/20">
@@ -40,8 +89,18 @@ export default function Download() {
           >
             The Android app, straight from us. Once it is installed, updates arrive inside the app.
           </motion.p>
+          {inAppBrowser && (
+            <div className="mx-auto mb-6 max-w-xl rounded-[4px] border-2 border-accent bg-card p-4 text-left" role="alert" data-testid="in-app-browser">
+              <p className="font-bold text-foreground">This browser cannot download apps.</p>
+              <p className="mt-1 text-sm text-foreground/75">
+                You opened this link inside another app. Open it in Chrome, then tap Download for Android there.
+              </p>
+              {helpButtons("h-11 px-5 text-base")}
+            </div>
+          )}
           <a
             href={JAMVI_APK_PATH}
+            onClick={() => setTapped(true)}
             className="btn-mat h-14 px-7 text-lg"
             data-testid="download-android"
           >
@@ -49,6 +108,17 @@ export default function Download() {
             Download for Android
           </a>
           <p className="mt-3 text-sm text-foreground/60">About 100 MB, so Wi-Fi is best. Android 7 or newer.</p>
+          {tapped && (
+            <div className="mx-auto mt-6 max-w-xl rounded-[4px] bg-card p-4 text-left shadow-sm" role="status" data-testid="download-help">
+              <p className="font-bold text-foreground">Download not starting?</p>
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-foreground/75">
+                <li>Look at the bottom of the screen: Chrome may be asking you to tap <strong>Download anyway</strong>.</li>
+                <li>Open Chrome&rsquo;s menu (&#8942;), then <strong>Downloads</strong>. A held-back APK waits there for you to keep it.</li>
+                <li>Opened from WhatsApp, Facebook or Instagram? Open this page in Chrome instead.</li>
+              </ul>
+              {helpButtons("h-10 px-4 text-sm")}
+            </div>
+          )}
         </div>
       </section>
 
