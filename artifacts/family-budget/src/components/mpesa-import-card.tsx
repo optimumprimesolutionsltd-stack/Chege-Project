@@ -103,8 +103,8 @@ export function MpesaImportCard() {
           ) : null}
           <dl className="grid grid-cols-3 gap-3 border-t border-dashed border-[hsl(var(--sisal))]/35 pt-4">
             {[
-              { label: "Came in", value: summary ? kes(summary.moneyIn) : "…" },
-              { label: "Went out", value: summary ? kes(summary.moneyOut) : "…" },
+              { label: "Into M-Pesa", value: summary ? kes(summary.moneyIn) : "…" },
+              { label: "Left M-Pesa", value: summary ? kes(summary.moneyOut) : "…" },
               { label: "Entries", value: summary ? String(summary.entries) : "…" },
             ].map((figure) => (
               <div key={figure.label} className="min-w-0">
@@ -113,6 +113,8 @@ export function MpesaImportCard() {
               </div>
             ))}
           </dl>
+          {/* What they count, so they are not read as spending (5 Oct 2026). */}
+          <p className="text-xs text-[hsl(var(--paper))]/70">All money in and out of M-Pesa, savings, transfers and repayments included. What you spent is under Spent on your budget.</p>
           </>
         )}
 

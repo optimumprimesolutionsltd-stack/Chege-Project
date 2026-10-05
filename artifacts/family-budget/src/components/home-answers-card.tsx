@@ -13,7 +13,7 @@ const TONE_CLASS: Record<Tone, string> = {
 
 /**
  * Three questions, three answers, at the top of the overview:
- * How much do I have? What did I spend this month? Am I on track?
+ * How much do I have? Spent on your budget this month. Am I on track?
  * Everything below is detail behind these.
  */
 export function HomeAnswersCard({
@@ -39,7 +39,7 @@ export function HomeAnswersCard({
     {
       key: "spent",
       href: "/expenses",
-      question: "What did I spend this month?",
+      question: "Spent on your budget this month",
       answer: formatKes(answers.spent),
       icon: ShoppingBag,
       big: true,
