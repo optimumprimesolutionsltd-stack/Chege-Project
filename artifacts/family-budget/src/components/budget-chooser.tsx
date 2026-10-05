@@ -95,9 +95,9 @@ export function dedupeCategoryNames(names: readonly string[]): string[] {
 
 export const ONBOARDING_CATEGORY_TIERS: { priority: number; label: string; description: string; categories: readonly string[] }[] = [
   { priority: 1, label: "Essentials", description: "The costs that keep life moving.", categories: ["Food", "Housing", "Utilities", "Shared bills", "Transport"] },
-  { priority: 2, label: "Important", description: "Regular needs worth planning for.", categories: ["Health", "Education", "Books & supplies", "Family support", "Loans", "Personal care", "Insurance"] },
+  { priority: 2, label: "Important", description: "Regular needs worth planning for.", categories: ["Health", "Education", "Books & supplies", "Family support", "Loans", "Emergencies", "Personal care", "Insurance"] },
   { priority: 3, label: "Household & connection", description: "The things that support your day-to-day life.", categories: ["Airtime & data", "Household", "Subscriptions", "Work & business", "Business supplies", "Stock & inventory"] },
-  { priority: 4, label: "Flexible", description: "Optional spending and future plans.", categories: ["Entertainment", "Dates & activities", "Events", "Events & programs", "Equipment", "Venue", "Clothing", "Gifts", "Member welfare", "Welfare & benevolence", "Building & upkeep", "Outreach & missions", "Projects", "Other"] },
+  { priority: 4, label: "Flexible", description: "Optional spending and future plans.", categories: ["Entertainment", "Dates & activities", "Events", "Events & programs", "Equipment", "Venue", "Clothing", "Gifts", "Member welfare", "Welfare & benevolence", "Building & upkeep", "Outreach & missions", "Projects", "Tithe & giving", "Other"] },
 ];
 
 const ALL_ONBOARDING_CATEGORIES = dedupeCategoryNames(ONBOARDING_CATEGORY_TIERS.flatMap((tier) => tier.categories));
@@ -122,12 +122,12 @@ export function dedupeIncomeStreamNames(names: string[]): string[] {
   });
 }
 export const PURPOSE_CATEGORY_MAP: Record<string, readonly string[]> = {
-  student: ["Food", "Housing", "Transport", "Education", "Books & supplies", "Airtime & data", "Subscriptions", "Personal care", "Entertainment", "Other"],
-  working: ["Food", "Housing", "Utilities", "Transport", "Health", "Family support", "Loans", "Insurance", "Airtime & data", "Subscriptions", "Personal care", "Entertainment", "Other"],
-  business: ["Food", "Transport", "Health", "Work & business", "Business supplies", "Stock & inventory", "Loans", "Airtime & data", "Other"],
-  couple: ["Food", "Housing", "Shared bills", "Utilities", "Transport", "Health", "Dates & activities", "Other"],
-  friends: ["Food", "Housing", "Shared bills", "Utilities", "Transport", "Entertainment", "Dates & activities", "Airtime & data", "Other"],
-  family: ["Food", "Housing", "Utilities", "Transport", "Health", "Education", "Family support", "Insurance", "Household"],
+  student: ["Food", "Housing", "Transport", "Education", "Books & supplies", "Airtime & data", "Subscriptions", "Personal care", "Entertainment", "Emergencies", "Other"],
+  working: ["Food", "Housing", "Utilities", "Transport", "Health", "Education", "Family support", "Loans", "Emergencies", "Insurance", "Airtime & data", "Subscriptions", "Personal care", "Entertainment", "Tithe & giving", "Other"],
+  business: ["Food", "Housing", "Utilities", "Transport", "Health", "Education", "Family support", "Work & business", "Business supplies", "Stock & inventory", "Loans", "Emergencies", "Airtime & data", "Tithe & giving", "Other"],
+  couple: ["Food", "Housing", "Shared bills", "Utilities", "Transport", "Health", "Education", "Family support", "Loans", "Emergencies", "Airtime & data", "Dates & activities", "Other"],
+  friends: ["Food", "Housing", "Shared bills", "Utilities", "Transport", "Entertainment", "Dates & activities", "Airtime & data", "Emergencies", "Other"],
+  family: ["Food", "Housing", "Utilities", "Transport", "Health", "Education", "Family support", "Loans", "Emergencies", "Insurance", "Household", "Airtime & data", "Other"],
   chama: ["Member welfare", "Loans", "Events", "Transport", "Projects", "Other"],
   church: ["Building & upkeep", "Utilities", "Outreach & missions", "Welfare & benevolence", "Events & programs", "Equipment", "Transport", "Other"],
   club: ["Member welfare", "Events", "Equipment", "Venue", "Transport", "Projects", "Entertainment", "Other"],
@@ -642,7 +642,10 @@ export function BudgetChooser({
 
   if (showCategorySetup) {
     const recommendedCategories = dedupeCategoryNames([...(onboardingPurpose ? (PURPOSE_CATEGORY_MAP[onboardingPurpose] ?? ALL_ONBOARDING_CATEGORIES) : ALL_ONBOARDING_CATEGORIES), ...customCategories]);
-    const visibleTiers = ONBOARDING_CATEGORY_TIERS.map((tier) => ({ ...tier, categories: tier.categories.filter((category) => recommendedCategories.includes(category)) })).filter((tier) => tier.categories.length > 0);
+    // Every category is offered, the ones suited to this budget first: "people
+    // sometimes don't know what they want, it's good to give them everything" (5 Oct 2026).
+    const suited = (category: string) => (recommendedCategories.includes(category) ? 0 : 1);
+    const visibleTiers = ONBOARDING_CATEGORY_TIERS.map((tier) => ({ ...tier, categories: [...tier.categories].sort((a, b) => suited(a) - suited(b)) }));
     if (customCategories.length > 0) visibleTiers.push({ priority: 5, label: "Your categories", description: "Custom categories you added for your own situation.", categories: customCategories });
     const allSelected = recommendedCategories.every((category) => selectedCategories.includes(category));
     const toggleCategory = (category: string) => {

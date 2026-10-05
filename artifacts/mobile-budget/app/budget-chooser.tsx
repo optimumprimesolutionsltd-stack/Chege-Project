@@ -38,6 +38,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/lib/auth';
+import { SwitchAccountLink } from '@/components/SwitchAccountLink';
 import {
   activateMobileWorkspace,
   completeMobileBudgetChooser,
@@ -53,6 +54,8 @@ import {
   COMMON_INCOME_STREAMS,
   budgetDurationLabels,
   incomeStreamsForMode,
+  ALL_ONBOARDING_CATEGORIES,
+  CATEGORY_HINTS,
   ONBOARDING_CATEGORY_TIERS,
   PURPOSE_OPTIONS,
   canonicalCategoryName,
@@ -425,6 +428,7 @@ export default function BudgetChooserScreen() {
           <Pressable onPress={() => setInvitesDismissed(true)} hitSlop={8} style={{ paddingVertical: 12, alignSelf: 'center' }}>
             <Text style={[styles.skipLink, { color: colors.mutedForeground }]}>Not now — set up my own budget</Text>
           </Pressable>
+          <SwitchAccountLink color={colors.mutedForeground} />
         </ScrollView>
       </View>
     );
@@ -558,6 +562,7 @@ export default function BudgetChooserScreen() {
             </>
           );
         })()}
+        <SwitchAccountLink color={colors.mutedForeground} />
       </ScrollView>
       <Modal visible={createSharedOpen} transparent animationType="fade" onRequestClose={() => setCreateSharedOpen(false)}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.scrim}>
@@ -739,6 +744,7 @@ function MobileOnboardingFlow({
   onComplete: (draft: MobileOnboardingDraft) => Promise<void>;
   onSkip: () => Promise<void>;
 }) {
+  const prices = usePrices();
   const [skipping, setSkipping] = useState(false);
   const [step, setStep] = useState(0);
   const [draft, setDraft] = useState<MobileOnboardingDraft>({
@@ -782,10 +788,20 @@ function MobileOnboardingFlow({
     () => dedupeCategoryNames([...recommendedCategoriesForPurpose(draft.persona, draft.coupleStage), ...draft.customCategories]),
     [draft.persona, draft.coupleStage, draft.customCategories],
   );
+  // "There should be more categories, e.g. education, emergency" and "people
+  // sometimes don't know what they want, it's good to give them everything"
+  // (5 Oct 2026): every category is shown, the ones suited to this budget first.
   const visibleTiers = useMemo(() => {
+    const suited = (category: string) => (recommendedCategories.includes(category) ? 0 : 1);
     const tiers: Array<{ priority: number; label: string; description: string; categories: string[] }> = ONBOARDING_CATEGORY_TIERS
-      .map((tier) => ({ priority: tier.priority, label: tier.label, description: tier.description, categories: tier.categories.filter((category) => recommendedCategories.includes(category)) }))
-      .filter((tier) => tier.categories.length > 0);
+      .map((tier) => ({ priority: tier.priority, label: tier.label, description: tier.description, categories: [...tier.categories].sort((a, b) => suited(a) - suited(b)) }));
+    // A wedding's or a student group's own categories are in no tier, and were
+    // never shown at all.
+    const inTiers = new Set<string>(ONBOARDING_CATEGORY_TIERS.flatMap((tier) => tier.categories));
+    const ownKind = recommendedCategories.filter((category) => !inTiers.has(category) && !draft.customCategories.includes(category));
+    if (ownKind.length > 0) {
+      tiers.unshift({ priority: 0, label: 'For this budget', description: 'Made for what you are setting up.', categories: ownKind });
+    }
     if (draft.customCategories.length > 0) {
       tiers.push({ priority: 5, label: 'Your categories', description: 'Custom categories for your own situation.', categories: draft.customCategories });
     }
@@ -1053,9 +1069,12 @@ function MobileOnboardingFlow({
 
         {step === 3 ? <>
           <Text style={[styles.onboardingQuestion, { color: colors.foreground }]}>{headingName}{isShared ? 'what does the group spend money on?' : 'what should we help you track?'}</Text>
-          <Text style={[styles.onboardingHint, { color: colors.mutedForeground }]}>{isShared ? "Nothing is preselected. Choose what the group actually spends on — you can add more later." : 'Nothing is preselected. Choose only what belongs in this budget, or select all recommended categories.'}</Text>
+          <Text style={[styles.onboardingHint, { color: colors.mutedForeground }]}>{isShared ? "Every category is here, with a star on the ones that usually suit a group like this. Tap what it spends on — you can change them later." : 'Every category is here, with a star on the ones that suit you. Tap the ones you use, or select them all - you can remove any later.'}</Text>
           <Pressable testID="onboarding-select-all" accessibilityRole="button" accessibilityLabel="Select all recommended categories" onPress={() => setDraftValue('selectedCategories', draft.selectedCategories.length === recommendedCategories.length ? [] : recommendedCategories)} style={[styles.selectAll, { backgroundColor: colors.accent, borderColor: colors.primary }]}><View style={styles.choiceCopy}><Text style={[styles.choiceTitle, { color: colors.foreground }]}>{draft.selectedCategories.length === recommendedCategories.length ? 'Clear all categories' : 'Select all recommended categories'}</Text><Text style={[styles.choiceDescription, { color: colors.mutedForeground }]}>Start quickly, then refine your list later.</Text></View><Feather name="check-square" size={20} color={colors.primary} /></Pressable>
-          {visibleTiers.map((tier) => <View key={tier.priority} style={styles.categoryTier}><Text style={[styles.tierTitle, { color: colors.foreground }]}>Tier {tier.priority} · {tier.label}</Text><Text style={[styles.tierDescription, { color: colors.mutedForeground }]}>{tier.description}</Text><View style={styles.categoryGrid}>{tier.categories.map((category) => <Pressable key={category} testID={`onboarding-category-${category}`} accessibilityRole="button" accessibilityState={{ selected: draft.selectedCategories.includes(category) }} onPress={() => toggleCategory(category)} style={[styles.categoryChip, { backgroundColor: draft.selectedCategories.includes(category) ? colors.accent : colors.card, borderColor: draft.selectedCategories.includes(category) ? colors.primary : colors.border }]}><Text style={[styles.categoryChipText, { color: colors.foreground }]}>{category}</Text>{draft.selectedCategories.includes(category) ? <Feather name="check" size={15} color={colors.primary} /> : null}</Pressable>)}</View></View>)}
+          <Pressable testID="onboarding-select-every" accessibilityRole="button" onPress={() => setDraftValue('selectedCategories', dedupeCategoryNames(visibleTiers.flatMap((tier) => tier.categories)))} hitSlop={8} style={{ alignSelf: 'center', paddingVertical: 6 }}>
+            <Text style={[styles.choiceTitle, { color: colors.primary }]}>Select every category</Text>
+          </Pressable>
+          {visibleTiers.map((tier) => <View key={tier.priority} style={styles.categoryTier}><Text style={[styles.tierTitle, { color: colors.foreground }]}>{tier.priority >= 1 && tier.priority <= 4 ? `Tier ${tier.priority} · ` : ''}{tier.label}</Text><Text style={[styles.tierDescription, { color: colors.mutedForeground }]}>{tier.description}</Text><View style={styles.categoryGrid}>{tier.categories.map((category) => <Pressable key={category} testID={`onboarding-category-${category}`} accessibilityRole="button" accessibilityHint={CATEGORY_HINTS[category]} accessibilityState={{ selected: draft.selectedCategories.includes(category) }} onPress={() => toggleCategory(category)} style={[styles.categoryChip, { backgroundColor: draft.selectedCategories.includes(category) ? colors.accent : colors.card, borderColor: draft.selectedCategories.includes(category) ? colors.primary : colors.border }]}><View style={{ flex: 1, minWidth: 0 }}><Text style={[styles.categoryChipText, { flex: 0, color: colors.foreground }]}>{category}</Text>{CATEGORY_HINTS[category] ? <Text numberOfLines={3} style={{ color: colors.mutedForeground, fontSize: 11, lineHeight: 14, fontFamily: 'Inter_400Regular', marginTop: 2 }}>{CATEGORY_HINTS[category]}</Text> : null}</View>{draft.selectedCategories.includes(category) ? <Feather name="check" size={15} color={colors.primary} /> : recommendedCategories.includes(category) ? <Feather name="star" size={13} color={colors.brandTeal} accessibilityLabel="Suggested" /> : null}</Pressable>)}</View></View>)}
           <View style={[styles.customBox, { backgroundColor: colors.card, borderColor: colors.border }]}><Text style={[styles.choiceTitle, { color: colors.foreground }]}>Add your own category</Text><View style={styles.inlineInput}><TextInput testID="onboarding-custom-category" value={customCategory} onChangeText={setCustomCategory} onSubmitEditing={addCustomCategory} placeholder="e.g. HELB or trip fund" placeholderTextColor={colors.mutedForeground} style={[styles.onboardingInput, styles.flexInput, { borderColor: colors.border, color: colors.foreground }]} /><Pressable onPress={addCustomCategory} style={[styles.smallButton, { backgroundColor: colors.primary }]}><Text style={[styles.smallButtonText, { color: colors.primaryForeground }]}>Add</Text></Pressable></View></View>
         </> : null}
 
@@ -1100,8 +1119,8 @@ function MobileOnboardingFlow({
 
         {step === 5 ? <>
           <Text style={[styles.onboardingQuestion, { color: colors.foreground }]}>{headingName}{isShared ? 'how much does the group plan for each?' : 'how much will you plan for each category?'}</Text>
-          <Text style={[styles.onboardingHint, { color: colors.mutedForeground }]}>These are plans, not restrictions. You can adjust them anytime.</Text>
-          {draft.selectedCategories.map((category) => <View key={category} style={[styles.amountRow, { backgroundColor: colors.card, borderColor: colors.border }]}><Text style={[styles.amountLabel, { color: colors.foreground }]}>{category}</Text><View style={styles.amountInputWrap}><Text style={[styles.currency, { color: colors.mutedForeground }]}>KES</Text><TextInput testID={`onboarding-amount-${category}`} keyboardType="decimal-pad" value={draft.categoryBudgets[category] ?? ''} onChangeText={(value) => setDraftValue('categoryBudgets', { ...draft.categoryBudgets, [category]: value.replace(/[^0-9.]/g, '') })} placeholder="0" placeholderTextColor={colors.mutedForeground} style={[styles.amountInput, { borderColor: colors.border, color: colors.foreground }]} /></View></View>)}
+          <Text style={[styles.onboardingHint, { color: colors.mutedForeground }]}>Roughly how much a month, if you know. Leave any blank - you can set amounts later.</Text>
+          {draft.selectedCategories.map((category) => <View key={category} style={[styles.amountRow, { backgroundColor: colors.card, borderColor: colors.border }]}><View style={{ flex: 1, minWidth: 0 }}><Text style={[styles.amountLabel, { flex: 0, color: colors.foreground }]}>{category}</Text>{CATEGORY_HINTS[category] ? <Text style={{ color: colors.mutedForeground, fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 2 }}>{CATEGORY_HINTS[category]}</Text> : null}</View><View style={styles.amountInputWrap}><Text style={[styles.currency, { color: colors.mutedForeground }]}>KES</Text><TextInput testID={`onboarding-amount-${category}`} keyboardType="decimal-pad" value={draft.categoryBudgets[category] ?? ''} onChangeText={(value) => setDraftValue('categoryBudgets', { ...draft.categoryBudgets, [category]: value.replace(/[^0-9.]/g, '') })} placeholder="Optional" placeholderTextColor={colors.mutedForeground} style={[styles.amountInput, { borderColor: colors.border, color: colors.foreground }]} /></View></View>)}
           <View style={[styles.planTotal, { backgroundColor: colors.accent }]}><Text style={[styles.choiceTitle, { color: colors.foreground }]}>Planned total</Text><Text style={[styles.planTotalValue, { color: colors.foreground }]}>KES {draft.selectedCategories.reduce((sum, category) => sum + (Number(draft.categoryBudgets[category]) || 0), 0).toLocaleString('en-KE')}</Text></View>
         </> : null}
 
@@ -1110,6 +1129,12 @@ function MobileOnboardingFlow({
           {step > 0 ? <Pressable testID="onboarding-back" onPress={goBack} style={[styles.backButton, { borderColor: colors.border }]}><Feather name="arrow-left" size={17} color={colors.foreground} /><Text style={[styles.backButtonText, { color: colors.foreground }]}>Back</Text></Pressable> : <View />}
           <Pressable testID="onboarding-continue" disabled={saving} onPress={() => void goNext()} style={[styles.primaryButton, { backgroundColor: colors.primary }, saving && styles.disabled]}>{saving ? <ActivityIndicator color={colors.primaryForeground} /> : <><Text style={[styles.primaryText, { color: colors.primaryForeground }]}>{step === 5 ? 'Finish setup' : 'Continue'}</Text><Feather name="arrow-right" size={18} color={colors.primaryForeground} /></>}</Pressable>
         </View>
+        {/* The trial note above scrolls out of sight; this stays by the button.
+            "No where in the app it shows me I am on trial" (5 Oct 2026). */}
+        <Text testID="onboarding-trial-line" style={{ color: colors.mutedForeground, fontSize: 12, textAlign: 'center', fontFamily: 'Inter_600SemiBold' }}>
+          Free trial: 14 days free, then {kesLabel(prices.monthly)} a month or {kesLabel(prices.annual)} a year.
+        </Text>
+        <SwitchAccountLink color={colors.mutedForeground} testID="onboarding-switch-account" />
       </ScrollView>
     </KeyboardAvoidingView>
   );
