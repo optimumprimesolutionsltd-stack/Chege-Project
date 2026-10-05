@@ -1056,11 +1056,14 @@ export default function MpesaImportScreen() {
     AsyncStorage.getItem(autoKey).then((raw) => { if (active) setSmsAuto(parseSmsAuto(raw)); }).catch(() => {});
     return () => { active = false; };
   }, [autoKey]);
-  const keepSmsAuto = (next: SmsAuto) => {
+  // Resolves once the mark is stored. Home's count reads it back from storage, so
+  // asking Home to count again before then counted the same messages as new until
+  // the next refresh (5 Oct 2026): wait for this before invalidating 'new-mpesa-sms'.
+  const keepSmsAuto = (next: SmsAuto): Promise<void> => {
     setSmsAuto(next);
-    AsyncStorage.setItem(autoKey, JSON.stringify(next)).catch(() => {});
     // The notification opens "new since you last looked", so it goes off with it.
     if (!next.on && smsNotify) void setSmsNotify(false).then((result) => setSmsNotifyState(result.on));
+    return AsyncStorage.setItem(autoKey, JSON.stringify(next)).catch(() => {});
   };
   // A notification the moment M-Pesa texts, from a build that carries it.
   const smsNotifiable = canNotifySms();
@@ -1070,7 +1073,7 @@ export default function MpesaImportScreen() {
     setSmsNotifyState(result.on);
     if (result.reason) Alert.alert('Could not turn it on', smsRefusal(result.reason));
     // Tapping the notification opens the messages since Jamvi last looked, so that is on too.
-    else if (result.on && !smsAuto.on) keepSmsAuto({ on: true, since: smsAuto.since || Date.now() });
+    else if (result.on && !smsAuto.on) void keepSmsAuto({ on: true, since: smsAuto.since || Date.now() });
   };
   // The messages read through the same reader as pasted ones, a batch at a time.
   const readSmsMessages = async (messages: string[]): Promise<PreviewLine[] | null> => {
@@ -1116,7 +1119,7 @@ export default function MpesaImportScreen() {
         return;
       }
       // The first time it is allowed, new messages are looked for from now on.
-      if (!smsAuto.on && smsAuto.since === 0) keepSmsAuto({ on: true, since: Date.now() });
+      if (!smsAuto.on && smsAuto.since === 0) void keepSmsAuto({ on: true, since: Date.now() });
       smsNewestRef.current = null;
       await readSmsMessages(result.messages);
     } catch (error: unknown) {
@@ -1168,7 +1171,7 @@ export default function MpesaImportScreen() {
       // save, so Save can never move the mark on. Moved on here instead, or
       // the same messages counted as new on Home's badge for ever.
       if (shown && !shown.some(isRecordable)) {
-        keepSmsAuto({ on: true, since: found.newest });
+        await keepSmsAuto({ on: true, since: found.newest });
         smsNewestRef.current = null;
         void queryClient.invalidateQueries({ queryKey: ['new-mpesa-sms'] });
       }
@@ -2151,7 +2154,7 @@ export default function MpesaImportScreen() {
       if (!lostTouch) await clearSavePending(savingFor);
       // New messages taken in and saved: the next check starts after them.
       if (smsNewestRef.current !== null && result.saved + result.repeats > 0) {
-        keepSmsAuto({ on: true, since: smsNewestRef.current });
+        await keepSmsAuto({ on: true, since: smsNewestRef.current });
         smsNewestRef.current = null;
         void queryClient.invalidateQueries({ queryKey: ['new-mpesa-sms'] });
       }
