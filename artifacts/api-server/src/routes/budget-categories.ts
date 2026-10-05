@@ -638,6 +638,19 @@ router.put("/budget-categories/:id", async (req, res) => {
   // months keep the budget they had.
   const reach = budgetReach.safeParse(req.body);
   if (!reach.success) { res.status(400).json({ error: "Invalid input", details: reach.error.flatten() }); return; }
+  // A category with subcategories is a heading: its budget is theirs added up
+  // and it holds no amount of its own (5 Oct 2026: "parents to only have
+  // grand total of children"). Neither app offers one; this stops an older
+  // app or a direct request from setting one anyway.
+  if (parsed.data.budgetAmount !== undefined && parsed.data.budgetAmount > 0) {
+    const [child] = await db.select({ id: budgetCategoriesTable.id }).from(budgetCategoriesTable)
+      .where(and(eq(budgetCategoriesTable.parentId, id), eq(budgetCategoriesTable.groupId, groupId)))
+      .limit(1);
+    if (child) {
+      res.status(400).json({ error: `"${existing.name}" is budgeted through its subcategories. Set the amount on each of them and this total follows.` });
+      return;
+    }
+  }
   const onlyMonth = reach.data.onlyThisMonth ?? null;
   if (onlyMonth && parsed.data.budgetAmount !== undefined) {
     if (!budgetMonthsReady()) { res.status(503).json({ error: "A budget for one month cannot be kept yet. Try again in a minute." }); return; }
