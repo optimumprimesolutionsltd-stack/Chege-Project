@@ -12,6 +12,7 @@ import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQueryClient } from '@tanstack/react-query';
 import { Feather } from '@expo/vector-icons';
+import { cleanConfirmInput, confirmBody, confirmReady, typedWord } from '@/lib/deletionConfirm';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { customFetch, useGetGroup } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
@@ -33,6 +34,8 @@ export default function DeleteGroupCodeScreen() {
   const { data: group } = useGetGroup();
   const groupName = workspaceBudgetName(group);
   const [code, setCode] = useState('');
+  // Set when this account has no email: the word to type instead of a code.
+  const [word, setWord] = useState<string | null>(null);
   const [sending, setSending] = useState(true);
   const [confirming, setConfirming] = useState(false);
   const requestedOnce = useRef(false);
@@ -40,7 +43,7 @@ export default function DeleteGroupCodeScreen() {
   const sendCode = async () => {
     setSending(true);
     try {
-      await customFetch('/api/group/delete/request-code', { method: 'POST' });
+      setWord(typedWord(await customFetch<unknown>('/api/group/delete/request-code', { method: 'POST' })));
     } catch (error) {
       Alert.alert(
         'Could not send a code',
@@ -61,14 +64,14 @@ export default function DeleteGroupCodeScreen() {
   }, []);
 
   const confirm = async () => {
-    if (confirming || sending || code.length !== 6) return;
+    if (confirming || sending || !confirmReady(code, word)) return;
     setConfirming(true);
     try {
       await leaveMobileSharedWorkspace({
         leave: () => customFetch('/api/group', {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code }),
+          body: JSON.stringify(confirmBody(code, word)),
         }),
         storage: AsyncStorage,
         resetQueries: () => queryClient.resetQueries(),
@@ -98,36 +101,39 @@ export default function DeleteGroupCodeScreen() {
         <Text style={[styles.intro, { color: colors.mutedForeground }]}>
           {sending && code.length === 0
             ? 'Sending a code to your email…'
-            : `We’ve emailed a 6-digit code. Enter it below — this is what actually deletes “${groupName}” for every member. Nothing happens without it, and it cannot be undone.`}
+            : word
+              ? `Your account has no email to send a code to. Type ${word} below to delete “${groupName}” for every member. It cannot be undone.`
+              : `We’ve emailed a 6-digit code. Enter it below — this is what actually deletes “${groupName}” for every member. Nothing happens without it, and it cannot be undone.`}
         </Text>
 
         <TextInput
           value={code}
-          onChangeText={(text) => setCode(text.replace(/[^\d]/g, '').slice(0, 6))}
-          keyboardType="number-pad"
-          placeholder="000000"
+          onChangeText={(text) => setCode(cleanConfirmInput(text, word))}
+          keyboardType={word ? 'default' : 'number-pad'}
+          autoCapitalize="characters"
+          placeholder={word ?? '000000'}
           placeholderTextColor={colors.mutedForeground}
-          maxLength={6}
+          maxLength={word ? 12 : 6}
           autoFocus
           style={[styles.codeInput, { borderColor: colors.border, color: colors.foreground }]}
           testID="delete-group-code-input"
         />
 
-        <Pressable onPress={() => void sendCode()} disabled={sending} hitSlop={8} style={styles.resendLink}>
+        {word ? null : <Pressable onPress={() => void sendCode()} disabled={sending} hitSlop={8} style={styles.resendLink}>
           <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>
             {sending ? 'Sending…' : 'Resend code'}
           </Text>
-        </Pressable>
+        </Pressable>}
       </View>
 
       <View style={[styles.footer, { borderTopColor: colors.border, paddingBottom: insets.bottom + 12 }]}>
         <Pressable
           testID="delete-group-confirm"
           onPress={() => void confirm()}
-          disabled={confirming || sending || code.length !== 6}
+          disabled={confirming || sending || !confirmReady(code, word)}
           style={[
             styles.confirmBtn,
-            { backgroundColor: colors.destructive, opacity: confirming || sending || code.length !== 6 ? 0.5 : 1 },
+            { backgroundColor: colors.destructive, opacity: confirming || sending || !confirmReady(code, word) ? 0.5 : 1 },
           ]}
         >
           {confirming ? (

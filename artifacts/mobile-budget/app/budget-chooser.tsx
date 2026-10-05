@@ -38,7 +38,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/lib/auth';
-import { SwitchAccountLink } from '@/components/SwitchAccountLink';
+import { BackToSignIn, SwitchAccountLink } from '@/components/SwitchAccountLink';
 import {
   activateMobileWorkspace,
   completeMobileBudgetChooser,
@@ -1126,7 +1126,7 @@ function MobileOnboardingFlow({
 
         {error ? <Text accessibilityRole="alert" style={[styles.onboardingError, { color: colors.destructive, backgroundColor: colors.destructive + '14' }]}>{error}</Text> : null}
         <View style={styles.onboardingActions}>
-          {step > 0 ? <Pressable testID="onboarding-back" onPress={goBack} style={[styles.backButton, { borderColor: colors.border }]}><Feather name="arrow-left" size={17} color={colors.foreground} /><Text style={[styles.backButtonText, { color: colors.foreground }]}>Back</Text></Pressable> : <View />}
+          {step > 0 ? <Pressable testID="onboarding-back" onPress={goBack} style={[styles.backButton, { borderColor: colors.border }]}><Feather name="arrow-left" size={17} color={colors.foreground} /><Text style={[styles.backButtonText, { color: colors.foreground }]}>Back</Text></Pressable> : <BackToSignIn color={colors.foreground} testID="onboarding-back-to-sign-in" />}
           <Pressable testID="onboarding-continue" disabled={saving} onPress={() => void goNext()} style={[styles.primaryButton, { backgroundColor: colors.primary }, saving && styles.disabled]}>{saving ? <ActivityIndicator color={colors.primaryForeground} /> : <><Text style={[styles.primaryText, { color: colors.primaryForeground }]}>{step === 5 ? 'Finish setup' : 'Continue'}</Text><Feather name="arrow-right" size={18} color={colors.primaryForeground} /></>}</Pressable>
         </View>
         {/* The trial note above scrolls out of sight; this stays by the button.

@@ -46,6 +46,7 @@ import { HomeTip } from '@/components/HomeTip';
 import { workspaceNameTextStyle } from '@/lib/workspaceIdentity';
 import { getExpenseEditHref } from '@/lib/expenseEditLink';
 import {
+  ApiError,
   useGetDashboardSummary,
   useGetDashboardActivity,
   useGetExpenses,
@@ -181,6 +182,7 @@ export default function DashboardScreen() {
     data: summary,
     isLoading: summaryLoading,
     isError: summaryError,
+    error: summaryFailure,
     refetch: refetchSummary,
   } = useGetDashboardSummary({ month, year });
 
@@ -380,7 +382,11 @@ export default function DashboardScreen() {
     // No active workspace at all — a brand-new or just-signed-in person. Send
     // them to the chooser, where they can create a budget or accept an
     // invitation, rather than a dead "ask someone to add you" screen.
-    if (!group) {
+    // Or a budget this account cannot open - one left selected on this phone
+    // by another account signed in before ("why does it take someone here for
+    // a new account", 5 Oct 2026): choosing one is the way on, not "try again".
+    const refused = summaryFailure instanceof ApiError && (summaryFailure.status === 403 || summaryFailure.status === 404);
+    if (!group || refused) {
       return <Redirect href="/budget-chooser" />;
     }
     return (

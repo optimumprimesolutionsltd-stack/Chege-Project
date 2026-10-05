@@ -20,7 +20,10 @@ describe("deleting a group needs an emailed code", () => {
     const del = group.slice(group.indexOf('router.delete("/group"'), group.indexOf("export default router;"));
     expect(del.indexOf("confirmGroupDeletionCode(")).toBeGreaterThan(-1);
     expect(del.indexOf("confirmGroupDeletionCode(")).toBeLessThan(del.indexOf("eraseGroupData("));
-    expect(del).toContain("Enter the 6-digit code we emailed you.");
+    // The code is required unless the account has no email to send one to
+    // (lib/account-deletion's deletionConfirmation).
+    expect(del.indexOf("deletionConfirmation(")).toBeLessThan(del.indexOf("eraseGroupData("));
+    expect(lib).toContain('{ error: "Enter the 6-digit code we emailed you." }');
     expect(del).toContain("accountDeletionConfirmLimiter");
   });
 

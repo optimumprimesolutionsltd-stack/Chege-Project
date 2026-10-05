@@ -28,7 +28,10 @@ import { resolvePhotoUrl, verifyPhotoObject } from "../lib/photoStorage";
 import { refuseStartingGroup } from "../lib/group-start";
 import { hasAccessibleSharedBudgetWithName } from "../lib/shared-group-names";
 import {
+  accountHasEmail,
   confirmGroupDeletionCode,
+  deletionConfirmation,
+  TYPED_CONFIRMATION,
   eraseGroupData,
   IncorrectDeletionCodeError,
   requestGroupDeletionCode,
@@ -305,6 +308,10 @@ router.post("/group/delete/request-code", accountDeletionCodeLimiter, async (req
   if (!requireGroupOwner(req, res)) return;
 
   const [group] = await db.select({ name: groupsTable.name }).from(groupsTable).where(eq(groupsTable.id, groupId)).limit(1);
+  if (!(await accountHasEmail(req.user!.id))) {
+    res.json({ sent: false, confirmWith: TYPED_CONFIRMATION });
+    return;
+  }
   try {
     await requestGroupDeletionCode(req.user!.id, groupId, group?.name ?? "your group");
     res.json({ sent: true });
@@ -325,13 +332,13 @@ router.delete("/group", accountDeletionConfirmLimiter, async (req, res): Promise
   }
   if (!requireGroupOwner(req, res)) return;
 
-  const code = typeof req.body?.code === "string" ? req.body.code.trim() : "";
-  if (!/^\d{6}$/.test(code)) {
-    res.status(400).json({ error: "Enter the 6-digit code we emailed you." });
+  const how = await deletionConfirmation(req.user!.id, req.body);
+  if ("error" in how) {
+    res.status(400).json({ error: how.error });
     return;
   }
   try {
-    await confirmGroupDeletionCode(req.user!.id, groupId, code);
+    if (how.kind === "code") await confirmGroupDeletionCode(req.user!.id, groupId, how.code);
   } catch (error) {
     if (error instanceof IncorrectDeletionCodeError) {
       res.status(400).json({ error: error.message });

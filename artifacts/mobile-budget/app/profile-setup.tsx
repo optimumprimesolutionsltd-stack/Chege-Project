@@ -14,7 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useAuth } from '@/lib/auth';
-import { SwitchAccountLink } from '@/components/SwitchAccountLink';
+import { BackToSignIn, SwitchAccountLink } from '@/components/SwitchAccountLink';
 
 export default function ProfileSetupScreen() {
   const insets = useSafeAreaInsets();
@@ -47,6 +47,7 @@ export default function ProfileSetupScreen() {
       colors={['#00132F', '#0B1F2A', '#0D4A43']}
       style={[styles.container, { paddingTop: (Platform.OS === 'web' ? 67 : insets.top) + 28 }]}
     >
+      <BackToSignIn color="#d7e0ea" testID="profile-setup-back" />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.content}

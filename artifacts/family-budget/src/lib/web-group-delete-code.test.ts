@@ -10,6 +10,7 @@ describe("web: deleting a group goes through the emailed code", () => {
   });
   it("asks for a code, then deletes with it", () => {
     expect(settings).toContain('fetch("/api/group/delete/request-code", { method: "POST", credentials: "include" })');
-    expect(settings).toContain("body: JSON.stringify({ code: groupDeletionCode })");
+    // The code, or for an account with no email, the typed word.
+    expect(settings).toContain("body: JSON.stringify(groupDeletionWord ? { confirm: groupDeletionCode } : { code: groupDeletionCode })");
   });
 });
