@@ -206,3 +206,14 @@ describe('2026 only', () => {
     expect(read('app/sort-entries.tsx')).toContain('body: JSON.stringify({ from: workingYear().from }),');
   });
 });
+
+// "Can't this be fixed by a single tap?" (5 Oct 2026).
+describe('Match M-Pesa now', () => {
+  it('asks first, sends M-Pesa\'s own figure, and adds no entry - the rest goes into the opening balance', () => {
+    const screen = readFileSync('app/mpesa-difference.tsx', 'utf8');
+    expect(screen).toContain("customFetch<{ account: string; after: number; openingBefore: number; openingAfter: number }>('/api/mpesa/difference/match'");
+    expect(screen).toContain('body: JSON.stringify({ liveBalance: latest }),');
+    expect(screen).toContain('No entry is added, so nothing counts as income or spending');
+    expect(screen).toContain('testID="mpesa-difference-match"');
+  });
+});
