@@ -164,14 +164,27 @@ export type DifferenceSpan = {
   amounts?: Array<{ receipt: string; day: string; entryId: number; description: string; inMessages: number; inJamvi: number }>;
 };
 
+const TRANSACTION_COST = /transaction\s+cost,?\s*(?:ksh|kes)\.?\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)/i;
+
+/** The charge an M-Pesa message states ("Transaction cost, Ksh7.00"), or null. */
+export function statedCharge(body: string | undefined): number | null {
+  const found = body?.match(TRANSACTION_COST)?.[1];
+  if (!found) return null;
+  const value = Number(found.replace(/,/g, ''));
+  return Number.isFinite(value) ? value : null;
+}
+
 /**
- * The M-Pesa charge a payment is missing: M-Pesa took more than Jamvi has for
- * it. Null for anything else (Jamvi has more out, or money in), which is left
- * to look at.
+ * The M-Pesa charge a payment is missing - only the one its own message
+ * states, and only when that is exactly what Jamvi is short. Worked out from
+ * the balance alone it once added 137 "charges" of up to KES 3,829 where
+ * messages were not on the phone (5 Oct 2026). Null for anything else, which
+ * is left to look at.
  */
-export function missingCharge(item: { inMessages: number; inJamvi: number }): number | null {
+export function missingCharge(item: { inMessages: number; inJamvi: number }, stated: number | null): number | null {
+  if (stated === null || stated < 1 || item.inJamvi >= 0) return null;
   const short = Math.round((item.inJamvi - item.inMessages) * 100) / 100;
-  return item.inJamvi < 0 && short >= 1 && short <= 5_000 ? short : null;
+  return Math.abs(short - stated) < 0.5 ? stated : null;
 }
 
 export type FixPlan = {
@@ -193,7 +206,7 @@ export type FixPlan = {
  * messages may be cash or typed on purpose, so it is never deleted - only
  * counted, to be looked at.
  */
-export function fixPlan(spans: readonly DifferenceSpan[]): FixPlan {
+export function fixPlan(spans: readonly DifferenceSpan[], chargeOf: (receipt: string) => number | null = () => null): FixPlan {
   const move = new Set<string>();
   const redate = new Map<number, string>();
   let count = 0;
@@ -203,7 +216,7 @@ export function fixPlan(spans: readonly DifferenceSpan[]): FixPlan {
   const charges = new Map<number, number>();
   for (const span of spans) {
     for (const item of span.amounts ?? []) {
-      const charge = missingCharge(item);
+      const charge = missingCharge(item, chargeOf(item.receipt));
       if (charge !== null) charges.set(item.entryId, charge);
       else leftToCheck += 1;
     }

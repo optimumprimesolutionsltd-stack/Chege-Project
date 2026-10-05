@@ -9,7 +9,7 @@ import { formatDisplayDate } from '@/lib/displayFormat';
 import { readMpesaRows, smsRefusal } from '@/lib/mpesaSms';
 import { retrySave } from '@/lib/saveRetry';
 import { differenceError } from '@/lib/differenceError';
-import { differenceMessages, fixConfirmation, fixPlan, hasFixes, inWorkingYear, kes, missingCharge, receiptOf, spanChangeText, startingBalanceAdvice, workingYear, type DifferenceSpan } from '@/lib/mpesaLiveBalance';
+import { differenceMessages, fixConfirmation, fixPlan, hasFixes, inWorkingYear, kes, missingCharge, statedCharge, receiptOf, spanChangeText, startingBalanceAdvice, workingYear, type DifferenceSpan } from '@/lib/mpesaLiveBalance';
 
 
 type Span = DifferenceSpan;
@@ -38,6 +38,9 @@ export default function MpesaDifferenceScreen() {
   const [error, setError] = useState<string | null>(null);
   const [answer, setAnswer] = useState<Answer | null>(null);
   const [bodies, setBodies] = useState<Map<string, string>>(new Map());
+  // The charge each message states, the only one Fix all will add.
+  const [statedCharges, setStatedCharges] = useState<Map<string, number>>(new Map());
+  const chargeOf = (receipt: string) => statedCharges.get(receipt) ?? null;
 
   // Checking again over a result already shown keeps it on screen, with a
   // line saying so, rather than blanking it for a spinner each time.
@@ -65,11 +68,18 @@ export default function MpesaDifferenceScreen() {
         return;
       }
       const byReceipt = new Map<string, string>();
+      // A Fuliza notice shares its payment's code: the charge comes from
+      // whichever message with that code states one.
+      const charges = new Map<string, number>();
       for (const row of rows) {
         const code = receiptOf(row.body);
-        if (code) byReceipt.set(code, row.body.trim());
+        if (!code) continue;
+        byReceipt.set(code, row.body.trim());
+        const stated = statedCharge(row.body);
+        if (stated !== null && !charges.has(code)) charges.set(code, stated);
       }
       setBodies(byReceipt);
+      setStatedCharges(charges);
       // Only reads, so trying again through a server hiccup is always safe.
       setAnswer(await retrySave(() => customFetch<Answer>('/api/mpesa/difference', {
         method: 'POST',
@@ -96,7 +106,7 @@ export default function MpesaDifferenceScreen() {
   const [fixing, setFixing] = useState(false);
   const fixAll = () => {
     if (!answer?.result) return;
-    const plan = fixPlan(answer.result.spans);
+    const plan = fixPlan(answer.result.spans, chargeOf);
     const { title, message } = fixConfirmation(plan, answer.account.name);
     Alert.alert(title, message, [
       { text: 'Not now', style: 'cancel' },
@@ -191,7 +201,7 @@ export default function MpesaDifferenceScreen() {
               ) : null}
             </View>
 
-            {result.spans.length > 0 && hasFixes(fixPlan(result.spans)) ? (
+            {result.spans.length > 0 && hasFixes(fixPlan(result.spans, chargeOf)) ? (
               <Pressable
                 onPress={fixAll}
                 disabled={fixing || rechecking}
@@ -288,7 +298,7 @@ export default function MpesaDifferenceScreen() {
                   <View style={styles.group}>
                     <Text style={[styles.groupTitle, { color: colors.foreground }]}>Saved for a different amount</Text>
                     {(span.amounts ?? []).map((item) => {
-                      const charge = missingCharge(item);
+                      const charge = missingCharge(item, chargeOf(item.receipt));
                       return (
                         <View key={item.receipt} style={[styles.item, { borderColor: colors.border }]}>
                           <Text style={{ color: colors.foreground, fontSize: 13 }} numberOfLines={2}>{item.description} · {formatDisplayDate(item.day)}</Text>
