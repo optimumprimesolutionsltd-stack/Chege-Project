@@ -139,20 +139,28 @@ describe('Fix all', () => {
   });
 
   // "No single entry explains this" was nearly always a charge never saved (5 Oct 2026).
-  it('adds a charge M-Pesa took but Jamvi never saved, and leaves any other amount to look at', async () => {
-    const { fixPlan, hasFixes, missingCharge } = await import('../mpesaLiveBalance');
-    expect(missingCharge({ inMessages: -107, inJamvi: -100 })).toBe(7);
-    expect(missingCharge({ inMessages: -100, inJamvi: -120 })).toBeNull(); // Jamvi has more out
-    expect(missingCharge({ inMessages: 990, inJamvi: 1000 })).toBeNull(); // money in
+  // Worked out from the balance alone, Fix all once added 137 "charges" of up
+  // to KES 3,829 where messages were not on the phone (5 Oct 2026). Now only
+  // the charge the message itself states, and only when that is the shortfall.
+  it('adds only the charge a message states, and only when that is what Jamvi is short', async () => {
+    const { fixPlan, hasFixes, missingCharge, statedCharge } = await import('../mpesaLiveBalance');
+    expect(statedCharge('TJ1 Confirmed. Ksh500.00 sent to JANE. New M-PESA balance is Ksh1,000.00. Transaction cost, Ksh7.00.')).toBe(7);
+    expect(statedCharge('TJ1 Confirmed. Ksh500.00 paid to SHOP. Transaction cost, Ksh0.00.')).toBe(0);
+    expect(statedCharge('TJ1 Confirmed. You have received Ksh500.00')).toBeNull();
+    expect(missingCharge({ inMessages: -107, inJamvi: -100 }, 7)).toBe(7);
+    // The balance says 3,829 short, but the message states no such charge.
+    expect(missingCharge({ inMessages: -3929.51, inJamvi: -100 }, 7)).toBeNull();
+    expect(missingCharge({ inMessages: -107, inJamvi: -100 }, null)).toBeNull();
+    expect(missingCharge({ inMessages: -100, inJamvi: -100 }, 0)).toBeNull();
     const plan = fixPlan([span('2026-09-13', '2026-09-13', { amounts: [
       { receipt: 'TJ1', day: '2026-09-13', entryId: 4, description: 'Shop', inMessages: -57, inJamvi: -50 },
-      { receipt: 'TJ2', day: '2026-09-13', entryId: 5, description: 'Rent', inMessages: -100, inJamvi: -120 },
-    ] })]);
+      { receipt: 'TJ2', day: '2026-09-13', entryId: 5, description: 'Airtime', inMessages: -3929.51, inJamvi: -100 },
+    ] })], (receipt) => (receipt === 'TJ1' ? 7 : receipt === 'TJ2' ? 0 : null));
     expect(plan.charges).toEqual([{ entryId: 4, amount: 7 }]);
     expect(plan.leftToCheck).toBe(1);
     expect(hasFixes(plan)).toBe(true);
     const screen = read('app/mpesa-difference.tsx');
-    expect(screen).toContain('body: JSON.stringify({ move: plan.move, redate: plan.redate, charges: plan.charges }),');
+    expect(screen).toContain('const plan = fixPlan(answer.result.spans, chargeOf);');
     expect(screen).toContain("{rechecking ? 'Checking…' : 'Check again'}");
   });
 

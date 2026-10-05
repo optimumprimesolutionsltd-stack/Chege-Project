@@ -475,8 +475,9 @@ router.post("/mpesa/difference", async (req, res): Promise<void> => {
 const differenceFixSchema = z.object({
   move: z.array(z.string().trim().regex(/^[A-Z0-9]{8,15}$/)).max(2_000).default([]),
   redate: z.array(z.object({ id: z.number().int().positive(), date: z.string().date() })).max(2_000).default([]),
-  // An M-Pesa charge the balance shows was taken, never saved: added to its payment.
-  charges: z.array(z.object({ entryId: z.number().int().positive(), amount: z.number().positive().max(5_000) })).max(2_000).default([]),
+  // An M-Pesa charge its message states, never saved: added to its payment. No
+  // M-Pesa charge comes near KES 1,000; a bigger one is not a charge (5 Oct 2026).
+  charges: z.array(z.object({ entryId: z.number().int().positive(), amount: z.number().positive().max(1_000) })).max(2_000).default([]),
 });
 
 /**
