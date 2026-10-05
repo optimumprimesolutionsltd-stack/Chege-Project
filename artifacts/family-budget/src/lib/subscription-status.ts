@@ -16,20 +16,34 @@ export interface MemberEntitlements {
   currentPeriodEnd: string | null;
 }
 
+// Kenya is UTC+3 all year. Access runs to the midnight that ends its last
+// day, so that last day is the day before the stored end.
+const KENYA_MS = 3 * 3_600_000;
+const kenyaDayNumber = (ms: number) => Math.floor((ms + KENYA_MS) / 86_400_000);
+
+/**
+ * Whole days left after today, by Kenya's calendar: a 14-day trial begun today
+ * says 14, its last day says 0 ("ends today"). Counting hours rounded up said
+ * 15 on the first day ("15 days or 14 days?", 5 Oct 2026).
+ */
 export function daysUntil(iso: string | null, now: Date = new Date()): number | null {
   if (!iso) return null;
   const end = new Date(iso).getTime();
   if (Number.isNaN(end)) return null;
-  return Math.ceil((end - now.getTime()) / 86_400_000);
+  return kenyaDayNumber(end - 1) - kenyaDayNumber(now.getTime());
 }
 
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
 /** A calendar date a member can actually remember, alongside the relative
- *  day-count — "45 days left" is easy to lose track of; a date is not. */
+ *  day-count — "45 days left" is easy to lose track of; a date is not. It is
+ *  the last day with access, in Kenya, whatever the phone's own time zone. */
 export function formatDeadline(iso: string | null): string | null {
   if (!iso) return null;
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toLocaleDateString("en-KE", { day: "numeric", month: "long", year: "numeric" });
+  const end = new Date(iso).getTime();
+  if (Number.isNaN(end)) return null;
+  const last = new Date(end - 1 + KENYA_MS);
+  return `${last.getUTCDate()} ${MONTH_NAMES[last.getUTCMonth()]} ${last.getUTCFullYear()}`;
 }
 
 /**

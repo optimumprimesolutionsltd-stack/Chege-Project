@@ -8,7 +8,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { daysUntil, statusLine, type MemberEntitlements } from "./subscription-status";
+import { daysUntil, formatDeadline, statusLine, type MemberEntitlements } from "./subscription-status";
 
 const NOW = new Date("2026-09-05T12:00:00Z");
 const inDays = (n: number) => new Date(NOW.getTime() + n * 86_400_000).toISOString();
@@ -27,8 +27,14 @@ function member(overrides: Partial<MemberEntitlements> = {}): MemberEntitlements
 }
 
 describe("daysUntil", () => {
-  it("rounds up, so a few hours left still reads as a day", () => {
-    expect(daysUntil(inDays(0.2), NOW)).toBe(1);
+  // Access runs to the Nairobi midnight that ends its last day. A trial begun
+  // this morning ends 14 days on, and says 14 - not 15 ("15 days or 14 days?",
+  // 5 Oct 2026); on its last day it says 0, "ends today".
+  it("counts whole days after today, by Kenya's calendar", () => {
+    const morning = new Date("2026-10-05T06:00:00.000Z"); // 09:00 in Nairobi
+    expect(daysUntil("2026-10-19T21:00:00.000Z", morning)).toBe(14); // midnight ending 19 Oct
+    expect(daysUntil("2026-10-19T21:00:00.000Z", new Date("2026-10-19T18:00:00.000Z"))).toBe(0);
+    expect(formatDeadline("2026-10-19T21:00:00.000Z")).toBe("19 October 2026");
   });
 
   it("returns null for nothing and for nonsense", () => {
