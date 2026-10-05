@@ -31,6 +31,7 @@ import {
 import { ASK_JAMVI_TOOLS, runAskJamviTool } from "../lib/ask-jamvi-tools";
 import { nairobiNow } from "../lib/nairobiTime";
 import { notAReversal } from "../lib/reversal-links";
+import { isSavingsAccount } from "../lib/savings-accounts";
 
 const router = Router();
 
@@ -265,7 +266,8 @@ router.get("/ai/budget-summary", async (req, res): Promise<void> => {
       incomeReceived: Number(allTimeIncomeTotal[0]?.total ?? 0),
     },
     allTimeCategories,
-    goals: goals.map((goal) => ({
+    // Savings accounts (M-Shwari, KCB M-PESA...) have no target, so they are not goals to finish (lib/savings-accounts).
+    goals: goals.filter((goal) => !isSavingsAccount(goal)).map((goal) => ({
       name: goal.name,
       targetAmount: Number(goal.targetAmount),
       currentAmount: Number(goal.currentAmount),
@@ -494,7 +496,9 @@ router.get("/search", async (req, res): Promise<void> => {
       ...goals.map((item) => ({
         ...item,
         kind: "goals",
-        subtitle: `Goal · KES ${Number(item.amount).toLocaleString("en-KE")} of KES ${Number(item.targetAmount).toLocaleString("en-KE")}`,
+        subtitle: isSavingsAccount(item)
+          ? `Savings account · KES ${Number(item.amount).toLocaleString("en-KE")}`
+          : `Goal · KES ${Number(item.amount).toLocaleString("en-KE")} of KES ${Number(item.targetAmount).toLocaleString("en-KE")}`,
       })),
       ...income.map((item) => ({ ...item, kind: "income", subtitle: "Income source · monthly target" })),
     ].sort((a, b) => String(b.date ?? "").localeCompare(String(a.date ?? ""))),

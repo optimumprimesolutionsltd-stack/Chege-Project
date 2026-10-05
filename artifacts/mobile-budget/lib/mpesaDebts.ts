@@ -1,4 +1,5 @@
 import { type Choice, type PreviewLine } from './mpesaImport';
+import { LENDERS, loanOf, type Lender, type LenderId } from './mpesaProducts';
 
 /** A person or institution in "Who owes who", with what stands between you. */
 export type PartyLite = { id: number; name: string; owedToUs?: number | null; owedByUs?: number | null };
@@ -179,29 +180,54 @@ export function balanceChanges(
   return changes;
 }
 
-/** The name Fuliza goes by in Who owes who: Safaricom lends it. */
-export const FULIZA_PARTY_NAME = 'Safaricom PLC';
+/** The name Fuliza goes by in Who owes who. It was "Safaricom PLC" until 5 Oct 2026; the server renames that one. */
+export const FULIZA_PARTY_NAME = 'Fuliza';
+
+/** This lender in Who owes who, when it is there. */
+export const findLenderParty = (lender: Lender, parties: readonly PartyLite[]): PartyLite | null =>
+  parties.find((party) => lender.party.test(clean(party.name))) ?? null;
 
 /** Fuliza in Who owes who, when it is there. */
 export const findFulizaParty = (parties: readonly PartyLite[]): PartyLite | null =>
-  parties.find((party) => clean(party.name).includes('fuliza') || clean(party.name).startsWith('safaricom')) ?? null;
+  findLenderParty(LENDERS.find((lender) => lender.id === 'fuliza')!, parties);
+
+/**
+ * The lenders - Fuliza, M-Shwari, KCB M-PESA, Hustler Fund - that ticked lines
+ * borrow from or pay back and that are not linked to anybody yet: each needs
+ * its own entry in Who owes who before the save.
+ */
+export function lendersNeeded(lines: readonly PreviewLine[], choices: Record<number, Choice>): Lender[] {
+  const needed = new Map<LenderId, Lender>();
+  for (const line of lines) {
+    const loan = loanOf(line);
+    const choice = choices[line.index];
+    if (loan && choice?.include && !choice.debt) needed.set(loan.lender.id, loan.lender);
+  }
+  return [...needed.values()];
+}
 
 /** Whether any ticked line needs Fuliza in Who owes who. */
 export const needsFulizaParty = (lines: readonly PreviewLine[], choices: Record<number, Choice>): boolean =>
-  lines.some((line) => (line.type === 'fuliza_borrowed' || line.type === 'fuliza_repaid') && choices[line.index]?.include && !choices[line.index]?.debt);
+  lendersNeeded(lines, choices).some((lender) => lender.id === 'fuliza');
 
 /**
- * Fuliza still owed is a debt to Fuliza, and repaying it clears that debt, so
- * both lines are linked to it - Who owes who then shows what is owed. Lines
- * already linked to somebody are left as they were.
+ * A loan still owed is a debt to its lender, and paying it back clears that
+ * debt, so each such line is linked to its lender - Who owes who then shows
+ * what is owed to each. Lines already linked to somebody are left as they were.
  */
-export function withFulizaDebt(lines: readonly PreviewLine[], choices: Record<number, Choice>, partyId: number): Record<number, Choice> {
+export function withLenderDebts(lines: readonly PreviewLine[], choices: Record<number, Choice>, partyIds: Partial<Record<LenderId, number>>): Record<number, Choice> {
   const next = { ...choices };
   for (const line of lines) {
     const choice = next[line.index];
-    if (!choice || choice.debt) continue;
-    if (line.type === 'fuliza_borrowed') next[line.index] = { ...choice, debt: { kind: 'borrowed', partyId }, incomeSourceId: null };
-    else if (line.type === 'fuliza_repaid') next[line.index] = { ...choice, debt: { kind: 'pay-back', partyId }, category: '', auto: false };
+    const loan = loanOf(line);
+    const partyId = loan ? partyIds[loan.lender.id] : undefined;
+    if (!choice || choice.debt || !loan || partyId == null) continue;
+    if (loan.kind === 'borrowed') next[line.index] = { ...choice, debt: { kind: 'borrowed', partyId }, incomeSourceId: null };
+    else next[line.index] = { ...choice, debt: { kind: 'pay-back', partyId }, category: '', auto: false };
   }
   return next;
 }
+
+/** Fuliza's lines linked to it (see withLenderDebts). */
+export const withFulizaDebt = (lines: readonly PreviewLine[], choices: Record<number, Choice>, partyId: number): Record<number, Choice> =>
+  withLenderDebts(lines.filter((line) => line.type?.startsWith('fuliza_')), choices, { fuliza: partyId });

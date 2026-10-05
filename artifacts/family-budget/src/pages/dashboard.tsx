@@ -2418,7 +2418,8 @@ function GoalForm({
   onDone: () => void;
   memberUserId?: string;
 }) {
-  const activeGoals = goals?.filter(g => !g.isCompleted) ?? [];
+  // Goals with a target only: M-Shwari and the other savings accounts have none (lib/mpesa-products).
+  const activeGoals = goals?.filter(g => !g.isCompleted && g.targetAmount > 0) ?? [];
   const [amount, setAmount] = useState("");
   const [selectedGoalId, setSelectedGoalId] = useState<"cascade" | number>(
     activeGoals.length === 1 ? activeGoals[0].id : "cascade"
@@ -2684,7 +2685,8 @@ export default function Dashboard() {
     })
     .reduce((s, t) => s + t.amount, 0) ?? 0;
 
-  const activeGoals = goals?.filter((g) => !g.isCompleted) ?? [];
+  // Goals with a target only: M-Shwari and the other savings accounts have none (lib/mpesa-products).
+  const activeGoals = goals?.filter((g) => !g.isCompleted && g.targetAmount > 0) ?? [];
   const nearestGoal = activeGoals.length > 0
     ? activeGoals.slice().sort((a, b) => {
         if (a.deadline && b.deadline) return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();

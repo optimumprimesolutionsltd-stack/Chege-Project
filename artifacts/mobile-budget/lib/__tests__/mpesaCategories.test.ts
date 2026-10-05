@@ -42,7 +42,8 @@ describe('automatic suggestions', () => {
     ];
     const choices = initialChoices(lines, [{ type: 'disbursement', description: 'Kenya Power', expenseCategory: 'Electricity' }], NAMES);
     expect(choices[0]).toMatchObject({ category: 'Electricity', auto: true });
-    expect(choices[1]).toMatchObject({ category: 'Airtime & Data', auto: true });
+    // Airtime has its own built-in ledger under M-Pesa, filed and confirmed by Jamvi (5 Oct 2026, lib/mpesaProducts).
+    expect(choices[1]).toMatchObject({ category: 'Airtime', auto: true, confirmed: true });
     // Nothing to go on: "Not sure yet", as Jamvi's suggestion (asked for 2 Oct 2026).
     expect(choices[2]).toMatchObject({ category: 'Not sure yet', auto: true });
     expect(choices[3]).toMatchObject({ category: '', auto: false });
@@ -51,15 +52,15 @@ describe('automatic suggestions', () => {
 
 describe('choosing by hand', () => {
   const lines = [
-    line({ index: 0, type: 'airtime_purchase', description: 'Airtime — Safaricom' }),
-    line({ index: 1, type: 'airtime_purchase', description: 'airtime — safaricom' }),
-    line({ index: 2, type: 'airtime_purchase', description: 'Airtime — Safaricom' }),
+    line({ index: 0, description: 'Mama Mboga — Gikomba' }),
+    line({ index: 1, description: 'mama mboga — gikomba' }),
+    line({ index: 2, description: 'Mama Mboga — Gikomba' }),
     line({ index: 3, description: 'Other Shop' }),
   ];
 
   it('overrides a suggestion, and the choice is the person\'s from then on', () => {
     const start = initialChoices(lines, [], NAMES);
-    expect(start[0]).toMatchObject({ category: 'Airtime & Data', auto: true });
+    expect(start[0]).toMatchObject({ category: 'Not sure yet', auto: true });
     const next = chooseCategory(lines, start, 0, 'Groceries');
     // Chosen by hand, it is remembered unless the person unticks it.
     expect(next[0]).toEqual({ include: true, category: 'Groceries', auto: false, remember: true });

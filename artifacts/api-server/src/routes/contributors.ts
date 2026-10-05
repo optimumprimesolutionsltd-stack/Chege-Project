@@ -32,6 +32,7 @@ import { groupVerifyCode } from "../lib/contribution-verification";
 import { nairobiNow } from "../lib/nairobiTime";
 import { notAReversal } from "../lib/reversal-links";
 import { workOutBalances } from "../lib/who-owes-who";
+import { FULIZA_PARTY_NAME, renameFormerFulizaParty } from "../lib/lenders";
 import {
   CONTRIBUTOR_NAME_MAX,
   contributorNameMessage,
@@ -212,6 +213,8 @@ const router: IRouter = Router();
 router.get("/contributors", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
+  // Fuliza under its own name (lib/lenders), never at the cost of the list.
+  await renameFormerFulizaParty(groupId).catch(() => {});
 
   const contributors = await db
     .select({
@@ -400,7 +403,7 @@ async function workedOutBalances(groupId: number) {
     return { ...row, linkPartyId: fulizaId, linkKind: kind };
   });
   const worked = workOutBalances(withFuliza);
-  const known = fuliza ? parties : [...parties, { id: FULIZA_TO_ADD, name: "Safaricom PLC", owedToUs: null, owedByUs: null }];
+  const known = fuliza ? parties : [...parties, { id: FULIZA_TO_ADD, name: FULIZA_PARTY_NAME, owedToUs: null, owedByUs: null }];
   const changes = known
     .filter((party) => worked.has(party.id))
     .map((party) => {
@@ -430,13 +433,13 @@ router.post("/contributors/worked-out", async (req, res): Promise<void> => {
   if (!requireGroupManager(req, res)) return;
   const { changes, fulizaLinks, fulizaId: existingFulizaId } = await workedOutBalances(groupId);
   await db.transaction(async (trx) => {
-    // Safaricom PLC, added with its balance when it is not in Who owes who yet.
+    // Fuliza, added with its balance when it is not in Who owes who yet.
     let fulizaId = existingFulizaId;
     const toAdd = changes.find((change) => change.id === FULIZA_TO_ADD);
     if (fulizaId === null && (toAdd || fulizaLinks.length > 0)) {
       const [added] = await trx.insert(groupContributorsTable).values({
         groupId,
-        name: "Safaricom PLC",
+        name: FULIZA_PARTY_NAME,
         kind: "institution",
         owedToUs: toAdd?.workedOut.owedToUs ?? 0,
         owedByUs: toAdd?.workedOut.owedByUs ?? 0,

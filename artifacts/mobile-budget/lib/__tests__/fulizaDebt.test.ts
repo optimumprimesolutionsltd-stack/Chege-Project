@@ -42,10 +42,11 @@ describe('Fuliza in Who owes who', () => {
   });
 });
 
-// "Safaricom should be in the app as a creditor" - "should be Safaricom PLC".
+// "Safaricom should be in the app as a creditor" - it was "Safaricom PLC" until
+// 5 Oct 2026, when each M-Pesa lender got its own name: Fuliza.
 describe('the Fuliza creditor', () => {
-  it('is added as Safaricom PLC, and an existing Safaricom or Fuliza entry is used', () => {
-    expect(FULIZA_PARTY_NAME).toBe('Safaricom PLC');
+  it('is added as Fuliza, and an existing Safaricom or Fuliza entry is used', () => {
+    expect(FULIZA_PARTY_NAME).toBe('Fuliza');
     expect(findFulizaParty([{ id: 3, name: 'Safaricom PLC' }])?.id).toBe(3);
     expect(findFulizaParty([{ id: 4, name: 'Safaricom' }])?.id).toBe(4);
     expect(findFulizaParty([{ id: 5, name: 'Hermda trders' }])).toBeNull();

@@ -288,8 +288,8 @@ export default function PartiesScreen() {
         if (change.now.owedToUs !== change.workedOut.owedToUs) parts.push(`owes you ${formatKES(change.now.owedToUs)} → ${formatKES(change.workedOut.owedToUs)}`);
         return `· ${change.name}: ${parts.join(', ')}`;
       });
-      // Fuliza entries from statements, attached to Safaricom PLC so its history shows them.
-      if (toLink > 0) lines.push(`· ${toLink} Fuliza ${toLink === 1 ? 'entry' : 'entries'} from your statements linked to Safaricom PLC, so its history shows them`);
+      // Fuliza entries from statements, attached to Fuliza so its history shows them.
+      if (toLink > 0) lines.push(`· ${toLink} Fuliza ${toLink === 1 ? 'entry' : 'entries'} from your statements linked to Fuliza, so its history shows them`);
       Alert.alert('From your entries', `${lines.join('\n')}\n\nWorked out from the entries linked to each person.`, [
         { text: 'Not now', style: 'cancel' },
         {

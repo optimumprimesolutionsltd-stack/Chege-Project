@@ -223,7 +223,7 @@ describe('the balance changes offered afterwards', () => {
 describe('the debt logic is the same on both apps', () => {
   const read = (p: string) => readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
   it('shares the exact code, apart from how the two files name each other', () => {
-    expect(read('../family-budget/src/lib/mpesa-debts.ts')).toBe(read('lib/mpesaDebts.ts').replace(/'/g, '"').replace('./mpesaImport', './mpesa-import'));
+    expect(read('../family-budget/src/lib/mpesa-debts.ts')).toBe(read('lib/mpesaDebts.ts').replace(/'/g, '"').replace('./mpesaImport', './mpesa-import').replace('./mpesaProducts', './mpesa-products'));
   });
 
   it.each([

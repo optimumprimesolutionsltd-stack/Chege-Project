@@ -258,8 +258,8 @@ export default function PartiesPage() {
         if (change.now.owedToUs !== change.workedOut.owedToUs) parts.push(`owes you ${formatKes(change.now.owedToUs)} → ${formatKes(change.workedOut.owedToUs)}`);
         return `· ${change.name}: ${parts.join(", ")}`;
       });
-      // Fuliza entries from statements, attached to Safaricom PLC so its history shows them.
-      if (toLink > 0) lines.push(`· ${toLink} Fuliza ${toLink === 1 ? "entry" : "entries"} from your statements linked to Safaricom PLC, so its history shows them`);
+      // Fuliza entries from statements, attached to Fuliza so its history shows them.
+      if (toLink > 0) lines.push(`· ${toLink} Fuliza ${toLink === 1 ? "entry" : "entries"} from your statements linked to Fuliza, so its history shows them`);
       if (!window.confirm(`From your entries\n\n${lines.join("\n")}\n\nWorked out from the entries linked to each person. Use these?`)) return;
       const applied = await fetch("/api/contributors/worked-out", {
         method: "POST",

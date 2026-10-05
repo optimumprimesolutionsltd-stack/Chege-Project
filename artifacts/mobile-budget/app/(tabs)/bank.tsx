@@ -4706,7 +4706,7 @@ export default function BankScreen() {
                             >
                               <Text style={{ color: colors.dropdownForeground, fontFamily: 'Inter_400Regular' }}>{g.name}</Text>
                               <Text style={{ color: colors.dropdownMutedForeground, fontFamily: 'Inter_400Regular', fontSize: 12 }}>
-                                {pct}% funded
+                                {g.targetAmount > 0 ? `${pct}% funded` : `KES ${g.currentAmount.toLocaleString('en-KE')} in it`}
                               </Text>
                             </TouchableOpacity>
                           );

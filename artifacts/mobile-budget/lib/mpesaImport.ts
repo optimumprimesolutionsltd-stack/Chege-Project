@@ -1,5 +1,6 @@
 import type { DebtLink } from './mpesaDebts';
 import { fuzzyCategory, isFeePosting, ruleCategory, wordCategory, type PayeeRules } from './payeeLearning';
+import { loanOf, productCategory, productOf, savingsOf } from './mpesaProducts';
 
 export type AlreadyRecorded = {
   date: string | null;
@@ -255,14 +256,35 @@ export function initialChoices(
   const choices: Record<number, Choice> = {};
   for (const line of lines) {
     const suggested = notSureIfNothing(line, suggestionFor(line, history, categoryNames, chargeCategory, rules));
-    choices[line.index] = { include: isRecordable(line) && (canRecordOut || line.direction !== 'out'), category: suggested, auto: suggested !== '' };
+    choices[line.index] = {
+      // Savings either way need an owner or admin, as payments out do.
+      include: isRecordable(line) && (canRecordOut || (line.direction !== 'out' && !savingsOf(line))),
+      category: suggested,
+      auto: suggested !== '',
+      ...(filedByJamvi(line, suggested) ? { confirmed: true } : {}),
+    };
     if (line.direction === 'in') {
-      // Fuliza still owed is borrowed, never income, so it is offered no source.
-      const source = line.description && line.type !== 'fuliza_borrowed' ? suggestIncomeSource(line.description, history) : null;
+      // A loan drawn (Fuliza, M-Shwari, KCB M-PESA, Hustler Fund) is borrowed, never income, so it is offered no source.
+      const source = line.description && loanOf(line)?.kind !== 'borrowed' && !savingsOf(line) ? suggestIncomeSource(line.description, history) : null;
       choices[line.index] = { ...choices[line.index], incomeSourceId: source, sourceAuto: source !== null };
     }
   }
   return choices;
+}
+
+/**
+ * Lines nobody has to look at: airtime, bundles and Home Fibre (lib/mpesaProducts),
+ * M-Pesa's and Fuliza's own charges, and loans from Fuliza, M-Shwari, KCB M-PESA
+ * and Hustler Fund. Jamvi files them and they count as
+ * confirmed, so they save with the rest; the person can still change or untick
+ * any of them. Asked for 5 Oct 2026: "these things have no bone of contention".
+ */
+export function filedByJamvi(line: PreviewLine, category: string): boolean {
+  // A loan goes to its lender in Who owes who, and savings to their account in Savings, when saved
+  // (lib/mpesaDebts withLenderDebts, lib/mpesaProducts withSavingsAccounts).
+  if (loanOf(line) || savingsOf(line)) return true;
+  if (line.direction !== 'out' || !category || category === NOT_SURE_CATEGORY) return false;
+  return productOf(line) !== null || line.type === 'transaction_charge' || line.type === 'fuliza_fee';
 }
 
 /** The category money out is filed under when nobody can yet say what it was for (lib/entriesToSort). */
@@ -272,10 +294,10 @@ export const NOT_SURE_CATEGORY = 'Not sure yet';
  * Money out Jamvi has nothing to suggest for starts on "Not sure yet" - asked
  * for 2 Oct 2026 - as a suggestion like any other: it waits for the person to
  * confirm it (one at a time or with the bulk buttons), and Home brings it back
- * to sort once saved. Fuliza is left alone: repaying it needs no category.
+ * to sort once saved. Loans are left alone: paying one back needs no category.
  */
 function notSureIfNothing(line: PreviewLine, suggested: string): string {
-  if (suggested || line.direction !== 'out' || line.type?.startsWith('fuliza_')) return suggested;
+  if (suggested || line.direction !== 'out' || line.type?.startsWith('fuliza_') || loanOf(line) || savingsOf(line)) return suggested;
   return NOT_SURE_CATEGORY;
 }
 
@@ -296,11 +318,20 @@ function suggestionFor(
     if (builtIn) return builtIn;
   }
   if (line.type === 'transaction_charge') return chargeCategory || defaultCategoryFor(line, categoryNames);
+  // Paying back a loan only clears the debt: what it bought was recorded when it was spent.
+  // Money into savings is not spent at all.
+  if (loanOf(line) || savingsOf(line)) return '';
   const description = line.description ?? '';
   // A rule the person kept, then this exact payee's history, then payees with a similar name,
   // then a word that has nearly always meant one category in their own books.
   const kept = description ? ruleCategory(description, rules, line.payeeNumber) : '';
   const earlier = description ? suggestCategory(description, history) : '';
+  // A Safaricom product goes where the person keeps it, and otherwise to its ledger under M-Pesa -
+  // never to a guess from a similar name, which could be anything.
+  const product = productOf(line);
+  if (product) {
+    return (kept && (categoryNames.length === 0 || categoryNames.includes(kept)) ? kept : '') || (earlier !== NOT_SURE_CATEGORY ? earlier : '') || productCategory(product, categoryNames);
+  }
   const similar = description && line.named !== false ? fuzzyCategory(description, history, categoryNames) : '';
   const byWord = description && line.named !== false ? wordCategory(description, history, categoryNames) : '';
   return (
@@ -330,17 +361,30 @@ export function refreshSuggestions(
   for (const line of lines) {
     const current = choices[line.index];
     if (!current) continue;
+    // Never confirmed or unconfirmed by the person: a line Jamvi files itself counts as
+    // confirmed - so a statement worked on before 5 Oct 2026, restored from its draft,
+    // gets its airtime, bundles, charges and loans filed too (see filedByJamvi).
+    const untouched = current.confirmed === undefined && current.include && destinationOf(current) === 'category';
     if (line.direction === 'in') {
+      if (untouched && (loanOf(line)?.kind === 'borrowed' || savingsOf(line))) {
+        next[line.index] = { ...current, incomeSourceId: null, sourceAuto: false, confirmed: true };
+        continue;
+      }
       // A source the person chose is never replaced; a suggestion is offered again.
       if (current.incomeSourceId == null || current.sourceAuto) {
-        const source = line.description ? suggestIncomeSource(line.description, history) : null;
+        const source = line.description && loanOf(line)?.kind !== 'borrowed' && !savingsOf(line) ? suggestIncomeSource(line.description, history) : null;
         next[line.index] = { ...current, incomeSourceId: source, sourceAuto: source !== null };
       }
       continue;
     }
     if (current.category && !current.auto) continue;
     const suggested = notSureIfNothing(line, suggestionFor(line, history, categoryNames, chargeCategory, rules));
-    next[line.index] = { ...current, category: suggested, auto: suggested !== '' };
+    next[line.index] = {
+      ...current,
+      category: suggested,
+      auto: suggested !== '',
+      ...(untouched && filedByJamvi(line, suggested) ? { confirmed: true } : {}),
+    };
   }
   return next;
 }
@@ -421,12 +465,16 @@ export function snippetFor(pasted: string, receipt: string | null, length = 90):
 }
 
 /**
- * Fuliza owed from the last statement, paid back to the Fuliza debt with no
- * category of its own. Filed under a category it would count twice: once as
- * what the loan bought, once as paying it back.
+ * A loan - Fuliza, M-Shwari, KCB M-PESA, Hustler Fund - paid back to its debt
+ * with no category of its own. Filed under a category it would count twice:
+ * once as what the loan bought, once as paying it back.
  */
+export const paysOffLoan = (line: PreviewLine, choice: Choice): boolean =>
+  loanOf(line)?.kind === 'pay-back' && choice.debt?.kind === 'pay-back' && !choice.category.trim();
+
+/** Fuliza's case of paysOffLoan. */
 export const paysOffFuliza = (line: PreviewLine, choice: Choice): boolean =>
-  line.type === 'fuliza_repaid' && choice.debt?.kind === 'pay-back' && !choice.category.trim();
+  line.type === 'fuliza_repaid' && paysOffLoan(line, choice);
 
 /** Why a ticked line cannot be saved yet, or null when it can. */
 export function problemWith(line: PreviewLine, choice: Choice | undefined): string | null {
@@ -439,9 +487,11 @@ export function problemWith(line: PreviewLine, choice: Choice | undefined): stri
   // Money moved between the person's own places is not spending, so it needs no category.
   if (isMove(choice)) return null;
   // Money lent is not spending, so it needs no category; paying a debt back does.
-  // Repaying Fuliza needs no category: saving links it to Fuliza in Who owes who.
-  const fulizaRepayment = line.type === 'fuliza_repaid' && (paysOffFuliza(line, choice) || !choice.debt);
-  if (line.direction === 'out' && choice.debt?.kind !== 'lend' && !fulizaRepayment && !choice.category.trim()) return 'Choose what it was for.';
+  // Paying a loan back needs no category: saving links it to its lender in Who owes who.
+  const loanRepayment = loanOf(line)?.kind === 'pay-back' && (paysOffLoan(line, choice) || !choice.debt);
+  // Into M-Shwari, KCB M-PESA, Ziidi or Mali: saving links it to that account in Savings.
+  const intoSavings = Boolean(savingsOf(line)?.into) && !choice.debt;
+  if (line.direction === 'out' && choice.debt?.kind !== 'lend' && !loanRepayment && !intoSavings && !choice.category.trim()) return 'Choose what it was for.';
   return null;
 }
 
@@ -680,7 +730,7 @@ export function buildPostings(line: PreviewLine, choice: Choice, ctx: PostingCon
 
   if (line.direction === 'in') {
     // A source is only for income: a repayment or a loan is not, so it takes none.
-    const source = choice.incomeSourceId && !choice.debt && line.type !== 'fuliza_borrowed' ? ctx.incomeSources?.find((entry) => entry.id === choice.incomeSourceId) : undefined;
+    const source = choice.incomeSourceId && !choice.debt && loanOf(line)?.kind !== 'borrowed' ? ctx.incomeSources?.find((entry) => entry.id === choice.incomeSourceId) : undefined;
     // A source belongs to one member, and the server only accepts the deposit
     // when it names exactly that member as who made it - not merely any
     // current member. A source whose owner is not currently a member
@@ -702,7 +752,7 @@ export function buildPostings(line: PreviewLine, choice: Choice, ctx: PostingCon
         // They paid back what they owed you, or you borrowed from them: neither
         // is income, and the server keeps both out of the income figures.
         ...(choice.debt?.kind === 'repaid' ? { settlesContributorId: choice.debt.partyId } : {}),
-        ...(choice.debt?.kind === 'borrowed' || (!choice.debt && line.type === 'fuliza_borrowed') ? { isBorrowing: true } : {}),
+        ...(choice.debt?.kind === 'borrowed' || (!choice.debt && loanOf(line)?.kind === 'borrowed') ? { isBorrowing: true } : {}),
         ...(receipt ? { mpesaReceipt: receipt } : {}),
         ...(choice.notes?.trim() ? { notes: choice.notes.trim() } : {}),
       },
@@ -715,9 +765,9 @@ export function buildPostings(line: PreviewLine, choice: Choice, ctx: PostingCon
   const madeById = ctx.userId ?? null;
   // Lending is not a cost: no category, and linked to who it went to.
   const lending = choice.debt?.kind === 'lend';
-  // Nor is paying Fuliza back: what the loan bought was recorded as spending
+  // Nor is paying a loan back: what the loan bought was recorded as spending
   // when it was bought, so the repayment only clears the debt.
-  const clearing = paysOffFuliza(line, choice);
+  const clearing = paysOffLoan(line, choice);
   return {
     kind: 'disbursement' as const,
     main: {
@@ -871,7 +921,7 @@ export function chooseOtherBudget(choices: Record<number, Choice>, index: number
 export function sendableLines(lines: readonly PreviewLine[], choices: Record<number, Choice>): PreviewLine[] {
   return lines.filter((line) => {
     const choice = choices[line.index];
-    if (!choice?.include || !isRecordable(line) || choice.debt || line.type?.startsWith('fuliza_') || line.type === 'transaction_charge') return false;
+    if (!choice?.include || !isRecordable(line) || choice.debt || line.type?.startsWith('fuliza_') || loanOf(line) || savingsOf(line) || line.type === 'transaction_charge') return false;
     const destination = destinationOf(choice);
     return destination === 'category' || destination === 'other-budget';
   });
@@ -904,7 +954,7 @@ export function sendLinesToOtherBudget(
 
 /** Savings transfers take whole shillings only, and only a payment that could be recorded at all. */
 export const canUseSavings = (line: PreviewLine): boolean =>
-  isRecordable(line) && line.amount !== null && Number.isInteger(line.amount) && !line.type?.startsWith('fuliza_');
+  isRecordable(line) && line.amount !== null && Number.isInteger(line.amount) && !line.type?.startsWith('fuliza_') && !loanOf(line);
 
 /** Words in a payee that say it is a bank: a payment to one is likely a move between the person's own accounts. */
 export const BANK_WORDS = /\b(bank|equity|kcb|co-?op(erative)?|absa|ncba|stanbic|dtb|i&m|family|sidian|gulf|hf|nba|diamond|standard chartered|citi|hfc|ecobank|uba|prime bank|credit bank|victoria|guaranty|gtb|m-?oriental|paramount|spire)\b/i;

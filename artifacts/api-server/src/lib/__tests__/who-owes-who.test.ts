@@ -49,8 +49,8 @@ describe("Fuliza from statements", () => {
     expect(route).toContain("return { ...row, linkPartyId: fulizaId, linkKind: kind };");
   });
 
-  it("adds Safaricom PLC to Who owes who when it is not there, on confirming", () => {
-    expect(route).toContain('name: "Safaricom PLC",');
+  it("adds Fuliza to Who owes who when it is not there, on confirming", () => {
+    expect(route).toContain("name: FULIZA_PARTY_NAME,");
     expect(route).toContain("if (fulizaId === null && (toAdd || fulizaLinks.length > 0)) {");
   });
 });
