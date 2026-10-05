@@ -6,6 +6,7 @@ import { JAMVI_APK_PATH, JAMVI_APP_PATH, JAMVI_SUPPORT_EMAIL } from "@/lib/site-
 
 const STEPS = [
   "Tap Download for Android above, on the phone you will use Jamvi on.",
+  "If Chrome says the file might be harmful, tap Download anyway. If nothing seems to happen, open Chrome's menu, then Downloads - a blocked download waits there for you to keep it.",
   "Open the file when it finishes. If Android asks, allow installs from your browser (or WhatsApp, if the link came there).",
   "If Google Play Protect warns about an app it does not know, tap More details, then Install anyway. Jamvi is not in the Play Store yet, so Google has not seen it.",
   "Open Jamvi and sign in with Google. You start with a free trial.",
@@ -47,7 +48,7 @@ export default function Download() {
             <DownloadIcon className="h-5 w-5" aria-hidden="true" />
             Download for Android
           </a>
-          <p className="mt-3 text-sm text-foreground/60">About 100 MB. Android only.</p>
+          <p className="mt-3 text-sm text-foreground/60">About 100 MB, so Wi-Fi is best. Android 7 or newer.</p>
         </div>
       </section>
 
