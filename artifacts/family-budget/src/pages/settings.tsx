@@ -120,11 +120,13 @@ export default function Settings() {
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [deletionStep, setDeletionStep] = useState<"intro" | "code">("intro");
   const [deletionCode, setDeletionCode] = useState("");
+  const [deletionWord, setDeletionWord] = useState<string | null>(null);
   // Deleting a group needs the same emailed-code approval as deleting an
   // account: it erases everything for every member with no grace period.
   const [confirmingDeleteGroup, setConfirmingDeleteGroup] = useState(false);
   const [groupDeletionStep, setGroupDeletionStep] = useState<"intro" | "code">("intro");
   const [groupDeletionCode, setGroupDeletionCode] = useState("");
+  const [groupDeletionWord, setGroupDeletionWord] = useState<string | null>(null);
   const [sendingGroupCode, setSendingGroupCode] = useState(false);
   const [confirmingGroupCode, setConfirmingGroupCode] = useState(false);
   const [sendingDeletionCode, setSendingDeletionCode] = useState(false);
@@ -602,10 +604,9 @@ export default function Settings() {
     setSendingGroupCode(true);
     try {
       const response = await fetch("/api/group/delete/request-code", { method: "POST", credentials: "include" });
-      if (!response.ok) {
-        const body = await response.json().catch(() => null);
-        throw new Error(body?.error);
-      }
+      const body = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(body?.error);
+      setGroupDeletionWord(typeof body?.confirmWith === "string" ? body.confirmWith : null);
       setGroupDeletionStep("code");
     } catch (error) {
       toast({
@@ -625,7 +626,7 @@ export default function Settings() {
         method: "DELETE",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: groupDeletionCode }),
+        body: JSON.stringify(groupDeletionWord ? { confirm: groupDeletionCode } : { code: groupDeletionCode }),
       });
       if (!response.ok) {
         const body = await response.json().catch(() => null);
@@ -674,10 +675,10 @@ export default function Settings() {
     setSendingDeletionCode(true);
     try {
       const response = await fetch("/api/auth/delete-account/request-code", { method: "POST", credentials: "include" });
-      if (!response.ok) {
-        const body = await response.json().catch(() => null);
-        throw new Error(body?.error);
-      }
+      const body = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(body?.error);
+      // No email on the account: confirmed by typing a word instead.
+      setDeletionWord(typeof body?.confirmWith === "string" ? body.confirmWith : null);
       setDeletionStep("code");
     } catch (error) {
       toast({
@@ -697,7 +698,7 @@ export default function Settings() {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: deletionCode }),
+        body: JSON.stringify(deletionWord ? { confirm: deletionCode } : { code: deletionCode }),
       });
       if (!response.ok) {
         const body = await response.json().catch(() => null);
@@ -1616,22 +1617,24 @@ export default function Settings() {
           ) : (
             <>
               <AlertDialogHeader>
-                <AlertDialogTitle>Confirm with the code we emailed you</AlertDialogTitle>
+                <AlertDialogTitle>{deletionWord ? `Type ${deletionWord} to confirm` : "Confirm with the code we emailed you"}</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Enter the 6-digit code — this is what actually schedules your account for deletion. Nothing
-                  happens without it.
+                  {deletionWord
+                    ? `Your account has no email to send a code to. Type ${deletionWord} to schedule your account for deletion.`
+                    : "Enter the 6-digit code — this is what actually schedules your account for deletion. Nothing happens without it."}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <Input
                 value={deletionCode}
-                onChange={(event) => setDeletionCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
-                placeholder="000000"
-                inputMode="numeric"
-                maxLength={6}
+                onChange={(event) => setDeletionCode(deletionWord ? event.target.value.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 12) : event.target.value.replace(/\D/g, "").slice(0, 6))}
+                placeholder={deletionWord ?? "000000"}
+                inputMode={deletionWord ? "text" : "numeric"}
+                maxLength={deletionWord ? 12 : 6}
                 autoFocus
                 className="text-center text-2xl font-bold tracking-[0.5em]"
                 data-testid="delete-account-code-input"
               />
+              {deletionWord ? null : (
               <button
                 type="button"
                 onClick={() => void requestDeletionCode()}
@@ -1640,6 +1643,7 @@ export default function Settings() {
               >
                 {sendingDeletionCode ? "Sending…" : "Resend code"}
               </button>
+              )}
               <AlertDialogFooter>
                 <AlertDialogCancel data-testid="keep-account">Keep my account</AlertDialogCancel>
                 <AlertDialogAction
@@ -1648,7 +1652,7 @@ export default function Settings() {
                     event.preventDefault();
                     void confirmDeletionCode();
                   }}
-                  disabled={confirmingDeletionCode || deletionCode.length !== 6}
+                  disabled={confirmingDeletionCode || (deletionWord ? deletionCode !== deletionWord : deletionCode.length !== 6)}
                   className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 >
                   {confirmingDeletionCode ? "Deleting…" : "Delete my account"}
@@ -1695,22 +1699,24 @@ export default function Settings() {
           ) : (
             <>
               <AlertDialogHeader>
-                <AlertDialogTitle>Confirm with the code we emailed you</AlertDialogTitle>
+                <AlertDialogTitle>{groupDeletionWord ? `Type ${groupDeletionWord} to confirm` : "Confirm with the code we emailed you"}</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Enter the 6-digit code — this is what actually deletes "{budgetName}" for every member. Nothing
-                  happens without it, and it cannot be undone.
+                  {groupDeletionWord
+                    ? `Your account has no email to send a code to. Type ${groupDeletionWord} to delete "${budgetName}" for every member. It cannot be undone.`
+                    : `Enter the 6-digit code — this is what actually deletes "${budgetName}" for every member. Nothing happens without it, and it cannot be undone.`}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <Input
                 value={groupDeletionCode}
-                onChange={(event) => setGroupDeletionCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
-                placeholder="000000"
-                inputMode="numeric"
-                maxLength={6}
+                onChange={(event) => setGroupDeletionCode(groupDeletionWord ? event.target.value.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 12) : event.target.value.replace(/\D/g, "").slice(0, 6))}
+                placeholder={groupDeletionWord ?? "000000"}
+                inputMode={groupDeletionWord ? "text" : "numeric"}
+                maxLength={groupDeletionWord ? 12 : 6}
                 autoFocus
                 className="text-center text-2xl font-bold tracking-[0.5em]"
                 data-testid="delete-group-code-input"
               />
+              {groupDeletionWord ? null : (
               <button
                 type="button"
                 onClick={() => void requestGroupCode()}
@@ -1719,6 +1725,7 @@ export default function Settings() {
               >
                 {sendingGroupCode ? "Sending…" : "Resend code"}
               </button>
+              )}
               <AlertDialogFooter>
                 <AlertDialogCancel data-testid="keep-group">Keep the group</AlertDialogCancel>
                 <AlertDialogAction
@@ -1727,7 +1734,7 @@ export default function Settings() {
                     event.preventDefault();
                     void confirmGroupDeletion();
                   }}
-                  disabled={confirmingGroupCode || groupDeletionCode.length !== 6}
+                  disabled={confirmingGroupCode || (groupDeletionWord ? groupDeletionCode !== groupDeletionWord : groupDeletionCode.length !== 6)}
                   className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 >
                   {confirmingGroupCode ? "Deleting…" : "Delete this group"}

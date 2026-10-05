@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { customFetch } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
 import { yearSummary, type PastYear } from '@/lib/deleteYear';
+import { cleanConfirmInput, confirmBody, confirmReady, typedWord } from '@/lib/deletionConfirm';
 
 /**
  * Deleting a whole past year from the Personal budget, for good ("delete 2025
@@ -27,13 +28,15 @@ export default function DeleteYearScreen() {
   const [chosen, setChosen] = useState<PastYear | null>(null);
   const [codeSent, setCodeSent] = useState(false);
   const [code, setCode] = useState('');
+  // Set when this account has no email: the word to type instead of a code.
+  const [word, setWord] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   const sendCode = async (year: PastYear) => {
     setSending(true);
     try {
-      await customFetch(`/api/budget-years/${year.year}/delete/request-code`, { method: 'POST' });
+      setWord(typedWord(await customFetch<unknown>(`/api/budget-years/${year.year}/delete/request-code`, { method: 'POST' })));
       setCodeSent(true);
     } catch (error) {
       Alert.alert('Could not send a code', error instanceof Error ? error.message : 'Check your connection and try again.');
@@ -45,22 +48,22 @@ export default function DeleteYearScreen() {
   const choose = (year: PastYear) => {
     Alert.alert(
       `Delete ${year.year} for good?`,
-      `${yearSummary(year)}\n\nThis cannot be undone. Your categories, income sources, goals and accounts stay. We will email you a code to confirm.`,
+      `${yearSummary(year)}\n\nThis cannot be undone. Your categories, income sources, goals and accounts stay. You confirm with a code we email you.`,
       [
         { text: 'Keep it', style: 'cancel' },
-        { text: 'Email me the code', style: 'destructive', onPress: () => { setChosen(year); setCode(''); void sendCode(year); } },
+        { text: 'Continue', style: 'destructive', onPress: () => { setChosen(year); setCode(''); void sendCode(year); } },
       ],
     );
   };
 
   const confirm = async () => {
-    if (!chosen || code.length !== 6 || deleting) return;
+    if (!chosen || !confirmReady(code, word) || deleting) return;
     setDeleting(true);
     try {
       await customFetch(`/api/budget-years/${chosen.year}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code }),
+        body: JSON.stringify(confirmBody(code, word)),
       });
       // Every balance, list and report on the phone changes with it.
       await queryClient.resetQueries();
@@ -121,22 +124,25 @@ export default function DeleteYearScreen() {
             <Text style={[styles.intro, { color: colors.mutedForeground }]}>
               {sending && !codeSent
                 ? 'Sending a code to your email…'
-                : `We’ve emailed a 6-digit code. Enter it below - it is what deletes ${chosen.year}. ${yearSummary(chosen)} Nothing happens without it, and it cannot be undone.`}
+                : word
+                  ? `Your account has no email to send a code to. Type ${word} below to delete ${chosen.year}. ${yearSummary(chosen)} It cannot be undone.`
+                  : `We’ve emailed a 6-digit code. Enter it below - it is what deletes ${chosen.year}. ${yearSummary(chosen)} Nothing happens without it, and it cannot be undone.`}
             </Text>
             <TextInput
               value={code}
-              onChangeText={(text) => setCode(text.replace(/[^\d]/g, '').slice(0, 6))}
-              keyboardType="number-pad"
-              placeholder="000000"
+              onChangeText={(text) => setCode(cleanConfirmInput(text, word))}
+              keyboardType={word ? 'default' : 'number-pad'}
+              autoCapitalize="characters"
+              placeholder={word ?? '000000'}
               placeholderTextColor={colors.mutedForeground}
-              maxLength={6}
+              maxLength={word ? 12 : 6}
               autoFocus
               style={[styles.codeInput, { borderColor: colors.border, color: colors.foreground }]}
               testID="delete-year-code"
             />
-            <Pressable onPress={() => void sendCode(chosen)} disabled={sending} hitSlop={8} style={{ alignSelf: 'center' }}>
+            {word ? null : <Pressable onPress={() => void sendCode(chosen)} disabled={sending} hitSlop={8} style={{ alignSelf: 'center' }}>
               <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>{sending ? 'Sending…' : 'Resend code'}</Text>
-            </Pressable>
+            </Pressable>}
           </>
         )}
       </ScrollView>
@@ -146,8 +152,8 @@ export default function DeleteYearScreen() {
           <Pressable
             testID="delete-year-confirm"
             onPress={() => void confirm()}
-            disabled={deleting || sending || code.length !== 6}
-            style={[styles.confirmBtn, { backgroundColor: colors.destructive, opacity: deleting || sending || code.length !== 6 ? 0.5 : 1 }]}
+            disabled={deleting || sending || !confirmReady(code, word)}
+            style={[styles.confirmBtn, { backgroundColor: colors.destructive, opacity: deleting || sending || !confirmReady(code, word) ? 0.5 : 1 }]}
           >
             {deleting
               ? <ActivityIndicator color={colors.destructiveForeground} />

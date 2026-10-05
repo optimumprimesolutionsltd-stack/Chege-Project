@@ -52,7 +52,11 @@ import { resolveOrigin } from '../lib/requestOrigin.js';
 import { ensureTrialSubscription } from "../lib/subscription-catalog";
 import {
   cancelPendingAccountDeletion,
+  accountHasEmail,
   confirmAccountDeletionCode,
+  deletionConfirmation,
+  requestAccountDeletion,
+  TYPED_CONFIRMATION,
   IncorrectDeletionCodeError,
   requestAccountDeletionCode,
 } from "../lib/account-deletion";
@@ -460,6 +464,10 @@ router.post('/auth/delete-account/request-code', accountDeletionCodeLimiter, asy
     return;
   }
 
+  if (!(await accountHasEmail(req.user.id))) {
+    res.json({ sent: false, confirmWith: TYPED_CONFIRMATION });
+    return;
+  }
   try {
     await requestAccountDeletionCode(req.user.id);
     res.json({ sent: true });
@@ -481,15 +489,17 @@ router.post('/auth/delete-account/confirm', accountDeletionConfirmLimiter, async
     return;
   }
 
-  const code = typeof req.body?.code === 'string' ? req.body.code.trim() : '';
-  if (!/^\d{6}$/.test(code)) {
-    res.status(400).json({ error: 'Enter the 6-digit code we emailed you.' });
+  const how = await deletionConfirmation(req.user.id, req.body);
+  if ('error' in how) {
+    res.status(400).json({ error: how.error });
     return;
   }
 
   let scheduledFor: Date;
   try {
-    scheduledFor = await confirmAccountDeletionCode(req.user.id, code);
+    scheduledFor = how.kind === 'code'
+      ? await confirmAccountDeletionCode(req.user.id, how.code)
+      : await requestAccountDeletion(req.user.id);
   } catch (error) {
     if (error instanceof IncorrectDeletionCodeError) {
       res.status(400).json({ error: error.message });

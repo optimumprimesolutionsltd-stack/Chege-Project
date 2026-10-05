@@ -60,6 +60,13 @@ const accountDeletionMocks = vi.hoisted(() => {
     eraseGroupData: vi.fn().mockResolvedValue(undefined),
     confirmGroupDeletionCode: vi.fn().mockResolvedValue(undefined),
     requestGroupDeletionCode: vi.fn().mockResolvedValue(undefined),
+    accountHasEmail: vi.fn().mockResolvedValue(true),
+    TYPED_CONFIRMATION: "DELETE",
+    // As the real one does for an account with an email.
+    deletionConfirmation: vi.fn(async (_userId: string, body: { code?: unknown } | undefined) => {
+      const code = typeof body?.code === "string" ? body.code.trim() : "";
+      return /^\d{6}$/.test(code) ? { kind: "code", code } : { error: "Enter the 6-digit code we emailed you." };
+    }),
     IncorrectDeletionCodeError,
   };
 });

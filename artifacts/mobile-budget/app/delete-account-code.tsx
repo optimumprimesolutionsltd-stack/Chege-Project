@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { customFetch } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/lib/auth';
+import { cleanConfirmInput, confirmBody, confirmReady, typedWord } from '@/lib/deletionConfirm';
 
 /**
  * The confirmation step settings.tsx's "Delete account" leads to.
@@ -28,6 +29,8 @@ export default function DeleteAccountCodeScreen() {
   const insets = useSafeAreaInsets();
   const { logout } = useAuth();
   const [code, setCode] = useState('');
+  // Set when this account has no email: the word to type instead of a code.
+  const [word, setWord] = useState<string | null>(null);
   const [sending, setSending] = useState(true);
   const [confirming, setConfirming] = useState(false);
   const requestedOnce = useRef(false);
@@ -35,7 +38,7 @@ export default function DeleteAccountCodeScreen() {
   const sendCode = async () => {
     setSending(true);
     try {
-      await customFetch('/api/auth/delete-account/request-code', { method: 'POST' });
+      setWord(typedWord(await customFetch<unknown>('/api/auth/delete-account/request-code', { method: 'POST' })));
     } catch (error) {
       Alert.alert(
         'Could not send a code',
@@ -56,13 +59,13 @@ export default function DeleteAccountCodeScreen() {
   }, []);
 
   const confirm = async () => {
-    if (confirming || sending || code.length !== 6) return;
+    if (confirming || sending || !confirmReady(code, word)) return;
     setConfirming(true);
     try {
       await customFetch('/api/auth/delete-account/confirm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code }),
+        body: JSON.stringify(confirmBody(code, word)),
       });
       // The confirm endpoint already ended the session server-side; this
       // clears the local token and cache to match.
@@ -90,36 +93,39 @@ export default function DeleteAccountCodeScreen() {
         <Text style={[styles.intro, { color: colors.mutedForeground }]}>
           {sending && code.length === 0
             ? 'Sending a code to your email…'
-            : 'We’ve emailed a 6-digit code. Enter it below — this is what actually schedules your account for deletion. Nothing happens without it.'}
+            : word
+              ? `Your account has no email to send a code to. Type ${word} below to schedule your account for deletion.`
+              : 'We’ve emailed a 6-digit code. Enter it below — this is what actually schedules your account for deletion. Nothing happens without it.'}
         </Text>
 
         <TextInput
           value={code}
-          onChangeText={(text) => setCode(text.replace(/[^\d]/g, '').slice(0, 6))}
-          keyboardType="number-pad"
-          placeholder="000000"
+          onChangeText={(text) => setCode(cleanConfirmInput(text, word))}
+          keyboardType={word ? 'default' : 'number-pad'}
+          autoCapitalize="characters"
+          placeholder={word ?? '000000'}
           placeholderTextColor={colors.mutedForeground}
-          maxLength={6}
+          maxLength={word ? 12 : 6}
           autoFocus
           style={[styles.codeInput, { borderColor: colors.border, color: colors.foreground }]}
           testID="delete-account-code-input"
         />
 
-        <Pressable onPress={() => void sendCode()} disabled={sending} hitSlop={8} style={styles.resendLink}>
+        {word ? null : <Pressable onPress={() => void sendCode()} disabled={sending} hitSlop={8} style={styles.resendLink}>
           <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>
             {sending ? 'Sending…' : 'Resend code'}
           </Text>
-        </Pressable>
+        </Pressable>}
       </View>
 
       <View style={[styles.footer, { borderTopColor: colors.border, paddingBottom: insets.bottom + 12 }]}>
         <Pressable
           testID="delete-account-confirm"
           onPress={() => void confirm()}
-          disabled={confirming || sending || code.length !== 6}
+          disabled={confirming || sending || !confirmReady(code, word)}
           style={[
             styles.confirmBtn,
-            { backgroundColor: colors.destructive, opacity: confirming || sending || code.length !== 6 ? 0.5 : 1 },
+            { backgroundColor: colors.destructive, opacity: confirming || sending || !confirmReady(code, word) ? 0.5 : 1 },
           ]}
         >
           {confirming ? (

@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { db } from "@workspace/db";
 import { getActiveGroupId } from "../lib/activeGroup";
-import { confirmYearDeletionCode, IncorrectDeletionCodeError, requestYearDeletionCode } from "../lib/account-deletion";
+import { accountHasEmail, confirmYearDeletionCode, deletionConfirmation, IncorrectDeletionCodeError, requestYearDeletionCode, TYPED_CONFIRMATION } from "../lib/account-deletion";
 import { nairobiToday } from "../lib/mpesa-balance";
 import { deletableYear, deleteYear, pastYears } from "../lib/year-deletion";
 import { accountDeletionCodeLimiter, accountDeletionConfirmLimiter } from "../middlewares/rateLimit";
@@ -41,6 +41,10 @@ router.post("/budget-years/:year/delete/request-code", accountDeletionCodeLimite
   if (groupId === null || !personalOnly(req, res)) return;
   const year = yearOf(req.params.year, res);
   if (year === null) return;
+  if (!(await accountHasEmail(req.user!.id))) {
+    res.json({ sent: false, confirmWith: TYPED_CONFIRMATION });
+    return;
+  }
   try {
     await requestYearDeletionCode(req.user!.id, groupId, year);
     res.json({ sent: true });
@@ -54,13 +58,13 @@ router.delete("/budget-years/:year", accountDeletionConfirmLimiter, async (req, 
   if (groupId === null || !personalOnly(req, res)) return;
   const year = yearOf(req.params.year, res);
   if (year === null) return;
-  const code = typeof req.body?.code === "string" ? req.body.code.trim() : "";
-  if (!/^\d{6}$/.test(code)) {
-    res.status(400).json({ error: "Enter the 6-digit code we emailed you." });
+  const how = await deletionConfirmation(req.user!.id, req.body);
+  if ("error" in how) {
+    res.status(400).json({ error: how.error });
     return;
   }
   try {
-    await confirmYearDeletionCode(req.user!.id, groupId, year, code);
+    if (how.kind === "code") await confirmYearDeletionCode(req.user!.id, groupId, year, how.code);
   } catch (error) {
     if (error instanceof IncorrectDeletionCodeError) {
       res.status(400).json({ error: error.message });

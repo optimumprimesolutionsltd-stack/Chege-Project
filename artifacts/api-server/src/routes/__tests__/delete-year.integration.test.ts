@@ -112,4 +112,21 @@ describe.skipIf(!hasDb)("deleting a past year (integration)", () => {
     expect((await request(app(false)).get("/budget-years")).status).toBe(403);
     expect((await request(app(false)).delete("/budget-years/2025").send({ code: "123456" })).status).toBe(403);
   });
+
+  // An account a sign-in made with no email could never get a code (5 Oct 2026).
+  it("lets an account with no email confirm by typing DELETE, and never lets one with an email skip its code", async () => {
+    await db.insert(jointAccountTxTable).values({ groupId, accountId: (await db.select({ id: bankAccountsTable.id }).from(bankAccountsTable).where(eq(bankAccountsTable.groupId, groupId)))[0].id, type: "deposit", amount: 50, description: "2024 gift", date: "2024-03-01" } as never);
+
+    // With an email: the word is refused.
+    expect((await request(app()).delete("/budget-years/2024").send({ confirm: "DELETE" })).status).toBe(400);
+
+    await db.update(usersTable).set({ email: null }).where(eq(usersTable.id, userId));
+    const asked = await request(app()).post("/budget-years/2024/delete/request-code");
+    expect(asked.status).toBe(200);
+    expect(asked.body).toEqual({ sent: false, confirmWith: "DELETE" });
+    expect((await request(app()).delete("/budget-years/2024").send({ confirm: "delet" })).status).toBe(400);
+    const done = await request(app()).delete("/budget-years/2024").send({ confirm: "delete" });
+    expect(done.status).toBe(200);
+    expect(done.body.deleted.bankEntries).toBe(1);
+  });
 });

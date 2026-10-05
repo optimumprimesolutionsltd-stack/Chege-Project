@@ -231,6 +231,37 @@ export async function cancelPendingAccountDeletion(userId: string): Promise<void
 const DELETION_CODE_LENGTH = 6;
 const DELETION_CODE_TTL_MS = 10 * 60 * 1000;
 
+/**
+ * An account with no email - one made by a sign-in that sent none - can never
+ * get a code, so it could never delete itself, a group or a year (5 Oct 2026).
+ * It confirms by typing this word instead; it is already signed in, and the
+ * phone adds a fingerprint check once its build carries one.
+ */
+export const TYPED_CONFIRMATION = "DELETE";
+
+export async function accountHasEmail(userId: string): Promise<boolean> {
+  const [user] = await db.select({ email: usersTable.email }).from(usersTable).where(eq(usersTable.id, userId)).limit(1);
+  return Boolean(user?.email);
+}
+
+/**
+ * How this request confirms a deletion: the emailed code, or - only for an
+ * account with no email - the typed word. An account with an email can never
+ * skip its code by typing the word.
+ */
+export async function deletionConfirmation(
+  userId: string,
+  body: unknown,
+): Promise<{ kind: "code"; code: string } | { kind: "typed" } | { error: string }> {
+  const fields = (body ?? {}) as { code?: unknown; confirm?: unknown };
+  if (await accountHasEmail(userId)) {
+    const code = typeof fields.code === "string" ? fields.code.trim() : "";
+    return /^\d{6}$/.test(code) ? { kind: "code", code } : { error: "Enter the 6-digit code we emailed you." };
+  }
+  const typed = typeof fields.confirm === "string" ? fields.confirm.trim().toUpperCase() : "";
+  return typed === TYPED_CONFIRMATION ? { kind: "typed" } : { error: `Type ${TYPED_CONFIRMATION} to confirm.` };
+}
+
 export class IncorrectDeletionCodeError extends Error {
   constructor() {
     super("That code is incorrect or has expired.");
