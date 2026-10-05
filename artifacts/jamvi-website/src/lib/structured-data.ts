@@ -48,7 +48,7 @@ const application = {
   "@type": "SoftwareApplication",
   name: "Jamvi",
   applicationCategory: "FinanceApplication",
-  operatingSystem: "Web, Android, iOS",
+  operatingSystem: "Web, Android",
   url: SITE_ORIGIN,
   image: DEFAULT_OG_IMAGE,
   inLanguage: "en-KE",
