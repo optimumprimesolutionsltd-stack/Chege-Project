@@ -15,6 +15,7 @@ import { workspaceLabel, workspaceNameClass } from "@/lib/workspace-identity";
 import { Input } from "@/components/ui/input";
 import { getBudgetIncomeCheck, getKnownIncomeTotal } from "@/lib/onboarding-budget-utils";
 import { budgetDurationLabels } from "@/lib/budget-plan";
+import { newSubcategoryError, onboardingSubcategoriesFor, plannedCategoryAmount, readCustomSubcategories, readSubcategoryBudgets, subcategoryPayload } from "@/lib/onboarding-subcategories";
 import { DEFAULT_WORKSPACE_ACCENT } from "@/lib/workspace-accent";
 
 const CHOOSER_STORAGE_PREFIX = "jamvi:budget-chooser:completed:";
@@ -31,6 +32,10 @@ type WebOnboardingDraft = {
   selectedCategories: string[];
   customCategories: string[];
   categoryBudgets: Record<string, string>;
+  /** Amounts against each category's subcategories; a category has none of its own. */
+  subcategoryBudgets: Record<string, Record<string, string>>;
+  /** Subcategories the person added on the amounts step, by category. */
+  customSubcategories: Record<string, string[]>;
   selectedIncomeStreams: string[];
   incomeAmounts: Record<string, string>;
   /** Group setup only: what each member is expected to contribute per month. */
@@ -167,6 +172,8 @@ function readOnboardingDraft(userId: string): WebOnboardingDraft | null {
       selectedCategories: Array.isArray(value.selectedCategories) ? value.selectedCategories.filter((item): item is string => typeof item === "string") : [],
       customCategories: Array.isArray(value.customCategories) ? value.customCategories.filter((item): item is string => typeof item === "string") : [],
       categoryBudgets: value.categoryBudgets && typeof value.categoryBudgets === "object" ? value.categoryBudgets : {},
+      subcategoryBudgets: readSubcategoryBudgets(value.subcategoryBudgets),
+      customSubcategories: readCustomSubcategories(value.customSubcategories),
       selectedIncomeStreams: Array.isArray(value.selectedIncomeStreams) ? value.selectedIncomeStreams.filter((item): item is string => typeof item === "string") : [],
       incomeAmounts: value.incomeAmounts && typeof value.incomeAmounts === "object" ? value.incomeAmounts : {},
       memberContribution: typeof value.memberContribution === "string" ? value.memberContribution.replace(/[^0-9]/g, "") : "",
@@ -283,6 +290,9 @@ export function BudgetChooser({
   const [categorySelectionError, setCategorySelectionError] = useState(false);
   const [showCategoryBudgetSetup, setShowCategoryBudgetSetup] = useState(false);
   const [categoryBudgets, setCategoryBudgets] = useState<Record<string, string>>({});
+  const [subcategoryBudgets, setSubcategoryBudgets] = useState<Record<string, Record<string, string>>>({});
+  const [customSubcategories, setCustomSubcategories] = useState<Record<string, string[]>>({});
+  const [newSubcategory, setNewSubcategory] = useState<Record<string, string>>({});
   const [customCategories, setCustomCategories] = useState<string[]>([]);
   const [customCategory, setCustomCategory] = useState("");
   const [showIncomeSetup, setShowIncomeSetup] = useState(false);
@@ -313,6 +323,8 @@ export function BudgetChooser({
       selectedCategories,
       customCategories,
       categoryBudgets,
+      subcategoryBudgets,
+      customSubcategories,
       selectedIncomeStreams,
       incomeAmounts,
       memberContribution,
@@ -322,7 +334,7 @@ export function BudgetChooser({
     } catch {
       // The server-side incomplete marker still keeps onboarding from being skipped.
     }
-  }, [activeOnboardingStage, budgetDuration, categoryBudgets, customCategories, customEndDate, incomeAmounts, memberContribution, onboardingMode, onboardingPurpose, selectedCategories, selectedIncomeStreams, userId]);
+  }, [activeOnboardingStage, budgetDuration, categoryBudgets, subcategoryBudgets, customSubcategories, customCategories, customEndDate, incomeAmounts, memberContribution, onboardingMode, onboardingPurpose, selectedCategories, selectedIncomeStreams, userId]);
 
   const enterApp = () => {
     if (userId) {
@@ -367,6 +379,8 @@ export function BudgetChooser({
     setSelectedCategories(draft.selectedCategories);
     setCustomCategories(draft.customCategories);
     setCategoryBudgets(draft.categoryBudgets);
+    setSubcategoryBudgets(draft.subcategoryBudgets);
+    setCustomSubcategories(draft.customSubcategories);
     setSelectedIncomeStreams(draft.selectedIncomeStreams);
     setIncomeAmounts(draft.incomeAmounts);
     setMemberContribution(draft.memberContribution ?? "");
@@ -441,7 +455,9 @@ export function BudgetChooser({
           durationType: budgetDuration ?? "month",
           startDate,
           endDate: budgetDuration === "custom" ? customEndDate : null,
-          categories: selectedCategories.map((name, position) => ({ name, plannedAmount: Math.max(0, Math.round(Number(categoryBudgets[name] ?? 0))), priority: ONBOARDING_CATEGORY_TIERS.find((item) => item.categories.some((category) => category === name))?.priority ?? 4, isCustom: customCategories.includes(name), position })),
+          // A category is planned only through its subcategories, which the
+          // server makes under it; its amount is theirs added up.
+          categories: selectedCategories.map((name, position) => ({ name, plannedAmount: plannedCategoryAmount(name, subcategoryBudgets, customSubcategories), subcategories: subcategoryPayload(name, subcategoryBudgets, customSubcategories), priority: ONBOARDING_CATEGORY_TIERS.find((item) => item.categories.some((category) => category === name))?.priority ?? 4, isCustom: customCategories.includes(name), position })),
         }),
       });
       if (!response.ok) throw new Error("Could not save your budget plan");
@@ -702,13 +718,21 @@ export function BudgetChooser({
   }
 
   if (showCategoryBudgetSetup) {
-    const totalBudget = selectedCategories.reduce((sum, category) => sum + (Number(categoryBudgets[category]) || 0), 0);
+    const totalBudget = selectedCategories.reduce((sum, category) => sum + plannedCategoryAmount(category, subcategoryBudgets, customSubcategories), 0);
     const knownIncomeTotal = getKnownIncomeTotal(selectedIncomeStreams.map((name) => ({ name, monthlyAmount: Number(incomeAmounts[name] ?? 0) })));
     const incomeCheck = getBudgetIncomeCheck(totalBudget, knownIncomeTotal);
-    const setCategoryBudget = (category: string, amount: string) => setCategoryBudgets((current) => ({ ...current, [category]: amount.replace(/[^0-9.]/g, "") }));
+    const setSubcategoryBudget = (category: string, child: string, amount: string) => setSubcategoryBudgets((current) => ({ ...current, [category]: { ...(current[category] ?? {}), [child]: amount.replace(/[^0-9.]/g, "") } }));
+    const addSubcategory = (category: string) => {
+      const name = (newSubcategory[category] ?? "").trim();
+      const problem = newSubcategoryError(name, selectedCategories, customSubcategories);
+      if (problem) { setSelectionError(problem); return; }
+      setSelectionError(null);
+      setCustomSubcategories((current) => ({ ...current, [category]: [...(current[category] ?? []), name] }));
+      setNewSubcategory((current) => ({ ...current, [category]: "" }));
+    };
     return (
-      <main className="min-h-screen bg-gradient-to-b from-primary/10 via-background to-background px-4 py-6 sm:px-6 sm:py-10"><section className="mx-auto w-full max-w-3xl"><div className="overflow-hidden rounded-3xl border border-primary/15 bg-card shadow-xl"><header className="border-b border-primary/10 bg-primary px-6 py-7 text-primary-foreground sm:px-10 sm:py-9"><p className="text-xs font-bold uppercase tracking-[0.18em] text-accent">Step 6 of 6 · Approve your budget plan</p><h1 className="mt-2 max-w-2xl font-display text-3xl font-bold sm:text-5xl">{user.firstName ? `${user.firstName}, how much will you plan for each category?` : "How much will you plan for each category?"}</h1><p className="mt-3 max-w-2xl text-sm leading-relaxed text-primary-foreground/80 sm:text-base">Set an amount for the categories you selected. These are plans, not restrictions—you can adjust them anytime.</p></header><div className="p-6 sm:p-10">{selectedCategories.length > 0 ? <div className="space-y-3">{selectedCategories.map((category) => <div key={category} className="flex items-center gap-3 rounded-xl border border-border bg-background p-3"><label htmlFor={`budget-${category}`} className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{category}</label><div className="flex w-36 items-center gap-2"><span className="text-sm text-muted-foreground">KES</span><Input id={`budget-${category}`} inputMode="decimal" type="text" placeholder="0" value={categoryBudgets[category] ?? ""} onChange={(event) => setCategoryBudget(category, event.target.value)} className="h-10 text-right" /></div></div>)}</div> : <div className="rounded-2xl border border-dashed border-border p-6 text-sm text-muted-foreground">You did not select expense categories. You can add them later from your Budget page.</div>}<div className={`mt-5 rounded-xl border px-4 py-3 text-sm leading-relaxed ${incomeCheck.status === "above-income" ? "border-amber-500/40 bg-amber-500/10 text-foreground" : "border-primary/20 bg-primary/[0.04] text-muted-foreground"}`} role={incomeCheck.status === "above-income" ? "alert" : "status"}><span className="font-semibold text-foreground">{incomeCheck.status === "above-income" ? "Review this plan: " : "Income check: "}</span>{incomeCheck.message}</div>
- <div className="mt-6 flex items-center justify-between rounded-xl bg-primary/[0.05] px-4 py-3"><span className="text-sm font-semibold text-muted-foreground">Planned total</span><span className="font-display text-xl font-bold text-foreground">KES {totalBudget.toLocaleString("en-KE")}</span></div>{selectionError ? <p className="mt-4 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-foreground" role="alert">{selectionError}</p> : null}<div className="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between"><Button type="button" variant="outline" className="h-12 rounded-xl px-6" onClick={goBackToIncome} data-testid="onboarding-back-to-income">Back</Button><div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end"><p className="text-xs text-muted-foreground">Amounts can be changed later</p><Button type="button" className="h-12 rounded-xl px-6" onClick={() => void (async () => { setSelectionError(null); try { await saveOnboardingPreferences(true); try { window.localStorage.setItem(`jamvi:onboarding:category-budgets:${encodeURIComponent(userId)}`, JSON.stringify(categoryBudgets)); window.localStorage.removeItem(onboardingDraftStorageKey(userId)); } catch { /* The server completion record remains authoritative. */ } setShowCategoryBudgetSetup(false); } catch (error) { setSelectionError(error instanceof Error ? error.message : "Could not finish setup right now."); } })()}>Approve budget and continue <ChevronRight className="ml-2 h-4 w-4" /></Button></div></div></div></div></section></main>
+      <main className="min-h-screen bg-gradient-to-b from-primary/10 via-background to-background px-4 py-6 sm:px-6 sm:py-10"><section className="mx-auto w-full max-w-3xl"><div className="overflow-hidden rounded-3xl border border-primary/15 bg-card shadow-xl"><header className="border-b border-primary/10 bg-primary px-6 py-7 text-primary-foreground sm:px-10 sm:py-9"><p className="text-xs font-bold uppercase tracking-[0.18em] text-accent">Step 6 of 6 · Approve your budget plan</p><h1 className="mt-2 max-w-2xl font-display text-3xl font-bold sm:text-5xl">{user.firstName ? `${user.firstName}, how much will you plan for each category?` : "How much will you plan for each category?"}</h1><p className="mt-3 max-w-2xl text-sm leading-relaxed text-primary-foreground/80 sm:text-base">Set an amount for each subcategory; each category adds up its subcategories. These are plans, not restrictions—you can adjust them anytime.</p></header><div className="p-6 sm:p-10">{selectedCategories.length > 0 ? <div className="space-y-3">{selectedCategories.map((category) => { const subcategories = onboardingSubcategoriesFor(category, customSubcategories); const subtotal = plannedCategoryAmount(category, subcategoryBudgets, customSubcategories); return <div key={category} data-testid={`onboarding-amount-group-${category}`} className="rounded-xl border border-border bg-background"><div className="flex items-center justify-between gap-3 px-3 pt-3 pb-2"><span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{category}</span><span className={`text-sm font-bold ${subtotal > 0 ? "text-foreground" : "text-muted-foreground"}`}>KES {subtotal.toLocaleString("en-KE")}</span></div>{subcategories.map((child) => <div key={child} className="flex items-center gap-3 border-t border-border py-2 pl-6 pr-3"><label htmlFor={`budget-${category}-${child}`} className="min-w-0 flex-1 truncate text-sm text-foreground">{child}</label><div className="flex w-36 items-center gap-2"><span className="text-sm text-muted-foreground">KES</span><Input id={`budget-${category}-${child}`} inputMode="decimal" type="text" placeholder="0" value={subcategoryBudgets[category]?.[child] ?? ""} onChange={(event) => setSubcategoryBudget(category, child, event.target.value)} className="h-10 text-right" /></div></div>)}<div className="flex items-center gap-2 border-t border-border py-2 pl-6 pr-3"><Input aria-label={`Add a subcategory under ${category}`} placeholder={subcategories.length === 0 ? "Add a subcategory to plan an amount" : "Add a subcategory"} value={newSubcategory[category] ?? ""} onChange={(event) => setNewSubcategory((current) => ({ ...current, [category]: event.target.value }))} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addSubcategory(category); } }} className="h-9" /><Button type="button" variant="outline" size="sm" className="rounded-lg" onClick={() => addSubcategory(category)}>Add</Button></div></div>; })}</div> : <div className="rounded-2xl border border-dashed border-border p-6 text-sm text-muted-foreground">You did not select expense categories. You can add them later from your Budget page.</div>}<div className={`mt-5 rounded-xl border px-4 py-3 text-sm leading-relaxed ${incomeCheck.status === "above-income" ? "border-amber-500/40 bg-amber-500/10 text-foreground" : "border-primary/20 bg-primary/[0.04] text-muted-foreground"}`} role={incomeCheck.status === "above-income" ? "alert" : "status"}><span className="font-semibold text-foreground">{incomeCheck.status === "above-income" ? "Review this plan: " : "Income check: "}</span>{incomeCheck.message}</div>
+ <div className="mt-6 flex items-center justify-between rounded-xl bg-primary/[0.05] px-4 py-3"><span className="text-sm font-semibold text-muted-foreground">Planned total</span><span className="font-display text-xl font-bold text-foreground">KES {totalBudget.toLocaleString("en-KE")}</span></div>{selectionError ? <p className="mt-4 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-foreground" role="alert">{selectionError}</p> : null}<div className="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between"><Button type="button" variant="outline" className="h-12 rounded-xl px-6" onClick={goBackToIncome} data-testid="onboarding-back-to-income">Back</Button><div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end"><p className="text-xs text-muted-foreground">Amounts can be changed later</p><Button type="button" className="h-12 rounded-xl px-6" onClick={() => void (async () => { setSelectionError(null); try { await saveOnboardingPreferences(true); try { window.localStorage.setItem(`jamvi:onboarding:category-budgets:${encodeURIComponent(userId)}`, JSON.stringify(subcategoryBudgets)); window.localStorage.removeItem(onboardingDraftStorageKey(userId)); } catch { /* The server completion record remains authoritative. */ } setShowCategoryBudgetSetup(false); } catch (error) { setSelectionError(error instanceof Error ? error.message : "Could not finish setup right now."); } })()}>Approve budget and continue <ChevronRight className="ml-2 h-4 w-4" /></Button></div></div></div></div></section></main>
     );
   }
 
