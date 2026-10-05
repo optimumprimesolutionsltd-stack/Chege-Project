@@ -48,6 +48,7 @@ import {
   // once" - and reusing it here avoids a migration for what is the same
   // problem: telling somebody about a deadline exactly once.
   subscriptionRemindersTable,
+  sessionsTable,
   usersTable,
 } from "@workspace/db";
 
@@ -158,6 +159,9 @@ export async function requestAccountDeletion(
     .update(usersTable)
     .set({ deletionRequestedAt: now })
     .where(eq(usersTable.id, userId));
+  // Signed out everywhere, not just here: any use of Jamvi after this is a new
+  // sign-in, which cancels the deletion (and runAccountDeletions checks for one).
+  await db.delete(sessionsTable).where(sql`${sessionsTable.sess} -> 'user' ->> 'id' = ${userId}`);
 
   if (existing?.email && !existing.deletionRequestedAt) {
     await trySendDeletionEmail(existing.email, existing.firstName ?? "", "requested", scheduledFor);
@@ -214,11 +218,36 @@ export async function sendAccountDeletionReminders(
  * the overwhelming majority of sign-ins that never asked to delete anything,
  * so it is safe to call unconditionally rather than checking first.
  */
-export async function cancelPendingAccountDeletion(userId: string): Promise<void> {
-  await db
+const escapeHtml = (text: string) =>
+  text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+export async function cancelPendingAccountDeletion(userId: string): Promise<boolean> {
+  const cancelled = await db
     .update(usersTable)
     .set({ deletionRequestedAt: null })
-    .where(and(eq(usersTable.id, userId), isNull(usersTable.deletedAt)));
+    .where(and(eq(usersTable.id, userId), isNull(usersTable.deletedAt), isNotNull(usersTable.deletionRequestedAt)))
+    .returning({ email: usersTable.email, firstName: usersTable.firstName, preferredName: usersTable.preferredName });
+  const [person] = cancelled;
+  if (!person) return false;
+  // "Welcome back" (5 Oct 2026): somebody whose deletion was cancelled is told
+  // so, rather than finding out - or not - from a reminder that never comes.
+  if (person.email) {
+    const name = (person.preferredName ?? person.firstName ?? "").trim();
+    try {
+      await sendEmail({
+        from: fromAddress(),
+        to: [person.email],
+        subject: "Welcome back to Jamvi - your account is staying",
+        html: `<p>${name ? `Hi ${escapeHtml(name)},` : "Hi,"}</p>`
+          + `<p>Welcome back. You signed in to Jamvi, so the deletion of your account that you asked for has been cancelled. `
+          + `Your account and everything in it are staying, exactly as they were.</p>`
+          + `<p>If you still want your account deleted, ask again from Settings.</p>`,
+      });
+    } catch (error) {
+      if (!(error instanceof EmailNotConfiguredError)) logger.error({ err: error }, "Could not send the welcome-back email");
+    }
+  }
+  return true;
 }
 
 /**
@@ -670,15 +699,39 @@ export async function eraseAccount(userId: string, now: Date = new Date()): Prom
  * blocking the rest — the next run picks it back up, since a failed account
  * still has deletedAt null.
  */
+/**
+ * Whether the person is signed in anywhere: a session that has not expired.
+ * Sessions are pushed on as they are used, so one still live means Jamvi was
+ * used within the last week.
+ */
+export async function hasLiveSession(userId: string, now: Date = new Date()): Promise<boolean> {
+  const [row] = await db
+    .select({ sid: sessionsTable.sid })
+    .from(sessionsTable)
+    .where(and(sql`${sessionsTable.sess} -> 'user' ->> 'id' = ${userId}`, gt(sessionsTable.expire, now)))
+    .limit(1);
+  return Boolean(row);
+}
+
 export async function runAccountDeletions(
   now: Date = new Date(),
-): Promise<{ examined: number; erased: number; failed: number }> {
+): Promise<{ examined: number; erased: number; failed: number; kept: number }> {
   const ids = await accountsDueForErasure(now);
   let erased = 0;
   let failed = 0;
+  let kept = 0;
 
   for (const id of ids) {
     try {
+      // Somebody still using Jamvi is never erased. A deletion asked for on 20
+      // Sep 2026 erased an account in daily use on 5 Oct: signing back in had
+      // not cancelled it. Any live session now cancels it instead.
+      if (await hasLiveSession(id, now)) {
+        await cancelPendingAccountDeletion(id);
+        kept++;
+        logger.warn({ userId: id }, "Account deletion cancelled: the account is still in use");
+        continue;
+      }
       await eraseAccount(id, now);
       erased++;
     } catch (error) {
@@ -687,5 +740,5 @@ export async function runAccountDeletions(
     }
   }
 
-  return { examined: ids.length, erased, failed };
+  return { examined: ids.length, erased, failed, kept };
 }
