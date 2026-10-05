@@ -20,6 +20,7 @@ export type DebtEntryRow = {
   type: string;
   amount: number | string;
   isLending?: boolean | null;
+  isBorrowing?: boolean | null;
   settlesContributorId?: number | null;
   linkPartyId?: number | null;
   linkKind?: string | null;
@@ -34,7 +35,10 @@ function kindOf(row: DebtEntryRow): { partyId: number; kind: "borrowed" | "pay-b
     return { partyId: row.linkPartyId, kind: row.linkKind as "borrowed" | "pay-back" | "lend" | "repaid" };
   }
   if (row.settlesContributorId == null) return null;
-  if (row.type === "deposit") return { partyId: row.settlesContributorId, kind: "repaid" };
+  // Money in from a person is them paying you back - unless it was borrowed
+  // from them, which you now owe. Counted as a repayment, every borrowing
+  // took the lender's balance the wrong way and Who owes who showed nobody.
+  if (row.type === "deposit") return { partyId: row.settlesContributorId, kind: row.isBorrowing ? "borrowed" : "repaid" };
   return { partyId: row.settlesContributorId, kind: row.isLending ? "lend" : "pay-back" };
 }
 

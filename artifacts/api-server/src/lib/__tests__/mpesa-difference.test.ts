@@ -116,6 +116,19 @@ describe("find the difference", () => {
     expect(charged.spans).toEqual([]);
   });
 
+  // "Biggest first" (5 Oct 2026): 56 days of shillings hid the few that made the gap.
+  it("lists the biggest differences first, whatever their dates", () => {
+    const days: DifferenceMessage[] = [
+      { receipt: "BBB0000001", balance: 1000, at: at("2026-10-01", 9), day: "2026-10-01" },
+      { receipt: "BBB0000002", balance: 990, at: at("2026-10-02", 9), day: "2026-10-02" },   // -10, not saved
+      { receipt: "BBB0000003", balance: 5990, at: at("2026-10-03", 9), day: "2026-10-03" },  // +5,000, not saved
+      { receipt: "BBB0000004", balance: 5890, at: at("2026-10-04", 9), day: "2026-10-04" },  // -100, not saved
+    ];
+    const result = findDifference(days, [], 1000)!;
+    expect(result.spans.map((span) => span.change)).toEqual([5000, -100, -10]);
+    expect(result.moreSpans).toBe(0);
+  });
+
   it("counts days across a month end", () => {
     expect(nextDay("2026-09-30")).toBe("2026-10-01");
     expect(nextDay("2026-12-31")).toBe("2027-01-01");

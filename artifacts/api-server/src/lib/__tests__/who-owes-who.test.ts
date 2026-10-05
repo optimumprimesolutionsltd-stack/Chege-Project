@@ -63,3 +63,32 @@ describe("Fuliza history", () => {
     expect(route).toContain(".onConflictDoNothing({ target: debtEntryLinksTable.transactionId });");
   });
 });
+
+// "I have always chosen who I am borrowing from" - and still nobody showed.
+describe("borrowing kept on the entry itself", () => {
+  it("is money owed to the lender, not the lender paying you back", () => {
+    const worked = workOutBalances([
+      { type: "deposit", amount: 50000, isBorrowing: true, settlesContributorId: 7 },
+      { type: "disbursement", amount: 10000, settlesContributorId: 7 },
+    ]);
+    expect(worked.get(7)).toEqual({ owedToUs: 0, owedByUs: 40000, entries: 2 });
+  });
+
+  it("is loaded by Work it out, and listed when nobody is linked", () => {
+    const route = readFileSync("src/routes/contributors.ts", "utf8");
+    expect(route).toContain('tx.is_borrowing AS "isBorrowing"');
+    expect(route).toContain('router.get("/contributors/unlinked-debts"');
+    expect(route).toContain("AND ((tx.type = 'deposit' AND tx.is_borrowing) OR (tx.type = 'disbursement' AND tx.is_lending))");
+    expect(route).toContain("AND link.party_id IS NULL");
+  });
+});
+
+// Saved on the server, the person a debt line was with is linked there too.
+describe("a debt line saved on the server", () => {
+  it("is linked to its person by the same route the phone used", () => {
+    const posting = readFileSync("src/lib/import-save-posting.ts", "utf8");
+    expect(posting).toContain('await call("/api/debt-links", { links: [{ transactionId: posted.id, partyId: item.debt.partyId, kind: item.debt.kind }] }, groupId);');
+    const jobs = readFileSync("src/routes/import-save-jobs.ts", "utf8");
+    expect(jobs).toContain('debt: z.object({ partyId: z.number().int().positive(), kind: z.enum(["borrowed", "pay-back", "lend", "repaid"]) }).optional(),');
+  });
+});
