@@ -160,7 +160,19 @@ export type DifferenceSpan = {
   missing: Array<{ receipt: string; day: string; savedIn: string | null; savedOn: string | null }>;
   extra: Array<{ id: number; date: string; amount: number; description: string; receipt: string | null }>;
   redated: Array<{ id: number; receipt: string; messageDay: string; savedDate: string; amount: number; description: string }>;
+  /** Saved, on the right day, for a different amount than the balance moved: most often a charge never saved. */
+  amounts?: Array<{ receipt: string; day: string; entryId: number; description: string; inMessages: number; inJamvi: number }>;
 };
+
+/**
+ * The M-Pesa charge a payment is missing: M-Pesa took more than Jamvi has for
+ * it. Null for anything else (Jamvi has more out, or money in), which is left
+ * to look at.
+ */
+export function missingCharge(item: { inMessages: number; inJamvi: number }): number | null {
+  const short = Math.round((item.inJamvi - item.inMessages) * 100) / 100;
+  return item.inJamvi < 0 && short >= 1 && short <= 5_000 ? short : null;
+}
 
 export type FixPlan = {
   /** Saved to another account: moved to the M-Pesa account. */
@@ -171,6 +183,8 @@ export type FixPlan = {
   bringIn: { count: number; from: string; to: string } | null;
   /** In the account but in none of the messages: never touched, left to look at. */
   leftToCheck: number;
+  /** M-Pesa charges the balance shows were taken but never saved: added to their payment. */
+  charges: Array<{ entryId: number; amount: number }>;
 };
 
 /**
@@ -186,7 +200,13 @@ export function fixPlan(spans: readonly DifferenceSpan[]): FixPlan {
   let from: string | null = null;
   let to: string | null = null;
   let leftToCheck = 0;
+  const charges = new Map<number, number>();
   for (const span of spans) {
+    for (const item of span.amounts ?? []) {
+      const charge = missingCharge(item);
+      if (charge !== null) charges.set(item.entryId, charge);
+      else leftToCheck += 1;
+    }
     for (const item of span.missing) {
       if (item.savedIn) move.add(item.receipt);
       else {
@@ -203,16 +223,21 @@ export function fixPlan(spans: readonly DifferenceSpan[]): FixPlan {
     redate: [...redate].map(([id, date]) => ({ id, date })),
     bringIn: count > 0 && from && to ? { count, from, to } : null,
     leftToCheck,
+    charges: [...charges].map(([entryId, amount]) => ({ entryId, amount })),
   };
 }
 
-export const hasFixes = (plan: FixPlan): boolean => plan.move.length > 0 || plan.redate.length > 0 || plan.bringIn !== null;
+export const hasFixes = (plan: FixPlan): boolean => plan.move.length > 0 || plan.redate.length > 0 || plan.bringIn !== null || plan.charges.length > 0;
 
 /** The one confirmation: what will change, and what will not. */
 export function fixConfirmation(plan: FixPlan, account: string): { title: string; message: string } {
   const parts: string[] = [];
   if (plan.bringIn) parts.push(`Bring in ${plan.bringIn.count} payment${plan.bringIn.count === 1 ? '' : 's'} not saved anywhere, as Not sure yet - you say what each was for later, in Sort them out.`);
   if (plan.move.length > 0) parts.push(`Move ${plan.move.length} saved in another account to ${account}.`);
+  if (plan.charges.length > 0) {
+    const total = plan.charges.reduce((sum, charge) => sum + charge.amount, 0);
+    parts.push(`Add ${plan.charges.length} M-Pesa charge${plan.charges.length === 1 ? '' : 's'} M-Pesa took but Jamvi never saved (${kes(total)} in all), each to its payment.`);
+  }
   if (plan.redate.length > 0) parts.push(`Give ${plan.redate.length} ${plan.redate.length === 1 ? 'entry' : 'entries'} the day of ${plan.redate.length === 1 ? 'its' : 'their'} M-Pesa message.`);
   const left = plan.leftToCheck > 0
     ? `\n\nNothing is deleted. ${plan.leftToCheck} ${plan.leftToCheck === 1 ? 'entry' : 'entries'} in ${account} that ${plan.leftToCheck === 1 ? 'is' : 'are'} in none of your messages ${plan.leftToCheck === 1 ? 'stays' : 'stay'} for you to look at: ${plan.leftToCheck === 1 ? 'it may be' : 'they may be'} cash, or saved twice.`

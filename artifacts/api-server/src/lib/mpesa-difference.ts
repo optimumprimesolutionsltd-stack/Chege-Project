@@ -63,6 +63,13 @@ export type ProblemSpan = {
   extra: Array<{ id: number; date: string; amount: number; description: string; receipt: string | null }>;
   /** In both, but saved under a different day from its message, so it lands on the wrong side of a day. */
   redated: Array<{ id: number; receipt: string; messageDay: string; savedDate: string; amount: number; description: string }>;
+  /**
+   * In both, on the right day, but for a different amount: the balance moved
+   * by `inMessages` with this payment and its charges, and Jamvi has
+   * `inJamvi`. Most often an M-Pesa charge never saved. `entryId` is the
+   * payment's own entry, for adding the charge to.
+   */
+  amounts?: Array<{ receipt: string; day: string; entryId: number; description: string; inMessages: number; inJamvi: number }>;
 };
 
 export type DifferenceResult = {
@@ -123,6 +130,25 @@ export function findDifference(
   }
   const messageReceipts = new Set(messageDay.keys());
 
+  // What each payment did to the balance: the change from the message before
+  // it, summed over every message carrying its code (a Fuliza notice shares
+  // its payment's). And what Jamvi has for it: the entry and its charges.
+  const ordered = withBalance.map((message, index) => ({ message, index }))
+    .sort((a, b) => a.message.at - b.message.at || a.index - b.index)
+    .map(({ message }) => message);
+  const movedBy = new Map<string, number>();
+  for (let i = 1; i < ordered.length; i += 1) {
+    const code = ordered[i].receipt;
+    if (!code) continue;
+    movedBy.set(code, round((movedBy.get(code) ?? 0) + ordered[i].balance - ordered[i - 1].balance));
+  }
+  const savedFor = new Map<string, number>();
+  for (const entry of entries) {
+    const code = entry.receipt && messageReceipts.has(entry.receipt) ? entry.receipt : entry.covers;
+    if (code) savedFor.set(code, round((savedFor.get(code) ?? 0) + entry.signed));
+  }
+  const firstCode = ordered[0]?.receipt ?? null;
+
   const spans: ProblemSpan[] = [];
   let moreSpans = 0;
   for (let i = 1; i < days.length; i += 1) {
@@ -158,6 +184,16 @@ export function findDifference(
       missing: dedupe(missing, (item) => item.receipt).slice(0, MAX_ITEMS),
       extra: extra.slice(0, MAX_ITEMS),
       redated: redated.slice(0, MAX_ITEMS),
+      amounts: dedupe(
+        withBalance.filter((message) => message.record !== false && message.receipt && message.receipt !== firstCode && inSpan(message.day) && ledgerReceipts.has(message.receipt) && movedBy.has(message.receipt)),
+        (message) => message.receipt!,
+      )
+        .filter((message) => Math.abs(movedBy.get(message.receipt!)! - (savedFor.get(message.receipt!) ?? 0)) >= 1)
+        .map((message) => {
+          const entry = ledgerReceipts.get(message.receipt!)!;
+          return { receipt: message.receipt!, day: message.day, entryId: entry.id, description: entry.description, inMessages: movedBy.get(message.receipt!)!, inJamvi: savedFor.get(message.receipt!) ?? 0 };
+        })
+        .slice(0, MAX_ITEMS),
     });
   }
 

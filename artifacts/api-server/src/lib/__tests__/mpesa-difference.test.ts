@@ -98,6 +98,24 @@ describe("find the difference", () => {
     expect(result.spans.flatMap((span) => span.extra)).toEqual([]);
   });
 
+  // Spans "no single entry explains" were nearly all an M-Pesa charge never
+  // saved (5 Oct 2026): the payment is there, for less than the balance moved.
+  it("finds a payment saved for a different amount than the balance moved: a charge never saved", () => {
+    const withCharge: DifferenceMessage[] = [
+      ...messages,
+      { receipt: "AAA0000004", balance: 2093, at: at("2026-10-04", 9), day: "2026-10-04" }, // paid 100, charge 7
+    ];
+    const ledger: LedgerEntry[] = [...right, { id: 4, date: "2026-10-04", signed: -100, receipt: "AAA0000004", description: "Airtime" }];
+    const result = findDifference(withCharge, ledger, 1000)!;
+    expect(result.spans).toHaveLength(1);
+    expect(result.spans[0]).toMatchObject({ change: -7, missing: [], extra: [], redated: [] });
+    expect(result.spans[0].amounts).toEqual([{ receipt: "AAA0000004", day: "2026-10-04", entryId: 4, description: "Airtime", inMessages: -107, inJamvi: -100 }]);
+
+    // Saved with its charge, it agrees.
+    const charged = findDifference(withCharge, [...ledger, { id: 5, date: "2026-10-04", signed: -7, receipt: null, description: "Charge", covers: "AAA0000004" }], 1000)!;
+    expect(charged.spans).toEqual([]);
+  });
+
   it("counts days across a month end", () => {
     expect(nextDay("2026-09-30")).toBe("2026-10-01");
     expect(nextDay("2026-12-31")).toBe("2027-01-01");
