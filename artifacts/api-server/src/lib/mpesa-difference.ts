@@ -149,15 +149,10 @@ export function findDifference(
   }
   const firstCode = ordered[0]?.receipt ?? null;
 
-  const spans: ProblemSpan[] = [];
-  let moreSpans = 0;
+  const all: ProblemSpan[] = [];
   for (let i = 1; i < days.length; i += 1) {
     const change = round(gapOn(days[i]) - gapOn(days[i - 1]));
     if (Math.abs(change) < 1) continue;
-    if (spans.length >= MAX_SPANS) {
-      moreSpans += 1;
-      continue;
-    }
     const after = days[i - 1];
     const upTo = days[i];
     const inSpan = (day: string) => day > after && day <= upTo;
@@ -177,7 +172,7 @@ export function findDifference(
         return sent !== undefined && inSpan(sent) !== inSpan(entry.date) && (inSpan(sent) || inSpan(entry.date));
       })
       .map((entry) => ({ id: entry.id, receipt: entry.receipt!, messageDay: messageDay.get(entry.receipt!)!, savedDate: entry.date, amount: entry.signed, description: entry.description }));
-    spans.push({
+    all.push({
       from: nextDay(after),
       to: upTo,
       change,
@@ -196,6 +191,15 @@ export function findDifference(
         .slice(0, MAX_ITEMS),
     });
   }
+
+  // Biggest first: the few days that make up most of the gap, not a run of
+  // shillings at the start of the year ("biggest first", 5 Oct 2026). Equal
+  // ones stay in date order.
+  const ranked = all.map((span, index) => ({ span, index }))
+    .sort((a, b) => Math.abs(b.span.change) - Math.abs(a.span.change) || a.index - b.index)
+    .map(({ span }) => span);
+  const spans = ranked.slice(0, MAX_SPANS);
+  const moreSpans = ranked.length - spans.length;
 
   return {
     from: days[0],
