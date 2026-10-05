@@ -53,6 +53,7 @@ import {
 } from '@workspace/api-client-react';
 import { formatDisplayDate as formatDate } from '@/lib/displayFormat';
 import { isSavingsAccount } from '@/lib/mpesaProducts';
+import { confirmNotAlreadyFromMpesa } from '@/lib/alreadyFromMpesa';
 
 function formatKES(n?: number | null): string {
   if (n === undefined || n === null) return '—';
@@ -970,6 +971,9 @@ export default function GoalsScreen() {
       }
     }
 
+    // Jamvi may already have this from M-Pesa - an M-Shwari deposit read from a statement,
+    // say: asked before it is counted twice (lib/alreadyFromMpesa). The date is today's.
+    if (!(await confirmNotAlreadyFromMpesa({ amount: total, date: new Date().toISOString().slice(0, 10), direction: 'out', goalId: selectedGoal.id }))) return;
     setSubmittingContrib(true);
     try {
       await contribute({

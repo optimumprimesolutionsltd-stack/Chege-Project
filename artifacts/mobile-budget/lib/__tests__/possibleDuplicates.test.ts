@@ -77,6 +77,18 @@ describe('typing a payment Jamvi already has from M-Pesa', () => {
     expect(read('app/(tabs)/bank.tsx')).toContain("editingTransactionId === null &&\n      (txType === 'deposit' || txType === 'disbursement') &&");
   });
 
+  it('covers moves too: savings in and out, transfers between accounts on both sides, and Contribute', () => {
+    const phoneBank = read('app/(tabs)/bank.tsx');
+    const webBank = read('../family-budget/src/pages/bank.tsx');
+    expect(phoneBank).toContain("goalId: selectedGoal.id }))");
+    expect(webBank).toContain('goalId: transferGoalId }))) return;');
+    for (const source of [phoneBank, webBank]) {
+      expect(source).toMatch(/direction: ['"]out['"], accountId: selectedAccountId \},\n\s+\{ amount: \w+, date, direction: ['"]in['"], accountId: bankTransferDestinationId \}/);
+    }
+    expect(read('app/(tabs)/goals.tsx')).toContain("direction: 'out', goalId: selectedGoal.id }))) return;");
+    expect(read('../family-budget/src/pages/savings-goals.tsx')).toContain('direction: "out", goalId: goal.id }))) return;');
+  });
+
   it('never stops a save when the check itself fails', () => {
     expect(read('lib/alreadyFromMpesa.ts')).toContain('} catch {\n    return true;\n  }');
     expect(read('../family-budget/src/lib/already-from-mpesa.ts')).toContain('} catch {\n    return true;\n  }');
