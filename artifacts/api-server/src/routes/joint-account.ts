@@ -32,6 +32,7 @@ import { memberLedgerName } from "../lib/contributor-name";
 import { GROUP_ATTRIBUTION } from "../lib/attribution";
 import { reversalLinksReady, soleReversalCandidate } from "../lib/reversal-links";
 import { enrichTransactions } from "../lib/transaction-details";
+import { ledgerEntries, ledgerTotals } from "../lib/account-ledger";
 import { importTidyKeptReady } from "../lib/import-tidy-kept";
 import { createBankStatementPdf } from "../lib/bank-statement-pdf";
 import { absorbedByOpening, alreadyThere, completeAt, isSavingsAccount, OPENING_NOTE_PATTERN, openingNote, roomIn } from "../lib/savings-accounts";
@@ -758,47 +759,37 @@ router.get("/joint-account", async (req, res): Promise<void> => {
     ? accounts[0]
     : accounts.find((account) => account.id === query.data.accountId);
   if (!isAggregate && !selectedAccount) { res.status(400).json({ error: "Bank account not found." }); return; }
-  const txs = await db
-    .select()
-    .from(jointAccountTxTable)
-    .where(isAggregate
-      ? eq(jointAccountTxTable.groupId, groupId)
-      : and(eq(jointAccountTxTable.groupId, groupId), eq(jointAccountTxTable.accountId, selectedAccount!.id)))
-    .orderBy(sql`${jointAccountTxTable.date} DESC, ${jointAccountTxTable.createdAt} DESC`);
-
-  // The whole list in a handful of queries, never several per entry (lib/describe-transaction).
-  const enriched = await enrichTransactions(txs, groupId);
-
+  // Added up by the database, not here: each row carries its own running
+  // balance, so the list no longer needs every entry to show any of them
+  // (lib/account-ledger, docs/account-list-paging.md).
+  //
   // The balance is as at today (Kenyan date). An entry dated in the future has
   // not happened yet, so it is listed but not counted - the headline used to
   // add everything, so a posting dated next week already moved today's balance.
   const today = currentBusinessDate();
-  const dayOf = (value: unknown) => value instanceof Date ? value.toISOString().slice(0, 10) : String(value).slice(0, 10);
-  const happened = txs.filter(t => dayOf(t.date) <= today);
-  const ledgerDeposits = happened.filter(t => t.type === "deposit").reduce((s, t) => s + t.amount, 0);
-  const ledgerDisbursements = happened.filter(t => t.type === "disbursement").reduce((s, t) => s + t.amount, 0);
-  const totalDeposits = happened.filter(t => t.type === "deposit" && t.bankTransferId == null).reduce((s, t) => s + t.amount, 0);
-  const totalDisbursements = happened.filter(t => t.type === "disbursement" && t.bankTransferId == null).reduce((s, t) => s + t.amount, 0);
-  // Every entry, future ones included: the running balance on each row walks
-  // the whole ledger, and the first row dated today or earlier lands exactly
-  // on the balance above.
-  const fullDeposits = txs.filter(t => t.type === "deposit").reduce((s, t) => s + t.amount, 0);
-  const fullDisbursements = txs.filter(t => t.type === "disbursement").reduce((s, t) => s + t.amount, 0);
+  const ledgerAccountId = isAggregate ? null : selectedAccount!.id;
+  const [entries, totals] = await Promise.all([
+    ledgerEntries(db, groupId, ledgerAccountId),
+    ledgerTotals(db, groupId, ledgerAccountId, today),
+  ]);
+
+  // The whole list in a handful of queries, never several per entry (lib/describe-transaction).
+  const enriched = await enrichTransactions(entries.map(({ entry }) => entry), groupId);
+
   const openingBalance = isAggregate
     ? accounts.reduce((sum, account) => sum + account.openingBalance, 0)
     : selectedAccount!.openingBalance;
   const openingBalanceDate = isAggregate
     ? null
     : resolveOpeningBalanceDate(selectedAccount!);
-  const balance = openingBalance + ledgerDeposits - ledgerDisbursements;
-  let balanceCursor = openingBalance + fullDeposits - fullDisbursements;
-  const transactions = enriched.map((transaction) => {
-    const runningBalance = isAggregate ? null : balanceCursor;
-    if (!isAggregate) {
-      balanceCursor -= transaction.type === "deposit" ? transaction.amount : -transaction.amount;
-    }
-    return { ...transaction, runningBalance };
-  });
+  const balance = openingBalance + totals.ledgerDeposits - totals.ledgerDisbursements;
+  const { totalDeposits, totalDisbursements } = totals;
+  // Every entry, future ones included: the balance just after each one. The
+  // newest entry dated today or earlier lands exactly on the balance above.
+  const transactions = enriched.map((transaction, index) => ({
+    ...transaction,
+    runningBalance: isAggregate ? null : openingBalance + entries[index].sumThroughThis,
+  }));
 
   res.json({
     accountId: isAggregate ? null : selectedAccount!.id,

@@ -21,6 +21,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import request from "supertest";
 import express from "express";
+import { ledgerEntries, ledgerTotals } from "../../lib/account-ledger";
 
 // ---------------------------------------------------------------------------
 // Mock @workspace/db
@@ -55,6 +56,14 @@ vi.mock("@workspace/db", () => {
     and: vi.fn(),
   };
 });
+
+// The account's totals and running balances are added up by the database
+// (lib/account-ledger, checked against a real Postgres); here they are handed
+// in, so these tests check what the route builds from them.
+vi.mock("../../lib/account-ledger", () => ({
+  ledgerEntries: vi.fn(),
+  ledgerTotals: vi.fn(),
+}));
 
 // requireTransactionEligibility (used by every route under test here) now
 // checks subscription status for a Personal budget too, not only a Shared
@@ -196,10 +205,12 @@ describe("multiple-account legacy fallback", () => {
         { id: 7, name: "Everyday", openingBalance: 100 },
         { id: 8, name: "Savings buffer", openingBalance: 250 },
       ]))
-      .mockImplementationOnce(() => makeSelectChainWith([
-        { id: 1, groupId: 1, accountId: 7, type: "deposit", amount: 60, description: "Deposit", madeById: null, incomeSourceId: null, expenseCategory: null, savingsGoalId: null, transferDirection: null, expenseId: null, date: "2024-06-01", createdAt: new Date() },
-        { id: 2, groupId: 1, accountId: 8, type: "disbursement", amount: 40, description: "Spend", madeById: null, incomeSourceId: null, expenseCategory: null, savingsGoalId: null, transferDirection: null, expenseId: null, date: "2024-06-01", createdAt: new Date() },
-      ]));
+      ;
+    vi.mocked(ledgerEntries).mockResolvedValueOnce([
+      { entry: { id: 1, groupId: 1, accountId: 7, type: "deposit", amount: 60, description: "Deposit", madeById: null, incomeSourceId: null, expenseCategory: null, savingsGoalId: null, transferDirection: null, expenseId: null, date: "2024-06-01", createdAt: new Date() } as never, sumThroughThis: 20 },
+      { entry: { id: 2, groupId: 1, accountId: 8, type: "disbursement", amount: 40, description: "Spend", madeById: null, incomeSourceId: null, expenseCategory: null, savingsGoalId: null, transferDirection: null, expenseId: null, date: "2024-06-01", createdAt: new Date() } as never, sumThroughThis: -40 },
+    ]);
+    vi.mocked(ledgerTotals).mockResolvedValueOnce({ ledgerDeposits: 60, ledgerDisbursements: 40, totalDeposits: 60, totalDisbursements: 40 });
 
     const res = await request(jointApp).get("/joint-account");
 
@@ -221,10 +232,12 @@ describe("multiple-account legacy fallback", () => {
         { id: 7, name: "Everyday", openingBalance: 100 },
         { id: 8, name: "Savings buffer", openingBalance: 250 },
       ]))
-      .mockImplementationOnce(() => makeSelectChainWith([
-        { id: 3, groupId: 1, accountId: 8, type: "disbursement", amount: 30, description: "Spend", madeById: null, incomeSourceId: null, expenseCategory: null, savingsGoalId: null, transferDirection: null, expenseId: null, date: "2024-06-02", createdAt: new Date() },
-        { id: 2, groupId: 1, accountId: 8, type: "deposit", amount: 80, description: "Deposit", madeById: null, incomeSourceId: null, expenseCategory: null, savingsGoalId: null, transferDirection: null, expenseId: null, date: "2024-06-01", createdAt: new Date() },
-      ]));
+      ;
+    vi.mocked(ledgerEntries).mockResolvedValueOnce([
+      { entry: { id: 3, groupId: 1, accountId: 8, type: "disbursement", amount: 30, description: "Spend", madeById: null, incomeSourceId: null, expenseCategory: null, savingsGoalId: null, transferDirection: null, expenseId: null, date: "2024-06-02", createdAt: new Date() } as never, sumThroughThis: 50 },
+      { entry: { id: 2, groupId: 1, accountId: 8, type: "deposit", amount: 80, description: "Deposit", madeById: null, incomeSourceId: null, expenseCategory: null, savingsGoalId: null, transferDirection: null, expenseId: null, date: "2024-06-01", createdAt: new Date() } as never, sumThroughThis: 80 },
+    ]);
+    vi.mocked(ledgerTotals).mockResolvedValueOnce({ ledgerDeposits: 80, ledgerDisbursements: 30, totalDeposits: 80, totalDisbursements: 30 });
 
     const res = await request(jointApp).get("/joint-account?accountId=8");
 
