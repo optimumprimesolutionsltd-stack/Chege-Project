@@ -1,6 +1,14 @@
 import { db } from "@workspace/db";
 import { sql, type SQL } from "drizzle-orm";
 import { logger } from "./logger";
+import { TAKEN_BACK_PREFIX } from "./mpesa-parser/import";
+
+/** The receipt code a take-back undid, or null when the description is not one. */
+export function takenBackReceipt(description: string | null | undefined): string | null {
+  if (!description?.startsWith(TAKEN_BACK_PREFIX)) return null;
+  const code = description.slice(TAKEN_BACK_PREFIX.length).trim().toUpperCase();
+  return /^[A-Z0-9]{8,15}$/.test(code) ? code : null;
+}
 
 /**
  * Whether reversal_links exists yet, and the one condition every income figure
@@ -43,7 +51,11 @@ export const MONEY_BACK_PATTERN = "Money back%";
  * id column as the calling query names it, for example sql`t.id`.
  */
 export function notAReversal(depositId: SQL | unknown): SQL {
-  const filedAsMoneyBack = sql`AND NOT EXISTS (SELECT 1 FROM joint_account_transactions mb WHERE mb.id = ${depositId} AND mb.description ILIKE ${MONEY_BACK_PATTERN})`;
+  // ...and any receipt a reversal took back again (TAKEN_BACK_PREFIX).
+  const filedAsMoneyBack = sql`AND NOT EXISTS (SELECT 1 FROM joint_account_transactions mb WHERE mb.id = ${depositId} AND mb.description ILIKE ${MONEY_BACK_PATTERN})
+    AND NOT EXISTS (SELECT 1 FROM joint_account_transactions rc JOIN joint_account_transactions tb
+      ON tb.group_id = rc.group_id AND tb.type = 'disbursement' AND tb.description = ${TAKEN_BACK_PREFIX} || rc.mpesa_receipt
+      WHERE rc.id = ${depositId} AND rc.mpesa_receipt IS NOT NULL)`;
   if (!ready) return filedAsMoneyBack;
   return sql`${filedAsMoneyBack} AND NOT EXISTS (SELECT 1 FROM reversal_links rl WHERE rl.reversal_transaction_id = ${depositId})`;
 }

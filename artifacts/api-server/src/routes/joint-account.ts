@@ -30,7 +30,7 @@ import { canonicalExpenseCategoryName } from "../lib/categoryNames";
 import { headingAmong, postingToHeadingError } from "../lib/category-headings";
 import { memberLedgerName } from "../lib/contributor-name";
 import { GROUP_ATTRIBUTION } from "../lib/attribution";
-import { reversalLinksReady, soleReversalCandidate } from "../lib/reversal-links";
+import { reversalLinksReady, soleReversalCandidate, takenBackReceipt } from "../lib/reversal-links";
 import { enrichTransactions } from "../lib/transaction-details";
 import { importTidyKeptReady } from "../lib/import-tidy-kept";
 import { createBankStatementPdf } from "../lib/bank-statement-pdf";
@@ -1093,7 +1093,9 @@ router.post("/joint-account/disbursement", async (req, res): Promise<void> => {
   if (disbursementClash) { res.status(409).json(disbursementClash); return; }
   // Lending carries no category, nor does a debt payment given none, so there
   // is nothing to canonicalise, look up or refuse for being a heading.
-  const expenseCategory = isLending || !parsed.data.expenseCategory
+  // A reversal taking back money received is not spending: it cancels that
+  // receipt, which leaves income for the same reason (lib/reversal-links.ts).
+  const expenseCategory = isLending || !parsed.data.expenseCategory || takenBackReceipt(description) !== null
     ? null
     : canonicalExpenseCategoryName(parsed.data.expenseCategory);
   if (isLending && !description.trim()) {

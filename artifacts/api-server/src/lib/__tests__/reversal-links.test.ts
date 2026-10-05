@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it } from "vitest";
 import { sql } from "drizzle-orm";
-import { notAReversal, reversalLinksReady, setReversalLinksReadyForTests, soleReversalCandidate } from "../reversal-links";
+import { notAReversal, reversalLinksReady, setReversalLinksReadyForTests, soleReversalCandidate, takenBackReceipt } from "../reversal-links";
 
 const bank = readFileSync("src/routes/joint-account.ts", "utf8");
 const dashboard = readFileSync("src/routes/dashboard.ts", "utf8");
@@ -226,5 +226,26 @@ describe("the payments a money back could be", () => {
     const candidates = bankRoute.slice(bankRoute.indexOf("async function reversalCandidates"), bankRoute.indexOf("async function linkReversal"));
     expect(candidates).not.toContain("::date - ${");
     expect(candidates).toContain("AND ${jointAccountTxTable.date} >= ${fromDay}");
+  });
+});
+
+// A reversal of money received is money out, and cancels the receipt it names.
+describe("money received, taken back by a reversal", () => {
+  it("reads the receipt code a take-back undid, and nothing else", () => {
+    expect(takenBackReceipt("Taken back: reversal of UEP1B5FFVA")).toBe("UEP1B5FFVA");
+    expect(takenBackReceipt("Taken back: a reversed receipt")).toBeNull();
+    expect(takenBackReceipt("Money back: reversal of UEP1B5FFVA")).toBeNull();
+    expect(takenBackReceipt(null)).toBeNull();
+  });
+
+  it("leaves the receipt out of income", () => {
+    const fragment = JSON.stringify((notAReversal(sql`t.id`) as unknown as { queryChunks: unknown[] }).queryChunks);
+    expect(fragment).toContain("tb.type = 'disbursement'");
+    expect(fragment).toContain("Taken back: reversal of ");
+    expect(fragment).toContain("rc.mpesa_receipt IS NOT NULL");
+  });
+
+  it("is never spending: the route drops the category", () => {
+    expect(bank).toMatch(/!parsed\.data\.expenseCategory \|\| takenBackReceipt\(description\) !== null/);
   });
 });
