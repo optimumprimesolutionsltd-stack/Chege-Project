@@ -534,17 +534,11 @@ export default function BudgetChooserScreen() {
           );
           return (
             <>
-              <View style={[styles.selectedPanel, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                {selectedWorkspace ? <>
-                  <View style={styles.selectedHeader}>
-                    <View style={[styles.selectedIcon, { backgroundColor: colors.accent }]}><Feather name="check" size={19} color={colors.accentForeground} /></View>
-                    <View style={styles.workspaceText}>
-                      <Text style={[styles.selectedLabel, { color: colors.primary }]}>READY TO OPEN</Text>
-                      <Text style={[styles.selectedTitle, { color: colors.foreground }, selectedWorkspace.isPrivate ? null : workspaceNameTextStyle(selectedWorkspace.nameStyle)]}>{selectedName}</Text>
-                    </View>
-                  </View>
-                  <Pressable testID="open-selected-budget" accessibilityRole="button" accessibilityLabel={`Open ${selectedName}`} disabled={selectWorkspace.isPending} onPress={() => void chooseWorkspace(selectedWorkspace)} style={[styles.openButton, { backgroundColor: colors.accent }, selectWorkspace.isPending && styles.disabled]}><Text style={[styles.openButtonText, { color: colors.accentForeground }]}>{selectWorkspace.isPending ? 'Opening…' : `Open ${selectedName}`}</Text><Feather name="arrow-up-right" size={18} color={colors.accentForeground} /></Pressable>
-                </> : prefersShared ? <>
+              {/* Tapping a workspace below opens it, so a "Ready to open" card here only
+                  asked the same question twice. What is left is the one thing the
+                  list cannot say: somebody who wants a group and has none yet. */}
+              {!selectedWorkspace && prefersShared ? (
+                <View style={[styles.selectedPanel, { backgroundColor: colors.card, borderColor: colors.border }]} testID="chooser-next-step">
                   <View style={styles.selectedHeader}>
                     <View style={[styles.selectedIcon, { backgroundColor: colors.accent }]}><Feather name="users" size={19} color={colors.accentForeground} /></View>
                     <View style={styles.workspaceText}>
@@ -553,8 +547,8 @@ export default function BudgetChooserScreen() {
                     </View>
                   </View>
                   <Pressable testID="create-shared-budget-primary" accessibilityRole="button" accessibilityLabel="Create a Shared group" onPress={() => { setError(null); setCreateSharedOpen(true); }} style={[styles.openButton, { backgroundColor: colors.accent }]}><Text style={[styles.openButtonText, { color: colors.accentForeground }]}>Create Shared group</Text><Feather name="arrow-up-right" size={18} color={colors.accentForeground} /></Pressable>
-                </> : <Text style={[styles.empty, { color: colors.mutedForeground }]}>Choose one to see the next step.</Text>}
-              </View>
+                </View>
+              ) : null}
 
               <Text style={[styles.sectionLabel, { color: colors.brandTeal }]}>YOUR WORKSPACES</Text>
               <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Choose a workspace</Text>

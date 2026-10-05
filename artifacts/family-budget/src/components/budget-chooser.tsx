@@ -861,7 +861,7 @@ export function BudgetChooser({
                 <Button type="button" variant="outline" className="mt-5 rounded-xl" onClick={() => void refetchWorkspaces()}>Try again</Button>
               </div>
             ) : (
-              <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(300px,0.8fr)] lg:items-start">
+              <div className={`grid gap-8 lg:items-start ${!selectedWorkspace && onboardingMode === "shared" ? "lg:grid-cols-[minmax(0,1fr)_minmax(300px,0.8fr)]" : "max-w-3xl"}`}>
                 <div>
                   <p className="text-xs font-bold uppercase tracking-[0.18em] text-primary">Your workspaces</p>
                   <h2 className="mt-2 font-display text-2xl font-bold text-foreground">Choose a workspace</h2>
@@ -910,23 +910,14 @@ export function BudgetChooser({
                   })()}
                 </div>
 
-                <aside className="order-first rounded-2xl border border-border bg-background p-5 shadow-sm sm:p-6 lg:order-none" aria-live="polite">
-                  {selectedWorkspace ? <>
-                    <div className="flex items-center gap-3">
-                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent text-accent-foreground"><Check className="h-5 w-5" /></span>
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold uppercase tracking-[0.14em] text-primary">Ready to open</p>
-                        <h2 className={`mt-1 truncate font-display text-xl font-bold text-foreground ${selectedWorkspace.isPrivate ? "" : workspaceNameClass(selectedWorkspace.nameStyle)}`}>{selectedName}</h2>
-                      </div>
-                    </div>
-                    <Button type="button" className="mt-6 h-12 w-full justify-between rounded-xl px-4" disabled={selectWorkspace.isPending} onClick={() => void chooseWorkspace(selectedWorkspace)}>
-                      <span>{selectWorkspace.isPending ? "Opening…" : `Open ${selectedName}`}</span><ArrowUpRight className="h-4 w-4" />
-                    </Button>
-                  </> : onboardingMode === "shared" ? (
+                {/* Choosing a workspace in the list opens it, so a "Ready to open" panel
+                    beside it asked the same question twice. Only the next step for a
+                    group not made yet is left to say. */}
+                {!selectedWorkspace && onboardingMode === "shared" ? (
+                  <aside className="order-first rounded-2xl border border-border bg-background p-5 shadow-sm sm:p-6 lg:order-none" aria-live="polite" data-testid="chooser-next-step">
                     <p className="text-sm text-muted-foreground">Create your Shared group to see the next step.</p>
-                  ) : <p className="text-sm text-muted-foreground">Choose one to see the next step.</p>}
-
-                </aside>
+                  </aside>
+                ) : null}
               </div>
             )}
           </div>
