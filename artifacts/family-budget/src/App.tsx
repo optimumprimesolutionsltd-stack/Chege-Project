@@ -25,6 +25,7 @@ import AuthDone from '@/pages/auth-done';
 import MyGroups from '@/pages/my-groups';
 import ResetPasswordPage from '@/pages/reset-password';
 import Settings from '@/pages/settings';
+import BudgetHandover from '@/pages/budget-handover';
 import Subscription from "@/pages/subscription";
 import SavingsGoals from '@/pages/savings-goals';
 import Bank from '@/pages/bank';
@@ -164,6 +165,7 @@ function AuthenticatedApp() {
         <Route path="/subscription" component={Subscription} />
         <Route path="/groups" component={MyGroups} />
         <Route path="/settings" component={Settings} />
+        <Route path="/handover" component={BudgetHandover} />
         <Route path="/invite/:token" component={InvitePage} />
         <Route path="/join/:token" component={JoinGroupPage} />
         <Route path="/parity" component={Parity} />
