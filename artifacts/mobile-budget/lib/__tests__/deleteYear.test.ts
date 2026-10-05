@@ -15,9 +15,10 @@ describe('deleting a past year', () => {
   const screen = read('app/delete-year.tsx');
   it('asks first, then deletes only with the emailed code, and refreshes everything', () => {
     expect(screen.indexOf('Alert.alert(\n      `Delete ${year.year} for good?`')).toBeGreaterThan(0);
-    expect(screen).toContain("customFetch(`/api/budget-years/${year.year}/delete/request-code`, { method: 'POST' })");
-    expect(screen).toContain('disabled={deleting || sending || code.length !== 6}');
-    expect(screen).toContain('body: JSON.stringify({ code }),');
+    expect(screen).toContain("customFetch<unknown>(`/api/budget-years/${year.year}/delete/request-code`, { method: 'POST' })");
+    expect(screen).toContain('disabled={deleting || sending || !confirmReady(code, word)}');
+    // The code, or for an account with no email, the typed word (lib/deletionConfirm).
+    expect(screen).toContain('body: JSON.stringify(confirmBody(code, word)),');
     expect(screen).toContain('await queryClient.resetQueries();');
   });
 

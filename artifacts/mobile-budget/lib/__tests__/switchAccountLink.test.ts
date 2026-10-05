@@ -20,4 +20,10 @@ describe('a way out of the wrong account', () => {
     expect(chooser.match(/<SwitchAccountLink /g)).toHaveLength(3);
     expect(chooser).toContain('testID="onboarding-switch-account"');
   });
+
+  it('has a Back to sign-in on the name screen and the first setup step', () => {
+    expect(read('components/SwitchAccountLink.tsx')).toContain("'This account has no email'");
+    expect(read('app/profile-setup.tsx')).toContain('<BackToSignIn color="#d7e0ea" testID="profile-setup-back" />');
+    expect(read('app/budget-chooser.tsx')).toContain(': <BackToSignIn color={colors.foreground} testID="onboarding-back-to-sign-in" />}');
+  });
 });
