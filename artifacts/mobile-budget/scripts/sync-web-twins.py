@@ -20,6 +20,7 @@ WEB = os.path.join(HERE, '..', '..', 'family-budget', 'src', 'lib')
 TWINS = {
     'mpesaImport.ts': ('mpesa-import.ts', {'./mpesaDebts': './mpesa-debts', './payeeLearning': './payee-learning', './mpesaProducts': './mpesa-products'}),
     'mpesaProducts.ts': ('mpesa-products.ts', {'./mpesaImport': './mpesa-import'}),
+    'possibleDuplicates.ts': ('possible-duplicates.ts', {}),
     'mpesaDebts.ts': ('mpesa-debts.ts', {'./mpesaImport': './mpesa-import', './mpesaProducts': './mpesa-products'}),
     'payeeLearning.ts': ('payee-learning.ts', {}),
     'savePosting.ts': ('save-posting.ts', {'./mpesaImport': './mpesa-import'}),

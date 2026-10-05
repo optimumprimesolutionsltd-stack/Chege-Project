@@ -153,6 +153,11 @@ import {
   summarise,
   type Choice,
   type PreviewLine,
+  mergeTwins,
+  twinNotes,
+  twinQuestions,
+  untickElsewhere,
+  withTwins,
 } from '@/lib/mpesaImport';
 import { findSavingsGoal, ledgersToMake, loanOf, productNote, productOf, savingsNeeded, savingsOf, withSavingsAccounts, type LenderId, type SavingsAccountId } from '@/lib/mpesaProducts';
 
@@ -978,6 +983,13 @@ export default function MpesaImportScreen() {
       const shown = applyNicknames(response.lines, known);
       setLines(shown);
       setChoices(initialChoices(shown, history, categories.map((row) => row.name), effectiveChargeCategory, rules, canManageBudget));
+      // Then: another of the person's budgets that has these codes, and entries typed by hand that look the same.
+      void markRecorded(shown)
+        .then((checked) => {
+          setLines((current) => mergeTwins(current, checked));
+          setChoices((current) => untickElsewhere(checked, current));
+        })
+        .catch(() => {});
       // A restored draft brings back what was chosen by hand, on top of the fresh reading.
       const restoredChoices = pendingChoicesRef.current;
       if (restoredChoices) {
@@ -1056,6 +1068,13 @@ export default function MpesaImportScreen() {
       setSmsMessages(messages);
       setLines(shown);
       setChoices(initialChoices(shown, history, categories.map((row) => row.name), effectiveChargeCategory, rules, canManageBudget));
+      // Then: another of the person's budgets that has these codes, and entries typed by hand that look the same.
+      void markRecorded(shown)
+        .then((checked) => {
+          setLines((current) => mergeTwins(current, checked));
+          setChoices((current) => untickElsewhere(checked, current));
+        })
+        .catch(() => {});
       return shown;
     } catch (error: unknown) {
       Alert.alert('Could not read them', plainReadFailure(error));
@@ -1138,6 +1157,7 @@ export default function MpesaImportScreen() {
     if (codes.length === 0) return all;
     // A year's statement holds thousands of codes; the server takes 2,000 at a time.
     const found: Array<{ receipt: string; date: string; description: string; category?: string | null; editable?: boolean }> = [];
+    const elsewhere: Array<{ receipt: string; budget: string }> = [];
     for (let start = 0; start < codes.length; start += RECEIPT_BATCH) {
       const body = await customFetch<{ recorded: typeof found }>('/api/mpesa/import/check-receipts', {
         method: 'POST',
@@ -1145,13 +1165,37 @@ export default function MpesaImportScreen() {
         body: JSON.stringify({ receipts: codes.slice(start, start + RECEIPT_BATCH) }),
       });
       found.push(...body.recorded);
+      // Codes already in another of the person's budgets. Only a warning: a failure is passed over.
+      const other = await customFetch<{ elsewhere: typeof elsewhere }>('/api/possible-duplicates/elsewhere', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ receipts: codes.slice(start, start + RECEIPT_BATCH) }),
+      }).catch(() => ({ elsewhere: [] }));
+      elsewhere.push(...other.elsewhere);
     }
     const body = { recorded: found };
     const recorded = new Map(body.recorded.map((row) => [row.receipt, { date: row.date, description: row.description, category: row.category ?? null, editable: row.editable === true }]));
-    return all.map((line) => {
+    const marked = all.map((line) => {
       const existing = line.receipt ? recorded.get(line.receipt) : undefined;
       return existing ? { ...line, alreadyRecorded: existing } : line;
     });
+    // Entries typed by hand that look like the same payment (lib/mpesaImport withTwins).
+    // Only a warning: a failed check never stops the reading.
+    const matches: Array<{ key: string; entries: Array<{ description: string; date: string; amount: number }> }> = [];
+    const questions = twinQuestions(marked);
+    for (let start = 0; start < questions.length; start += RECEIPT_BATCH) {
+      try {
+        const body = await customFetch<{ matches: typeof matches }>('/api/possible-duplicates/check', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ against: 'typed', items: questions.slice(start, start + RECEIPT_BATCH) }),
+        });
+        matches.push(...body.matches);
+      } catch {
+        break;
+      }
+    }
+    return withTwins(marked, matches, elsewhere);
   };
 
   const pickStatement = async () => {
@@ -3023,6 +3067,11 @@ export default function MpesaImportScreen() {
                       {status === 'needs' ? 'Needs you' : status === 'changed' ? (choice?.confirmed ? ((choice.auto && out && productOf(item)) || loanOf(item) || savingsOf(item) ? 'Filed by Jamvi' : 'Confirmed') : 'You changed this - confirmed, it saves with the next Save') : 'Suggested by Jamvi'}
                     </Text>
                   ) : null}
+                  {twinNotes(item).map((note) => (
+                    <Text key={note} style={[styles.hint, { marginTop: 0, color: colors.destructive }]} testID={`mpesa-line-twin-${item.index}`}>
+                      {note}
+                    </Text>
+                  ))}
                   {statementReading && choice?.include && (status === 'suggested' || choice?.confirmed) ? (
                     <Pressable
                       onPress={() => confirm(item.index, !choice?.confirmed)}

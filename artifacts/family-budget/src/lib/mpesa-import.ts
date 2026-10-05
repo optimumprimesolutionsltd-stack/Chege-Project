@@ -31,7 +31,13 @@ export type PreviewLine = {
   alreadyRecorded: AlreadyRecorded | null;
   /** The till or paybill number, when the source carries one (a statement does, a message does not). */
   payeeNumber?: string | null;
+  /** Another of the person"s budgets that already has this M-Pesa code: saving it here too would count it twice. */
+  elsewhere?: string | null;
+  /** An entry typed by hand in this budget that looks like the same payment (api-server lib/possible-duplicates). */
+  typedTwin?: TypedTwin | null;
 };
+
+export type TypedTwin = { description: string; date: string; amount: number };
 
 /**
  * `auto` is true while the category is Jamvi"s suggestion and the person has not chosen one.
@@ -258,7 +264,8 @@ export function initialChoices(
     const suggested = notSureIfNothing(line, suggestionFor(line, history, categoryNames, chargeCategory, rules));
     choices[line.index] = {
       // Savings either way need an owner or admin, as payments out do.
-      include: isRecordable(line) && (canRecordOut || (line.direction !== "out" && !savingsOf(line))),
+      // A code already saved in another budget starts unticked, so it is not counted twice.
+      include: isRecordable(line) && !line.elsewhere && (canRecordOut || (line.direction !== "out" && !savingsOf(line))),
       category: suggested,
       auto: suggested !== "",
       ...(filedByJamvi(line, suggested) ? { confirmed: true } : {}),
@@ -1085,3 +1092,92 @@ export function monthsOf(lines: readonly { date: string | null }[]): Array<{ key
 
 /** Whether a line falls in `month` ("2026-01"), or `null` for every month. */
 export const inMonth = (line: { date: string | null }, month: string | null): boolean => month === null || line.date?.slice(0, 7) === month;
+
+/* --------------------------------------------------------- the same payment twice */
+
+/**
+ * What the server is asked about each recordable line, to find entries typed by
+ * hand that look like the same payment (POST /possible-duplicates/check). Only
+ * amounts, dates and directions are sent; the key is the line"s index.
+ */
+export function twinQuestions(lines: readonly PreviewLine[], accountId?: number | null): Array<{ key: string; amount: number; date: string; direction: "in" | "out"; accountId?: number | null }> {
+  return lines.flatMap((line) =>
+    isRecordable(line) && line.date && line.amount && line.amount > 0 && line.direction
+      ? [{ key: String(line.index), amount: line.amount, date: line.date, direction: line.direction, ...(accountId ? { accountId } : {}) }]
+      : [],
+  );
+}
+
+/** The lines with what was found: the other budget a code is already in, and a typed entry that looks the same. */
+export function withTwins(
+  lines: readonly PreviewLine[],
+  matches: ReadonlyArray<{ key: string; entries: ReadonlyArray<{ description: string; date: string; amount: number }> }>,
+  elsewhere: ReadonlyArray<{ receipt: string; budget: string }>,
+): PreviewLine[] {
+  const typed = new Map(matches.map((match) => [match.key, match.entries[0]]));
+  const other = new Map(elsewhere.map((row) => [row.receipt, row.budget]));
+  return lines.map((line) => {
+    const twin = typed.get(String(line.index));
+    const budget = line.receipt ? other.get(line.receipt) : undefined;
+    return {
+      ...line,
+      elsewhere: budget ?? line.elsewhere ?? null,
+      typedTwin: twin ? { description: twin.description, date: twin.date, amount: twin.amount } : line.typedTwin ?? null,
+    };
+  });
+}
+
+/**
+ * Lines found to be in another budget after their choices were made (a paste is
+ * checked once read): unticked, unless the person has already said otherwise.
+ */
+export function untickElsewhere(lines: readonly PreviewLine[], choices: Record<number, Choice>): Record<number, Choice> {
+  const next = { ...choices };
+  for (const line of lines) {
+    const choice = next[line.index];
+    if (line.elsewhere && choice?.include && choice.confirmed === undefined) next[line.index] = { ...choice, include: false };
+  }
+  return next;
+}
+
+/** The words on a line that may be a payment recorded before. */
+export function twinNotes(line: PreviewLine): string[] {
+  const notes: string[] = [];
+  if (line.elsewhere) notes.push(`Already saved in ${line.elsewhere}. Left unticked so it is not counted twice - tick it only if it belongs in both.`);
+  if (line.typedTwin) {
+    const amount = `KES ${line.typedTwin.amount.toLocaleString("en-KE")}`;
+    notes.push(`Looks like "${line.typedTwin.description}" (${amount}) you typed on ${line.typedTwin.date}. Save this one from M-Pesa and Home will ask which to keep.`);
+  }
+  return notes;
+}
+
+/** What withTwins found, put on lines already on screen (by index), leaving everything else as it is now. */
+export function mergeTwins(current: PreviewLine[] | null, checked: readonly PreviewLine[]): PreviewLine[] | null {
+  if (!current) return current;
+  const found = new Map(checked.map((line) => [line.index, line]));
+  return current.map((line) => {
+    const twin = found.get(line.index);
+    return twin ? { ...line, elsewhere: twin.elsewhere ?? null, typedTwin: twin.typedTwin ?? null } : line;
+  });
+}
+
+/**
+ * The warning when a payment is typed by hand that M-Pesa already brought in:
+ * "a warning when something the app has picked is picked again" (5 Oct 2026).
+ * The entries are what POST /possible-duplicates/check found among this
+ * budget"s M-Pesa entries.
+ */
+export function alreadyFromMpesaMessage(entries: ReadonlyArray<{ description: string; date: string; amount: number; receipt?: string | null }>): { title: string; message: string } {
+  const listed = entries.slice(0, 3).map((entry) =>
+    `- ${entry.description} (KES ${entry.amount.toLocaleString("en-KE")}) on ${entry.date}${entry.receipt ? `, M-Pesa ${entry.receipt}` : ""}`,
+  );
+  const lines = [
+    `Jamvi already has ${entries.length === 1 ? "this payment" : "payments like this"} from your M-Pesa:`,
+    ...listed,
+    ...(entries.length > 3 ? [`...and ${entries.length - 3} more.`] : []),
+    "",
+    "Saving it again would count it twice. Save only if it is a different payment.",
+  ];
+  return { title: "Already in from M-Pesa?", message: lines.join("\n") };
+}
+

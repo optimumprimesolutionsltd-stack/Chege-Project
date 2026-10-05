@@ -1,5 +1,6 @@
 import Business from '@/pages/business';
 import SortEntries from '@/pages/sort-entries';
+import PossibleDuplicates from '@/pages/possible-duplicates';
 import Debt from '@/pages/debt';
 import Help from '@/pages/help';
 import BudgetPlanPage from '@/pages/budget-plan-page';
@@ -158,6 +159,7 @@ function AuthenticatedApp() {
         <Route path="/spending-by-item" component={SpendingByItem} />
         <Route path="/business" component={Business} />
         <Route path="/sort-entries" component={SortEntries} />
+        <Route path="/possible-duplicates" component={PossibleDuplicates} />
         <Route path="/debt" component={Debt} />
         <Route path="/help" component={Help} />
         <Route path="/budget-plan" component={BudgetPlanPage} />

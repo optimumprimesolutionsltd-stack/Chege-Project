@@ -34,8 +34,8 @@ describe("a savings account", () => {
 describe("the routes treat it as one", () => {
   it("a transfer out of it records what was there before as a balance correction, not an error", () => {
     expect(transfers).toContain('const opening = direction === "from_savings" ? alreadyThere(goal, amount) : 0;');
-    expect(transfers).toContain("note: `Already in ${goal.name} before Jamvi's records began`,");
-    expect(transfers).toContain("const nextAmount = goal.currentAmount + opening + delta;");
+    expect(transfers).toContain("note: openingNote(goal.name),");
+    expect(transfers).toContain("const nextAmount = goal.currentAmount + opening + delta - absorbed;");
   });
 
   it("is never marked complete, nor capped, anywhere a balance changes", () => {

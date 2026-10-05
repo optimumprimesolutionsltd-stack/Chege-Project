@@ -88,6 +88,7 @@ import {
   getProjectedCategoryBalance,
   hasMissingPersonalFundingSource,
 } from "@/lib/expense-funding-utils";
+import { confirmNotAlreadyFromMpesa } from "@/lib/already-from-mpesa";
 
 type Expense = {
   id: number;
@@ -1152,6 +1153,8 @@ export default function Expenses() {
             }))),
         ]
         : undefined;
+      // Jamvi may already have this payment from M-Pesa: asked before it is counted twice (lib/already-from-mpesa).
+      if (!(await confirmNotAlreadyFromMpesa({ amount, date: addForm.date, direction: "out", accountId: addForm.accountId ?? null }))) return;
       await createExpense.mutateAsync({
         data: {
             amount, category: hasCategoryAllocation ? expenseCategory : "", ...(hasCategoryAllocation ? { categoryAllocations: categoryAllocations.map((allocation) =>

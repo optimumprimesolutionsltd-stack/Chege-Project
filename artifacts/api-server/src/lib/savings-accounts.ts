@@ -29,3 +29,17 @@ export const roomIn = (goal: GoalLike): number =>
  */
 export const alreadyThere = (goal: GoalLike, withdrawal: number): number =>
   isSavingsAccount(goal) ? Math.max(0, withdrawal - goal.currentAmount) : 0;
+
+/** The note on that correction, which is also how it is found again. */
+export const openingNote = (goalName: string): string => `Already in ${goalName} before Jamvi's records began`;
+export const OPENING_NOTE_PATTERN = "Already in % before Jamvi's records began";
+
+/**
+ * A deposit dated on or before the first withdrawal that needed an opening
+ * correction is part of what that correction stood for: an older statement
+ * read after a newer one. It shrinks the correction by as much as it can,
+ * instead of being counted on top of it - otherwise the account would hold the
+ * same money twice. Returns how much of the deposit the correction absorbs.
+ */
+export const absorbedByOpening = (deposit: number, opening: number, depositDate: string, firstWithdrawalDate: string | null): number =>
+  firstWithdrawalDate !== null && depositDate <= firstWithdrawalDate ? Math.min(deposit, Math.max(0, opening)) : 0;

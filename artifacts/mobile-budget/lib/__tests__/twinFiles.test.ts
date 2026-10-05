@@ -19,6 +19,7 @@ const PAIRS: Array<[string, string]> = [
   ['lib/mpesaImport.ts', '../family-budget/src/lib/mpesa-import.ts'],
   ['lib/mpesaDebts.ts', '../family-budget/src/lib/mpesa-debts.ts'],
   ['lib/mpesaProducts.ts', '../family-budget/src/lib/mpesa-products.ts'],
+  ['lib/possibleDuplicates.ts', '../family-budget/src/lib/possible-duplicates.ts'],
   ['lib/payeeLearning.ts', '../family-budget/src/lib/payee-learning.ts'],
   ['lib/savePosting.ts', '../family-budget/src/lib/save-posting.ts'],
   ['lib/statementTable.ts', '../family-budget/src/lib/statement-table.ts'],

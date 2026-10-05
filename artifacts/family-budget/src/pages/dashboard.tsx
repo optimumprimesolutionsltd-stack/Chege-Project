@@ -82,6 +82,7 @@ import { HomeAnswersCard } from "@/components/home-answers-card";
 import { useEntitlements } from "@/hooks/use-entitlements";
 import { mayStartGroup } from "@/lib/group-start";
 import { toSortTitle, type EntryToSort } from "@/lib/entries-to-sort";
+import { confirmNotAlreadyFromMpesa } from "@/lib/already-from-mpesa";
 
 type QuickAction = "none" | "income" | "expense" | "goal";
 const RECURRING_DASHBOARD_DRAFT_KEY = "jamvi-recurring-dashboard-draft";
@@ -1459,6 +1460,8 @@ function ExpenseForm({
         accountId: selectedBankAccountId!,
       }] : [];
       const allFundingSplits = [...bankFundingSplits, ...directFundingSplits];
+      // Jamvi may already have this payment from M-Pesa: asked before it is counted twice (lib/already-from-mpesa).
+      if (!(await confirmNotAlreadyFromMpesa({ amount: amt, date, direction: "out", accountId: bankAmount > 0 ? selectedBankAccountId : null }))) return;
       await createExpense.mutateAsync({
         data: {
           amount: amt,
