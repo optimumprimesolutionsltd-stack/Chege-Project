@@ -5,7 +5,7 @@ import { SITE_SEO } from "@/lib/site-seo";
 import { JAMVI_APK_PATH, JAMVI_APP_PATH, JAMVI_SUPPORT_EMAIL } from "@/lib/site-links";
 
 const STEPS = [
-  "Tap Download for Android below, on the phone you will use Jamvi on.",
+  "Tap Download for Android above, on the phone you will use Jamvi on.",
   "Open the file when it finishes. If Android asks, allow installs from your browser (or WhatsApp, if the link came there).",
   "If Google Play Protect warns about an app it does not know, tap More details, then Install anyway. Jamvi is not in the Play Store yet, so Google has not seen it.",
   "Open Jamvi and sign in with Google. You start with a free trial.",
