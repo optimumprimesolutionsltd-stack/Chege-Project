@@ -35,6 +35,7 @@ import { CategorySearchInput, useCategorySearch } from "@/components/category-se
 import { formatKes } from "@/lib/utils";
 import {
   buildPostings,
+  canAddNote,
   categoryPath,
   chooseCategory as chooseLineCategory,
   chooseIncomeSource,
@@ -224,6 +225,8 @@ export default function MpesaImportPage() {
   const [reading, setReading] = useState(false);
   const [lines, setLines] = useState<PreviewLine[] | null>(null);
   const [choices, setChoices] = useState<Record<number, Choice>>({});
+  // Lines whose optional note box is open (canAddNote); a line with a note shows it anyway.
+  const [noteOpen, setNoteOpen] = useState<Set<number>>(() => new Set());
   // Undo for every change to the list, most recent first - as on the phone.
   // Cleared for a new list or after a save; a save itself is not undone here.
   const { canUndo, steps: undoSteps, undo } = useUndoHistory(choices, setChoices, lines, {
@@ -2400,6 +2403,27 @@ export default function MpesaImportPage() {
                         </button>
                       );
                     })()
+                  ) : null}
+                  {canAddNote(choice) ? (
+                    noteOpen.has(item.index) || choice?.notes ? (
+                      <Input
+                        value={choice?.notes ?? ""}
+                        onChange={(event) => setChoices((current) => ({ ...current, [item.index]: { ...current[item.index], notes: event.target.value } }))}
+                        placeholder="A short note (optional)"
+                        maxLength={1000}
+                        aria-label={`Note for ${item.description ?? "this line"}`}
+                        data-testid={`mpesa-line-note-${item.index}`}
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setNoteOpen((current) => new Set(current).add(item.index))}
+                        className="text-left text-xs font-semibold text-primary hover:underline"
+                        data-testid={`mpesa-line-note-add-${item.index}`}
+                      >
+                        Add a note (optional)
+                      </button>
+                    )
                   ) : null}
                   {out && item.fee ? <p className="text-xs text-muted-foreground">+ {formatKes(item.fee)} M-Pesa charge, saved on its own</p> : null}
                 </CardContent>

@@ -139,6 +139,20 @@ export const isMove = (choice: Choice | undefined): boolean => {
   return destination === "transfer" || destination === "savings" || destination === "other-budget";
 };
 
+/**
+ * Whether a line offers its optional note: once it says what the money was -
+ * a category, a person or business it was a debt with, or where money in came
+ * from - and it is ordinary money in or out, which is what carries a note
+ * (buildPostings). A move between the person"s own places does not.
+ * "Brief descriptions ... when you have selected a category or someone/business
+ * during import. It should be optional" (6 Oct 2026). Saving a note was added in
+ * #417, but no screen ever had the box to type one.
+ */
+export function canAddNote(choice: Choice | undefined): boolean {
+  if (!choice?.include || isMove(choice) || destinationOf(choice) === "contribution") return false;
+  return Boolean(choice.category.trim() || choice.debt || choice.incomeSourceId);
+}
+
 type PastPosting = { type: string; description: string; expenseCategory?: string | null; incomeSourceId?: number | null; chargeForTransactionId?: number | null };
 
 const clean = (value: string) => value.trim().replace(/\s+/g, " ").toLocaleLowerCase("en-KE");

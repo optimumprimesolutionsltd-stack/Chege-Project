@@ -113,6 +113,7 @@ import { fetchOtherBudgetOptions, type OtherBudgetOptions } from '@/lib/otherBud
 import { applyOtherBudgetRules, otherBudgetRuleFor, otherBudgetRuleLabel, otherBudgetRulesKey, parseOtherBudgetRules, rememberOtherBudgetLabel, withOtherBudgetRule, withoutOtherBudgetRule, type OtherBudgetRules } from '@/lib/otherBudgetRules';
 import {
   buildPostings,
+  canAddNote,
   categoryPath,
   chooseCategory as chooseLineCategory,
   carryChoices,
@@ -1663,6 +1664,8 @@ export default function MpesaImportScreen() {
         .map((row) => ({ id: row.id, name: row.name, debtBalance: row.debtBalance })),
     [categoryList],
   );
+  // Lines whose optional note box is open (canAddNote); a line with a note shows it anyway.
+  const [noteOpen, setNoteOpen] = useState<Set<number>>(() => new Set());
   const [debtFor, setDebtFor] = useState<{ index: number; partyId: number | null; kind: DebtKind | null } | null>(null);
   // Somebody not yet in Who owes who, added from the debt sheet itself.
   const [newParty, setNewParty] = useState<{ name: string; kind: 'person' | 'institution' } | null>(null);
@@ -3542,6 +3545,31 @@ export default function MpesaImportScreen() {
                         </>
                       );
                     })()
+                  ) : null}
+                  {canAddNote(choice) ? (
+                    noteOpen.has(item.index) || choice?.notes ? (
+                      <TextInput
+                        value={choice?.notes ?? ''}
+                        onChangeText={(text) => setChoices((current) => ({ ...current, [item.index]: { ...current[item.index], notes: text } }))}
+                        placeholder="A short note (optional)"
+                        placeholderTextColor={colors.mutedForeground}
+                        maxLength={1000}
+                        multiline
+                        accessibilityLabel={`Note for ${item.description ?? 'this line'}`}
+                        testID={`mpesa-line-note-${item.index}`}
+                        style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, color: colors.foreground, fontSize: 14 }}
+                      />
+                    ) : (
+                      <Pressable
+                        onPress={() => setNoteOpen((current) => new Set(current).add(item.index))}
+                        accessibilityRole="button"
+                        testID={`mpesa-line-note-add-${item.index}`}
+                        hitSlop={6}
+                        style={{ alignSelf: 'flex-start', paddingVertical: 4 }}
+                      >
+                        <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>Add a note (optional)</Text>
+                      </Pressable>
+                    )
                   ) : null}
                     </>
                   ) : choice?.include ? (
