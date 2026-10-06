@@ -12,10 +12,12 @@ export function CategorySearchBox({
   value,
   onChange,
   testID,
+  autoFocus,
 }: {
   value: string;
   onChange: (next: string) => void;
   testID?: string;
+  autoFocus?: boolean;
 }) {
   const colors = useColors();
   return (
@@ -43,6 +45,7 @@ export function CategorySearchBox({
         autoCapitalize="none"
         autoCorrect={false}
         returnKeyType="search"
+        autoFocus={autoFocus}
         testID={testID}
         style={{ flex: 1, paddingVertical: 8, color: colors.foreground, fontFamily: 'Inter_400Regular' }}
       />

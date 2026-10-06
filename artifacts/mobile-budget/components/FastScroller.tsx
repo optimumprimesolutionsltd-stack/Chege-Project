@@ -24,20 +24,38 @@ const GLIDE_MAX = 4_500;
 // The position is only needed to know where to jump from and which arrows to
 // show: a few times a second is plenty, and every report costs the phone.
 const SCROLL_REPORT_MS = 48;
+// After "to the end" the page keeps following its end this long, while the
+// rest of a list drawn a batch at a time is still being added below.
+const FOLLOW_END_MS = 3_000;
 
-/** Where the arrows sit, clear of a header and the floating buttons. */
-export type ScrollerInsets = { top: number; bottom: number };
+/**
+ * Where the arrows sit, clear of a header and the floating buttons.
+ *
+ * `findCategory` puts a search button on top of the column, on a page that
+ * lists categories: it is handed a way to scroll the page, and opens the
+ * page's own "Search categories" box. `beforeEnd` runs before "to the end" -
+ * a page that draws its list a batch at a time draws the rest, so the end is
+ * the real last entry.
+ */
+export type ScrollerInsets = {
+  top: number;
+  bottom: number;
+  findCategory?: (scrollTo: (offset: number) => void) => void;
+  beforeEnd?: () => void;
+};
 
 type ScrollHandlers = {
   onLayout?: (event: LayoutChangeEvent) => void;
   onContentSizeChange?: (width: number, height: number) => void;
   onScroll?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
+  onScrollBeginDrag?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
 };
 
 /**
  * Up and down arrows at the right edge of a long page: a tap moves a screen,
  * holding one keeps the page moving until it is let go - a year of transactions took
- * minutes of flicking. Give it the list's own handlers (they are called too)
+ * minutes of flicking. Beside them, "to the top" and "to the end", and on a
+ * page of categories a button to find one. Give it the list's own handlers (they are called too)
  * and a way to jump; spread `listProps` on the list and put `thumb` beside
  * it, both inside a `flex: 1` View.
  *
@@ -127,6 +145,32 @@ export function useFastScroller(
   const release = () => stopGlide();
   useEffect(() => stopGlide, []);
 
+  // "To the end": the page may still be drawing the rest of its list, so for
+  // a moment it follows the end as the list grows. A finger on the page, or
+  // any other button, lets go.
+  const followEndUntil = useRef(0);
+  const toEnd = () => {
+    stopGlide();
+    insets?.beforeEnd?.();
+    followEndUntil.current = Date.now() + FOLLOW_END_MS;
+    jump('bottom');
+  };
+  const toTop = () => {
+    stopGlide();
+    followEndUntil.current = 0;
+    jump('top');
+  };
+  const findCategory = () => {
+    stopGlide();
+    followEndUntil.current = 0;
+    insets?.findCategory?.((offset) => {
+      const { height, content } = sizesRef.current;
+      const next = Math.min(Math.max(0, content - height), Math.max(0, offset));
+      targetRef.current = next;
+      scrollToRef.current(next, true);
+    });
+  };
+
   if (!insets) return { listProps: handlers, thumb: null };
 
   const show = sizes.height > 0 && sizes.content > sizes.height * SCROLLER_MIN_SCREENS;
@@ -140,7 +184,16 @@ export function useFastScroller(
     },
     onContentSizeChange: (width: number, content: number) => {
       setSizes((current) => (current.content === content ? current : { ...current, content }));
+      if (Date.now() < followEndUntil.current) {
+        const end = Math.max(0, content - sizesRef.current.height);
+        targetRef.current = end;
+        scrollToRef.current(end, false);
+      }
       handlers.onContentSizeChange?.(width, content);
+    },
+    onScrollBeginDrag: (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      followEndUntil.current = 0;
+      handlers.onScrollBeginDrag?.(event);
     },
     onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       offsetRef.current = event.nativeEvent.contentOffset.y;
@@ -151,6 +204,22 @@ export function useFastScroller(
     },
   };
 
+  const buttonStyle = {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  } as const;
+
   const arrow = (direction: 'up' | 'down') => (
     <Pressable
       onPressIn={() => pressIn(direction)}
@@ -159,31 +228,33 @@ export function useFastScroller(
       accessibilityRole="button"
       accessibilityLabel={direction === 'up' ? 'Up a screen. Hold to keep scrolling up.' : 'Down a screen. Hold to keep scrolling down.'}
       testID={`page-scroller-${direction}`}
-      style={({ pressed }) => ({
-        width: 38,
-        height: 38,
-        borderRadius: 19,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: colors.card,
-        borderWidth: 1,
-        borderColor: colors.border,
-        opacity: pressed ? 1 : 0.88,
-        shadowColor: '#000',
-        shadowOpacity: 0.15,
-        shadowRadius: 4,
-        shadowOffset: { width: 0, height: 2 },
-        elevation: 3,
-      })}
+      style={({ pressed }) => [buttonStyle, { opacity: pressed ? 1 : 0.88 }]}
     >
       <Feather name={direction === 'up' ? 'chevron-up' : 'chevron-down'} size={20} color={colors.primary} />
     </Pressable>
   );
 
+  // One tap each, no hold: find a category, the top, the end.
+  const button = (key: 'find' | 'top' | 'end', icon: keyof typeof Feather.glyphMap, label: string, onPress: () => void) => (
+    <Pressable
+      onPress={onPress}
+      hitSlop={6}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      testID={`page-scroller-${key}`}
+      style={({ pressed }) => [buttonStyle, { opacity: pressed ? 1 : 0.88 }]}
+    >
+      <Feather name={icon} size={20} color={colors.primary} />
+    </Pressable>
+  );
+
   const thumb = show ? (
     <View pointerEvents="box-none" style={{ position: 'absolute', right: 10, top: insets.top, bottom: insets.bottom, justifyContent: 'flex-end', gap: 8 }} testID="page-scroller">
+      {insets.findCategory ? button('find', 'search', 'Find a category', findCategory) : null}
+      {!edges.atTop ? button('top', 'chevrons-up', 'To the top', toTop) : null}
       {!edges.atTop ? arrow('up') : null}
       {!edges.atBottom ? arrow('down') : null}
+      {!edges.atBottom ? button('end', 'chevrons-down', 'To the end', toEnd) : null}
     </View>
   ) : null;
 

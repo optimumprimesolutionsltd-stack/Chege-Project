@@ -33,14 +33,17 @@ describe('a PDF of a grouped list, as a summary or detailed', () => {
 describe('the scroller arrows', () => {
   it('is on every long page, clear of its header and floating buttons', () => {
     expect(read('app/(tabs)/bank.tsx')).toContain("scroller={{ top: topPad + 12, bottom: (Platform.OS === 'web' ? 100 : insets.bottom + 110) }}");
-    for (const tab of ['budget', 'contributions', 'debt', 'goals', 'history', 'index', 'reports', 'settings']) {
+    for (const tab of ['contributions', 'debt', 'goals', 'history', 'index', 'reports', 'settings']) {
       expect(read(`app/(tabs)/${tab}.tsx`)).toContain('scroller={{ top: 12, bottom: insets.bottom + 110 }}');
     }
-    for (const page of ['expense-ledger', 'income-ledger', 'business', 'spending-by-item']) {
+    expect(read('app/(tabs)/budget.tsx')).toContain('scroller={{ top: 12, bottom: insets.bottom + 110, findCategory: openCategoryFind }}');
+    for (const page of ['business', 'spending-by-item']) {
       const screen = read(`app/${page}.tsx`);
       expect(screen).toContain('<ScrollerScrollView scroller={{ top: 8, bottom: insets.bottom + 16 }}');
       expect(screen).toContain('</ScrollerScrollView>');
     }
+    expect(read('app/expense-ledger.tsx')).toContain('<ScrollerScrollView scroller={{ top: 8, bottom: insets.bottom + 16, findCategory: openCategoryFind, beforeEnd: paged.showAll }}');
+    expect(read('app/income-ledger.tsx')).toContain('<ScrollerScrollView scroller={{ top: 8, bottom: insets.bottom + 16, beforeEnd: paged.showAll }}');
     expect(read('app/parties.tsx')).toContain('scroller={{ top: 8, bottom: 24 }}');
     expect(read('app/mpesa-import.tsx')).toContain('scroller={{ top: 8, bottom: insets.bottom + 120 }}');
   });
@@ -59,6 +62,25 @@ describe('the scroller arrows', () => {
     const lists = read('components/PageScrollReset.tsx');
     expect(lists).toContain('if (!scroller) return <FlatList ref={ref} {...LIST_WINDOW} {...props} />;');
     expect(lists).toContain("(offset, animated) => ref.current?.scrollTo({ y: offset, animated })");
+  });
+
+  // "is there an option of going to end" / "the search button is incase am looking for a particular category"
+  it('goes to the top or the real end in one tap, and finds a category where the page lists them', () => {
+    const hook = read('components/FastScroller.tsx');
+    expect(hook).toContain("{!edges.atTop ? button('top', 'chevrons-up', 'To the top', toTop) : null}");
+    expect(hook).toContain("{!edges.atBottom ? button('end', 'chevrons-down', 'To the end', toEnd) : null}");
+    expect(hook).toContain("{insets.findCategory ? button('find', 'search', 'Find a category', findCategory) : null}");
+    // A list drawn a batch at a time draws the rest first, and the page follows its end as it grows.
+    expect(hook).toContain('insets?.beforeEnd?.();');
+    expect(hook).toContain('if (Date.now() < followEndUntil.current) {');
+    expect(read('lib/progressiveDays.ts')).toContain('const showAll = useCallback(() => setLimit(Number.POSITIVE_INFINITY), []);');
+    const budget = read('app/(tabs)/budget.tsx');
+    expect(budget).toContain('testID="budget-category-find"');
+    expect(budget).toContain('{foundBreakdown.map(({ row: cat, isChild, hasSubcategories }) => {');
+    expect(budget).toContain('{foundUnused.map((cat) => {');
+    const expenses = read('app/expense-ledger.tsx');
+    expect(expenses).toContain("setView('category');");
+    expect(expenses).toContain('testID="expense-ledger-category-find"');
   });
 });
 

@@ -23,6 +23,7 @@ import { isoDay, longDay, monthStartIso, orderedRange } from '@/lib/dayRange';
 import { useColors } from '@/hooks/useColors';
 import { useProgressiveDays } from '@/lib/progressiveDays';
 import { ScrollerScrollView } from '@/components/PageScrollReset';
+import { CategorySearchBox } from '@/components/CategorySearchBox';
 import { getExpenseEditHref } from '@/lib/expenseEditLink';
 import { groupByCategory, groupByItem } from '@/lib/groupExpenses';
 import { Paths } from 'expo-file-system';
@@ -117,7 +118,14 @@ export default function ExpenseLedgerScreen() {
     () => (hasBusiness ? allEntries.filter((entry) => (scope === 'business') === isBusinessEntry(entry)) : allEntries),
     [allEntries, scope, hasBusiness, costCategoryNames],
   );
-  const scopedCategoryGroups = useMemo(() => groupByCategory(entries), [entries]);
+  // "Find a category" from the scroller: By category, narrowed to the names typed.
+  const [findingCategory, setFindingCategory] = useState(false);
+  const [categoryFind, setCategoryFind] = useState('');
+  const allCategoryGroups = useMemo(() => groupByCategory(entries), [entries]);
+  const scopedCategoryGroups = useMemo(() => {
+    const needle = categoryFind.trim().toLocaleLowerCase('en-KE');
+    return needle ? allCategoryGroups.filter((group) => group.label.toLocaleLowerCase('en-KE').includes(needle)) : allCategoryGroups;
+  }, [allCategoryGroups, categoryFind]);
   const businessTotal = useMemo(
     () => allEntries.filter(isBusinessEntry).reduce((sum, entry) => sum + entry.amount, 0),
     [allEntries, costCategoryNames],
@@ -232,6 +240,12 @@ export default function ExpenseLedgerScreen() {
 
   // Drawn a batch at a time: a year of entries all at once made the screen drag.
   const paged = useProgressiveDays(days);
+  // The box sits under the view buttons, a short way down the page.
+  const openCategoryFind = (scrollTo: (offset: number) => void) => {
+    setView('category');
+    setFindingCategory(true);
+    scrollTo(0);
+  };
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background, paddingTop: insets.top }]}>
@@ -266,7 +280,7 @@ export default function ExpenseLedgerScreen() {
         </Pressable>
       </View>
 
-      <ScrollerScrollView scroller={{ top: 8, bottom: insets.bottom + 16 }}
+      <ScrollerScrollView scroller={{ top: 8, bottom: insets.bottom + 16, findCategory: openCategoryFind, beforeEnd: paged.showAll }}
         onScroll={paged.onScroll}
         contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 32 }]}
         keyboardShouldPersistTaps="handled"
@@ -413,7 +427,15 @@ export default function ExpenseLedgerScreen() {
             </Text>
           </View>
         ) : shownView === 'category' ? (
-          <>{scopedCategoryGroups.map(renderGroup)}</>
+          <>
+            {findingCategory || categoryFind ? (
+              <CategorySearchBox value={categoryFind} onChange={setCategoryFind} autoFocus={findingCategory} testID="expense-ledger-category-find" />
+            ) : null}
+            {scopedCategoryGroups.length === 0 ? (
+              <Text style={[styles.noteText, { color: colors.mutedForeground, marginTop: 12 }]}>No category matching “{categoryFind.trim()}”.</Text>
+            ) : null}
+            {scopedCategoryGroups.map(renderGroup)}
+          </>
         ) : shownView === 'item' ? (
           itemGroups.map(renderGroup)
         ) : (
