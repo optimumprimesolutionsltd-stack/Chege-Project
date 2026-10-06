@@ -256,7 +256,7 @@ export default function IncomeLedgerScreen() {
         </Pressable>
       </View>
 
-      <ScrollerScrollView scroller={{ top: 8, bottom: insets.bottom + 16 }}
+      <ScrollerScrollView scroller={{ top: 8, bottom: insets.bottom + 16, beforeEnd: paged.showAll }}
         onScroll={paged.onScroll}
         contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 32 }]}
         keyboardShouldPersistTaps="handled"

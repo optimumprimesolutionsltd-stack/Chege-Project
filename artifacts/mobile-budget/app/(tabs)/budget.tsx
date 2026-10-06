@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -869,6 +869,24 @@ export default function BudgetScreen() {
   const budgetFor = (category: BudgetCategory) => storedBudgets.get(category.id) ?? category.budgetAmount;
   const reportedCategoryNames = new Set(breakdown.map(category => category.category));
   const unusedCategories = activeCategories.filter(category => !reportedCategoryNames.has(category.name));
+  // "Find a category" from the scroller: the list narrowed to the names typed.
+  // A match keeps its branch - a parent brings its subcategories, a
+  // subcategory brings its parent heading.
+  const [findingCategory, setFindingCategory] = useState(false);
+  const [categoryFind, setCategoryFind] = useState('');
+  const findNeedle = categoryFind.trim().toLocaleLowerCase('en-KE');
+  const nameHit = (name: string) => name.toLocaleLowerCase('en-KE').includes(findNeedle);
+  const parentsOfHits = new Set(orderedBreakdown.filter(({ row }) => row.parentName && nameHit(row.category)).map(({ row }) => row.parentName));
+  const foundBreakdown = findNeedle
+    ? orderedBreakdown.filter(({ row }) => nameHit(row.category) || parentsOfHits.has(row.category) || (row.parentName ? nameHit(row.parentName) : false))
+    : orderedBreakdown;
+  const foundUnused = findNeedle ? unusedCategories.filter(category => nameHit(category.name)) : unusedCategories;
+  const categoryListY = useRef(0);
+  const openCategoryFind = (scrollTo: (offset: number) => void) => {
+    if (!categoryPanel.open) categoryPanel.toggle();
+    setFindingCategory(true);
+    scrollTo(categoryListY.current);
+  };
   // What the household plan adds up to, and what is expected to come in, so a
   // figure can be moved and the effect read off without a calculator. Leaves
   // only, and not an income stream's own costs, which are budgeted apart.
@@ -1611,7 +1629,7 @@ export default function BudgetScreen() {
         </View>
       </Modal>
 
-      <PageScrollView scroller={{ top: 12, bottom: insets.bottom + 110 }}
+      <PageScrollView scroller={{ top: 12, bottom: insets.bottom + 110, findCategory: openCategoryFind }}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.secondary} />}
         contentContainerStyle={{ paddingBottom: Platform.OS === 'web' ? 100 : insets.bottom + 110 }}
@@ -2125,7 +2143,7 @@ export default function BudgetScreen() {
         </View>
 
         {/* Category list */}
-        <View style={styles.list}>
+        <View style={styles.list} onLayout={(event) => { categoryListY.current = event.nativeEvent.layout.y; }}>
           <Pressable onPress={categoryPanel.toggle} style={styles.collapseHead}>
             <View style={{ flex: 1 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -2154,6 +2172,12 @@ export default function BudgetScreen() {
                 : 'Tap a category to see the expenses behind its total. Owners and admins manage category budgets.'}
             </Text>
           ) : null}
+          {findingCategory || categoryFind ? (
+            <CategorySearchBox value={categoryFind} onChange={setCategoryFind} autoFocus={findingCategory} testID="budget-category-find" />
+          ) : null}
+          {findNeedle && foundBreakdown.length === 0 && foundUnused.length === 0 ? (
+            <Text style={[styles.sectionHint, { color: colors.mutedForeground }]}>No category matching “{categoryFind.trim()}”.</Text>
+          ) : null}
 
           {isLoading ? (
             <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} size="large" />
@@ -2177,7 +2201,7 @@ export default function BudgetScreen() {
             </View>
           ) : (
             <>
-              {orderedBreakdown.map(({ row: cat, isChild, hasSubcategories }) => {
+              {foundBreakdown.map(({ row: cat, isChild, hasSubcategories }) => {
                 const pct = cat.budgetAmount > 0 ? Math.min(cat.spentAmount / cat.budgetAmount, 1) : 0;
                 const isOver = cat.spentAmount > cat.budgetAmount && cat.budgetAmount > 0;
                 const icon = getCategoryIcon(cat.category);
@@ -2279,7 +2303,7 @@ export default function BudgetScreen() {
                   </Pressable>
                 );
               })}
-              {unusedCategories.map((cat) => {
+              {foundUnused.map((cat) => {
                 const icon = getCategoryIcon(cat.name);
                 const rowEditing = catEditor.editing;
                 return (

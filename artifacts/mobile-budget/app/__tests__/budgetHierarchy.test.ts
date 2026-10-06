@@ -11,7 +11,9 @@ describe('the Budget tab groups a parent with its children', () => {
   it('orders parents first, each followed by its own children', () => {
     expect(budget).toContain('const orderedBreakdown = useMemo(');
     expect(budget).toContain('for (const child of mine) ordered.push({ row: child, isChild: true, hasSubcategories: false });');
-    expect(budget).toContain('{orderedBreakdown.map(({ row: cat, isChild, hasSubcategories }) => {');
+    // Drawn through the category search, which is the whole list until something is typed.
+    expect(budget).toContain(': orderedBreakdown;');
+    expect(budget).toContain('{foundBreakdown.map(({ row: cat, isChild, hasSubcategories }) => {');
   });
 
   it('never drops a child whose parent is not in this month', () => {

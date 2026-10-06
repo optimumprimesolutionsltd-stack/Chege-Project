@@ -38,10 +38,12 @@ export function useProgressiveDays<T extends { rows: readonly unknown[] }>(days:
   const shownRows = useMemo(() => shown.reduce((sum, day) => sum + day.rows.length, 0), [shown]);
   const more = shown.length < days.length;
   const showMore = useCallback(() => setLimit((current) => current + ROWS_PER_BATCH), []);
+  // "To the end" means the last entry, not the last one drawn so far.
+  const showAll = useCallback(() => setLimit(Number.POSITIVE_INFINITY), []);
   const onScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     if (!more) return;
     const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
     if (layoutMeasurement.height + contentOffset.y >= contentSize.height - NEAR_END) showMore();
   }, [more, showMore]);
-  return { shown, more, showMore, onScroll, shownRows, total };
+  return { shown, more, showMore, showAll, onScroll, shownRows, total };
 }

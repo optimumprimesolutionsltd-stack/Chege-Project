@@ -39,7 +39,9 @@ describe('the search box is on every category list', () => {
     ['app/(tabs)/bank.tsx', 3],
     ['app/bank-day.tsx', 1],
     ['app/add-expense.tsx', 1],
-    ['app/(tabs)/budget.tsx', 1],
+    // The Edit categories list, and the By category list the scroller's search button opens.
+    ['app/(tabs)/budget.tsx', 2],
+    ['app/expense-ledger.tsx', 1],
   ])('%s', (file, count) => {
     expect(read(file).split('<CategorySearchBox').length - 1).toBe(count);
   });
