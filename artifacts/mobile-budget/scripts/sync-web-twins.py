@@ -18,7 +18,8 @@ WEB = os.path.join(HERE, '..', '..', 'family-budget', 'src', 'lib')
 
 # phone file -> (web file, import paths to rename)
 TWINS = {
-    'mpesaImport.ts': ('mpesa-import.ts', {'./mpesaDebts': './mpesa-debts', './payeeLearning': './payee-learning', './mpesaProducts': './mpesa-products'}),
+    'mpesaImport.ts': ('mpesa-import.ts', {'./mpesaDebts': './mpesa-debts', './payeeLearning': './payee-learning', './mpesaProducts': './mpesa-products', './knownPayees': './known-payees'}),
+    'knownPayees.ts': ('known-payees.ts', {}),
     'mpesaProducts.ts': ('mpesa-products.ts', {'./mpesaImport': './mpesa-import'}),
     'possibleDuplicates.ts': ('possible-duplicates.ts', {}),
     'mpesaDebts.ts': ('mpesa-debts.ts', {'./mpesaImport': './mpesa-import', './mpesaProducts': './mpesa-products'}),

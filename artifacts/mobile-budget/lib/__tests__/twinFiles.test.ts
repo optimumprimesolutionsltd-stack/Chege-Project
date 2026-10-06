@@ -13,7 +13,8 @@ const NORMALISE = (text: string) =>
     .replace(/\.\/(mpesaDebts|mpesa-debts)/g, './mpesa-debts')
     .replace(/\.\/(payeeLearning|payee-learning)/g, './payee-learning')
     .replace(/\.\/(mpesaProducts|mpesa-products)/g, './mpesa-products')
-    .replace(/\.\/(statementTable|statement-table)/g, './statement-table');
+    .replace(/\.\/(statementTable|statement-table)/g, './statement-table')
+    .replace(/\.\/(knownPayees|known-payees)/g, './known-payees');
 
 const PAIRS: Array<[string, string]> = [
   ['lib/mpesaImport.ts', '../family-budget/src/lib/mpesa-import.ts'],
@@ -25,6 +26,7 @@ const PAIRS: Array<[string, string]> = [
   ['lib/statementTable.ts', '../family-budget/src/lib/statement-table.ts'],
   ['lib/statementImport.ts', '../family-budget/src/lib/statement-import.ts'],
   ['lib/otherBudgetOptions.ts', '../family-budget/src/lib/other-budget-options.ts'],
+  ['lib/knownPayees.ts', '../family-budget/src/lib/known-payees.ts'],
 ];
 
 describe('the phone and the web share one copy of the logic', () => {
