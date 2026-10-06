@@ -31,6 +31,14 @@ const OPENERS: Record<string, string> = {
 
 const DEFAULT_OPENER = "Hi Jamvi — I'd like to know more about the app.";
 
+/**
+ * Asks the bot for the Android app. The bot (optimum-prime-lead-notifier,
+ * JAMVI_APK_REQUEST_TEXT) answers exactly this text with the APK as a file,
+ * which Chrome's download block never sees. Keep the two in step.
+ */
+export const APK_REQUEST_TEXT = "Hi Jamvi, please send me the Android app";
+export const APK_ON_WHATSAPP_LINK = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(APK_REQUEST_TEXT)}`;
+
 export function whatsAppLink(path: string): string {
   // Guides and segment pages live under a section; anything beneath a known
   // one inherits its opener rather than falling back to the generic line.

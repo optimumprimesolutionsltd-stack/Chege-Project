@@ -4,6 +4,7 @@ import { Download as DownloadIcon, ShieldCheck, Smartphone, MessageSquare, Globe
 import { useSeo } from "@/hooks/use-seo";
 import { SITE_SEO } from "@/lib/site-seo";
 import { JAMVI_APK_PATH, JAMVI_APP_PATH, JAMVI_SMS_APK_PATH, JAMVI_SUPPORT_EMAIL } from "@/lib/site-links";
+import { APK_ON_WHATSAPP_LINK } from "@/components/whatsapp-button";
 
 const STEPS = [
   "Tap Download for Android above, on the phone you will use Jamvi on.",
@@ -142,8 +143,22 @@ export default function Download() {
           </h2>
           <p className="mb-4 text-foreground/75">
             There is a version that fills in your budget straight from M-Pesa&rsquo;s text messages. Because it asks to read
-            messages, Chrome on a phone blocks it for now while Google reviews it. Get it with a computer instead:
+            messages, Chrome on a phone blocks it for now while Google reviews it. The easy way: we send you the file on
+            WhatsApp, and you install it from there.
           </p>
+          <a
+            href={APK_ON_WHATSAPP_LINK}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-mat h-12 px-5 text-base"
+            data-testid="apk-on-whatsapp"
+          >
+            <MessageSquare className="h-5 w-5" aria-hidden="true" /> Get it on WhatsApp
+          </a>
+          <p className="mt-2 text-sm text-foreground/60">
+            Opens WhatsApp with the message ready - just send it. The app arrives as a file: tap it, then Install.
+          </p>
+          <p className="mb-3 mt-6 font-semibold text-foreground">Or with a computer:</p>
           <ol className="space-y-3">
             {SMS_VERSION_STEPS.map((step, index) => (
               <li key={step} className="flex gap-3 text-foreground/80">
