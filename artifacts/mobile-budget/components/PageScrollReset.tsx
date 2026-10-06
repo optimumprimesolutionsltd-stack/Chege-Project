@@ -99,6 +99,14 @@ export const ScrollerScrollView = React.forwardRef<ScrollView, ScrollViewProps &
   );
 });
 
+/**
+ * How much of a long list is kept drawn. React Native's defaults keep about
+ * ten screens either side ready, which on Bank and Activity - hundreds of
+ * entries - is a lot of rows rebuilt while scrolling. Five either side is
+ * still well ahead of a fast flick; a screen can still set its own.
+ */
+const LIST_WINDOW = { initialNumToRender: 12, maxToRenderPerBatch: 10, updateCellsBatchingPeriod: 40, windowSize: 11 } as const;
+
 export function PageFlatList<ItemT>({ scroller, ...props }: FlatListProps<ItemT> & WithScroller) {
   const ref = useRef<FlatList<ItemT>>(null);
 
@@ -116,10 +124,10 @@ export function PageFlatList<ItemT>({ scroller, ...props }: FlatListProps<ItemT>
     (offset, animated) => ref.current?.scrollToOffset({ offset, animated }),
     props,
   );
-  if (!scroller) return <FlatList ref={ref} {...props} />;
+  if (!scroller) return <FlatList ref={ref} {...LIST_WINDOW} {...props} />;
   return (
     <View style={{ flex: 1 }}>
-      <FlatList ref={ref} {...props} {...listProps} />
+      <FlatList ref={ref} {...LIST_WINDOW} {...props} {...listProps} />
       {thumb}
     </View>
   );
