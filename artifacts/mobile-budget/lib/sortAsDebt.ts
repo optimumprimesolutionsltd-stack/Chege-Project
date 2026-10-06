@@ -6,6 +6,8 @@
  * sources, so money lent, borrowed or paid back could only be filed as
  * spending or income.
  */
+import { LENDERS } from './mpesaProducts';
+
 export type DebtKind = 'lend' | 'pay-back' | 'borrowed' | 'repaid';
 
 export type DebtKindOption = { kind: DebtKind; label: string; hint: string; needsPerson: boolean };
@@ -41,4 +43,17 @@ export function suggestedParty<T extends { id: number; name: string }>(descripti
     return name.length > 0 && name.every((word) => said.has(word));
   });
   return named.length === 1 ? named[0] : null;
+}
+
+/**
+ * Who the sheet offers. Fuliza, M-Shwari, KCB M-PESA and Hustler Fund are
+ * left out: the M-Pesa import links their loans and repayments itself, so
+ * picking one by hand for any other entry made a second debt beside the one
+ * the import keeps, and their balance in Who owes who came out wrong
+ * ("should fuliza be there or not since its automatically picked?", 6 Oct
+ * 2026). One is still offered when the entry itself names it.
+ */
+export function partiesToOffer<T extends { id: number; name: string }>(parties: readonly T[], suggested: T | null): T[] {
+  const isLender = (party: T) => LENDERS.some((lender) => lender.party.test(party.name.trim().replace(/\s+/g, ' ').toLocaleLowerCase('en-KE')));
+  return parties.filter((party) => !isLender(party) || party.id === suggested?.id);
 }
