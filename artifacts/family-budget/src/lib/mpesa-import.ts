@@ -1,6 +1,7 @@
 import type { DebtLink } from "./mpesa-debts";
 import { fuzzyCategory, isFeePosting, ruleCategory, wordCategory, type PayeeRules } from "./payee-learning";
 import { loanOf, productCategory, productOf, savingsOf } from "./mpesa-products";
+import { knownPayeeCategory } from "./known-payees";
 
 export type AlreadyRecorded = {
   date: string | null;
@@ -330,7 +331,8 @@ function suggestionFor(
   if (loanOf(line) || savingsOf(line)) return "";
   const description = line.description ?? "";
   // A rule the person kept, then this exact payee"s history, then payees with a similar name,
-  // then a word that has nearly always meant one category in their own books.
+  // then a word that has nearly always meant one category in their own books, then a
+  // well-known payee (lib/knownPayees).
   const kept = description ? ruleCategory(description, rules, line.payeeNumber) : "";
   const earlier = description ? suggestCategory(description, history) : "";
   // A Safaricom product goes where the person keeps it, and otherwise to its ledger under M-Pesa -
@@ -346,6 +348,9 @@ function suggestionFor(
     earlier ||
     similar ||
     byWord ||
+    // Then a payee whose category is obvious from its name (Kenya Power, a supermarket):
+    // the person"s own books always come first.
+    (description ? knownPayeeCategory(description, categoryNames) : "") ||
     (line.type === "fuliza_fee" ? chargeCategory : "") ||
     defaultCategoryFor(line, categoryNames)
   );
