@@ -4,6 +4,7 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { db, jointAccountTxTable } from "@workspace/db";
 import { getActiveGroupId, requireGroupManager } from "../lib/activeGroup";
 import { entriesToSortReady, NOT_SURE_CATEGORY } from "../lib/entries-to-sort";
+import { reversalLinksReady } from "../lib/reversal-links";
 import { DEBT_KINDS, sortAsDebt, unsortDebt } from "../lib/sort-as-debt";
 
 const router = Router();
@@ -56,6 +57,13 @@ router.get("/entries-to-sort", async (req, res): Promise<void> => {
     ? sql`OR (${jointAccountTxTable.type} = 'deposit' AND ${jointAccountTxTable.incomeSourceId} IS NULL
         AND ${jointAccountTxTable.id} IN (SELECT "transaction_id" FROM "entries_to_sort" WHERE "group_id" = ${groupId}))`
     : sql``;
+  // Either half of a reversal has nothing left to sort: the payment and its money
+  // back cancel out. A payment saved as Not sure and reversed later stayed on the
+  // list and looked like spending still to be filed (6 Oct 2026).
+  const notReversed = reversalLinksReady()
+    ? sql`AND NOT EXISTS (SELECT 1 FROM "reversal_links" r
+        WHERE r."reversal_transaction_id" = ${jointAccountTxTable.id} OR r."original_transaction_id" = ${jointAccountTxTable.id})`
+    : sql``;
   const rows = await db
     .select({
       id: jointAccountTxTable.id,
@@ -67,7 +75,7 @@ router.get("/entries-to-sort", async (req, res): Promise<void> => {
     .from(jointAccountTxTable)
     .where(and(
       eq(jointAccountTxTable.groupId, groupId),
-      sql`((${jointAccountTxTable.type} = 'disbursement' AND lower(${jointAccountTxTable.expenseCategory}) = lower(${NOT_SURE_CATEGORY})) ${marked})`,
+      sql`((${jointAccountTxTable.type} = 'disbursement' AND lower(${jointAccountTxTable.expenseCategory}) = lower(${NOT_SURE_CATEGORY})) ${marked}) ${notReversed}`,
     ))
     .orderBy(asc(jointAccountTxTable.date), asc(jointAccountTxTable.id))
     // A whole year's statement saved as Not sure is well over a thousand.
