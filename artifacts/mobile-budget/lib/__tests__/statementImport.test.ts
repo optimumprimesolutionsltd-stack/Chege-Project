@@ -390,6 +390,33 @@ describe('what the statement has that Jamvi is missing', () => {
   it('says when a payment was saved for a different amount', () => {
     expect(missingInJamvi(reading, rows).amounts).toEqual([{ id: 15, date: '2026-09-29', description: 'Sample', recorded: 450, statement: 500, fixable: false }]);
   });
+
+  // "Saved as KES 3,355, the statement says KES 25 - Use KES 25" (6 Oct 2026):
+  // a charge under its payment's code, read as a second payment.
+  it('never offers a charge amount for the payment that shares its code', () => {
+    const payment = { ...at('03 10:00:00', 'Pay Bill to 522522 - Lipa Na Kcb Acc. 1234', { withdrawn: 3355 }), receipt: 'TJ3ABCDEFG' };
+    const charge = { ...at('03 10:00:00', 'Pay Bill Charge Online', { withdrawn: 25 }), receipt: 'TJ3ABCDEFG' };
+    const saved = [{ id: 40, date: '2026-09-03', type: 'disbursement', amount: 3355, description: 'Lipa Na Kcb', mpesaReceipt: 'TJ3ABCDEFG' }];
+    const read = statementLines([payment, charge]);
+    expect(read.lines).toHaveLength(1);
+    expect(read.lines[0]).toMatchObject({ amount: 3355, fee: 25 });
+    const found = missingInJamvi(read, saved);
+    expect(found.amounts).toEqual([]);
+    expect(found.charges).toEqual([{ parentId: 40, date: '2026-09-03', amount: 25, description: 'Bank charge — Lipa Na Kcb' }]);
+  });
+
+  it('even when a reading still lists the charge as a line of its own', () => {
+    const line = (amount: number, type: string) => ({
+      index: 0, status: 'ready' as const, reason: null, receipt: 'TJ3ABCDEFH', direction: 'out' as const, type, amount, description: 'Equity Paybill', named: true, date: '2026-09-03', fee: null, mpesaBalance: null, alreadyRecorded: null,
+    });
+    const read = { ...statementLines([]), lines: [line(9961, 'paybill_payment'), line(48, 'other')] };
+    const saved = [{ id: 41, date: '2026-09-03', type: 'disbursement', amount: 9961, description: 'Equity Paybill', mpesaReceipt: 'TJ3ABCDEFH' }];
+    const found = missingInJamvi(read, saved);
+    expect(found.amounts).toEqual([]);
+    expect(found.charges.map((charge) => charge.amount)).toEqual([48]);
+    // Already saved with its charge: nothing to add.
+    expect(missingInJamvi(read, [...saved, { id: 42, date: '2026-09-03', type: 'disbursement', amount: 48, description: 'M-Pesa charge', mpesaReceipt: 'TJ3ABCDEFHC1', chargeForTransactionId: 41 }]).charges).toEqual([]);
+  });
 });
 
 // "Why does this keep happening?" A statement stops at the hour it was made.

@@ -1412,13 +1412,17 @@ export default function MpesaImportScreen() {
   }, [statementReading, account]);
   // Removing an entry the statement does not have waits a few seconds for Undo.
   const undoable = useUndoableDelete();
+  // Removed, and kept out of the list while the account reloads: once Undo
+  // had passed, the entry came back until everything was fetched again - "the
+  // remove button is taking too long to respond" (6 Oct 2026).
+  const [removedIds, setRemovedIds] = useState<ReadonlySet<number>>(() => new Set());
   // What this account has for the statement's days that the statement does not.
   const extras = useMemo(() => {
     const found = statementReading && account ? notOnStatement(statementReading, (account.transactions ?? []) as unknown as RecordedRow[]) : null;
     if (!found) return null;
-    const rows = found.rows.filter((row) => !undoable.isHidden(`extra:${row.id}`));
+    const rows = found.rows.filter((row) => !undoable.isHidden(`extra:${row.id}`) && !removedIds.has(row.id));
     return { rows, net: Math.round(rows.reduce((sum, row) => sum + row.effect, 0) * 100) / 100 };
-  }, [statementReading, account, undoable.isHidden]);
+  }, [statementReading, account, undoable.isHidden, removedIds]);
   // Sorting a difference out where it is shown (asked for 3 Oct 2026), rather
   // than "open Bank and fix it": an entry M-Pesa never had can be removed, and
   // one saved for a different amount set to the statement's.
@@ -1432,9 +1436,15 @@ export default function MpesaImportScreen() {
           text: 'Remove',
           style: 'destructive',
           onPress: () => undoable.schedule(`extra:${row.id}`, deletedLabel(row.description, Math.abs(row.effect)), async () => {
+            setRemovedIds((ids) => new Set(ids).add(row.id));
             try {
               await customFetch(`/api/joint-account/${row.id}`, { method: 'DELETE' });
             } catch (error: unknown) {
+              setRemovedIds((ids) => {
+                const next = new Set(ids);
+                next.delete(row.id);
+                return next;
+              });
               Alert.alert('Could not remove it', plainSaveError(error));
             }
             await queryClient.invalidateQueries();

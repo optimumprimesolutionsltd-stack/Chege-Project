@@ -51,6 +51,9 @@ export interface StatementReading {
 const DRAW = /^OverDraft of Credit Party/i;
 const REPAYMENT = /^OD Loan Repayment/i;
 const CHARGE = /\bCharge$/i;
+const CHARGE_WORD = /\bCharge\b/i;
+/** The most an M-Pesa charge comes to; the server refuses more (#600). */
+const MAX_CHARGE = 1_000;
 const REVERSAL = /\bReversal\b/i;
 
 type Kind = "person_payment" | "merchant_payment" | "paybill_payment" | "airtime_purchase" | "cash_withdrawal" | "person_receipt" | "bank_receipt";
@@ -213,6 +216,17 @@ export function statementLines(
       }
       else if (CHARGE.test(details)) charges.push(row);
       else mains.push(row);
+    }
+    // A charge worded with more after "Charge" still shares its payment's
+    // code. Read as a second payment, it asked to set the payment to the
+    // charge's amount - "saved as KES 3,355, the statement says KES 25" (6 Oct
+    // 2026). Under one code, an entry naming a charge beside one that does not
+    // is the charge.
+    for (const row of [...mains]) {
+      if (CHARGE_WORD.test(row.details) && mains.some((other) => other !== row && other.receipt === row.receipt && !CHARGE_WORD.test(other.details))) {
+        mains.splice(mains.indexOf(row), 1);
+        charges.push(row);
+      }
     }
     const charged = charges.reduce((sum, row) => sum + (row.withdrawn ?? 0), 0);
     const foldable = mains.length === 1 && charges.length > 0;
@@ -649,11 +663,32 @@ export function missingInJamvi(
   const recordedCodes = [...byReceipt.keys()];
   const charges: Array<{ parentId: number; date: string; amount: number; description: string }> = [];
   const amounts: Array<{ id: number; date: string; description: string; recorded: number; statement: number; fixable: boolean }> = [];
+  // Lines under each code. Two under one code are a payment and its charge;
+  // the saved entry is the payment, so only the payment's amount is compared,
+  // and the smaller one, when nothing holds it, is its missing charge.
+  const sameCode = new Map<string, PreviewLine[]>();
+  for (const line of reading.lines) {
+    if (line.status !== "ready" || !line.receipt || line.amount === null) continue;
+    sameCode.set(line.receipt, [...(sameCode.get(line.receipt) ?? []), line]);
+  }
   for (const line of reading.lines) {
     if (line.status !== "ready" || !line.receipt || line.amount === null) continue;
     const saved = byReceipt.get(line.receipt);
     if (!saved) continue;
     const recorded = Number(saved.amount) || 0;
+    const siblings = sameCode.get(line.receipt) ?? [line];
+    if (siblings.length > 1) {
+      const payment = siblings.find((other) => Math.abs((other.amount ?? 0) - recorded) < 0.01)
+        ?? siblings.reduce((big, other) => ((other.amount ?? 0) > (big.amount ?? 0) ? other : big));
+      if (line !== payment) {
+        const chargeKept = chargedIds.has(saved.id) || recordedCodes.some((code) => code.startsWith(`${line.receipt}C`));
+        if (line.direction === "out" && payment.direction === "out" && line.amount <= MAX_CHARGE && line.amount < (payment.amount ?? 0) && !chargeKept
+          && !charges.some((charge) => charge.parentId === saved.id)) {
+          charges.push({ parentId: saved.id, date: line.date ?? String(saved.date).slice(0, 10), amount: line.amount, description: `Bank charge — ${saved.description ?? payment.description ?? ""}` });
+        }
+        continue;
+      }
+    }
     if (Math.abs(recorded - line.amount) >= 0.01) {
       amounts.push({ id: saved.id, date: String(saved.date).slice(0, 10), description: saved.description ?? line.description ?? "", recorded, statement: line.amount, fixable: /^F[ZB]\d{12}$/.test(line.receipt) });
     }
@@ -668,7 +703,7 @@ export function missingInJamvi(
           && Math.abs((Number(row.amount) || 0) - (line.fee ?? 0)) < 0.01
           && /^bank charge/i.test(row.description ?? "")
           && payee !== "" && (row.description ?? "").toLowerCase().includes(payee.slice(0, 12)));
-      if (!chargeKept) {
+      if (!chargeKept && !charges.some((charge) => charge.parentId === saved.id)) {
         charges.push({ parentId: saved.id, date: line.date ?? String(saved.date).slice(0, 10), amount: line.fee, description: `Bank charge — ${saved.description ?? line.description ?? ""}` });
       }
     }
