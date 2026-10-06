@@ -12,7 +12,7 @@
  * Items are separated by "|" and shown as a list. Only extra changes; the
  * runtime version follows the app version, so this cannot strand an update.
  */
-const { withGradleProperties } = require('expo/config-plugins');
+const { withAndroidManifest, withGradleProperties } = require('expo/config-plugins');
 
 /**
  * The APK people download from jamvi.co.ke carries native code for ARM only.
@@ -28,6 +28,23 @@ const withArmOnly = (config) =>
     return cfg;
   });
 
+/**
+ * A build without SMS reading drops the permissions and also the receiver that
+ * listens for M-Pesa's texts (it stays declared in the jamvi-sms module's own
+ * manifest otherwise). Chrome blocks the APK as a "dangerous download" while it
+ * asks for SMS; the jamvi.co.ke download (eas.json "website") is built this way.
+ */
+const SMS_RECEIVER = 'expo.modules.jamvisms.MpesaSmsReceiver';
+const withoutSmsReceiver = (config) =>
+  withAndroidManifest(config, (cfg) => {
+    const manifest = cfg.modResults.manifest;
+    manifest.$['xmlns:tools'] = manifest.$['xmlns:tools'] ?? 'http://schemas.android.com/tools';
+    const application = manifest.application[0];
+    application.receiver = (application.receiver ?? []).filter((r) => r.$['android:name'] !== SMS_RECEIVER);
+    application.receiver.push({ $: { 'android:name': SMS_RECEIVER, 'tools:node': 'remove' } });
+    return cfg;
+  });
+
 module.exports = ({ config }) => {
   const note = (process.env.JAMVI_UPDATE_NOTE ?? '').trim();
   // A Play Store build (eas.json "play") leaves out reading SMS until Google
@@ -35,12 +52,13 @@ module.exports = ({ config }) => {
   // is removed, and the "Read my M-Pesa messages" button then hides itself.
   // Approved, delete JAMVI_PLAY_STORE from that profile and it is on.
   const playStore = process.env.JAMVI_PLAY_STORE === '1';
+  const noSms = playStore || process.env.JAMVI_NO_SMS === '1';
   return {
     ...config,
-    plugins: [...(config.plugins ?? []), ...(playStore ? [] : [withArmOnly])],
+    plugins: [...(config.plugins ?? []), ...(playStore ? [] : [withArmOnly]), ...(noSms ? [withoutSmsReceiver] : [])],
     android: {
       ...config.android,
-      ...(playStore ? { blockedPermissions: [...(config.android?.blockedPermissions ?? []), 'android.permission.READ_SMS', 'android.permission.RECEIVE_SMS'] } : {}),
+      ...(noSms ? { blockedPermissions: [...(config.android?.blockedPermissions ?? []), 'android.permission.READ_SMS', 'android.permission.RECEIVE_SMS'] } : {}),
     },
     extra: { ...config.extra, ...(note ? { updateNote: note } : {}) },
   };
