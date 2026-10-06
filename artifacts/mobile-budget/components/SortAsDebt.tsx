@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { customFetch } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
-import { debtKindLabel, debtKindsFor, suggestedParty, type DebtKind } from '@/lib/sortAsDebt';
+import { debtKindLabel, debtKindsFor, partiesToOffer, suggestedParty, type DebtKind } from '@/lib/sortAsDebt';
 import { plainSaveError } from '@/lib/saveRetry';
 import type { EntryToSort } from '@/lib/entriesToSort';
 
@@ -25,6 +26,8 @@ export function SortAsDebt({ entry, others, onClose, onSorted }: {
   onSorted: (change: { text: string; undo: () => Promise<void> }) => void;
 }) {
   const colors = useColors();
+  // Clear of Android's navigation bar: Save sat under it and could not be seen (6 Oct 2026).
+  const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const kinds = debtKindsFor(entry.direction);
   const [kind, setKind] = useState<DebtKind | null>(null);
@@ -37,6 +40,7 @@ export function SortAsDebt({ entry, others, onClose, onSorted }: {
     staleTime: 30_000,
   });
   const suggested = useMemo(() => suggestedParty(entry.description, parties), [entry.description, parties]);
+  const offered = useMemo(() => partiesToOffer(parties, suggested), [parties, suggested]);
   // Picked for the person once, when the description names them; theirs to change.
   const [suggestionUsed, setSuggestionUsed] = useState(false);
   useEffect(() => {
@@ -113,7 +117,7 @@ export function SortAsDebt({ entry, others, onClose, onSorted }: {
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
       <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' }}>
-        <View style={{ backgroundColor: colors.card, borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 16, gap: 12, maxHeight: '85%' }} testID="sort-debt-sheet">
+        <View style={{ backgroundColor: colors.card, borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 16, paddingBottom: Math.max(insets.bottom, 16) + 4, gap: 12, maxHeight: '85%' }} testID="sort-debt-sheet">
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={{ color: colors.foreground, fontFamily: 'Inter_700Bold', fontSize: 16 }}>A debt</Text>
@@ -140,7 +144,7 @@ export function SortAsDebt({ entry, others, onClose, onSorted }: {
                 <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>Who with?</Text>
                 {isLoading ? <ActivityIndicator color={colors.primary} /> : (
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                    {parties.map((party) => (
+                    {offered.map((party) => (
                       <Pressable key={party.id} onPress={() => { setPartyId(partyId === party.id ? null : party.id); setNewName(''); }} accessibilityRole="button" accessibilityState={{ selected: partyId === party.id }} testID={`sort-debt-party-${party.id}`} style={chip(partyId === party.id)}>
                         <Text style={{ color: partyId === party.id ? colors.primary : colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>{party.name}</Text>
                       </Pressable>
