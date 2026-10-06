@@ -91,6 +91,8 @@ import { confirmNotAlreadyFromMpesa } from '@/lib/alreadyFromMpesa';
  * spread over four categories.
  */
 const CHARGE_CATEGORY_KEY = 'jamvi:last-charge-category';
+/** Money-back entries left as money in: no longer offered for matching on this phone. */
+const MONEY_BACK_LEFT_KEY = 'jamvi:money-back-left';
 
 function formatKES(n?: number | null): string {
   if (n === undefined || n === null) return '—';
@@ -2278,8 +2280,23 @@ export default function BankScreen() {
   // Money-back entries not yet matched to the payment they reversed: each
   // still counts as income. Matching the ones with a single possible payment
   // takes one tap; the rest are named, to be opened and picked.
+  // Ones left as they are ("I should be able to press ignore", 6 Oct 2026):
+  // remembered on this phone, and no longer counted or asked about.
+  const [moneyBackLeft, setMoneyBackLeft] = useState<ReadonlySet<number>>(() => new Set());
+  useEffect(() => {
+    AsyncStorage.getItem(MONEY_BACK_LEFT_KEY)
+      .then((raw) => { if (raw) setMoneyBackLeft(new Set((JSON.parse(raw) as number[]).filter(Number.isFinite))); })
+      .catch(() => {});
+  }, []);
+  const leaveMoneyBack = (ids: readonly number[]) => {
+    setMoneyBackLeft((left) => {
+      const next = new Set([...left, ...ids]);
+      AsyncStorage.setItem(MONEY_BACK_LEFT_KEY, JSON.stringify([...next])).catch(() => {});
+      return next;
+    });
+  };
   const unmatchedMoneyBack = transactions.filter(
-    (transaction) => transaction.type === 'deposit' && /^money back/i.test(transaction.description ?? '') && !transaction.reversal,
+    (transaction) => transaction.type === 'deposit' && /^money back/i.test(transaction.description ?? '') && !transaction.reversal && !moneyBackLeft.has(transaction.id),
   );
   const [matchingReversals, setMatchingReversals] = useState(false);
   // Imported entries an older import filed wrongly in this account: M-Pesa
@@ -2396,12 +2413,22 @@ export default function BankScreen() {
     try {
       const result = await autoLinkReversals();
       invalidateBalance();
-      const waiting = result.needsYou.length;
+      const needsYou = result.needsYou.filter((item) => !moneyBackLeft.has(item.id));
+      const waiting = needsYou.length;
+      // The first one that can be opened here, to choose its payment.
+      const first = needsYou.map((item) => transactions.find((transaction) => transaction.id === item.id)).find((transaction) => transaction !== undefined);
       Alert.alert(
         result.linked > 0 ? `Matched ${result.linked}` : 'Nothing could be matched on its own',
         waiting === 0
           ? 'Every money-back entry is now linked to the payment it reversed, so none counts as income.'
-          : `${waiting} still ${waiting === 1 ? 'needs' : 'need'} you: ${result.needsYou.map((item) => `KES ${formatKES(item.amount)} on ${item.date} (${item.candidates === 0 ? 'no payment of that amount is recorded' : `${item.candidates} possible payments`})`).join('; ')}. Open each one to choose.`,
+          : `${waiting} still ${waiting === 1 ? 'needs' : 'need'} you: ${needsYou.map((item) => `KES ${formatKES(item.amount)} on ${item.date} (${item.candidates === 0 ? 'no payment of that amount is recorded' : `${item.candidates} possible payments`})`).join('; ')}.\n\nChoose the payment it reversed, or leave ${waiting === 1 ? 'it' : 'them'} as money in and Jamvi stops asking.`,
+        waiting === 0
+          ? [{ text: 'OK' }]
+          : [
+            { text: 'Not now', style: 'cancel' },
+            { text: 'Leave as money in', onPress: () => leaveMoneyBack(needsYou.map((item) => item.id)) },
+            ...(first ? [{ text: 'Choose the payment', onPress: () => openEdit(first) }] : []),
+          ],
       );
     } catch (error: unknown) {
       Alert.alert('Could not match them', error instanceof Error ? error.message : 'Please try again.');

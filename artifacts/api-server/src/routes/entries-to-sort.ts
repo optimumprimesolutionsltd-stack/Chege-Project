@@ -2,8 +2,9 @@ import { Router } from "express";
 import { z } from "zod";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { db, jointAccountTxTable } from "@workspace/db";
-import { getActiveGroupId } from "../lib/activeGroup";
+import { getActiveGroupId, requireGroupManager } from "../lib/activeGroup";
 import { entriesToSortReady, NOT_SURE_CATEGORY } from "../lib/entries-to-sort";
+import { DEBT_KINDS, sortAsDebt, unsortDebt } from "../lib/sort-as-debt";
 
 const router = Router();
 
@@ -142,6 +143,48 @@ router.delete("/entries-to-sort/:transactionId", async (req, res): Promise<void>
   }
   if (entriesToSortReady()) {
     await db.execute(sql`DELETE FROM "entries_to_sort" WHERE "transaction_id" = ${id} AND "group_id" = ${groupId}`);
+  }
+  res.status(204).end();
+});
+
+const debtSchema = z.object({ kind: z.enum(DEBT_KINDS), partyId: z.number().int().positive().nullable().optional() });
+
+/**
+ * Sorted out as a debt: lent, paid back, borrowed or repaid to you, with the
+ * person when known (lib/sort-as-debt). Leaves the list.
+ */
+router.post("/entries-to-sort/:transactionId/debt", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  if (!requireGroupManager(req, res)) return;
+  const id = Number(req.params.transactionId);
+  const parsed = debtSchema.safeParse(req.body);
+  if (!Number.isInteger(id) || id <= 0 || !parsed.success) {
+    res.status(400).json({ error: "Say what kind of debt it is." });
+    return;
+  }
+  const result = await sortAsDebt(groupId, id, parsed.data.kind, parsed.data.partyId ?? null);
+  if (!result.ok) {
+    res.status(result.status).json({ error: result.error });
+    return;
+  }
+  res.status(204).end();
+});
+
+/** Undo the above: back on the list as it was. */
+router.delete("/entries-to-sort/:transactionId/debt", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  if (!requireGroupManager(req, res)) return;
+  const id = Number(req.params.transactionId);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: "Which entry?" });
+    return;
+  }
+  const result = await unsortDebt(groupId, id);
+  if (!result.ok) {
+    res.status(result.status).json({ error: result.error });
+    return;
   }
   res.status(204).end();
 });

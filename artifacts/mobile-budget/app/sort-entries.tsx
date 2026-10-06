@@ -15,6 +15,7 @@ import {
 import { useColors } from '@/hooks/useColors';
 import { isNotSure, NOT_SURE_CATEGORY, sameParty, type EntryToSort } from '@/lib/entriesToSort';
 import { AddIncomeSourceChip } from '@/components/AddIncomeSourceChip';
+import { SortAsDebt } from '@/components/SortAsDebt';
 import { workingYear } from '@/lib/mpesaLiveBalance';
 import { inMonth, monthsOf } from '@/lib/mpesaImport';
 import { plainSaveError } from '@/lib/saveRetry';
@@ -167,6 +168,9 @@ export default function SortEntriesScreen() {
     }
   };
 
+  // "Debt" on an entry: lent, borrowed or paid back, and who with (components/SortAsDebt).
+  const [debtFor, setDebtFor] = useState<EntryToSort | null>(null);
+
   const chip = { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.muted } as const;
 
   return (
@@ -246,6 +250,11 @@ export default function SortEntriesScreen() {
               </View>
               <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>{entry.direction === 'out' ? 'What was it for?' : 'Where did it come from?'}</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
+                <Pressable disabled={busy !== null} onPress={() => setDebtFor(entry)} accessibilityRole="button" testID={`sort-entry-${entry.id}-debt`}
+                  style={{ ...chip, flexDirection: 'row', alignItems: 'center', gap: 4, borderColor: colors.primary, backgroundColor: `${colors.primary}14` }}>
+                  <Feather name="users" size={13} color={colors.primary} />
+                  <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>{entry.direction === 'out' ? 'Lent / paid a debt' : 'Borrowed / paid back'}</Text>
+                </Pressable>
                 {entry.direction === 'out'
                   ? categories.map((name) => (
                       <Pressable key={name} disabled={busy !== null} onPress={() => sort(entry, { expenseCategory: name }, name)} accessibilityRole="button" testID={`sort-entry-${entry.id}-category-${name}`} style={chip}>
@@ -274,6 +283,18 @@ export default function SortEntriesScreen() {
           )}
         />
       )}
+      {debtFor ? (
+        <SortAsDebt
+          entry={debtFor}
+          others={sameParty(entries, debtFor)}
+          onClose={() => setDebtFor(null)}
+          onSorted={(change) => {
+            setDebtFor(null);
+            setLastChange(change);
+            void done();
+          }}
+        />
+      ) : null}
       {lastChange ? (
         <View
           testID="sort-entries-undo-bar"
