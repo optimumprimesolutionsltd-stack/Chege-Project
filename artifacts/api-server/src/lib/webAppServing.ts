@@ -156,6 +156,13 @@ function attachDualWebBuilds(
     });
   }
 
+  // The version that reads M-Pesa's text messages, kept apart while Chrome
+  // blocks it as a "dangerous download" (it asks for SMS) and Google reviews
+  // it: the same release's jamvi-sms.apk, or JAMVI_SMS_APK_URL.
+  app.get("/download/jamvi-sms.apk", (_req, res) => {
+    res.redirect(302, androidSmsApkUrl());
+  });
+
   // Invitation and group-join links carry a token in the path. They were sent
   // without the /app prefix for a long time, and every one of those is still
   // sitting in somebody's inbox. Unprefixed they hit the marketing catch-all
@@ -280,4 +287,13 @@ export const DEFAULT_ANDROID_APK_URL =
 export function androidApkUrl(env: NodeJS.ProcessEnv = process.env): string {
   const configured = env.JAMVI_APK_URL?.trim();
   return configured && /^https:\/\//.test(configured) ? configured : DEFAULT_ANDROID_APK_URL;
+}
+
+/** The Android app that reads M-Pesa messages: the jamvi-android release's jamvi-sms.apk, unless JAMVI_SMS_APK_URL says otherwise. */
+export const DEFAULT_ANDROID_SMS_APK_URL =
+  "https://github.com/optimumprimesolutionsltd-stack/Chege-Project/releases/download/jamvi-android/jamvi-sms.apk";
+
+export function androidSmsApkUrl(env: NodeJS.ProcessEnv = process.env): string {
+  const configured = env.JAMVI_SMS_APK_URL?.trim();
+  return configured && /^https:\/\//.test(configured) ? configured : DEFAULT_ANDROID_SMS_APK_URL;
 }
