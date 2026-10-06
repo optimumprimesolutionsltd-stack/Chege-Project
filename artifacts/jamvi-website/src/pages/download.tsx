@@ -107,7 +107,7 @@ export default function Download() {
             <DownloadIcon className="h-5 w-5" aria-hidden="true" />
             Download for Android
           </a>
-          <p className="mt-3 text-sm text-foreground/60">About 100 MB, so Wi-Fi is best. Android 7 or newer.</p>
+          <p className="mt-3 text-sm text-foreground/60">About 60 MB, so Wi-Fi is best. Android 7 or newer.</p>
           {tapped && (
             <div className="mx-auto mt-6 max-w-xl rounded-[4px] bg-card p-4 text-left shadow-sm" role="status" data-testid="download-help">
               <p className="font-bold text-foreground">Download not starting?</p>
