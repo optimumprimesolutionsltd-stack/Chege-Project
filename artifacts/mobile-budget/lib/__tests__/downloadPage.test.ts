@@ -23,4 +23,17 @@ describe('jamvi.co.ke/download', () => {
     expect(serving).toContain('releases/download/jamvi-android/jamvi.apk');
     expect(serving).toContain('env.JAMVI_APK_URL');
   });
+
+  // 6 Oct 2026: Chrome blocks the APK that asks for SMS, so the website's main
+  // download leaves SMS out and the message-reading one has its own address.
+  it('offers the message-reading version at its own address, with the computer-and-WhatsApp way round', () => {
+    expect(read('../jamvi-website/src/lib/site-links.ts')).toContain('export const JAMVI_SMS_APK_PATH = "/download/jamvi-sms.apk";');
+    const page = read('../jamvi-website/src/pages/download.tsx');
+    expect(page).toContain('href={JAMVI_SMS_APK_PATH}');
+    expect(page).toContain('choose Document');
+    const serving = read('../api-server/src/lib/webAppServing.ts');
+    expect(serving).toContain('app.get("/download/jamvi-sms.apk"');
+    expect(serving).toContain('releases/download/jamvi-android/jamvi-sms.apk');
+    expect(serving).toContain('env.JAMVI_SMS_APK_URL');
+  });
 });

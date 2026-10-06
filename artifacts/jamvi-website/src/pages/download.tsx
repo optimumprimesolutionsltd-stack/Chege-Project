@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Download as DownloadIcon, ShieldCheck, Smartphone, MessageSquare, Globe, ExternalLink, Copy, Check } from "lucide-react";
+import { Download as DownloadIcon, ShieldCheck, Smartphone, MessageSquare, Globe, ExternalLink, Copy, Check, Laptop } from "lucide-react";
 import { useSeo } from "@/hooks/use-seo";
 import { SITE_SEO } from "@/lib/site-seo";
-import { JAMVI_APK_PATH, JAMVI_APP_PATH, JAMVI_SUPPORT_EMAIL } from "@/lib/site-links";
+import { JAMVI_APK_PATH, JAMVI_APP_PATH, JAMVI_SMS_APK_PATH, JAMVI_SUPPORT_EMAIL } from "@/lib/site-links";
 
 const STEPS = [
   "Tap Download for Android above, on the phone you will use Jamvi on.",
@@ -11,6 +11,19 @@ const STEPS = [
   "Open the file when it finishes. If Android asks, allow installs from your browser (or WhatsApp, if the link came there).",
   "If Google Play Protect warns about an app it does not know, tap More details, then Install anyway. Jamvi is not in the Play Store yet, so Google has not seen it.",
   "Open Jamvi and sign in with Google. You start with a free trial.",
+];
+
+/**
+ * The version that reads M-Pesa messages asks Android for SMS permission, and
+ * Chrome on a phone blocks that APK outright ("Dangerous download blocked")
+ * while Google reviews it. A file that arrives through WhatsApp is not checked
+ * by Chrome, so the way round is a computer: download there, send it over.
+ */
+const SMS_VERSION_STEPS = [
+  "On a computer, download the file below. A computer's browser does not block it.",
+  "Open WhatsApp on the computer (web.whatsapp.com or the WhatsApp app) and open the chat with yourself.",
+  "Tap the paperclip, choose Document, and send jamvi-sms.apk. Send it as a document, not as a photo or video.",
+  "On your phone, open that chat, tap the file, then Install. If Android asks, allow installs from WhatsApp.",
 ];
 
 /**
@@ -107,7 +120,7 @@ export default function Download() {
             <DownloadIcon className="h-5 w-5" aria-hidden="true" />
             Download for Android
           </a>
-          <p className="mt-3 text-sm text-foreground/60">About 100 MB, so Wi-Fi is best. Android 7 or newer.</p>
+          <p className="mt-3 text-sm text-foreground/60">About 60 MB, so Wi-Fi is best. Android 7 or newer.</p>
           {tapped && (
             <div className="mx-auto mt-6 max-w-xl rounded-[4px] bg-card p-4 text-left shadow-sm" role="status" data-testid="download-help">
               <p className="font-bold text-foreground">Download not starting?</p>
@@ -119,6 +132,33 @@ export default function Download() {
               {helpButtons("h-10 px-4 text-sm")}
             </div>
           )}
+        </div>
+      </section>
+
+      <section className="pb-12 px-4" id="read-mpesa-messages" data-testid="sms-version">
+        <div className="container mx-auto max-w-3xl rounded-[4px] border-2 border-accent bg-card p-6 shadow-sm sm:p-8">
+          <h2 className="mb-2 flex items-center gap-2 text-xl font-bold text-primary">
+            <MessageSquare className="h-5 w-5" aria-hidden="true" /> Want Jamvi to read your M-Pesa messages?
+          </h2>
+          <p className="mb-4 text-foreground/75">
+            There is a version that fills in your budget straight from M-Pesa&rsquo;s text messages. Because it asks to read
+            messages, Chrome on a phone blocks it for now while Google reviews it. Get it with a computer instead:
+          </p>
+          <ol className="space-y-3">
+            {SMS_VERSION_STEPS.map((step, index) => (
+              <li key={step} className="flex gap-3 text-foreground/80">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[3px] bg-primary/10 text-sm font-bold text-primary">{index + 1}</span>
+                <span>{step}</span>
+              </li>
+            ))}
+          </ol>
+          <a href={JAMVI_SMS_APK_PATH} className="btn-line mt-5 h-12 px-5 text-base" data-testid="download-sms-version">
+            <Laptop className="h-5 w-5" aria-hidden="true" /> Download the message-reading version
+          </a>
+          <p className="mt-3 text-sm text-foreground/60">
+            Already have Jamvi? It installs over it and keeps everything. No computer? Use the button above; you can still
+            import your M-Pesa statement or paste messages in.
+          </p>
         </div>
       </section>
 
@@ -148,7 +188,7 @@ export default function Download() {
           <div className="rounded-[4px] bg-card p-5 shadow-sm">
             <MessageSquare className="mb-2 h-5 w-5 text-primary" aria-hidden="true" />
             <h3 className="mb-1 font-semibold text-foreground">Your M-Pesa messages</h3>
-            <p className="text-sm text-foreground/70">The app can read M-Pesa&rsquo;s messages for you, but only if you ask it to and Android asks you first. <a href="/privacy" className="text-primary underline">How that works</a>.</p>
+            <p className="text-sm text-foreground/70">The <a href="#read-mpesa-messages" className="text-primary underline">message-reading version</a> reads M-Pesa&rsquo;s messages for you, but only if you ask it to and Android asks you first. <a href="/privacy" className="text-primary underline">How that works</a>.</p>
           </div>
           <div className="rounded-[4px] bg-card p-5 shadow-sm">
             <Globe className="mb-2 h-5 w-5 text-primary" aria-hidden="true" />
