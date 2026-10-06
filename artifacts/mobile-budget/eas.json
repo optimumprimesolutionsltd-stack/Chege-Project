@@ -12,6 +12,16 @@
         }
       }
     },
+    "website": {
+      "channel": "preview",
+      "android": {
+        "buildType": "apk",
+        "env": {
+          "EXPO_PUBLIC_DOMAIN": "jamvi.co.ke",
+          "JAMVI_NO_SMS": "1"
+        }
+      }
+    },
     "production": {
       "channel": "production",
       "android": {
