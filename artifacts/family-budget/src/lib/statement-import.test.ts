@@ -390,6 +390,19 @@ describe("what the statement has that Jamvi is missing", () => {
   it("says when a payment was saved for a different amount", () => {
     expect(missingInJamvi(reading, rows).amounts).toEqual([{ id: 15, date: "2026-09-29", description: "Sample", recorded: 450, statement: 500, fixable: false }]);
   });
+
+  // "Saved as KES 3,355, the statement says KES 25 - Use KES 25" (6 Oct 2026).
+  it("never offers a charge amount for the payment that shares its code", () => {
+    const payment = { ...at("03 10:00:00", "Pay Bill to 522522 - Lipa Na Kcb Acc. 1234", { withdrawn: 3355 }), receipt: "TJ3ABCDEFG" };
+    const charge = { ...at("03 10:00:00", "Pay Bill Charge Online", { withdrawn: 25 }), receipt: "TJ3ABCDEFG" };
+    const saved = [{ id: 40, date: "2026-09-03", type: "disbursement", amount: 3355, description: "Lipa Na Kcb", mpesaReceipt: "TJ3ABCDEFG" }];
+    const read = statementLines([payment, charge]);
+    expect(read.lines).toHaveLength(1);
+    expect(read.lines[0]).toMatchObject({ amount: 3355, fee: 25 });
+    const found = missingInJamvi(read, saved);
+    expect(found.amounts).toEqual([]);
+    expect(found.charges).toEqual([{ parentId: 40, date: "2026-09-03", amount: 25, description: "Bank charge — Lipa Na Kcb" }]);
+  });
 });
 
 // "Why does this keep happening?" A statement stops at the hour it was made.

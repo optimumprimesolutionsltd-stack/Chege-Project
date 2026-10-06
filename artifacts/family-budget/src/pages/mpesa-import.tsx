@@ -642,20 +642,29 @@ export default function MpesaImportPage() {
     });
     if (!response.ok) throw new Error(((await response.json().catch(() => ({}))) as { error?: string }).error ?? "Please try again.");
   };
+  // Removed, and kept out of the list while the account reloads: once Undo
+  // had passed, the entry came back until everything was fetched again (6 Oct 2026).
+  const [removedIds, setRemovedIds] = useState<ReadonlySet<number>>(() => new Set());
   // What this account has for the statement's days that the statement does not.
   const extras = useMemo(() => {
     const found = statementReading && account ? notOnStatement(statementReading, accountRows as unknown as RecordedRow[]) : null;
     if (!found) return null;
-    const rows = found.rows.filter((row) => !statementUndo.isHidden(`extra:${row.id}`));
+    const rows = found.rows.filter((row) => !statementUndo.isHidden(`extra:${row.id}`) && !removedIds.has(row.id));
     return { rows, net: Math.round(rows.reduce((sum, row) => sum + row.effect, 0) * 100) / 100 };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statementReading, account, statementUndo.isHidden]);
+  }, [statementReading, account, statementUndo.isHidden, removedIds]);
   const removeExtra = (row: { id: number; date: string; description?: string | null; effect: number; why: string }) => {
     if (!window.confirm(`Remove it from Jamvi?\n\n${String(row.date).slice(0, 10)} · ${row.description ?? ""} · ${formatKes(Math.abs(row.effect))}\n\nYour M-Pesa statement has no record of it (${row.why}). Remove it if it did not happen, or was recorded twice.`)) return;
     statementUndo.schedule(`extra:${row.id}`, deletedLabel(row.description, Math.abs(row.effect)), async () => {
+      setRemovedIds((ids) => new Set(ids).add(row.id));
       try {
         await sendJson(`/api/joint-account/${row.id}`, "DELETE");
       } catch (error) {
+        setRemovedIds((ids) => {
+          const next = new Set(ids);
+          next.delete(row.id);
+          return next;
+        });
         toast({ variant: "destructive", title: "Could not remove it", description: error instanceof Error ? error.message : "Please try again." });
       }
       await queryClient.invalidateQueries();
