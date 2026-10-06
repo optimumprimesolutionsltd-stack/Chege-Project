@@ -25,6 +25,7 @@ import { writePdf } from '@/lib/savePdf';
 import { askPdfDetail, type PdfDetail } from '@/lib/pdfDetail';
 import { isoDay, longDay, monthStartIso, orderedRange } from '@/lib/dayRange';
 import { useColors } from '@/hooks/useColors';
+import { useProgressiveDays } from '@/lib/progressiveDays';
 import { ScrollerScrollView } from '@/components/PageScrollReset';
 import { MonthStepper } from '@/components/MonthStepper';
 
@@ -220,6 +221,9 @@ export default function IncomeLedgerScreen() {
     );
   };
 
+  // Drawn a batch at a time: a year of entries all at once made the screen drag.
+  const paged = useProgressiveDays(days);
+
   return (
     <View style={[styles.screen, { backgroundColor: colors.background, paddingTop: insets.top }]}>
       <View style={[styles.header, { borderColor: colors.border }]}>
@@ -253,6 +257,7 @@ export default function IncomeLedgerScreen() {
       </View>
 
       <ScrollerScrollView scroller={{ top: 8, bottom: insets.bottom + 16 }}
+        onScroll={paged.onScroll}
         contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 32 }]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -387,14 +392,23 @@ export default function IncomeLedgerScreen() {
         ) : shownView === 'stream' ? (
           streamGroups.map(renderGroup)
         ) : (
-          days.map((day) => (
-            <View key={day.date} style={styles.day}>
-              <Text style={[styles.dayHeading, { color: colors.mutedForeground }]}>{longDay(day.date)}</Text>
-              <View style={[styles.dayCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                {day.rows.map((entry, index) => renderEntry(entry, index))}
+          <>
+            {paged.shown.map((day) => (
+              <View key={day.date} style={styles.day}>
+                <Text style={[styles.dayHeading, { color: colors.mutedForeground }]}>{longDay(day.date)}</Text>
+                <View style={[styles.dayCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  {day.rows.map((entry, index) => renderEntry(entry, index))}
+                </View>
               </View>
-            </View>
-          ))
+            ))}
+            {paged.more ? (
+              <Pressable onPress={paged.showMore} accessibilityRole="button" testID="ledger-show-more" style={{ alignItems: 'center', paddingVertical: 14 }}>
+                <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>
+                  Showing {paged.shownRows.toLocaleString('en-KE')} of {paged.total.toLocaleString('en-KE')} - show more
+                </Text>
+              </Pressable>
+            ) : null}
+          </>
         )}
       </ScrollerScrollView>
     </View>

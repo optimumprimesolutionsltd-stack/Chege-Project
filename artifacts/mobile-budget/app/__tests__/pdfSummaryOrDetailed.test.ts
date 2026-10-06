@@ -49,12 +49,15 @@ describe('the scroller arrows', () => {
     const hook = read('components/FastScroller.tsx');
     expect(hook).toContain('testID={`page-scroller-${direction}`}');
     expect(hook).toContain('onPressIn={() => pressIn(direction)}');
-    expect(hook).toContain('onPressOut={() => release(direction)}');
-    expect(hook).toContain('if (!held) jump(direction);');
+    expect(hook).toContain('onPressOut={release}');
+    // A tap moves the page on touch, not on release.
+    expect(hook.replace(/\s+/g, ' ')).toContain("const pressIn = (direction: 'up' | 'down') => { stopGlide(); jump(direction);");
+    expect(hook).toContain('glide.frame = requestAnimationFrame(step);');
+    expect(hook).toContain('scrollEventThrottle: SCROLL_REPORT_MS,');
     expect(hook).toContain("{!edges.atTop ? arrow('up') : null}");
     expect(hook).toContain('sizes.content > sizes.height * SCROLLER_MIN_SCREENS');
     const lists = read('components/PageScrollReset.tsx');
-    expect(lists).toContain('if (!scroller) return <FlatList ref={ref} {...props} />;');
+    expect(lists).toContain('if (!scroller) return <FlatList ref={ref} {...LIST_WINDOW} {...props} />;');
     expect(lists).toContain("(offset, animated) => ref.current?.scrollTo({ y: offset, animated })");
   });
 });
