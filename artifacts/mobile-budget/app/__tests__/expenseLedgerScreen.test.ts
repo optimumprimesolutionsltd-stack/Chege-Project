@@ -25,7 +25,7 @@ describe('one list of everything', () => {
 
   it('puts the span and the search in the cache key', () => {
     expect(screen).toContain('queryKey: getGetDashboardExpenseLedgerQueryKey(query)');
-    expect(screen).toContain('[rangeFrom, rangeTo, search]');
+    expect(screen).toContain('[rangeFrom, rangeTo, searched]');
   });
 
   it('reads a backwards range as the span between the dates', () => {
