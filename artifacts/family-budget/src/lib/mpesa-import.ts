@@ -162,6 +162,16 @@ export function canAddNote(choice: Choice | undefined): boolean {
  * categories that carry spending - is ever suggested; otherwise "".
  * "Can it go back to entries saved as not sure and preselect?" (7 Oct 2026).
  */
+const knownHistory = new WeakMap<readonly PastPosting[], PastPosting[]>();
+function withoutNotSure(history: readonly PastPosting[]): PastPosting[] {
+  const cached = knownHistory.get(history);
+  if (cached) return cached;
+  const notSure = NOT_SURE_CATEGORY.toLowerCase();
+  const known = history.filter((posting) => (posting.expenseCategory ?? "").trim().toLowerCase() !== notSure);
+  knownHistory.set(history, known);
+  return known;
+}
+
 export function suggestForSaved(
   entry: { description: string; direction: "in" | "out" },
   history: readonly PastPosting[],
@@ -170,7 +180,11 @@ export function suggestForSaved(
 ): string {
   if (entry.direction !== "out" || !entry.description.trim()) return "";
   const notSure = NOT_SURE_CATEGORY.toLowerCase();
-  const known = history.filter((posting) => (posting.expenseCategory ?? "").trim().toLowerCase() !== notSure);
+  // The same filtered history for every entry: the matchers cache what they
+  // read from a history by the array itself, and a fresh copy per entry missed
+  // that cache every time - 754 entries against 2,000 took 45 s on a PC and
+  // froze the phone (7 Oct 2026).
+  const known = withoutNotSure(history);
   const line: PreviewLine = {
     index: 0, status: "ready", reason: null, receipt: null, direction: "out", type: null, amount: null,
     description: entry.description, named: true, date: null, fee: null, mpesaBalance: null, alreadyRecorded: null,

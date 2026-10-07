@@ -39,3 +39,23 @@ describe('Sort them out shows the suggestions', () => {
     expect(screen).toContain('`File ${suggestedShown.length} as suggested?`');
   });
 });
+
+// Sort them out froze the phone (7 Oct 2026): a fresh filtered history per entry
+// missed the matchers' cache, so 754 entries against 2,000 took 45 s on a PC.
+describe('suggestions stay quick on a big list', () => {
+  it('work out 754 entries against 2,000 in well under two seconds', () => {
+    const payees = Array.from({ length: 400 }, (_, i) => `PAYEE ${i} ${['NAIVAS', 'KPLC', 'JOHN DOE', 'MAMA MBOGA', 'TOTAL'][i % 5]} LTD`);
+    const names = ['Groceries', 'Electricity', 'Fuel', 'Eating out', 'Rent'];
+    const history = Array.from({ length: 2000 }, (_, i) => ({ type: 'disbursement', description: payees[i % 400], expenseCategory: i % 3 ? names[i % 5] : 'Not sure yet' }));
+    const started = performance.now();
+    for (let i = 0; i < 754; i++) suggestForSaved({ description: `${payees[(i * 7) % 400]} ${i}`, direction: 'out' }, history, names);
+    expect(performance.now() - started).toBeLessThan(2000);
+  });
+
+  it('are worked out a batch at a time, once per payee, on a list that keeps its identity', () => {
+    const screen = readFileSync('app/sort-entries.tsx', 'utf8');
+    expect(screen).toContain('const entries = useMemo(() => data?.entries ?? [], [data]);');
+    expect(screen).toContain('if (next < entries.length) timer = setTimeout(step, 0);');
+    expect(screen).toContain('byPayee.set(key, name);');
+  });
+});

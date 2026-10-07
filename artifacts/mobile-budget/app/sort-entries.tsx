@@ -54,7 +54,9 @@ export default function SortEntriesScreen() {
     const parents = new Set(categoryList.map((row) => row.parentId).filter((id): id is number => id != null));
     return categoryList.filter((row) => !parents.has(row.id) && !isNotSure(row.name)).map((row) => row.name).sort((a, b) => a.localeCompare(b));
   }, [categoryList]);
-  const entries = data?.entries ?? [];
+  // The same array until the data changes: the suggestions effect keys on it, and a
+  // fresh [] each render while loading would restart it for ever.
+  const entries = useMemo(() => data?.entries ?? [], [data]);
   // A month at a time, as in the import.
   const [month, setMonth] = useState<string | null>(null);
   const months = useMemo(() => monthsOf(entries), [entries]);
@@ -143,14 +145,35 @@ export default function SortEntriesScreen() {
     return () => { active = false; };
   }, [group?.id]);
   const { data: ledger } = useGetJointAccount(undefined, { query: { queryKey: getGetJointAccountQueryKey(), staleTime: 60_000 } });
-  const suggestions = useMemo(() => {
+  // Worked out a batch at a time, once per payee, so taps always get through:
+  // done all at once on every reload it held the phone for minutes and nothing
+  // on screen answered (7 Oct 2026). The green chips fill in as it goes.
+  const [suggestions, setSuggestions] = useState<Map<number, string>>(() => new Map());
+  useEffect(() => {
     const history = (ledger?.transactions ?? []) as unknown as Parameters<typeof suggestForSaved>[1];
+    const byPayee = new Map<string, string>();
     const found = new Map<number, string>();
-    for (const entry of entries) {
-      const name = suggestForSaved(entry, history, categories, rules);
-      if (name) found.set(entry.id, name);
-    }
-    return found;
+    let next = 0;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const BATCH = 40;
+    const step = () => {
+      if (cancelled) return;
+      for (const end = Math.min(next + BATCH, entries.length); next < end; next += 1) {
+        const entry = entries[next];
+        const key = `${entry.direction}|${entry.description.trim().toLowerCase()}`;
+        let name = byPayee.get(key);
+        if (name === undefined) {
+          name = suggestForSaved(entry, history, categories, rules);
+          byPayee.set(key, name);
+        }
+        if (name) found.set(entry.id, name);
+      }
+      setSuggestions(new Map(found));
+      if (next < entries.length) timer = setTimeout(step, 0);
+    };
+    timer = setTimeout(step, 0);
+    return () => { cancelled = true; if (timer) clearTimeout(timer); };
   }, [entries, ledger, categories, rules]);
   const suggestedShown = useMemo(() => shown.filter((entry) => suggestions.has(entry.id)), [shown, suggestions]);
   // Every suggestion on screen at once, after saying how many, undone as one.
