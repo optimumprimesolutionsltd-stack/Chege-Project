@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ActivityIndicator, Alert, FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -10,6 +11,7 @@ import {
   useGetBudgetCategories,
   useGetGroup,
   useGetIncomeSources,
+  useGetJointAccount,
   useUpdateJointAccountTransaction,
 } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
@@ -17,7 +19,8 @@ import { isNotSure, NOT_SURE_CATEGORY, sameParty, type EntryToSort } from '@/lib
 import { AddIncomeSourceChip } from '@/components/AddIncomeSourceChip';
 import { SortAsDebt } from '@/components/SortAsDebt';
 import { workingYear } from '@/lib/mpesaLiveBalance';
-import { inMonth, monthsOf } from '@/lib/mpesaImport';
+import { inMonth, monthsOf, suggestForSaved } from '@/lib/mpesaImport';
+import { parseStoredRules, rulesStorageKey, type PayeeRules } from '@/lib/payeeLearning';
 import { plainSaveError } from '@/lib/saveRetry';
 import { formatDisplayDate } from '@/lib/displayFormat';
 
@@ -123,6 +126,65 @@ export default function SortEntriesScreen() {
   // Money in saved before every money in was asked about (4 Oct 2026): a year of
   // it can have no source. Gathered here when asked, Personal budget only.
   const { data: group } = useGetGroup();
+
+  // A suggestion for each entry, worked out as the import does (suggestForSaved):
+  // the rules kept on this phone, how each payee was filed before, then
+  // well-known payees. "Can it go back to entries saved as not sure and
+  // preselect?" (7 Oct 2026). Nothing is filed until the person taps.
+  const [rules, setRules] = useState<PayeeRules>({});
+  useEffect(() => {
+    let active = true;
+    AsyncStorage.getItem(rulesStorageKey(group?.id))
+      .then((stored) => { if (active) setRules(parseStoredRules(stored)); })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [group?.id]);
+  const { data: ledger } = useGetJointAccount(undefined, { query: { queryKey: getGetJointAccountQueryKey(), staleTime: 60_000 } });
+  const suggestions = useMemo(() => {
+    const history = (ledger?.transactions ?? []) as unknown as Parameters<typeof suggestForSaved>[1];
+    const found = new Map<number, string>();
+    for (const entry of entries) {
+      const name = suggestForSaved(entry, history, categories, rules);
+      if (name) found.set(entry.id, name);
+    }
+    return found;
+  }, [entries, ledger, categories, rules]);
+  const suggestedShown = useMemo(() => shown.filter((entry) => suggestions.has(entry.id)), [shown, suggestions]);
+  // Every suggestion on screen at once, after saying how many, undone as one.
+  const acceptAll = () => {
+    if (suggestedShown.length === 0) return;
+    Alert.alert(
+      `File ${suggestedShown.length} as suggested?`,
+      'Each goes under the category shown in green on it. Entries with no suggestion stay here. You can undo this.',
+      [
+        { text: 'Not now', style: 'cancel' },
+        {
+          text: `File ${suggestedShown.length}`,
+          onPress: async () => {
+            setBusy(suggestedShown[0].id);
+            const changed: EntryToSort[] = [];
+            try {
+              for (const one of suggestedShown) {
+                await updateTransaction({ id: one.id, data: { amount: one.amount, date: one.date, expenseCategory: suggestions.get(one.id) } as never });
+                changed.push(one);
+              }
+            } catch (error) {
+              Alert.alert('Could not file them all', plainSaveError(error));
+            } finally {
+              if (changed.length > 0) {
+                setLastChange({
+                  text: `${changed.length} ${changed.length === 1 ? 'entry' : 'entries'} filed as suggested`,
+                  undo: async () => { for (const one of changed) await putBack(one); },
+                });
+              }
+              await done();
+              setBusy(null);
+            }
+          },
+        },
+      ],
+    );
+  };
   const [gathering, setGathering] = useState(false);
   const gather = async () => {
     setGathering(true);
@@ -215,6 +277,18 @@ export default function SortEntriesScreen() {
                 </Text>
               </Pressable>
             ) : null}
+            {suggestedShown.length > 0 ? (
+              <Pressable
+                onPress={acceptAll}
+                disabled={busy !== null}
+                accessibilityRole="button"
+                testID="sort-entries-accept-all"
+                style={{ backgroundColor: colors.primary, borderRadius: 8, padding: 12, opacity: busy !== null ? 0.6 : 1 }}
+              >
+                <Text style={{ color: '#fff', fontFamily: 'Inter_700Bold', fontSize: 14 }}>Accept {suggestedShown.length} {suggestedShown.length === 1 ? 'suggestion' : 'suggestions'}</Text>
+                <Text style={{ color: '#fff', opacity: 0.85, fontSize: 12, marginTop: 2 }}>Jamvi suggests a category from how you filed these payees before, or from what the payee is.</Text>
+              </Pressable>
+            ) : null}
             {months.length > 1 ? (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 2 }} testID="sort-entries-months">
               {[{ key: null as string | null, label: 'All months', count: entries.length }, ...months].map((option) => {
@@ -255,8 +329,15 @@ export default function SortEntriesScreen() {
                   <Feather name="users" size={13} color={colors.primary} />
                   <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>{entry.direction === 'out' ? 'Lent / paid a debt' : 'Borrowed / paid back'}</Text>
                 </Pressable>
+                {entry.direction === 'out' && suggestions.has(entry.id) ? (
+                  <Pressable disabled={busy !== null} onPress={() => sort(entry, { expenseCategory: suggestions.get(entry.id)! }, suggestions.get(entry.id)!)} accessibilityRole="button" accessibilityLabel={`Suggested: ${suggestions.get(entry.id)}`} testID={`sort-entry-${entry.id}-suggested`}
+                    style={{ ...chip, flexDirection: 'row', alignItems: 'center', gap: 4, borderColor: colors.success, backgroundColor: `${colors.success}22` }}>
+                    <Feather name="check" size={13} color={colors.success} />
+                    <Text style={{ color: colors.success, fontFamily: 'Inter_700Bold', fontSize: 13 }}>{suggestions.get(entry.id)}</Text>
+                  </Pressable>
+                ) : null}
                 {entry.direction === 'out'
-                  ? categories.map((name) => (
+                  ? categories.filter((name) => name !== suggestions.get(entry.id)).map((name) => (
                       <Pressable key={name} disabled={busy !== null} onPress={() => sort(entry, { expenseCategory: name }, name)} accessibilityRole="button" testID={`sort-entry-${entry.id}-category-${name}`} style={chip}>
                         <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>{name}</Text>
                       </Pressable>

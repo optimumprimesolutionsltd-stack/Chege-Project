@@ -153,6 +153,32 @@ export function canAddNote(choice: Choice | undefined): boolean {
   return Boolean(choice.category.trim() || choice.debt || choice.incomeSourceId);
 }
 
+/**
+ * A category for money out already saved as "Not sure yet", worked out the way
+ * the import suggests one (suggestionFor): the person"s kept rules, how they
+ * filed the payee before, similar names and words, then well-known payees.
+ * Entries still under Not sure are left out of the history, so an unsorted
+ * payee never suggests Not sure for itself. Only one of `categoryNames` -
+ * categories that carry spending - is ever suggested; otherwise "".
+ * "Can it go back to entries saved as not sure and preselect?" (7 Oct 2026).
+ */
+export function suggestForSaved(
+  entry: { description: string; direction: "in" | "out" },
+  history: readonly PastPosting[],
+  categoryNames: readonly string[],
+  rules: PayeeRules = {},
+): string {
+  if (entry.direction !== "out" || !entry.description.trim()) return "";
+  const notSure = NOT_SURE_CATEGORY.toLowerCase();
+  const known = history.filter((posting) => (posting.expenseCategory ?? "").trim().toLowerCase() !== notSure);
+  const line: PreviewLine = {
+    index: 0, status: "ready", reason: null, receipt: null, direction: "out", type: null, amount: null,
+    description: entry.description, named: true, date: null, fee: null, mpesaBalance: null, alreadyRecorded: null,
+  };
+  const suggested = suggestionFor(line, known, categoryNames, "", rules);
+  return suggested && suggested.toLowerCase() !== notSure && categoryNames.includes(suggested) ? suggested : "";
+}
+
 type PastPosting = { type: string; description: string; expenseCategory?: string | null; incomeSourceId?: number | null; chargeForTransactionId?: number | null };
 
 const clean = (value: string) => value.trim().replace(/\s+/g, " ").toLocaleLowerCase("en-KE");
