@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -79,6 +79,7 @@ import { evaluateAmountExpression, isAmountExpression } from '@/lib/amountExpres
 import { parseBankAmount, parseBalanceFigure, readAmount, toMoney } from '@/lib/bankAmount';
 import { buildCategoryTree, filterCategoryTree, type CategoryRow } from '@workspace/category-tree';
 import { CategorySearchBox } from '@/components/CategorySearchBox';
+import { matchesSearch } from '@/lib/bankSearch';
 import { workspaceBudgetName } from '@/lib/workspaceIdentity';
 import { formatDisplayDate } from '@/lib/displayFormat';
 import { confirmNotAlreadyFromMpesa } from '@/lib/alreadyFromMpesa';
@@ -2127,6 +2128,15 @@ export default function BankScreen() {
   const period = periodFor(periodPreset, nairobiToday(), { from: periodFrom, to: periodTo });
   const periodSummary = data && period ? summarisePeriod(data as never, period) : null;
   const shownTransactions = period ? transactions.filter((tx) => inPeriod(tx, period)) : transactions;
+  // Search narrows the list only; the period's figures stay the period's
+  // (lib/bankSearch, "put a search button", 7 Oct 2026).
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const searched = useDeferredValue(search.trim());
+  const listedTransactions = useMemo(
+    () => (searched ? shownTransactions.filter((tx) => matchesSearch(tx as never, searched)) : shownTransactions),
+    [shownTransactions, searched],
+  );
 
   // "Withdrawn" counted spending, savings transfers and moves between your own
   // accounts as one figure. The balance falls the same way for all three, but
@@ -2480,7 +2490,7 @@ export default function BankScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
 
       <PageFlatList
-        data={shownTransactions}
+        data={listedTransactions}
         // A thumb to drag through months of transactions, clear of the
         // floating actions and the tab bar at the bottom.
         scroller={{ top: topPad + 12, bottom: (Platform.OS === 'web' ? 100 : insets.bottom + 110) }}
@@ -2876,6 +2886,48 @@ export default function BankScreen() {
                   <Text style={{ color: colors.primary, fontSize: 12, fontFamily: 'Inter_600SemiBold' }}>Move a day</Text>
                 </TouchableOpacity>
               ) : null}
+              {!txEditor.editing ? (
+                <TouchableOpacity
+                  onPress={() => { if (searchOpen) setSearch(''); setSearchOpen((open) => !open); }}
+                  hitSlop={8}
+                  testID="bank-search-toggle"
+                  accessibilityRole="button"
+                  accessibilityLabel={searchOpen ? 'Close search' : 'Search transactions'}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 6, marginLeft: 'auto' }}
+                >
+                  <Feather name={searchOpen ? 'x' : 'search'} size={13} color={colors.primary} />
+                  <Text style={{ color: colors.primary, fontSize: 12, fontFamily: 'Inter_600SemiBold' }}>{searchOpen ? 'Close' : 'Search'}</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          ) : null}
+          {searchOpen && transactions.length > 0 ? (
+            <View style={{ gap: 4, marginBottom: 8 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 10, backgroundColor: colors.card }}>
+                <Feather name="search" size={15} color={colors.mutedForeground} />
+                <TextInput
+                  value={search}
+                  onChangeText={setSearch}
+                  autoFocus
+                  placeholder="Name, category, note, code or amount"
+                  placeholderTextColor={colors.mutedForeground}
+                  returnKeyType="search"
+                  testID="bank-search-input"
+                  style={{ flex: 1, paddingVertical: 9, color: colors.foreground, fontSize: 14 }}
+                />
+                {search ? (
+                  <Pressable onPress={() => setSearch('')} hitSlop={8} accessibilityRole="button" accessibilityLabel="Clear search" testID="bank-search-clear">
+                    <Feather name="x-circle" size={15} color={colors.mutedForeground} />
+                  </Pressable>
+                ) : null}
+              </View>
+              {searched ? (
+                <Text style={{ color: colors.mutedForeground, fontSize: 12 }} testID="bank-search-count">
+                  {listedTransactions.length === 0
+                    ? `Nothing matching "${searched}"${period ? ' in this period' : ''}.`
+                    : `${listedTransactions.length} of ${shownTransactions.length} ${shownTransactions.length === 1 ? 'entry' : 'entries'}${period ? ' in this period' : ''}`}
+                </Text>
+              ) : null}
             </View>
           ) : null}
           </>
@@ -2889,7 +2941,7 @@ export default function BankScreen() {
           ) : null
         }
         ListEmptyComponent={
-          !isLoading ? (
+          !isLoading && !(searched && shownTransactions.length > 0) ? (
             <View style={styles.empty}>
               <Feather name="credit-card" size={40} color={colors.mutedForeground} />
                 <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
