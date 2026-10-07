@@ -183,7 +183,8 @@ describe('subcategories belong to Detailed mode', () => {
   it('retries a failed category load instead of waiting to be tapped', () => {
     expect(source).toContain('if (categoriesQuery.isError) void categoriesQuery.refetch();');
     const layout = readFileSync('app/_layout.tsx', 'utf8');
-    expect(layout).toContain('return failureCount < 3;');
+    // Retried twice, quickly (lag audit, 7 Oct 2026).
+    expect(layout).toContain('return failureCount < 2;');
     expect(layout).toContain('refetchOnReconnect: true');
     // A 4xx other than 401 is an answer, not a blip.
     expect(layout).toContain('if (error instanceof ApiError && error.status >= 400 && error.status < 500) return false;');

@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { inMonthOf, inYearOf } from "../lib/month-range";
 import { db } from "@workspace/db";
 import {
   expensesTable,
@@ -390,9 +391,9 @@ router.get("/expenses", async (req, res) => {
   const { month, year, category } = parsed.data;
   const conditions: any[] = [eq(expensesTable.groupId, groupId)];
   if (month !== undefined && year !== undefined) {
-    conditions.push(sql`EXTRACT(MONTH FROM ${expensesTable.date}) = ${month}`, sql`EXTRACT(YEAR FROM ${expensesTable.date}) = ${year}`);
+    conditions.push(inMonthOf(expensesTable.date, year, month));
   } else if (year !== undefined) {
-    conditions.push(sql`EXTRACT(YEAR FROM ${expensesTable.date}) = ${year}`);
+    conditions.push(inYearOf(expensesTable.date, year));
   }
   if (category) conditions.push(sql`(
     ${expensesTable.category} = ${category}
@@ -433,14 +434,12 @@ router.post("/expenses/apply-recurring", async (req, res) => {
   const recurring = await db.select().from(expensesTable).where(and(
     eq(expensesTable.groupId, groupId),
     eq(expensesTable.isRecurring, true),
-    sql`EXTRACT(MONTH FROM ${expensesTable.date}) = ${prevMonth}`,
-    sql`EXTRACT(YEAR FROM ${expensesTable.date}) = ${prevYear}`,
+    inMonthOf(expensesTable.date, prevYear, prevMonth),
   ));
   const existing = await db.select({ category: expensesTable.category, description: expensesTable.description })
     .from(expensesTable).where(and(
       eq(expensesTable.groupId, groupId),
-      sql`EXTRACT(MONTH FROM ${expensesTable.date}) = ${month}`,
-      sql`EXTRACT(YEAR FROM ${expensesTable.date}) = ${year}`,
+      inMonthOf(expensesTable.date, year, month),
     ));
   const existingKeys = new Set(existing.map((expense) => `${expense.category}||${expense.description}`));
   const toInsert = recurring.filter((expense) => !existingKeys.has(`${expense.category}||${expense.description}`));

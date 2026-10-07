@@ -1,4 +1,5 @@
 import { db } from "@workspace/db";
+import { inMonthOf } from "./month-range";
 import {
   expensesTable,
   budgetCategoriesTable,
@@ -271,7 +272,7 @@ export async function sendMonthlyDigest(
     .select({ total: sql<number>`COALESCE(SUM(${expensesTable.amount}), 0)` })
     .from(expensesTable)
     .where(
-      sql`${expensesTable.groupId} = ${groupId} AND EXTRACT(MONTH FROM ${expensesTable.date}) = ${month} AND EXTRACT(YEAR FROM ${expensesTable.date}) = ${year}`,
+      sql`${expensesTable.groupId} = ${groupId} AND ${inMonthOf(expensesTable.date, year, month)}`,
     );
 
   const [budgetRow] = await db
@@ -299,14 +300,12 @@ export async function sendMonthlyDigest(
         INNER JOIN expenses expense
           ON expense.id = allocation.expense_id AND expense.group_id = allocation.group_id
         WHERE allocation.group_id = ${groupId}
-          AND EXTRACT(MONTH FROM expense.date) = ${month}
-          AND EXTRACT(YEAR FROM expense.date) = ${year}
+          AND ${inMonthOf(sql`expense.date`, year, month)}
         UNION ALL
         SELECT expense.category, expense.amount
         FROM expenses expense
         WHERE expense.group_id = ${groupId}
-          AND EXTRACT(MONTH FROM expense.date) = ${month}
-          AND EXTRACT(YEAR FROM expense.date) = ${year}
+          AND ${inMonthOf(sql`expense.date`, year, month)}
           AND NOT EXISTS (
             SELECT 1 FROM expense_category_allocations allocation
             WHERE allocation.expense_id = expense.id AND allocation.group_id = ${groupId}
@@ -326,7 +325,7 @@ export async function sendMonthlyDigest(
       .from(expensesTable)
       .leftJoin(usersTable, eq(expensesTable.paidById, usersTable.id))
       .where(
-        sql`${expensesTable.groupId} = ${groupId} AND EXTRACT(MONTH FROM ${expensesTable.date}) = ${month} AND EXTRACT(YEAR FROM ${expensesTable.date}) = ${year}`,
+        sql`${expensesTable.groupId} = ${groupId} AND ${inMonthOf(expensesTable.date, year, month)}`,
       )
       .orderBy(desc(expensesTable.amount))
       .limit(5),
