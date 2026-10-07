@@ -192,8 +192,12 @@ describe("GET /dashboard/income-streams", () => {
     const statement = sqlMock.mock.results.at(-1)?.value as { strings: TemplateStringsArray; values: unknown[] };
     const statementText = statement.strings.join("");
     expect(statement.values).toContain(41);
-    expect(statement.values).toContain(2);
-    expect(statement.values).toContain(2025);
+    // The month is a range of days the date index can answer (lib/month-range):
+    // February 2025 is 1 Feb up to, not including, 1 Mar.
+    const nested = (values: unknown[]): unknown[] => values.flatMap((value) =>
+      value && typeof value === "object" && "values" in value ? nested((value as { values: unknown[] }).values) : [value]);
+    expect(nested(statement.values)).toContain("2025-02-01");
+    expect(nested(statement.values)).toContain("2025-03-01");
     expect(statement.values).not.toContain(999);
     expect(statementText).toContain("split.from_bank = false");
     expect(statementText).toContain("expense.paid_from_bank = false");

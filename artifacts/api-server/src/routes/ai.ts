@@ -1,4 +1,5 @@
 import { mpesaNamesReady } from "../lib/mpesa-names";
+import { inMonthOf } from "../lib/month-range";
 import { monthExpected } from "../lib/income-months";
 import { monthBudgets } from "../lib/budget-months";
 import { Router } from "express";
@@ -39,8 +40,8 @@ router.get("/ai/budget-summary", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
   const { month, year } = parseBudgetSummaryPeriod(req.query);
-  const monthFilter = sql`EXTRACT(MONTH FROM ${expensesTable.date}) = ${month} AND EXTRACT(YEAR FROM ${expensesTable.date}) = ${year}`;
-  const transactionMonthFilter = sql`EXTRACT(MONTH FROM ${jointAccountTxTable.date}) = ${month} AND EXTRACT(YEAR FROM ${jointAccountTxTable.date}) = ${year}`;
+  const monthFilter = sql`${inMonthOf(expensesTable.date, year, month)}`;
+  const transactionMonthFilter = sql`${inMonthOf(jointAccountTxTable.date, year, month)}`;
   // Income is what All income counts: not money borrowed, paid back to you,
   // moved in from savings, or back from a reversed payment.
   const isIncome = sql`${jointAccountTxTable.settlesContributorId} IS NULL AND NOT ${jointAccountTxTable.isBorrowing} AND ${jointAccountTxTable.transferDirection} IS DISTINCT FROM 'from_savings' ${notAReversal(jointAccountTxTable.id)}`;
@@ -67,8 +68,7 @@ router.get("/ai/budget-summary", async (req, res): Promise<void> => {
         SELECT e.category, e.amount
         FROM expenses e
         WHERE e.group_id = ${groupId}
-          AND EXTRACT(MONTH FROM e.date) = ${month}
-          AND EXTRACT(YEAR FROM e.date) = ${year}
+          AND ${inMonthOf(sql`e.date`, year, month)}
           AND NOT EXISTS (
             SELECT 1 FROM expense_category_allocations a
             WHERE a.expense_id = e.id AND a.group_id = ${groupId}
@@ -78,8 +78,7 @@ router.get("/ai/budget-summary", async (req, res): Promise<void> => {
         FROM expense_category_allocations a
         INNER JOIN expenses e ON e.id = a.expense_id AND e.group_id = a.group_id
         WHERE a.group_id = ${groupId}
-          AND EXTRACT(MONTH FROM e.date) = ${month}
-          AND EXTRACT(YEAR FROM e.date) = ${year}
+          AND ${inMonthOf(sql`e.date`, year, month)}
       ) entries
       GROUP BY category
       ORDER BY spent DESC, category ASC

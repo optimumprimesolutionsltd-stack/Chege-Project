@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { inMonthOf } from "../lib/month-range";
 import { db } from "@workspace/db";
 import { contributionsTable, usersTable, groupMembershipsTable } from "@workspace/db";
 import { eq, and, sql } from "drizzle-orm";
@@ -121,8 +122,7 @@ router.get("/contributions/deposits", async (req, res): Promise<void> => {
       AND t.bank_transfer_id IS NULL
       ${notAReversal(sql`t.id`)}
       AND COALESCE(s.user_id, t.made_by_id) IS NOT NULL
-      AND EXTRACT(MONTH FROM t.date) = ${Math.round(month)}
-      AND EXTRACT(YEAR FROM t.date) = ${Math.round(year)}
+      AND ${inMonthOf(sql`t.date`, Math.round(year), Math.round(month))}
     ORDER BY t.date DESC, t.id DESC
   `);
 

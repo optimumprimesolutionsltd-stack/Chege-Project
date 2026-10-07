@@ -29,14 +29,20 @@ describe('afterQuiet', () => {
   });
 });
 
-describe('both apps invalidate everything after any successful change', () => {
+describe('both apps refresh everything after any successful change', () => {
   const read = (p: string) => readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
   it.each([
     ['app/_layout.tsx'],
     ['../family-budget/src/App.tsx'],
   ])('%s', (file) => {
-    const source = read(file);
-    expect(source).toContain('new MutationCache({ onSuccess: () => refreshEverything() })');
-    expect(source).toContain('void queryClient.invalidateQueries();');
+    expect(read(file)).toContain('new MutationCache({ onSuccess: () => refreshEverything() })');
+  });
+
+  // The phone's tab screens stay mounted, so it refetches the whole-history
+  // lists only once their screen is in view (lib/refreshAfterSave, lag audit
+  // 7 Oct 2026); everything else refreshes at once, as on the web.
+  it('the web refetches everything; the phone holds back only the whole-history lists', () => {
+    expect(read('../family-budget/src/App.tsx')).toContain('void queryClient.invalidateQueries();');
+    expect(read('app/_layout.tsx')).toContain('const refreshEverything = afterQuiet(() => refreshAfterSave(queryClient));');
   });
 });

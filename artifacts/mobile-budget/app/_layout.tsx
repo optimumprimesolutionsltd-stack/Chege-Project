@@ -18,6 +18,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useFonts } from 'expo-font';
 import { Stack, router, useSegments } from 'expo-router';
+import { refreshAfterSave, refreshShownHistory } from '@/lib/refreshAfterSave';
 import * as SplashScreen from 'expo-splash-screen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEntitlements } from '@/hooks/useEntitlements';
@@ -116,9 +117,11 @@ SplashScreen.preventAutoHideAsync();
 // Any change made anywhere refreshes what every screen is showing. Screens each
 // listed the queries they thought a change touched, and the lists drifted:
 // renaming an income source on a deposit reached the bank but not Reports, which
-// kept showing the old name. Invalidating everything is cheap, since only the
-// screens on display reload, and it cannot fall behind a new report.
-const refreshEverything = afterQuiet(() => { void queryClient.invalidateQueries(); });
+// kept showing the old name. Everything is still refreshed, but the whole-history
+// lists only when a screen showing one is in view (lib/refreshAfterSave): tab
+// screens stay mounted, so refetching everything reloaded every tab's history
+// after every save.
+const refreshEverything = afterQuiet(() => refreshAfterSave(queryClient));
 
 const queryClient: QueryClient = new QueryClient({
   mutationCache: new MutationCache({ onSuccess: () => refreshEverything() }),
@@ -147,9 +150,13 @@ const queryClient: QueryClient = new QueryClient({
         // until somebody noticed the link. A 4xx other than 401 is an answer,
         // not a blip, so it is not retried.
         if (error instanceof ApiError && error.status >= 400 && error.status < 500) return false;
-        return failureCount < 3;
+        // Two quick tries rather than three slow ones: 1 s, 2 s and 4 s apart
+        // kept a screen on its spinner for about seven seconds before it said
+        // anything (lag audit, 7 Oct 2026). A dropped connection is still
+        // covered by refetchOnReconnect below.
+        return failureCount < 2;
       },
-      retryDelay: (attempt) => Math.min(1_000 * 2 ** attempt, 8_000),
+      retryDelay: (attempt) => (attempt === 0 ? 800 : 1_500),
       // The commonest fix for a failed load on a phone is simply being back on
       // the network, or coming back to the screen. Neither should need a tap.
       refetchOnReconnect: true,
@@ -175,6 +182,14 @@ function RootLayoutNav() {
   const [checkingChooser, setCheckingChooser] = useState(true);
   const [feedbackPromptOpen, setFeedbackPromptOpen] = useState(false);
   const feedbackCheckedRef = useRef(false);
+
+  // A history a save left out of date is fetched again when its screen comes
+  // into view (lib/refreshAfterSave). Keyed by the route as text, so it fires
+  // on a move between screens and never because of a re-render.
+  const routeKey = segments.join('/');
+  useEffect(() => {
+    refreshShownHistory(queryClient);
+  }, [routeKey]);
 
   // Landing on Home, authenticated, is the one moment guaranteed not to
   // interrupt something the person was in the middle of — never mid-onboarding,
