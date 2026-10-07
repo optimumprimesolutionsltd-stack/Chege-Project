@@ -40,7 +40,8 @@ router.post("/entries-to-sort", async (req, res): Promise<void> => {
     await db.execute(sql`
       INSERT INTO "entries_to_sort" ("transaction_id", "group_id")
       VALUES (${row.id}, ${groupId})
-      ON CONFLICT ("transaction_id") DO NOTHING`);
+      ON CONFLICT ("transaction_id") DO NOTHING`);    // Marked again (Undo after "Leave it"): no longer left with no source.
+    await db.execute(sql`DELETE FROM "entries_left_unsourced" WHERE "transaction_id" = ${row.id} AND "group_id" = ${groupId}`);
   }
   res.status(201).json({ kept: mine.length });
 });
@@ -75,6 +76,8 @@ router.get("/entries-to-sort", async (req, res): Promise<void> => {
       amount: jointAccountTxTable.amount,
       date: jointAccountTxTable.date,
       description: jointAccountTxTable.description,
+      // The entry's own note, shown and kept while it is sorted out.
+      notes: jointAccountTxTable.notes,
     })
     .from(jointAccountTxTable)
     .where(and(

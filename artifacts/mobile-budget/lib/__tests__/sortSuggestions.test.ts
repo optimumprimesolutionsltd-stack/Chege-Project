@@ -101,3 +101,19 @@ describe('Sort them out: search, and debt and a new category always in view', ()
     expect(sheet).toContain("? 'Choose where it goes.'");
   });
 });
+
+// "Hope we also have a brief description note" (7 Oct 2026).
+describe('a note while sorting out', () => {
+  const screen = readFileSync('app/sort-entries.tsx', 'utf8');
+  it('can be added to any entry and is saved with what it is sorted as, or with Leave it', () => {
+    expect(screen).toContain('testID={`sort-entry-${entry.id}-note-add`}');
+    expect(screen).toContain('...change, ...noteChange(one.id)');
+    expect(screen).toContain("expenseCategory: suggestions.get(one.id), ...noteChange(one.id)");
+    expect(screen).toContain('if (notes[entry.id] !== undefined) await updateTransaction(');
+  });
+  it('shows the note an entry already has, and only sends one typed here', () => {
+    expect(screen).toContain("value={notes[entry.id] ?? entry.notes ?? ''}");
+    expect(screen).toContain('notes[id] === undefined ? {} : { notes: notes[id].trim() || null }');
+    expect(readFileSync('../api-server/src/routes/entries-to-sort.ts', 'utf8')).toContain('notes: jointAccountTxTable.notes,');
+  });
+});

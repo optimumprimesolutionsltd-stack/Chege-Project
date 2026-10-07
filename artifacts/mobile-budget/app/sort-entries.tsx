@@ -100,12 +100,19 @@ export default function SortEntriesScreen() {
     id: one.id,
     data: { amount: one.amount, date: one.date, ...(one.direction === 'out' ? { expenseCategory: NOT_SURE_CATEGORY } : { incomeSourceId: null }) } as never,
   });
+  // An optional note per entry, saved with whatever it is sorted as: "hope we also
+  // have a brief description note" (7 Oct 2026). Only a note typed here is sent;
+  // an entry's existing note is otherwise left as it is.
+  const [notes, setNotes] = useState<Record<number, string>>({});
+  const [noteOpen, setNoteOpen] = useState<Set<number>>(() => new Set());
+  const rowState = useMemo(() => ({ notes, noteOpen }), [notes, noteOpen]);
+  const noteChange = (id: number) => (notes[id] === undefined ? {} : { notes: notes[id].trim() || null });
   const sortEach = async (list: readonly EntryToSort[], change: { expenseCategory: string } | { incomeSourceId: number }, label: string) => {
     setBusy(list[0]?.id ?? null);
     const changed: EntryToSort[] = [];
     try {
       for (const one of list) {
-        await updateTransaction({ id: one.id, data: { amount: one.amount, date: one.date, ...change } as never });
+        await updateTransaction({ id: one.id, data: { amount: one.amount, date: one.date, ...change, ...noteChange(one.id) } as never });
         changed.push(one);
       }
     } catch (error) {
@@ -200,7 +207,7 @@ export default function SortEntriesScreen() {
             const changed: EntryToSort[] = [];
             try {
               for (const one of suggestedShown) {
-                await updateTransaction({ id: one.id, data: { amount: one.amount, date: one.date, expenseCategory: suggestions.get(one.id) } as never });
+                await updateTransaction({ id: one.id, data: { amount: one.amount, date: one.date, expenseCategory: suggestions.get(one.id), ...noteChange(one.id) } as never });
                 changed.push(one);
               }
             } catch (error) {
@@ -225,6 +232,7 @@ export default function SortEntriesScreen() {
   const leave = async (entry: EntryToSort) => {
     setBusy(entry.id);
     try {
+      if (notes[entry.id] !== undefined) await updateTransaction({ id: entry.id, data: { amount: entry.amount, date: entry.date, ...noteChange(entry.id) } as never });
       await customFetch(`/api/entries-to-sort/${entry.id}`, { method: 'DELETE' });
       setLastChange({
         text: `${entry.description} left with no source`,
@@ -270,6 +278,8 @@ export default function SortEntriesScreen() {
         // A whole year saved as Not sure is over a thousand: drawn as it scrolls.
         <FlatList
           data={shown}
+          // Rows read these as well as their entry: redrawn when any changes.
+          extraData={rowState}
           keyExtractor={(entry) => String(entry.id)}
           contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 32 }]}
           keyboardShouldPersistTaps="handled"
@@ -358,7 +368,26 @@ export default function SortEntriesScreen() {
                     <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>New category</Text>
                   </Pressable>
                 ) : null}
+                {noteOpen.has(entry.id) || entry.notes || notes[entry.id] !== undefined ? null : (
+                  <Pressable disabled={busy !== null} onPress={() => setNoteOpen((open) => new Set(open).add(entry.id))} accessibilityRole="button" testID={`sort-entry-${entry.id}-note-add`}
+                    style={{ ...chip, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <Feather name="edit-3" size={13} color={colors.mutedForeground} />
+                    <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>Add a note</Text>
+                  </Pressable>
+                )}
               </View>
+              {noteOpen.has(entry.id) || entry.notes || notes[entry.id] !== undefined ? (
+                <TextInput
+                  value={notes[entry.id] ?? entry.notes ?? ''}
+                  onChangeText={(text) => setNotes((current) => ({ ...current, [entry.id]: text }))}
+                  placeholder="A short note (optional)"
+                  placeholderTextColor={colors.mutedForeground}
+                  maxLength={1000}
+                  accessibilityLabel={`Note for ${entry.description}`}
+                  testID={`sort-entry-${entry.id}-note`}
+                  style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, color: colors.foreground, fontSize: 14 }}
+                />
+              ) : null}
               <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
                 {entry.direction === 'out' && suggestions.has(entry.id) ? (
                   <Pressable disabled={busy !== null} onPress={() => sort(entry, { expenseCategory: suggestions.get(entry.id)! }, suggestions.get(entry.id)!)} accessibilityRole="button" accessibilityLabel={`Suggested: ${suggestions.get(entry.id)}`} testID={`sort-entry-${entry.id}-suggested`}
