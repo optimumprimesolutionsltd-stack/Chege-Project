@@ -47,6 +47,8 @@ import {
 import { buildCategoryTree, filterCategoryTree, type CategoryRow } from '@workspace/category-tree';
 
 import { BankAccountPicker } from '@/components/BankAccountPicker';
+import { NewCategoryOffer } from '@/components/NewCategoryOffer';
+import { standardTargetFor, type CategoryLite } from '@/lib/standardCategory';
 import { CategorySearchBox } from '@/components/CategorySearchBox';
 import { PageScrollView } from '@/components/PageScrollReset';
 import { ScreenHint } from '@/components/ScreenHint';
@@ -3205,6 +3207,29 @@ export default function MpesaImportScreen() {
                     <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0 }]} testID={`mpesa-line-not-sure-note-${item.index}`}>
                       Saved under Not sure yet. Home will remind you to sort it out.
                     </Text>
+                  ) : null}
+                  {out && choice?.include && !isMove(choice) && canManageBudget && item.description && (!choice.category || isNotSure(choice.category)) ? (
+                    <NewCategoryOffer
+                      description={item.description}
+                      rows={categories as unknown as CategoryLite[]}
+                      testID={`mpesa-line-new-category-${item.index}`}
+                      onCreated={(name) => {
+                        void queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
+                        const made = standardTargetFor(item.description ?? '')?.name;
+                        setChoices((current) => {
+                          // This line, and its payee's other lines, as chosen (chooseCategory);
+                          // other payees Jamvi files under the same category as a suggestion.
+                          const next = chooseLineCategory(lines ?? [], current, item.index, name);
+                          for (const line of lines ?? []) {
+                            const other = next[line.index];
+                            if (line.index === item.index || line.direction !== 'out' || !other?.include) continue;
+                            if (other.category && !isNotSure(other.category)) continue;
+                            if (made && standardTargetFor(line.description ?? '')?.name === made) next[line.index] = { ...other, category: name, auto: true };
+                          }
+                          return next;
+                        });
+                      }}
+                    />
                   ) : null}
                   {out && choice?.include && !isMove(choice) && choice.category && !isNotSure(choice.category) && item.description && rules[payeeKey(item.description)] !== choice.category ? (
                     <Pressable

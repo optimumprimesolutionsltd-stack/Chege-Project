@@ -7,6 +7,7 @@ import { router } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   customFetch,
+  getGetBudgetCategoriesQueryKey,
   getGetJointAccountQueryKey,
   useGetBudgetCategories,
   useGetGroup,
@@ -18,6 +19,8 @@ import { useColors } from '@/hooks/useColors';
 import { isNotSure, NOT_SURE_CATEGORY, sameParty, type EntryToSort } from '@/lib/entriesToSort';
 import { AddIncomeSourceChip } from '@/components/AddIncomeSourceChip';
 import { SortAsDebt } from '@/components/SortAsDebt';
+import { NewCategoryOffer } from '@/components/NewCategoryOffer';
+import { type CategoryLite } from '@/lib/standardCategory';
 import { workingYear } from '@/lib/mpesaLiveBalance';
 import { inMonth, monthsOf, suggestForSaved } from '@/lib/mpesaImport';
 import { parseStoredRules, rulesStorageKey, type PayeeRules } from '@/lib/payeeLearning';
@@ -355,6 +358,17 @@ export default function SortEntriesScreen() {
                       />,
                     ]}
               </ScrollView>
+              {entry.direction === 'out' && !suggestions.has(entry.id) ? (
+                <NewCategoryOffer
+                  description={entry.description}
+                  rows={categoryList as unknown as CategoryLite[]}
+                  testID={`sort-entry-${entry.id}-new-category`}
+                  onCreated={(name) => {
+                    void queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
+                    sort(entry, { expenseCategory: name }, name);
+                  }}
+                />
+              ) : null}
               {entry.direction === 'in' ? (
                 <Pressable disabled={busy !== null} onPress={() => void leave(entry)} accessibilityRole="button" testID={`sort-entry-${entry.id}-leave`} style={{ alignSelf: 'flex-start', paddingVertical: 4 }}>
                   <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>Leave it with no source</Text>

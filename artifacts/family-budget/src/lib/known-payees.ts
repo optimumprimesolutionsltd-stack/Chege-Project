@@ -132,3 +132,9 @@ export function knownPayeeCategory(description: string, categoryNames: readonly 
   }
   return "";
 }
+
+/** The category names a well-known payee fits, best first, whatever the budget has ([] for any other payee). */
+export function knownPayeeNames(description: string): readonly string[] {
+  if (!description) return [];
+  return KNOWN_PAYEES.find((known) => known.pattern.test(description))?.names ?? [];
+}
