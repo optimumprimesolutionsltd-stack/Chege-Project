@@ -24,7 +24,6 @@ import { CreateCategorySheet } from '@/components/CreateCategorySheet';
 import { matchesSearch } from '@/lib/bankSearch';
 import { standardTargetFor } from '@/lib/standardCategory';
 import { type CategoryLite } from '@/lib/standardCategory';
-import { workingYear } from '@/lib/mpesaLiveBalance';
 import { inMonth, monthsOf, suggestForSaved } from '@/lib/mpesaImport';
 import { parseStoredRules, rulesStorageKey, type PayeeRules } from '@/lib/payeeLearning';
 import { plainSaveError } from '@/lib/saveRetry';
@@ -138,8 +137,6 @@ export default function SortEntriesScreen() {
       ],
     );
   };
-  // Money in saved before every money in was asked about (4 Oct 2026): a year of
-  // it can have no source. Gathered here when asked, Personal budget only.
   const { data: group } = useGetGroup();
   // "+ New category" on any entry: name, parent and tier (components/CreateCategorySheet).
   const [newCategoryFor, setNewCategoryFor] = useState<EntryToSort | null>(null);
@@ -223,29 +220,8 @@ export default function SortEntriesScreen() {
       ],
     );
   };
-  const [gathering, setGathering] = useState(false);
-  const gather = async () => {
-    setGathering(true);
-    try {
-      // This year only: earlier years are left as they are.
-      const { added } = await customFetch<{ added: number }>('/api/entries-to-sort/money-in-without-source', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ from: workingYear().from }),
-      });
-      await done();
-      Alert.alert(
-        added > 0 ? `${added} found` : 'Nothing new found',
-        added > 0
-          ? 'Money in with no income source is now on this list. Give each a source, or several at once from the same payer.'
-          : 'All your money in already has a source, is a loan or a move between accounts, or is on this list.',
-      );
-    } catch (error) {
-      Alert.alert('Could not look', plainSaveError(error));
-    } finally {
-      setGathering(false);
-    }
-  };
+  // Money in with no source is gathered onto this list by the server whenever it
+  // is read - every year, minus what was left with no source (7 Oct 2026).
   const leave = async (entry: EntryToSort) => {
     setBusy(entry.id);
     try {
@@ -301,20 +277,6 @@ export default function SortEntriesScreen() {
           windowSize={7}
           ListHeaderComponent={(
             <View style={{ gap: 10 }}>
-            {group?.isPrivate ? (
-              <Pressable
-                onPress={() => void gather()}
-                disabled={gathering}
-                accessibilityRole="button"
-                testID="sort-entries-gather-money-in"
-                style={{ borderWidth: 1, borderColor: colors.primary, borderRadius: 8, padding: 12, opacity: gathering ? 0.6 : 1 }}
-              >
-                <Text style={{ color: colors.primary, fontFamily: 'Inter_700Bold', fontSize: 14 }}>{gathering ? 'Looking…' : `Find ${workingYear().year} money in with no source`}</Text>
-                <Text style={{ color: colors.mutedForeground, fontSize: 12, marginTop: 2 }}>
-                  Money in you have already saved without saying where it came from. Loans, repayments and moves between your accounts are left out.
-                </Text>
-              </Pressable>
-            ) : null}
             {suggestedShown.length > 0 ? (
               <Pressable
                 onPress={acceptAll}

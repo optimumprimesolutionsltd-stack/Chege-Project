@@ -37,6 +37,15 @@ export async function ensureEntriesToSort(): Promise<void> {
         "created_at" timestamp with time zone NOT NULL DEFAULT now()
       )`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS "entries_to_sort_group_idx" ON "entries_to_sort" ("group_id")`);
+    // Money in the person chose to leave with no source ("Leave it with no
+    // source"), so gathering never puts it back on the list.
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "entries_left_unsourced" (
+        "transaction_id" integer PRIMARY KEY
+          REFERENCES "joint_account_transactions"("id") ON DELETE CASCADE,
+        "group_id" integer NOT NULL REFERENCES "groups"("id") ON DELETE CASCADE,
+        "created_at" timestamp with time zone NOT NULL DEFAULT now()
+      )`);
     ready = true;
     logger.info("Entries to sort are ready");
   } catch (err) {
@@ -44,4 +53,42 @@ export async function ensureEntriesToSort(): Promise<void> {
     const retry = setTimeout(() => void ensureEntriesToSort(), 60_000);
     retry.unref?.();
   }
+}
+
+/**
+ * Puts every plain money in with no income source on the list to sort, from a
+ * day on or from the start: not borrowing (Fuliza included), a repayment, a
+ * move between accounts or to and from savings, a member's contribution,
+ * either half of a reversal, or one the person chose to leave with no source.
+ * "Want to fix old entries too - ship all to sort them out" (7 Oct 2026):
+ * done each time the list is read, so nothing waits on a button. How many were
+ * added.
+ */
+export async function gatherMoneyInWithoutSource(groupId: number, from?: string): Promise<number> {
+  if (!ready) return 0;
+  const since = from ? sql`AND t."date" >= ${from}` : sql``;
+  const added = await db.execute(sql`
+    INSERT INTO "entries_to_sort" ("transaction_id", "group_id")
+    SELECT t."id", t."group_id"
+    FROM "joint_account_transactions" t
+    WHERE t."group_id" = ${groupId}
+      AND t."type" = 'deposit'
+      AND t."income_source_id" IS NULL
+      AND t."is_borrowing" = false
+      AND t."settles_contributor_id" IS NULL
+      AND t."savings_goal_id" IS NULL
+      AND t."bank_transfer_id" IS NULL
+      AND t."transfer_direction" IS NULL
+      AND NOT EXISTS (
+        SELECT 1 FROM "joint_account_deposit_splits" s
+        WHERE s."transaction_id" = t."id" AND s."contributor_id" IS NOT NULL)
+      AND NOT EXISTS (
+        SELECT 1 FROM "reversal_links" r
+        WHERE r."reversal_transaction_id" = t."id" OR r."original_transaction_id" = t."id")
+      AND NOT EXISTS (
+        SELECT 1 FROM "entries_left_unsourced" l WHERE l."transaction_id" = t."id")
+      ${since}
+    ON CONFLICT ("transaction_id") DO NOTHING
+    RETURNING "transaction_id"`);
+  return (added as { rows?: unknown[] }).rows?.length ?? 0;
 }

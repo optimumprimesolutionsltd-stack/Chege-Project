@@ -200,9 +200,10 @@ describe('2026 only', () => {
     ];
     expect(inWorkingYear(rows, year.from).map((row) => row.body)).toEqual(['b']);
   });
-  it('is what Find the difference reads and what Find money in with no source gathers', () => {
+  it('is what Find the difference reads', () => {
+    // Money in with no source is no longer 2026 only: every year is gathered for
+    // Sort them out ("fix old entries too", 7 Oct 2026; moneyInSource.test).
     const screen = read('app/mpesa-difference.tsx');
     expect(screen).toContain('const rows = inWorkingYear(read.rows, yearFrom);');
-    expect(read('app/sort-entries.tsx')).toContain('body: JSON.stringify({ from: workingYear().from }),');
   });
 });
