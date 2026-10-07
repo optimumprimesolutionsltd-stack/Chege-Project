@@ -1,4 +1,5 @@
-import React, { useDeferredValue, useMemo, useState } from 'react';
+import React, { useDeferredValue, useEffect, useMemo, useState } from 'react';
+import { keepPreviousData, useQueryClient } from '@tanstack/react-query';
 import {
   View,
   Text,
@@ -15,11 +16,12 @@ import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import {
+  getDashboardExpenseLedger,
   getGetDashboardExpenseLedgerQueryKey,
   useGetBudgetCategories,
   useGetDashboardExpenseLedger,
 } from '@workspace/api-client-react';
-import { isoDay, longDay, monthStartIso, orderedRange } from '@/lib/dayRange';
+import { isoDay, longDay, monthStartIso, orderedRange, stepMonth } from '@/lib/dayRange';
 import { useColors } from '@/hooks/useColors';
 import { useProgressiveDays } from '@/lib/progressiveDays';
 import { ScrollerScrollView } from '@/components/PageScrollReset';
@@ -80,16 +82,46 @@ export default function ExpenseLedgerScreen() {
 
   const [rangeFrom, rangeTo] = orderedRange(from, to);
 
+  // Asked once typing pauses, not for every letter: each one was its own
+  // request, and the answers raced each other back (7 Oct 2026).
+  const [searched, setSearched] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => setSearched(search.trim()), 350);
+    return () => clearTimeout(timer);
+  }, [search]);
+
   const query = useMemo(
-    () => ({ from: rangeFrom, to: rangeTo, ...(search.trim() ? { q: search.trim() } : {}) }),
-    [rangeFrom, rangeTo, search],
+    () => ({ from: rangeFrom, to: rangeTo, ...(searched ? { q: searched } : {}) }),
+    [rangeFrom, rangeTo, searched],
   );
 
-  const { data, isLoading, isError, refetch } = useGetDashboardExpenseLedger(query, {
+  // Changing month used to clear the screen to "Loading…" every time, months
+  // already seen included, and a failure was retried three times before it was
+  // said (7 Oct 2026). Now the month on screen stays, dimmed, until the next one
+  // is in; a month is kept for a minute; and a failure is said after one retry.
+  const { data, isLoading, isError, isPlaceholderData, refetch } = useGetDashboardExpenseLedger(query, {
     // The span and the search both belong in the key, or changing either would
     // show the previous answer from cache under the new controls.
-    query: { queryKey: getGetDashboardExpenseLedgerQueryKey(query) },
+    query: { queryKey: getGetDashboardExpenseLedgerQueryKey(query), placeholderData: keepPreviousData, staleTime: 60_000, retry: 1 },
   });
+
+  // The months either side are fetched while this one is read, so the arrows
+  // usually land on a month that is already here.
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    if (searched) return;
+    const today = isoDay(new Date());
+    for (const delta of [-1, 1]) {
+      const next = stepMonth(rangeFrom, delta, today);
+      if (next.from === rangeFrom) continue;
+      const params = { from: next.from, to: next.to };
+      void queryClient.prefetchQuery({
+        queryKey: getGetDashboardExpenseLedgerQueryKey(params),
+        queryFn: () => getDashboardExpenseLedger(params),
+        staleTime: 60_000,
+      });
+    }
+  }, [rangeFrom, searched, queryClient]);
 
   const allEntries = data?.entries ?? [];
   // Household or Business costs: a side hustle's stock and running costs are
@@ -366,7 +398,7 @@ export default function ExpenseLedgerScreen() {
           />
         ) : null}
 
-        <View style={[styles.totalCard, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+        <View style={[styles.totalCard, { backgroundColor: colors.muted, borderColor: colors.border, opacity: isPlaceholderData ? 0.5 : 1 }]}>
           <Text style={[styles.totalValue, { color: colors.foreground }]}>
             {isLoading ? 'Loading…' : `KES ${formatKES(expensesTotal)}`}
           </Text>
@@ -404,6 +436,7 @@ export default function ExpenseLedgerScreen() {
           })}
         </View>
         {shownView !== view ? <ActivityIndicator color={colors.primary} style={{ marginTop: 12 }} testID="expense-ledger-view-switching" /> : null}
+        {isPlaceholderData ? <ActivityIndicator color={colors.primary} style={{ marginTop: 12 }} testID="expense-ledger-updating" /> : null}
 
         {isError ? (
           <Pressable
