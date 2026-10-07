@@ -74,3 +74,22 @@ describe('Financed by with no source chosen yet', () => {
     expect(source).toContain('selection.amounts[key] = payerAmounts[paidById];');
   });
 });
+
+// "If I choose whole amount in bank, shouldn't the other source be greyed out?
+// And why am I still being asked to fill in the paid directly tab?" (7 Oct 2026).
+describe('alone in the budget, Bank account or Cash - never both', () => {
+  it('choosing a bank drops Cash, its share, its sources and the unassigned balance', () => {
+    expect(source).toContain('if (onlyPerson && !paidFromBank) {');
+    expect(source).toContain('setPayerIds([]);');
+    expect(source).toContain("setPayerAmounts({ __joint_bank__: amount.replace(/,/g, '') });");
+  });
+
+  it('the bank takes the whole amount until the person types their own', () => {
+    expect(source).toContain('if (!onlyPerson || !paidFromBank || payerIds.length > 0 || bankAmountTouched.current) return;');
+    expect(source).toContain("{onlyPerson ? 'AMOUNT FROM THIS ACCOUNT' : 'TYPE THE AMOUNT FROM THIS ACCOUNT TO CONFIRM'}");
+  });
+
+  it('the auto-select never brings Cash back while a bank is chosen', () => {
+    expect(source).toContain('if (canManageShared && !paidFromBank && payerIds.length === 0 && selectablePayers.length === 1) {');
+  });
+});
