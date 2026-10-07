@@ -3,7 +3,7 @@ import { z } from "zod";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { db, jointAccountTxTable } from "@workspace/db";
 import { getActiveGroupId, requireGroupManager } from "../lib/activeGroup";
-import { entriesToSortReady, NOT_SURE_CATEGORY } from "../lib/entries-to-sort";
+import { entriesToSortReady, gatherMoneyInWithoutSource, NOT_SURE_CATEGORY } from "../lib/entries-to-sort";
 import { reversalLinksReady } from "../lib/reversal-links";
 import { DEBT_KINDS, sortAsDebt, unsortDebt } from "../lib/sort-as-debt";
 
@@ -40,7 +40,8 @@ router.post("/entries-to-sort", async (req, res): Promise<void> => {
     await db.execute(sql`
       INSERT INTO "entries_to_sort" ("transaction_id", "group_id")
       VALUES (${row.id}, ${groupId})
-      ON CONFLICT ("transaction_id") DO NOTHING`);
+      ON CONFLICT ("transaction_id") DO NOTHING`);    // Marked again (Undo after "Leave it"): no longer left with no source.
+    await db.execute(sql`DELETE FROM "entries_left_unsourced" WHERE "transaction_id" = ${row.id} AND "group_id" = ${groupId}`);
   }
   res.status(201).json({ kept: mine.length });
 });
@@ -53,6 +54,10 @@ router.post("/entries-to-sort", async (req, res): Promise<void> => {
 router.get("/entries-to-sort", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
+  // Money in with no source joins the list by itself, every year, unless the
+  // person left it so (lib/entries-to-sort). Personal budget only: money in to a
+  // Shared group is members' contributions. Never worth failing the list over.
+  if (req.group?.isPrivate) await gatherMoneyInWithoutSource(groupId).catch(() => 0);
   const marked = entriesToSortReady()
     ? sql`OR (${jointAccountTxTable.type} = 'deposit' AND ${jointAccountTxTable.incomeSourceId} IS NULL
         AND ${jointAccountTxTable.id} IN (SELECT "transaction_id" FROM "entries_to_sort" WHERE "group_id" = ${groupId}))`
@@ -71,6 +76,8 @@ router.get("/entries-to-sort", async (req, res): Promise<void> => {
       amount: jointAccountTxTable.amount,
       date: jointAccountTxTable.date,
       description: jointAccountTxTable.description,
+      // The entry's own note, shown and kept while it is sorted out.
+      notes: jointAccountTxTable.notes,
     })
     .from(jointAccountTxTable)
     .where(and(
@@ -116,28 +123,8 @@ router.post("/entries-to-sort/money-in-without-source", async (req, res): Promis
     res.status(400).json({ error: "Send the day to start from as YYYY-MM-DD." });
     return;
   }
-  const since = from.data.from ? sql`AND t."date" >= ${from.data.from}` : sql``;
-  const added = await db.execute(sql`
-    INSERT INTO "entries_to_sort" ("transaction_id", "group_id")
-    SELECT t."id", t."group_id"
-    FROM "joint_account_transactions" t
-    WHERE t."group_id" = ${groupId}
-      AND t."type" = 'deposit'
-      AND t."income_source_id" IS NULL
-      AND t."is_borrowing" = false
-      AND t."settles_contributor_id" IS NULL
-      AND t."savings_goal_id" IS NULL
-      AND t."bank_transfer_id" IS NULL
-      AND t."transfer_direction" IS NULL
-      AND NOT EXISTS (
-        SELECT 1 FROM "joint_account_deposit_splits" s
-        WHERE s."transaction_id" = t."id" AND s."contributor_id" IS NOT NULL)
-      AND NOT EXISTS (
-        SELECT 1 FROM "reversal_links" r WHERE r."reversal_transaction_id" = t."id")
-      ${since}
-    ON CONFLICT ("transaction_id") DO NOTHING
-    RETURNING "transaction_id"`);
-  res.json({ added: added.rows.length });
+  const added = await gatherMoneyInWithoutSource(groupId, from.data.from);
+  res.json({ added });
 });
 
 /** "Leave it without a source": money in taken off the list as it is. */
@@ -151,6 +138,12 @@ router.delete("/entries-to-sort/:transactionId", async (req, res): Promise<void>
   }
   if (entriesToSortReady()) {
     await db.execute(sql`DELETE FROM "entries_to_sort" WHERE "transaction_id" = ${id} AND "group_id" = ${groupId}`);
+    // Remembered, so the next gathering does not put it back.
+    await db.execute(sql`
+      INSERT INTO "entries_left_unsourced" ("transaction_id", "group_id")
+      SELECT ${id}, ${groupId}
+       WHERE EXISTS (SELECT 1 FROM "joint_account_transactions" WHERE "id" = ${id} AND "group_id" = ${groupId} AND "type" = 'deposit')
+      ON CONFLICT DO NOTHING`);
   }
   res.status(204).end();
 });

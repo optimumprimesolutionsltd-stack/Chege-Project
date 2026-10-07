@@ -33,7 +33,8 @@ const lower = (name: string) => name.trim().toLocaleLowerCase('en-KE');
  * for a new heading, its tier. Nothing is made until Add.
  */
 export function CreateCategorySheet({ target, rows, onClose, onCreated }: {
-  target: StandardTarget;
+  /** The standard place for a payee Jamvi knows; none for any other entry, which starts blank. */
+  target: StandardTarget | null;
   rows: readonly CategoryLite[];
   onClose: () => void;
   onCreated: (name: string) => void;
@@ -42,14 +43,15 @@ export function CreateCategorySheet({ target, rows, onClose, onCreated }: {
   const insets = useSafeAreaInsets();
   const tiers = useTiers();
   const headings = useMemo(() => headingsOf(rows), [rows]);
-  const suggestedHeading = headings.find((row) => lower(row.name) === lower(target.parent));
+  const suggestedHeading = target ? headings.find((row) => lower(row.name) === lower(target.parent)) : undefined;
   // A category with the suggested heading's name that is not a heading is not offered (lib/standardCategory placementFor).
-  const canMakeSuggested = !hasCategory(target.parent, rows);
-  const [name, setName] = useState(target.name);
+  const canMakeSuggested = target !== null && !hasCategory(target.parent, rows);
+  const [name, setName] = useState(target?.name ?? '');
   // 'h:<id>' an existing heading, 'suggested' the standard heading made new, 'new' a heading typed here.
   const [parent, setParent] = useState<string>(suggestedHeading ? `h:${suggestedHeading.id}` : canMakeSuggested ? 'suggested' : '');
   const [newHeading, setNewHeading] = useState('');
-  const [tier, setTier] = useState(target.priority);
+  // With nothing to go on, a new heading starts in the last tier, as onboarding files the unknown.
+  const [tier, setTier] = useState(target?.priority ?? 4);
   const [saving, setSaving] = useState(false);
 
   const chosenHeading = parent.startsWith('h:') ? headings.find((row) => `h:${row.id}` === parent) : undefined;
@@ -71,8 +73,8 @@ export function CreateCategorySheet({ target, rows, onClose, onCreated }: {
     setSaving(true);
     try {
       const saved = chosenHeading
-        ? await createInPlace(typedName, { kind: 'existing', parentId: chosenHeading.id, priority: chosenHeading.priority ?? target.priority })
-        : await createInPlace(typedName, { kind: 'new-heading', parentName: parent === 'new' ? newHeading : target.parent, priority: tier });
+        ? await createInPlace(typedName, { kind: 'existing', parentId: chosenHeading.id, priority: chosenHeading.priority ?? tier })
+        : await createInPlace(typedName, { kind: 'new-heading', parentName: parent === 'new' || !target ? newHeading : target.parent, priority: tier });
       onCreated(saved);
     } catch (error) {
       Alert.alert('Could not add it', plainSaveError(error));
@@ -98,10 +100,10 @@ export function CreateCategorySheet({ target, rows, onClose, onCreated }: {
           </View>
           <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 12 }}>
             <Text style={label}>Name</Text>
-            <TextInput value={name} onChangeText={setName} style={input} testID="create-category-name" />
+            <TextInput value={name} onChangeText={setName} placeholder="e.g. Groceries" placeholderTextColor={colors.mutedForeground} autoFocus={!target} style={input} testID="create-category-name" />
             <Text style={label}>Under</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-              {!suggestedHeading && canMakeSuggested ? (
+              {target && !suggestedHeading && canMakeSuggested ? (
                 <Pressable onPress={() => { setParent('suggested'); setTier(target.priority); }} style={chip(parent === 'suggested')} accessibilityRole="button" testID="create-category-parent-suggested">
                   <Text style={chipText(parent === 'suggested')}>{target.parent} (new)</Text>
                 </Pressable>
@@ -130,7 +132,7 @@ export function CreateCategorySheet({ target, rows, onClose, onCreated }: {
                 </View>
               </>
             ) : chosenHeading ? (
-              <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>In {tierLabel(tiers, chosenHeading.priority ?? target.priority)}, like {chosenHeading.name}.</Text>
+              <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>In {tierLabel(tiers, chosenHeading.priority ?? tier)}, like {chosenHeading.name}.</Text>
             ) : null}
             <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>It starts with no budget amount; set one on the Budget tab when you want to.</Text>
             {problem ? <Text style={{ color: colors.destructive, fontSize: 12 }}>{problem}</Text> : null}

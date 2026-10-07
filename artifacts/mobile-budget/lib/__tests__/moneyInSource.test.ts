@@ -53,9 +53,15 @@ describe('Sort them out, for a year already saved', () => {
     expect(screen).toContain("{ text: 'Just this one', onPress: () => void sortEach([entry], change, label) },");
     expect(screen).toContain('onPress: () => void sortEach([entry, ...others], change, label) },');
   });
-  it('gathers money in with no source, in a Personal budget only', () => {
-    expect(screen).toContain("customFetch<{ added: number }>('/api/entries-to-sort/money-in-without-source', {");
-    expect(screen).toContain('{group?.isPrivate ? (');
+  it('gathers money in with no source by itself, every year, in a Personal budget only', () => {
+    // "Want to fix old entries too - ship all to sort them out" (7 Oct 2026): no Find button,
+    // the server gathers whenever the list is read, minus what was left with no source.
+    const route = read('../api-server/src/routes/entries-to-sort.ts');
+    expect(route).toContain('if (req.group?.isPrivate) await gatherMoneyInWithoutSource(groupId).catch(() => 0);');
+    const gather = read('../api-server/src/lib/entries-to-sort.ts');
+    expect(gather).toContain('SELECT 1 FROM "entries_left_unsourced" l WHERE l."transaction_id" = t."id")');
+    expect(route).toContain('INSERT INTO "entries_left_unsourced" ("transaction_id", "group_id")');
+    expect(screen).not.toContain('sort-entries-gather-money-in');
   });
   it('can add a source right from an entry', () => {
     expect(screen).toContain('testID={`sort-entry-${entry.id}-add-source`}');

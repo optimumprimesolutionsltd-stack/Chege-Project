@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ActivityIndicator, Alert, FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -20,8 +20,10 @@ import { isNotSure, NOT_SURE_CATEGORY, sameParty, type EntryToSort } from '@/lib
 import { AddIncomeSourceChip } from '@/components/AddIncomeSourceChip';
 import { SortAsDebt } from '@/components/SortAsDebt';
 import { NewCategoryOffer } from '@/components/NewCategoryOffer';
+import { CreateCategorySheet } from '@/components/CreateCategorySheet';
+import { matchesSearch } from '@/lib/bankSearch';
+import { standardTargetFor } from '@/lib/standardCategory';
 import { type CategoryLite } from '@/lib/standardCategory';
-import { workingYear } from '@/lib/mpesaLiveBalance';
 import { inMonth, monthsOf, suggestForSaved } from '@/lib/mpesaImport';
 import { parseStoredRules, rulesStorageKey, type PayeeRules } from '@/lib/payeeLearning';
 import { plainSaveError } from '@/lib/saveRetry';
@@ -60,7 +62,14 @@ export default function SortEntriesScreen() {
   // A month at a time, as in the import.
   const [month, setMonth] = useState<string | null>(null);
   const months = useMemo(() => monthsOf(entries), [entries]);
-  const shown = useMemo(() => entries.filter((entry) => inMonth(entry, month)), [entries, month]);
+  // Search narrows the month's entries by payee or amount (lib/bankSearch), as on Bank.
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const searched = useDeferredValue(search.trim());
+  const shown = useMemo(
+    () => entries.filter((entry) => inMonth(entry, month) && (!searched || matchesSearch(entry, searched))),
+    [entries, month, searched],
+  );
 
   const done = async () => {
     await Promise.all([
@@ -91,12 +100,19 @@ export default function SortEntriesScreen() {
     id: one.id,
     data: { amount: one.amount, date: one.date, ...(one.direction === 'out' ? { expenseCategory: NOT_SURE_CATEGORY } : { incomeSourceId: null }) } as never,
   });
+  // An optional note per entry, saved with whatever it is sorted as: "hope we also
+  // have a brief description note" (7 Oct 2026). Only a note typed here is sent;
+  // an entry's existing note is otherwise left as it is.
+  const [notes, setNotes] = useState<Record<number, string>>({});
+  const [noteOpen, setNoteOpen] = useState<Set<number>>(() => new Set());
+  const rowState = useMemo(() => ({ notes, noteOpen }), [notes, noteOpen]);
+  const noteChange = (id: number) => (notes[id] === undefined ? {} : { notes: notes[id].trim() || null });
   const sortEach = async (list: readonly EntryToSort[], change: { expenseCategory: string } | { incomeSourceId: number }, label: string) => {
     setBusy(list[0]?.id ?? null);
     const changed: EntryToSort[] = [];
     try {
       for (const one of list) {
-        await updateTransaction({ id: one.id, data: { amount: one.amount, date: one.date, ...change } as never });
+        await updateTransaction({ id: one.id, data: { amount: one.amount, date: one.date, ...change, ...noteChange(one.id) } as never });
         changed.push(one);
       }
     } catch (error) {
@@ -128,9 +144,9 @@ export default function SortEntriesScreen() {
       ],
     );
   };
-  // Money in saved before every money in was asked about (4 Oct 2026): a year of
-  // it can have no source. Gathered here when asked, Personal budget only.
   const { data: group } = useGetGroup();
+  // "+ New category" on any entry: name, parent and tier (components/CreateCategorySheet).
+  const [newCategoryFor, setNewCategoryFor] = useState<EntryToSort | null>(null);
 
   // A suggestion for each entry, worked out as the import does (suggestForSaved):
   // the rules kept on this phone, how each payee was filed before, then
@@ -191,7 +207,7 @@ export default function SortEntriesScreen() {
             const changed: EntryToSort[] = [];
             try {
               for (const one of suggestedShown) {
-                await updateTransaction({ id: one.id, data: { amount: one.amount, date: one.date, expenseCategory: suggestions.get(one.id) } as never });
+                await updateTransaction({ id: one.id, data: { amount: one.amount, date: one.date, expenseCategory: suggestions.get(one.id), ...noteChange(one.id) } as never });
                 changed.push(one);
               }
             } catch (error) {
@@ -211,32 +227,12 @@ export default function SortEntriesScreen() {
       ],
     );
   };
-  const [gathering, setGathering] = useState(false);
-  const gather = async () => {
-    setGathering(true);
-    try {
-      // This year only: earlier years are left as they are.
-      const { added } = await customFetch<{ added: number }>('/api/entries-to-sort/money-in-without-source', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ from: workingYear().from }),
-      });
-      await done();
-      Alert.alert(
-        added > 0 ? `${added} found` : 'Nothing new found',
-        added > 0
-          ? 'Money in with no income source is now on this list. Give each a source, or several at once from the same payer.'
-          : 'All your money in already has a source, is a loan or a move between accounts, or is on this list.',
-      );
-    } catch (error) {
-      Alert.alert('Could not look', plainSaveError(error));
-    } finally {
-      setGathering(false);
-    }
-  };
+  // Money in with no source is gathered onto this list by the server whenever it
+  // is read - every year, minus what was left with no source (7 Oct 2026).
   const leave = async (entry: EntryToSort) => {
     setBusy(entry.id);
     try {
+      if (notes[entry.id] !== undefined) await updateTransaction({ id: entry.id, data: { amount: entry.amount, date: entry.date, ...noteChange(entry.id) } as never });
       await customFetch(`/api/entries-to-sort/${entry.id}`, { method: 'DELETE' });
       setLastChange({
         text: `${entry.description} left with no source`,
@@ -282,6 +278,8 @@ export default function SortEntriesScreen() {
         // A whole year saved as Not sure is over a thousand: drawn as it scrolls.
         <FlatList
           data={shown}
+          // Rows read these as well as their entry: redrawn when any changes.
+          extraData={rowState}
           keyExtractor={(entry) => String(entry.id)}
           contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 32 }]}
           keyboardShouldPersistTaps="handled"
@@ -289,20 +287,6 @@ export default function SortEntriesScreen() {
           windowSize={7}
           ListHeaderComponent={(
             <View style={{ gap: 10 }}>
-            {group?.isPrivate ? (
-              <Pressable
-                onPress={() => void gather()}
-                disabled={gathering}
-                accessibilityRole="button"
-                testID="sort-entries-gather-money-in"
-                style={{ borderWidth: 1, borderColor: colors.primary, borderRadius: 8, padding: 12, opacity: gathering ? 0.6 : 1 }}
-              >
-                <Text style={{ color: colors.primary, fontFamily: 'Inter_700Bold', fontSize: 14 }}>{gathering ? 'Looking…' : `Find ${workingYear().year} money in with no source`}</Text>
-                <Text style={{ color: colors.mutedForeground, fontSize: 12, marginTop: 2 }}>
-                  Money in you have already saved without saying where it came from. Loans, repayments and moves between your accounts are left out.
-                </Text>
-              </Pressable>
-            ) : null}
             {suggestedShown.length > 0 ? (
               <Pressable
                 onPress={acceptAll}
@@ -314,6 +298,25 @@ export default function SortEntriesScreen() {
                 <Text style={{ color: '#fff', fontFamily: 'Inter_700Bold', fontSize: 14 }}>Accept {suggestedShown.length} {suggestedShown.length === 1 ? 'suggestion' : 'suggestions'}</Text>
                 <Text style={{ color: '#fff', opacity: 0.85, fontSize: 12, marginTop: 2 }}>Jamvi suggests a category from how you filed these payees before, or from what the payee is.</Text>
               </Pressable>
+            ) : null}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              {searchOpen ? (
+                <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 10, backgroundColor: colors.card }}>
+                  <Feather name="search" size={15} color={colors.mutedForeground} />
+                  <TextInput value={search} onChangeText={setSearch} autoFocus placeholder="Payee or amount" placeholderTextColor={colors.mutedForeground} returnKeyType="search" testID="sort-entries-search-input"
+                    style={{ flex: 1, paddingVertical: 9, color: colors.foreground, fontSize: 14 }} />
+                </View>
+              ) : <View style={{ flex: 1 }} />}
+              <Pressable onPress={() => { if (searchOpen) setSearch(''); setSearchOpen((open) => !open); }} hitSlop={8} accessibilityRole="button" accessibilityLabel={searchOpen ? 'Close search' : 'Search these entries'} testID="sort-entries-search-toggle"
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Feather name={searchOpen ? 'x' : 'search'} size={15} color={colors.primary} />
+                <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>{searchOpen ? 'Close' : 'Search'}</Text>
+              </Pressable>
+            </View>
+            {searched ? (
+              <Text style={{ color: colors.mutedForeground, fontSize: 12 }} testID="sort-entries-search-count">
+                {shown.length === 0 ? `Nothing matching "${searched}".` : `${shown.length} found`}
+              </Text>
             ) : null}
             {months.length > 1 ? (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 2 }} testID="sort-entries-months">
@@ -349,12 +352,43 @@ export default function SortEntriesScreen() {
                 </Text>
               </View>
               <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>{entry.direction === 'out' ? 'What was it for?' : 'Where did it come from?'}</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
+              {/* Always in view, not at the start of the sideways row where they scrolled
+                  out of sight: "there is no place to create child and parent category and
+                  lent/borrowed" (7 Oct 2026). */}
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                 <Pressable disabled={busy !== null} onPress={() => setDebtFor(entry)} accessibilityRole="button" testID={`sort-entry-${entry.id}-debt`}
                   style={{ ...chip, flexDirection: 'row', alignItems: 'center', gap: 4, borderColor: colors.primary, backgroundColor: `${colors.primary}14` }}>
                   <Feather name="users" size={13} color={colors.primary} />
                   <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>{entry.direction === 'out' ? 'Lent / paid a debt' : 'Borrowed / paid back'}</Text>
                 </Pressable>
+                {entry.direction === 'out' ? (
+                  <Pressable disabled={busy !== null} onPress={() => setNewCategoryFor(entry)} accessibilityRole="button" testID={`sort-entry-${entry.id}-new-category-sheet`}
+                    style={{ ...chip, flexDirection: 'row', alignItems: 'center', gap: 4, borderColor: colors.primary, backgroundColor: `${colors.primary}14` }}>
+                    <Feather name="plus" size={13} color={colors.primary} />
+                    <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>New category</Text>
+                  </Pressable>
+                ) : null}
+                {noteOpen.has(entry.id) || entry.notes || notes[entry.id] !== undefined ? null : (
+                  <Pressable disabled={busy !== null} onPress={() => setNoteOpen((open) => new Set(open).add(entry.id))} accessibilityRole="button" testID={`sort-entry-${entry.id}-note-add`}
+                    style={{ ...chip, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <Feather name="edit-3" size={13} color={colors.mutedForeground} />
+                    <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>Add a note</Text>
+                  </Pressable>
+                )}
+              </View>
+              {noteOpen.has(entry.id) || entry.notes || notes[entry.id] !== undefined ? (
+                <TextInput
+                  value={notes[entry.id] ?? entry.notes ?? ''}
+                  onChangeText={(text) => setNotes((current) => ({ ...current, [entry.id]: text }))}
+                  placeholder="A short note (optional)"
+                  placeholderTextColor={colors.mutedForeground}
+                  maxLength={1000}
+                  accessibilityLabel={`Note for ${entry.description}`}
+                  testID={`sort-entry-${entry.id}-note`}
+                  style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, color: colors.foreground, fontSize: 14 }}
+                />
+              ) : null}
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
                 {entry.direction === 'out' && suggestions.has(entry.id) ? (
                   <Pressable disabled={busy !== null} onPress={() => sort(entry, { expenseCategory: suggestions.get(entry.id)! }, suggestions.get(entry.id)!)} accessibilityRole="button" accessibilityLabel={`Suggested: ${suggestions.get(entry.id)}`} testID={`sort-entry-${entry.id}-suggested`}
                     style={{ ...chip, flexDirection: 'row', alignItems: 'center', gap: 4, borderColor: colors.success, backgroundColor: `${colors.success}22` }}>
@@ -401,6 +435,19 @@ export default function SortEntriesScreen() {
           )}
         />
       )}
+      {newCategoryFor ? (
+        <CreateCategorySheet
+          target={standardTargetFor(newCategoryFor.description)}
+          rows={categoryList as unknown as CategoryLite[]}
+          onClose={() => setNewCategoryFor(null)}
+          onCreated={(name) => {
+            const entry = newCategoryFor;
+            setNewCategoryFor(null);
+            void queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
+            sort(entry, { expenseCategory: name }, name);
+          }}
+        />
+      ) : null}
       {debtFor ? (
         <SortAsDebt
           entry={debtFor}

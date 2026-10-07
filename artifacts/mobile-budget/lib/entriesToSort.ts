@@ -23,6 +23,8 @@ export type EntryToSort = {
   amount: number;
   date: string;
   description: string;
+  /** Its note, if it has one. */
+  notes?: string | null;
 };
 
 export const isNotSure = (category: string | null | undefined): boolean =>
