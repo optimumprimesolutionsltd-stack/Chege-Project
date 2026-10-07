@@ -1,6 +1,6 @@
 import React, { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ActivityIndicator, Alert, FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -24,7 +24,10 @@ import { CreateCategorySheet } from '@/components/CreateCategorySheet';
 import { matchesSearch } from '@/lib/bankSearch';
 import { standardTargetFor } from '@/lib/standardCategory';
 import { type CategoryLite } from '@/lib/standardCategory';
-import { inMonth, monthsOf, suggestForSaved } from '@/lib/mpesaImport';
+import { inMonth, suggestForSaved } from '@/lib/mpesaImport';
+import { monthsOfYear, yearsOf } from '@/lib/yearMonths';
+import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import { isoDay, longDay, monthStartIso, orderedRange } from '@/lib/dayRange';
 import { parseStoredRules, rulesStorageKey, type PayeeRules } from '@/lib/payeeLearning';
 import { plainSaveError } from '@/lib/saveRetry';
 import { formatDisplayDate } from '@/lib/displayFormat';
@@ -61,14 +64,25 @@ export default function SortEntriesScreen() {
   const entries = useMemo(() => data?.entries ?? [], [data]);
   // A month at a time, as in the import.
   const [month, setMonth] = useState<string | null>(null);
-  const months = useMemo(() => monthsOf(entries), [entries]);
+  // January to December of one year, each with its count (lib/yearMonths).
+  const thisYear = new Date().getFullYear();
+  const years = useMemo(() => yearsOf(entries, thisYear), [entries, thisYear]);
+  const [year, setYear] = useState(thisYear);
+  const months = useMemo(() => monthsOfYear(entries, year), [entries, year]);
   // Search narrows the month's entries by payee or amount (lib/bankSearch), as on Bank.
   const [searchOpen, setSearchOpen] = useState(false);
   const [search, setSearch] = useState('');
   const searched = useDeferredValue(search.trim());
+  // "Want all time, months and pick a date" (8 Oct 2026): a month, everything,
+  // or any span of days picked on the calendar ('range').
+  const [range, setRange] = useState<{ from: string; to: string }>(() => ({ from: monthStartIso(), to: isoDay(new Date()) }));
+  const [picker, setPicker] = useState<null | 'from' | 'to'>(null);
+  const [rangeFrom, rangeTo] = orderedRange(range.from, range.to);
+  const inView = (entry: EntryToSort) => (month === 'range' ? entry.date.slice(0, 10) >= rangeFrom && entry.date.slice(0, 10) <= rangeTo : inMonth(entry, month));
   const shown = useMemo(
-    () => entries.filter((entry) => inMonth(entry, month) && (!searched || matchesSearch(entry, searched))),
-    [entries, month, searched],
+    () => entries.filter((entry) => inView(entry) && (!searched || matchesSearch(entry, searched))),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [entries, month, searched, rangeFrom, rangeTo],
   );
 
   const done = async () => {
@@ -318,18 +332,53 @@ export default function SortEntriesScreen() {
                 {shown.length === 0 ? `Nothing matching "${searched}".` : `${shown.length} found`}
               </Text>
             ) : null}
-            {months.length > 1 ? (
+            {entries.length > 0 && years.length > 1 ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }} testID="sort-entries-year">
+                <Pressable disabled={year <= years[0]} onPress={() => { setYear((current) => current - 1); setMonth(null); }} hitSlop={10} accessibilityRole="button" accessibilityLabel="Previous year">
+                  <Feather name="chevron-left" size={20} color={year <= years[0] ? colors.border : colors.primary} />
+                </Pressable>
+                <Text style={{ color: colors.foreground, fontFamily: 'Inter_700Bold', fontSize: 14 }}>{year}</Text>
+                <Pressable disabled={year >= years[years.length - 1]} onPress={() => { setYear((current) => current + 1); setMonth(null); }} hitSlop={10} accessibilityRole="button" accessibilityLabel="Next year">
+                  <Feather name="chevron-right" size={20} color={year >= years[years.length - 1] ? colors.border : colors.primary} />
+                </Pressable>
+              </View>
+            ) : null}
+            {entries.length > 0 ? (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 2 }} testID="sort-entries-months">
-              {[{ key: null as string | null, label: 'All months', count: entries.length }, ...months].map((option) => {
+              {[{ key: null as string | null, label: 'All time', count: entries.length }, ...months, { key: 'range', label: 'Pick dates', count: month === 'range' ? shown.length : -1 }].map((option) => {
                 const on = month === option.key;
                 return (
                   <Pressable key={option.key ?? 'all'} onPress={() => setMonth(option.key)} accessibilityRole="button" accessibilityState={{ selected: on }} testID={`sort-entries-month-${option.key ?? 'all'}`}
-                    style={{ ...chip, borderColor: on ? colors.primary : colors.border, backgroundColor: on ? `${colors.primary}22` : colors.muted }}>
-                    <Text style={{ color: on ? colors.primary : colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>{option.label} ({option.count})</Text>
+                    style={{ ...chip, borderColor: on ? colors.primary : colors.border, backgroundColor: on ? `${colors.primary}22` : colors.muted, opacity: option.count === 0 && !on ? 0.45 : 1 }}>
+                    <Text style={{ color: on ? colors.primary : colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>{option.label}{option.count >= 0 ? ` (${option.count})` : ''}</Text>
                   </Pressable>
                 );
               })}
             </ScrollView>
+            ) : null}
+            {month === 'range' ? (
+              <View style={{ flexDirection: 'row', gap: 8 }} testID="sort-entries-dates">
+                {(['from', 'to'] as const).map((which) => (
+                  <Pressable key={which} onPress={() => setPicker(which)} accessibilityRole="button" accessibilityLabel={`${which === 'from' ? 'Start' : 'End'} date`} testID={`sort-entries-date-${which}`}
+                    style={{ flex: 1, borderWidth: 1, borderColor: colors.border, borderRadius: 8, padding: 10, backgroundColor: colors.card }}>
+                    <Text style={{ color: colors.mutedForeground, fontSize: 11 }}>{which === 'from' ? 'From' : 'To'}</Text>
+                    <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 14 }}>{longDay(which === 'from' ? range.from : range.to)}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
+            {picker ? (
+              <DateTimePicker
+                value={new Date((picker === 'from' ? range.from : range.to) + 'T00:00:00')}
+                mode="date"
+                display={Platform.OS === 'ios' ? 'inline' : 'calendar'}
+                maximumDate={new Date()}
+                onChange={(_event: DateTimePickerEvent, selected?: Date) => {
+                  const which = picker;
+                  setPicker(Platform.OS === 'ios' ? which : null);
+                  if (selected && which) setRange((current) => ({ ...current, [which]: isoDay(selected) }));
+                }}
+              />
             ) : null}
             </View>
           )}

@@ -285,6 +285,17 @@ const KIND_DEFAULTS: Record<string, readonly string[]> = {
 const BANK_PAYEE = /\b(?:bank|paybill account|equity|kcb|co-?op(?:erative)?|ncba|stanbic|absa|i\s?&\s?m|dtb|diamond trust|stanchart|standard chartered|sidian|sbm|gulf african|family bank|prime bank|credit bank|bank of africa|consolidated bank|national bank|housing finance|hfc)\b/i;
 export const isBankPayee = (description: string): boolean => BANK_PAYEE.test(description);
 
+/**
+ * Money in from a person, a bank or a cash deposit at an agent is not given a
+ * source from history: it may be a loan, a repayment, a gift or the person"s
+ * own money moving, so it waits with none and Sort them out asks ("money
+ * received from people and bank should go to not sure", 8 Oct 2026). A kept
+ * rule is not involved: income sources are only ever suggested from history.
+ */
+const NO_GUESS_IN = new Set(["person_receipt", "bank_receipt", "cash_deposit"]);
+export const sourceNotGuessed = (line: { type: string | null; description: string | null }): boolean =>
+  (line.type !== null && NO_GUESS_IN.has(line.type)) || Boolean(line.description && isBankPayee(line.description));
+
 const GROUP_PAYEE = /\b(chama|sacco|welfare|merry|self[- ]?help|group)\b/i;
 const GROUP_CATEGORY_WORDS = ["chama", "sacco", "contribution", "welfare", "merry"];
 
@@ -331,7 +342,7 @@ export function initialChoices(
     };
     if (line.direction === "in") {
       // A loan drawn (Fuliza, M-Shwari, KCB M-PESA, Hustler Fund) is borrowed, never income, so it is offered no source.
-      const source = line.description && loanOf(line)?.kind !== "borrowed" && !savingsOf(line) ? suggestIncomeSource(line.description, history) : null;
+      const source = line.description && loanOf(line)?.kind !== "borrowed" && !savingsOf(line) && !sourceNotGuessed(line) ? suggestIncomeSource(line.description, history) : null;
       choices[line.index] = { ...choices[line.index], incomeSourceId: source, sourceAuto: source !== null };
     }
   }
@@ -449,7 +460,7 @@ export function refreshSuggestions(
       }
       // A source the person chose is never replaced; a suggestion is offered again.
       if (current.incomeSourceId == null || current.sourceAuto) {
-        const source = line.description && loanOf(line)?.kind !== "borrowed" && !savingsOf(line) ? suggestIncomeSource(line.description, history) : null;
+        const source = line.description && loanOf(line)?.kind !== "borrowed" && !savingsOf(line) && !sourceNotGuessed(line) ? suggestIncomeSource(line.description, history) : null;
         next[line.index] = { ...current, incomeSourceId: source, sourceAuto: source !== null };
       }
       continue;
