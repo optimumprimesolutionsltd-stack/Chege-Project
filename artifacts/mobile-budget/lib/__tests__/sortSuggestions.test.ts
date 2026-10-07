@@ -59,3 +59,45 @@ describe('suggestions stay quick on a big list', () => {
     expect(screen).toContain('byPayee.set(key, name);');
   });
 });
+
+// "Equity Paybill Account -> Supermarket ... this is wrong suggestion. In such
+// cases like bank, it should be under not sure yet" (7 Oct 2026).
+describe('a payment to a bank', () => {
+  const filedBefore = [past('Equity Paybill Account', 'Groceries'), past('Equity Paybill Account', 'Groceries')];
+
+  it('gets no guess from history, similar names or words', () => {
+    expect(suggestForSaved({ description: 'Equity Paybill Account', direction: 'out' }, filedBefore, categories)).toBe('');
+    expect(suggestForSaved({ description: 'KCB PAYBILL AC 1234', direction: 'out' }, [], categories)).toBe('');
+    expect(suggestForSaved({ description: 'Family Bank Pesa Pap', direction: 'out' }, [], categories)).toBe('');
+  });
+
+  it('still follows a rule the person kept for it', () => {
+    expect(suggestForSaved({ description: 'Equity Paybill Account', direction: 'out' }, filedBefore, categories, { 'equity paybill account': 'Fuel' })).toBe('Fuel');
+  });
+
+  it('leaves other payees alone', () => {
+    expect(suggestForSaved({ description: 'KPLC PREPAID', direction: 'out' }, [], categories)).toBe('Electricity');
+  });
+});
+
+describe('Sort them out: search, and debt and a new category always in view', () => {
+  const screen = readFileSync('app/sort-entries.tsx', 'utf8');
+
+  it('searches by payee or amount', () => {
+    expect(screen).toContain('testID="sort-entries-search-toggle"');
+    expect(screen).toContain('inMonth(entry, month) && (!searched || matchesSearch(entry, searched))');
+  });
+
+  it('keeps Debt and New category in a row of their own, out of the sideways scroll', () => {
+    expect(screen.indexOf('testID={`sort-entry-${entry.id}-debt`}')).toBeLessThan(screen.indexOf('<ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled"'));
+    expect(screen).toContain('testID={`sort-entry-${entry.id}-new-category-sheet`}');
+    expect(screen).toContain('target={standardTargetFor(newCategoryFor.description)}');
+  });
+
+  it('a new category for any payee starts blank and still needs a parent and a tier', () => {
+    const sheet = readFileSync('components/CreateCategorySheet.tsx', 'utf8');
+    expect(sheet).toContain('target: StandardTarget | null;');
+    expect(sheet).toContain('const [tier, setTier] = useState(target?.priority ?? 4);');
+    expect(sheet).toContain("? 'Choose where it goes.'");
+  });
+});

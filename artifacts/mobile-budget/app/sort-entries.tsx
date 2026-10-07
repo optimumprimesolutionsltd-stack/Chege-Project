@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ActivityIndicator, Alert, FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -20,6 +20,9 @@ import { isNotSure, NOT_SURE_CATEGORY, sameParty, type EntryToSort } from '@/lib
 import { AddIncomeSourceChip } from '@/components/AddIncomeSourceChip';
 import { SortAsDebt } from '@/components/SortAsDebt';
 import { NewCategoryOffer } from '@/components/NewCategoryOffer';
+import { CreateCategorySheet } from '@/components/CreateCategorySheet';
+import { matchesSearch } from '@/lib/bankSearch';
+import { standardTargetFor } from '@/lib/standardCategory';
 import { type CategoryLite } from '@/lib/standardCategory';
 import { workingYear } from '@/lib/mpesaLiveBalance';
 import { inMonth, monthsOf, suggestForSaved } from '@/lib/mpesaImport';
@@ -60,7 +63,14 @@ export default function SortEntriesScreen() {
   // A month at a time, as in the import.
   const [month, setMonth] = useState<string | null>(null);
   const months = useMemo(() => monthsOf(entries), [entries]);
-  const shown = useMemo(() => entries.filter((entry) => inMonth(entry, month)), [entries, month]);
+  // Search narrows the month's entries by payee or amount (lib/bankSearch), as on Bank.
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const searched = useDeferredValue(search.trim());
+  const shown = useMemo(
+    () => entries.filter((entry) => inMonth(entry, month) && (!searched || matchesSearch(entry, searched))),
+    [entries, month, searched],
+  );
 
   const done = async () => {
     await Promise.all([
@@ -131,6 +141,8 @@ export default function SortEntriesScreen() {
   // Money in saved before every money in was asked about (4 Oct 2026): a year of
   // it can have no source. Gathered here when asked, Personal budget only.
   const { data: group } = useGetGroup();
+  // "+ New category" on any entry: name, parent and tier (components/CreateCategorySheet).
+  const [newCategoryFor, setNewCategoryFor] = useState<EntryToSort | null>(null);
 
   // A suggestion for each entry, worked out as the import does (suggestForSaved):
   // the rules kept on this phone, how each payee was filed before, then
@@ -315,6 +327,25 @@ export default function SortEntriesScreen() {
                 <Text style={{ color: '#fff', opacity: 0.85, fontSize: 12, marginTop: 2 }}>Jamvi suggests a category from how you filed these payees before, or from what the payee is.</Text>
               </Pressable>
             ) : null}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              {searchOpen ? (
+                <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 10, backgroundColor: colors.card }}>
+                  <Feather name="search" size={15} color={colors.mutedForeground} />
+                  <TextInput value={search} onChangeText={setSearch} autoFocus placeholder="Payee or amount" placeholderTextColor={colors.mutedForeground} returnKeyType="search" testID="sort-entries-search-input"
+                    style={{ flex: 1, paddingVertical: 9, color: colors.foreground, fontSize: 14 }} />
+                </View>
+              ) : <View style={{ flex: 1 }} />}
+              <Pressable onPress={() => { if (searchOpen) setSearch(''); setSearchOpen((open) => !open); }} hitSlop={8} accessibilityRole="button" accessibilityLabel={searchOpen ? 'Close search' : 'Search these entries'} testID="sort-entries-search-toggle"
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Feather name={searchOpen ? 'x' : 'search'} size={15} color={colors.primary} />
+                <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>{searchOpen ? 'Close' : 'Search'}</Text>
+              </Pressable>
+            </View>
+            {searched ? (
+              <Text style={{ color: colors.mutedForeground, fontSize: 12 }} testID="sort-entries-search-count">
+                {shown.length === 0 ? `Nothing matching "${searched}".` : `${shown.length} found`}
+              </Text>
+            ) : null}
             {months.length > 1 ? (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 2 }} testID="sort-entries-months">
               {[{ key: null as string | null, label: 'All months', count: entries.length }, ...months].map((option) => {
@@ -349,12 +380,24 @@ export default function SortEntriesScreen() {
                 </Text>
               </View>
               <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>{entry.direction === 'out' ? 'What was it for?' : 'Where did it come from?'}</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
+              {/* Always in view, not at the start of the sideways row where they scrolled
+                  out of sight: "there is no place to create child and parent category and
+                  lent/borrowed" (7 Oct 2026). */}
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                 <Pressable disabled={busy !== null} onPress={() => setDebtFor(entry)} accessibilityRole="button" testID={`sort-entry-${entry.id}-debt`}
                   style={{ ...chip, flexDirection: 'row', alignItems: 'center', gap: 4, borderColor: colors.primary, backgroundColor: `${colors.primary}14` }}>
                   <Feather name="users" size={13} color={colors.primary} />
                   <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>{entry.direction === 'out' ? 'Lent / paid a debt' : 'Borrowed / paid back'}</Text>
                 </Pressable>
+                {entry.direction === 'out' ? (
+                  <Pressable disabled={busy !== null} onPress={() => setNewCategoryFor(entry)} accessibilityRole="button" testID={`sort-entry-${entry.id}-new-category-sheet`}
+                    style={{ ...chip, flexDirection: 'row', alignItems: 'center', gap: 4, borderColor: colors.primary, backgroundColor: `${colors.primary}14` }}>
+                    <Feather name="plus" size={13} color={colors.primary} />
+                    <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>New category</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
                 {entry.direction === 'out' && suggestions.has(entry.id) ? (
                   <Pressable disabled={busy !== null} onPress={() => sort(entry, { expenseCategory: suggestions.get(entry.id)! }, suggestions.get(entry.id)!)} accessibilityRole="button" accessibilityLabel={`Suggested: ${suggestions.get(entry.id)}`} testID={`sort-entry-${entry.id}-suggested`}
                     style={{ ...chip, flexDirection: 'row', alignItems: 'center', gap: 4, borderColor: colors.success, backgroundColor: `${colors.success}22` }}>
@@ -401,6 +444,19 @@ export default function SortEntriesScreen() {
           )}
         />
       )}
+      {newCategoryFor ? (
+        <CreateCategorySheet
+          target={standardTargetFor(newCategoryFor.description)}
+          rows={categoryList as unknown as CategoryLite[]}
+          onClose={() => setNewCategoryFor(null)}
+          onCreated={(name) => {
+            const entry = newCategoryFor;
+            setNewCategoryFor(null);
+            void queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
+            sort(entry, { expenseCategory: name }, name);
+          }}
+        />
+      ) : null}
       {debtFor ? (
         <SortAsDebt
           entry={debtFor}

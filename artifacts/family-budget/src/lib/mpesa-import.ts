@@ -281,6 +281,10 @@ const KIND_DEFAULTS: Record<string, readonly string[]> = {
 };
 
 // A payee that names a group people pay into, and the words a category for it is likely to use.
+/** A payment to a bank or a bank"s paybill, rather than to whoever was paid through it. */
+const BANK_PAYEE = /\b(?:bank|paybill account|equity|kcb|co-?op(?:erative)?|ncba|stanbic|absa|i\s?&\s?m|dtb|diamond trust|stanchart|standard chartered|sidian|sbm|gulf african|family bank|prime bank|credit bank|bank of africa|consolidated bank|national bank|housing finance|hfc)\b/i;
+export const isBankPayee = (description: string): boolean => BANK_PAYEE.test(description);
+
 const GROUP_PAYEE = /\b(chama|sacco|welfare|merry|self[- ]?help|group)\b/i;
 const GROUP_CATEGORY_WORDS = ["chama", "sacco", "contribution", "welfare", "merry"];
 
@@ -394,6 +398,13 @@ function suggestionFor(
   const product = productOf(line);
   if (product) {
     return (kept && (categoryNames.length === 0 || categoryNames.includes(kept)) ? kept : "") || (earlier !== NOT_SURE_CATEGORY ? earlier : "") || productCategory(product, categoryNames);
+  }
+  // A bank"s paybill says nothing about what the money was for - a loan, school
+  // fees, a supermarket, a transfer - so only the person"s own kept rule names
+  // it; otherwise it waits as Not sure. "Equity Paybill Account -> Supermarket"
+  // was a guess from history (7 Oct 2026).
+  if (description && isBankPayee(description)) {
+    return kept && (categoryNames.length === 0 || categoryNames.includes(kept)) ? kept : "";
   }
   const similar = description && line.named !== false ? fuzzyCategory(description, history, categoryNames) : "";
   const byWord = description && line.named !== false ? wordCategory(description, history, categoryNames) : "";

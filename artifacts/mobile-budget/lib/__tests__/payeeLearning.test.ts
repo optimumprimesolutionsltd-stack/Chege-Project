@@ -181,8 +181,19 @@ describe('a fee never teaches its payment where to go', () => {
     expect(fuzzyCategory(payee, history, ['Bank charges'])).toBe('');
     expect(initialChoices([line], history, ['Bank charges'], 'Bank charges')[0].category).toBe('Not sure yet');
   });
-  it('still learns from real spending to the same payee', () => {
+  it('a bank paybill still waits as Not sure, even after real spending to it (7 Oct 2026)', () => {
+    // A bank's paybill says nothing about what the money was for: only a kept rule names it.
     const paid = [...history, { type: 'disbursement', description: payee, expenseCategory: 'Hermda traders' }];
-    expect(initialChoices([line], paid, ['Bank charges', 'Hermda traders'], 'Bank charges')[0].category).toBe('Hermda traders');
+    expect(initialChoices([line], paid, ['Bank charges', 'Hermda traders'], 'Bank charges')[0].category).toBe('Not sure yet');
+  });
+  it('still learns from real spending to a payee that is not a bank', () => {
+    const trader = 'Hermda Traders (0712000000)';
+    const traderHistory = [
+      { type: 'disbursement', description: trader, expenseCategory: null },
+      { type: 'disbursement', description: `Bank charge — ${trader}`, expenseCategory: 'Bank charges', chargeForTransactionId: 1 },
+      { type: 'disbursement', description: trader, expenseCategory: 'Hermda traders' },
+    ];
+    const traderLine = { ...line, description: trader, type: 'person_payment' };
+    expect(initialChoices([traderLine], traderHistory, ['Bank charges', 'Hermda traders'], 'Bank charges')[0].category).toBe('Hermda traders');
   });
 });
