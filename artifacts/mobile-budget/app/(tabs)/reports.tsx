@@ -52,6 +52,7 @@ import { useHasBusiness } from '@/hooks/useHasBusiness';
 import { ScreenHint } from '@/components/ScreenHint';
 import { MonthStepper } from '@/components/MonthStepper';
 import { PeriodTotalsCard } from '@/components/PeriodTotalsCard';
+import { MonthlyComparisonCard } from '@/components/MonthlyComparisonCard';
 import { SpendingTrendCard } from '@/components/SpendingTrendCard';
 
 const MONTHS = [
@@ -1324,6 +1325,11 @@ export default function ReportsScreen() {
                 })}
               </>
             )}
+          </View>
+
+          {/* ── Month by month: in against out, with what changed ── */}
+          <View style={styles.section}>
+            <MonthlyComparisonCard />
           </View>
 
           {/* ── Period totals and 6-month spending trend (as on the web) ── */}
