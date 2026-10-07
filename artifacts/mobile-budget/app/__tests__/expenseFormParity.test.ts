@@ -142,14 +142,15 @@ describe('the expense form stays cheap to re-render', () => {
     // A closure built inside the map is a new function every render and would
     // defeat the memo without leaving any sign that it had.
     expect(form).toContain('const togglePayer = useCallback(');
-    expect(form).toContain('onToggle={togglePayer}');
+    expect(form).toContain('const payDirectly = useCallback(');
+    expect(form).toContain('onToggle={onlyPerson ? payDirectly : togglePayer}');
     expect(form).toContain('onSelect={chooseCategory}');
   });
 
   it('works out the disabled state once, not once per pill', () => {
     // A group of forty computed the same answer forty times per keystroke.
     expect(form).toContain('const payersDisabled = getExpenseFundingControlState({');
-    expect(form).toContain('disabled={soleDirectPayer || payersDisabled}');
+    expect(form).toContain('disabled={onlyPerson ? false : soleDirectPayer || payersDisabled}');
   });
 
   it('memoises the derived figures that scan other lists', () => {
