@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -643,6 +643,12 @@ export default function AddExpenseSheet() {
   // so the pill stops pretending to be a toggle and the reason is stated.
   const soleDirectPayer = canManageShared && !paidFromBank && selectablePayers.length === 1;
   const onlyPerson = canManageShared && selectablePayers.length === 1;
+  // The bank's share follows the expense's amount until the person types their own.
+  const bankAmountTouched = useRef(false);
+  useEffect(() => {
+    if (!onlyPerson || !paidFromBank || payerIds.length > 0 || bankAmountTouched.current) return;
+    setPayerAmounts((previous) => (previous.__joint_bank__ === amount.replace(/,/g, '') ? previous : { ...previous, __joint_bank__: amount.replace(/,/g, '') }));
+  }, [onlyPerson, paidFromBank, payerIds.length, amount]);
   // Was recomputed inside the map, so a group of forty worked it out forty
   // times per keystroke for an answer that cannot differ between pills.
   const payersDisabled = getExpenseFundingControlState({
@@ -2250,6 +2256,20 @@ export default function AddExpenseSheet() {
               {canManageShared && <Pressable
                 onPress={() => {
                   if (isEditMode) setFundingDirty(true);
+                  // Alone in the budget it is Bank account or Cash, never both: a bank
+                  // took the whole amount, and no "Chege" share, unassigned balance or
+                  // Paid directly card was left to fill in (7 Oct 2026).
+                  if (onlyPerson && !paidFromBank) {
+                    setPaidFromBank(true);
+                    setAllowMixedFunding(false);
+                    setPayerIds([]);
+                    setSelectedSources([]);
+                    setSplitAmounts({});
+                    setPayerIncomeSourceIds({});
+                    bankAmountTouched.current = false;
+                    setPayerAmounts({ __joint_bank__: amount.replace(/,/g, '') });
+                    return;
+                  }
                   if (paidFromBank) {
                     setPaidFromBank(false);
                     setAllowMixedFunding(false);
@@ -2337,14 +2357,14 @@ export default function AddExpenseSheet() {
                 </View>
                 {payerIds.length === 0 && selectedBankAccountId && (
                   <View style={styles.singleFundingAmount}>
-                    <Text style={[styles.hintText, { color: colors.mutedForeground, marginTop: 0 }]}>TYPE THE AMOUNT FROM THIS ACCOUNT TO CONFIRM</Text>
+                    <Text style={[styles.hintText, { color: colors.mutedForeground, marginTop: 0 }]}>{onlyPerson ? 'AMOUNT FROM THIS ACCOUNT' : 'TYPE THE AMOUNT FROM THIS ACCOUNT TO CONFIRM'}</Text>
                     <TextInput
                       style={[styles.newSourceInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]}
                       keyboardType="numeric"
                       placeholder="KES 0"
                       placeholderTextColor={colors.mutedForeground}
                       value={payerAmounts.__joint_bank__ || ''}
-                      onChangeText={(value) => setPayerAmounts((previous) => ({ ...previous, __joint_bank__: value }))}
+                      onChangeText={(value) => { bankAmountTouched.current = true; setPayerAmounts((previous) => ({ ...previous, __joint_bank__: value })); }}
                       testID="expense-bank-amount"
                     />
                     <Text style={[styles.hintText, { color: colors.mutedForeground, marginTop: 4 }]}>
