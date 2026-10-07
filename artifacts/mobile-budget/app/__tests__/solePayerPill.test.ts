@@ -25,7 +25,10 @@ describe('a budget with one possible payer', () => {
   });
 
   it('stops the pill offering a toggle that undoes itself', () => {
-    expect(source).toContain('disabled={soleDirectPayer ||');
+    // Since 7 Oct 2026 it is a real choice against Bank account ("hard to
+    // click Chege"): tapping it means paid directly, and never deselects.
+    expect(source).toContain('onToggle={onlyPerson ? payDirectly : togglePayer}');
+    expect(source).toContain('setPayerIds((previous) => (previous.includes(userId) ? previous : [userId]));');
   });
 
   it('says why, rather than just going dead', () => {
@@ -50,5 +53,22 @@ describe('a budget with one possible payer', () => {
   it('leaves the auto-select alone', () => {
     // Weakening this would trade a dead pill for an unfunded expense.
     expect(source).toContain('setPayerIds([selectablePayers[0].userId]);');
+  });
+});
+
+// "Paid directly not clickable" (7 Oct 2026): the payer's own amount, filled in
+// before any income source was picked, counted as fully funded and greyed out
+// every source, so none could be chosen.
+describe('Financed by with no source chosen yet', () => {
+  it('locks no source until one has been chosen', () => {
+    expect(source).toContain('const sourceDisabled = !selected && fundingFulfilled && anySourceChosen;');
+  });
+
+  it('shows the source a one-source expense keeps on its payer as chosen', () => {
+    expect(source).toContain('const selected = selectedSources.includes(key) || key === implicitKey;');
+  });
+
+  it('gives the first source picked the amount already filled in', () => {
+    expect(source).toContain('selection.amounts[key] = payerAmounts[paidById];');
   });
 });

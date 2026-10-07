@@ -602,6 +602,15 @@ export default function AddExpenseSheet() {
 
   // Stable across renders so the memoised pills below are not handed a new
   // function every keystroke, which would defeat the memo without any sign.
+  // "Paid directly" for the only person in the budget: off the bank, onto them.
+  // Never a deselect - that was the toggle the auto-select undid at once
+  // (solePayerPill.test) - so the pill is a real choice against Bank account.
+  const payDirectly = useCallback((userId: string) => {
+    if (isEditMode) setFundingDirty(true);
+    setPaidFromBank(false);
+    setAllowMixedFunding(false);
+    setPayerIds((previous) => (previous.includes(userId) ? previous : [userId]));
+  }, [isEditMode]);
   const togglePayer = useCallback((userId: string) => {
     if (!canManageShared) return;
     if (isEditMode) setFundingDirty(true);
@@ -633,6 +642,7 @@ export default function AddExpenseSheet() {
   // genuinely no other direct payer to choose - the alternative is the bank -
   // so the pill stops pretending to be a toggle and the reason is stated.
   const soleDirectPayer = canManageShared && !paidFromBank && selectablePayers.length === 1;
+  const onlyPerson = canManageShared && selectablePayers.length === 1;
   // Was recomputed inside the map, so a group of forty worked it out forty
   // times per keystroke for an answer that cannot differ between pills.
   const payersDisabled = getExpenseFundingControlState({
@@ -2284,14 +2294,17 @@ export default function AddExpenseSheet() {
                   userId={m.userId}
                   name={m.userName?.split(' ')[0] ?? 'Member'}
                   selected={payerIds.includes(m.userId)}
-                  disabled={soleDirectPayer || payersDisabled}
+                  // The only person in the budget: a real choice against Bank account,
+                  // not a button that ignores taps (7 Oct 2026). Tapping it means paid
+                  // directly; it never leaves the expense paid by nobody.
+                  disabled={onlyPerson ? false : soleDirectPayer || payersDisabled}
                   dimmed={paidFromBank && payerIds.length === 0 && !allowMixedFunding}
                   hint={
                     soleDirectPayer
                       ? 'You are the only person in this budget, so this expense is recorded as paid by you.'
                       : undefined
                   }
-                  onToggle={togglePayer}
+                  onToggle={onlyPerson ? payDirectly : togglePayer}
                   colors={colors}
                 />
               ))}
@@ -2621,8 +2634,14 @@ export default function AddExpenseSheet() {
                 {incomeSources.map((src, idx) => {
                   const color = PALETTE[idx % PALETTE.length];
                   const key = incomeSourceKey(src.id);
-                  const selected = selectedSources.includes(key);
-                  const sourceDisabled = !selected && fundingFulfilled;
+                  // A one-source expense keeps its source on the payer (payerIncomeSourceIds)
+                  // until a second is added: that one shows as chosen. With no source chosen
+                  // yet, none is locked: the payer's own amount filled in "Fully funded" and
+                  // greyed out every source, so none could ever be picked (7 Oct 2026).
+                  const implicitKey = selectedSources.length === 0 && payerIncomeSourceIds[paidById] ? incomeSourceKey(payerIncomeSourceIds[paidById]!) : null;
+                  const selected = selectedSources.includes(key) || key === implicitKey;
+                  const anySourceChosen = selectedSources.length > 0 || implicitKey !== null;
+                  const sourceDisabled = !selected && fundingFulfilled && anySourceChosen;
                   return (
                     <Pressable key={src.id} disabled={sourceDisabled} accessibilityState={{ selected, disabled: sourceDisabled }} testID={`income-source-chip-${src.id}`} onPress={() => {
                        if (sourceDisabled) return;
@@ -2643,6 +2662,11 @@ export default function AddExpenseSheet() {
                           existingAmount: previous.length === 0 ? payerAmounts[paidById] : undefined,
                           newSourceId: key,
                         });
+                        // The first source picked takes the amount already filled in for the
+                        // payer, so one tap says where the money came from and stays fully funded.
+                        if (previous.length === 0 && !payerIncomeSourceIds[paidById] && payerAmounts[paidById]) {
+                          selection.amounts[key] = payerAmounts[paidById];
+                        }
                         setSplitAmounts(selection.amounts);
                         return selection.selectedSourceIds;
                       });
@@ -2656,7 +2680,7 @@ export default function AddExpenseSheet() {
                 })}
               </View>
             )}
-            {fundingFulfilled && (
+            {fundingFulfilled && (selectedSources.length > 0 || Boolean(payerIncomeSourceIds[paidById])) && (
               <Text style={[styles.hintText, { color: colors.primary, marginTop: 8 }]} accessibilityLiveRegion="polite">
                 Fully funded. Other income sources are unavailable until you lower an existing portion.
               </Text>
