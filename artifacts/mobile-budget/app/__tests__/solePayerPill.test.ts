@@ -33,14 +33,16 @@ describe('a budget with one possible payer', () => {
 
   it('says why, rather than just going dead', () => {
     // Going dead silently would leave the same symptom with a different cause.
-    expect(source).toContain('You are the only person in this budget, so this is paid by you.');
+    // Alone in the budget it reads Bank account or Cash (7 Oct 2026).
+    expect(source).toContain('Cash is money you paid from your pocket. Paid with M-Pesa or from a bank? Choose Bank account, then the account.');
+    expect(source).toContain("name={onlyPerson ? 'Cash' : m.userName?.split(' ')[0] ?? 'Member'}");
     expect(source).toContain('{soleDirectPayer && (');
   });
 
   it('explains it to a screen reader too', () => {
     expect(source).toContain('accessibilityHint={');
     expect(source).toContain(
-      'You are the only person in this budget, so this expense is recorded as paid by you.',
+      'Cash: money you paid from your pocket. For M-Pesa or a bank, choose Bank account and pick the account.',
     );
   });
 

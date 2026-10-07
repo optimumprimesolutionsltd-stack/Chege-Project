@@ -2292,7 +2292,9 @@ export default function AddExpenseSheet() {
                 <PayerPill
                   key={m.userId}
                   userId={m.userId}
-                  name={m.userName?.split(' ')[0] ?? 'Member'}
+                  // Alone in the budget the choice is Bank account or Cash - M-Pesa is one of
+                  // the accounts under Bank account (7 Oct 2026).
+                  name={onlyPerson ? 'Cash' : m.userName?.split(' ')[0] ?? 'Member'}
                   selected={payerIds.includes(m.userId)}
                   // The only person in the budget: a real choice against Bank account,
                   // not a button that ignores taps (7 Oct 2026). Tapping it means paid
@@ -2301,7 +2303,7 @@ export default function AddExpenseSheet() {
                   dimmed={paidFromBank && payerIds.length === 0 && !allowMixedFunding}
                   hint={
                     soleDirectPayer
-                      ? 'You are the only person in this budget, so this expense is recorded as paid by you.'
+                      ? 'Cash: money you paid from your pocket. For M-Pesa or a bank, choose Bank account and pick the account.'
                       : undefined
                   }
                   onToggle={onlyPerson ? payDirectly : togglePayer}
@@ -2311,7 +2313,7 @@ export default function AddExpenseSheet() {
             </View>
             {soleDirectPayer && (
               <Text style={[styles.hintText, { color: colors.mutedForeground, marginTop: 6 }]}>
-                You are the only person in this budget, so this is paid by you. Choose Bank account if the money came from one.
+                Cash is money you paid from your pocket. Paid with M-Pesa or from a bank? Choose Bank account, then the account.
               </Text>
             )}
             {paidFromBank && (
