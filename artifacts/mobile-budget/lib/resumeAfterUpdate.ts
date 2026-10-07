@@ -19,6 +19,10 @@ const RESUMABLE = new Set([
   // Its statement in progress is kept on the phone and comes back by itself,
   // so an update in the middle of one returns to it rather than to Home.
   '/mpesa-import',
+  // Lists worked through over a sitting: accepting an update in the middle of
+  // one landed on Home ("when a new update comes in and I accept I get removed
+  // from what I was doing", 8 Oct 2026).
+  '/sort-entries', '/possible-duplicates', '/mpesa-difference',
 ]);
 
 export function isResumable(pathname: string | null | undefined): pathname is string {

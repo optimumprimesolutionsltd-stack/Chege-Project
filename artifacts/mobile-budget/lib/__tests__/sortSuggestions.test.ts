@@ -85,7 +85,7 @@ describe('Sort them out: search, and debt and a new category always in view', ()
 
   it('searches by payee or amount', () => {
     expect(screen).toContain('testID="sort-entries-search-toggle"');
-    expect(screen).toContain('inMonth(entry, month) && (!searched || matchesSearch(entry, searched))');
+    expect(screen).toContain('inView(entry) && (!searched || matchesSearch(entry, searched))');
   });
 
   it('keeps Debt and New category in a row of their own, out of the sideways scroll', () => {
