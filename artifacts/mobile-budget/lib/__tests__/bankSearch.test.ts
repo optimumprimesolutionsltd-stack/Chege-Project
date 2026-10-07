@@ -39,3 +39,22 @@ describe('searching the Bank list', () => {
     expect(bank).toContain('for (const tx of shownTransactions) {');
   });
 });
+
+// "When making a search": "Mpesa charges" found nothing, because the entries
+// say "M-Pesa charges" (8 Oct 2026).
+describe('search ignores punctuation and spacing', () => {
+  const charge = { description: 'Fuliza access fee', expenseCategory: 'M-Pesa charges', amount: 20 };
+  it('finds M-Pesa however it is typed', () => {
+    expect(matchesSearch(charge, 'Mpesa charges')).toBe(true);
+    expect(matchesSearch(charge, 'm-pesa')).toBe(true);
+    expect(matchesSearch(charge, 'm pesa charges')).toBe(true);
+    expect(matchesSearch(charge, 'mpesa')).toBe(true);
+  });
+  it('still needs the words to be there', () => {
+    expect(matchesSearch(charge, 'mpesa rent')).toBe(false);
+  });
+  it('still reads amounts, with or without a comma', () => {
+    expect(matchesSearch(tx, '3,500')).toBe(true);
+    expect(matchesSearch(tx, '3500')).toBe(true);
+  });
+});
