@@ -36,6 +36,8 @@ import {
   useGetGroup,
   useUpdateExpense,
   useDeleteExpense,
+  useDeleteJointAccountTransaction,
+  getGetJointAccountQueryKey,
   useUpdateContribution,
   useDeleteContribution,
   useApplyRecurringExpenses,
@@ -196,6 +198,9 @@ export default function HistoryScreen() {
       expenseId?: number | null;
       bankTransferId?: string | null;
       madeByName?: string | null;
+      isLending?: boolean | null;
+      isBorrowing?: boolean | null;
+      settlesContributorId?: number | null;
     }>;
     return rows
       .filter((row) =>
@@ -219,6 +224,9 @@ export default function HistoryScreen() {
         date: row.date,
         paidByName: row.madeByName ?? null,
         fromBankPosting: true as const,
+        // A debt entry is removed on Banking, which also offers to put the
+        // person's balance in Who owes who back.
+        isDebtPosting: Boolean(row.isLending || row.isBorrowing || row.settlesContributorId),
       }));
   }, [bankAccount, month, year]);
 
@@ -243,6 +251,7 @@ export default function HistoryScreen() {
   const { data: group } = useGetGroup();
   const updateExpense = useUpdateExpense();
   const deleteExpense = useDeleteExpense();
+  const deleteTransaction = useDeleteJointAccountTransaction();
   const updateContribution = useUpdateContribution();
   const deleteContribution = useDeleteContribution();
 
@@ -321,7 +330,11 @@ export default function HistoryScreen() {
       : expense.date.slice(0, 10) === todayIso() && selfFunded;
   };
   const canRemoveExpenseRecord = (expense: Expense) => {
-    if ((expense as { fromBankPosting?: boolean }).fromBankPosting) return false;
+    // An M-Pesa or bank entry is removed from its account, so the balance follows:
+    // with a year imported nearly every row was one, and Edit offered nothing but
+    // padlocks ("edit button does not work", 8 Oct 2026). Debt entries stay on Banking.
+    const posting = expense as { fromBankPosting?: boolean; isDebtPosting?: boolean };
+    if (posting.fromBankPosting) return isContributionManager && !posting.isDebtPosting;
     if (!user) return false;
     if (isContributionManager) return true;
     const personalPayerId = expense.paidById
@@ -333,11 +346,16 @@ export default function HistoryScreen() {
   // Panel-level edit mode for the Expenses list: one Edit in the heading,
   // stage removals, one Save deletes them all.
   const expEditor = useListEditor({
-    remove: async (id) => { await deleteExpense.mutateAsync({ id }); },
+    // A bank or M-Pesa row carries its posting's id negated (bankSpending).
+    remove: async (id) => {
+      if (id < 0) await deleteTransaction.mutateAsync({ id: -id });
+      else await deleteExpense.mutateAsync({ id });
+    },
     afterSave: () => {
       queryClient.invalidateQueries({ queryKey: getGetExpensesQueryKey({ month, year }) });
       queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey({ month, year }) });
       queryClient.invalidateQueries({ queryKey: getGetDashboardActivityQueryKey() });
+      queryClient.invalidateQueries({ queryKey: getGetJointAccountQueryKey() });
     },
   });
   const sharedHouseholdRows = useMemo(
@@ -925,7 +943,26 @@ export default function HistoryScreen() {
                       {canRemoveExpenseRecord(row.item) ? (
                         <RemoveRowButton editor={expEditor} id={row.item.id} />
                       ) : (
-                        <Feather name="lock" size={13} color={colors.mutedForeground} />
+                        // Says why, rather than sitting there doing nothing.
+                        <Pressable
+                          hitSlop={10}
+                          accessibilityRole="button"
+                          accessibilityLabel="Why this cannot be removed here"
+                          testID={`history-locked-${row.item.id}`}
+                          onPress={() => Alert.alert(
+                            'Removed on Banking',
+                            (row.item as { isDebtPosting?: boolean }).isDebtPosting
+                              ? 'This is part of a debt. Remove it on the Bank tab, which also offers to put the balance in Who owes who back.'
+                              : (row.item as { fromBankPosting?: boolean }).fromBankPosting
+                                ? "Only the budget's owner or an admin can remove an M-Pesa or bank entry."
+                                : "Only the person who paid, or the budget's owner or an admin, can remove this expense.",
+                            (row.item as { isDebtPosting?: boolean }).isDebtPosting
+                              ? [{ text: 'Not now', style: 'cancel' }, { text: 'Open Bank', onPress: () => router.push('/(tabs)/bank' as never) }]
+                              : [{ text: 'OK' }],
+                          )}
+                        >
+                          <Feather name="lock" size={13} color={colors.mutedForeground} />
+                        </Pressable>
                       )}
                       <View style={{ flex: 1, opacity: expEditor.isRemoving(row.item.id) ? 0.5 : 1 }}>
                         <ExpenseRow expense={row.item} colors={colors} />

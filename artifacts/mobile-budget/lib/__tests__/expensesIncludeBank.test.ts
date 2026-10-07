@@ -41,8 +41,13 @@ describe('but they cannot be edited or removed there', () => {
     expect(history).toContain('// A bank posting is corrected where the balance follows it, not here.');
   });
 
-  it('refuses removal', () => {
-    expect((history.match(/fromBankPosting\) return false;/g) ?? []).length).toBe(2);
+  it('removes one from its account, by an owner or admin, but never a debt entry', () => {
+    // "Edit button does not work" (8 Oct 2026): with a year imported nearly every row was
+    // a bank posting, and Edit offered only padlocks. Debt entries stay on Banking, which
+    // offers to put the person's balance back.
+    expect(history).toContain('if (posting.fromBankPosting) return isContributionManager && !posting.isDebtPosting;');
+    expect(history).toContain('if (id < 0) await deleteTransaction.mutateAsync({ id: -id });');
+    expect(history).toContain('testID={`history-locked-${row.item.id}`}');
   });
 
   it('cannot collide with an expense id', () => {
