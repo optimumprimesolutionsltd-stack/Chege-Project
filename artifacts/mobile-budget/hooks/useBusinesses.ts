@@ -42,9 +42,20 @@ export function useBusinesses() {
     refresh();
   }, [queryClient, refresh]);
 
-  /** A new business: an income stream under its name, marked as a business. */
+  /**
+   * A new business: an income stream under its name, marked as a business. A
+   * name already used - any capitals or spacing - is that one, not a second
+   * business under the same name.
+   */
   const create = useCallback(async (name: string): Promise<{ id: number; name: string } | null> => {
     if (!user?.id || !name.trim()) return null;
+    const same = (text: string) => text.trim().replace(/\s+/g, ' ').toLocaleLowerCase('en-KE');
+    const streams = await customFetch<Array<{ id: number; name: string }>>('/api/income-sources').catch(() => []);
+    const existing = streams.find((stream) => same(stream.name) === same(name));
+    if (existing) {
+      await setBusiness(existing.id, true);
+      return existing;
+    }
     const created = await customFetch<{ id: number; name: string }>('/api/income-sources', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

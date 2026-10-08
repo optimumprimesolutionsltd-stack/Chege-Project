@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { customFetch, getGetJointAccountQueryKey, useGetGroup } from '@workspace/api-client-react';
+import { customFetch, getGetJointAccountQueryKey, useGetGroup, useGetJointAccounts } from '@workspace/api-client-react';
+import { useBusinessAccounts } from '@/hooks/useBusinessAccounts';
 import { LISTS_AN_EDIT_CHANGES } from '@/lib/showSavedEdit';
-import { businessKeyFor, businessMatches, ownerBusinessKey, parseOwnerBusiness, withKey, withSkipped, type OwnerBusiness } from '@/lib/ownerBusiness';
+import { bankAccountKeys, businessKeyFor, businessMatches, ownerBusinessKey, parseOwnerBusiness, withBankAccountKeys, withKey, withSkipped, type OwnerBusiness } from '@/lib/ownerBusiness';
 import { payeeName } from '@/lib/payeeLearning';
 
 type Marked = { ready: boolean; transactionIds: number[] };
@@ -29,6 +30,14 @@ export function useOwnerBusiness() {
     retry: false,
   });
   const markedIds = useMemo(() => new Set(marked?.transactionIds ?? []), [marked]);
+  // The business's bank accounts on Bank count as its own, untyped (lib/ownerBusiness).
+  const { data: accounts = [] } = useGetJointAccounts();
+  const { businessOf } = useBusinessAccounts();
+  const fromBank = useMemo(
+    () => (business.incomeSourceId === undefined && !business.name ? [] : bankAccountKeys(accounts, businessOf, business.incomeSourceId)),
+    [accounts, businessOf, business.incomeSourceId, business.name],
+  );
+  const matching = useMemo(() => withBankAccountKeys(business, fromBank), [business, fromBank]);
 
   const refresh = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: ['owner-business'] });
@@ -71,7 +80,7 @@ export function useOwnerBusiness() {
     return payeeName(entry.description) || entry.description;
   }, [business, mark, save]);
 
-  return { business, ready: marked?.ready === true, markedIds, save, mark, unmark, markFromEntry };
+  return { business, matching, fromBank, ready: marked?.ready === true, markedIds, save, mark, unmark, markFromEntry };
 }
 
 /**
@@ -80,7 +89,7 @@ export function useOwnerBusiness() {
  * entry; the person agreed to this when they named the business.
  */
 export function useAutoMarkBusiness<T extends Parameters<typeof businessMatches>[0][number]>(rows: readonly T[] | undefined) {
-  const { business, ready, markedIds, mark } = useOwnerBusiness();
+  const { matching: business, ready, markedIds, mark } = useOwnerBusiness();
   const tried = useRef(new Set<number>());
   useEffect(() => {
     if (!ready || !rows || business.keys.length === 0) return;
