@@ -555,6 +555,10 @@ export default function BankScreen() {
     [categories],
   );
   const isBorrowing = borrowTarget !== null;
+  // Borrowed money and a repayment are not income, so they have no income stream:
+  // the streams are not offered and none is saved ("if the money is borrowed,
+  // income source shouldnt be there", 8 Oct 2026).
+  const notIncome = isBorrowing || repayingParty !== null;
 
   // The savings goal matching the current withdrawGoalId selection
   const selectedGoal = savingsGoals.find(g => g.id === withdrawGoalId) ?? null;
@@ -1952,8 +1956,10 @@ export default function BankScreen() {
                 ? contributorSplits.length > 0 ? undefined : validDepositorIds[0] ?? null
                 : withdrawerId ?? null,
             ...(txType === 'deposit' ? { contributorSplits } : {}),
-            ...(txType === 'deposit' && contributorSplits.length === 0 ? { incomeSourceId } : {}),
-            ...(txType === 'deposit' && depositSourceKind ? { sourceKind: depositSourceKind } : {}),
+            ...(txType === 'deposit' && contributorSplits.length === 0 ? { incomeSourceId: notIncome ? null : incomeSourceId } : {}),
+            // What kind of money it is, so an edit to "Borrowed" or "repaying you" sticks.
+            ...(txType === 'deposit' ? { isBorrowing, settlesContributorId: repayingParty?.id ?? (borrowTarget?.kind === 'party' ? borrowedFromParty?.id ?? null : null) } : {}),
+            ...(txType === 'deposit' && depositSourceKind && !notIncome ? { sourceKind: depositSourceKind } : {}),
             ...(txType === 'deposit' && appliesTo ? { appliesToMonth: appliesTo.month, appliesToYear: appliesTo.year } : {}),
             ...(txType === 'disbursement'
               ? withdrawDest === 'lend'
@@ -2026,8 +2032,8 @@ export default function BankScreen() {
               ...(repayingParty ? { settlesContributorId: repayingParty.id } : {}),
               ...(isBorrowing ? { isBorrowing: true } : {}),
               madeById: null,
-              ...(incomeSourceId ? { incomeSourceId } : {}),
-              ...(depositSourceKind ? { sourceKind: depositSourceKind } : {}),
+              ...(incomeSourceId && !notIncome ? { incomeSourceId } : {}),
+              ...(depositSourceKind && !notIncome ? { sourceKind: depositSourceKind } : {}),
               ...(appliesTo ? { appliesToMonth: appliesTo.month, appliesToYear: appliesTo.year } : {}),
               accountId: selectedAccountId ?? undefined,
             },
@@ -2044,8 +2050,8 @@ export default function BankScreen() {
               ...(repayingParty ? { settlesContributorId: repayingParty.id } : {}),
               ...(isBorrowing ? { isBorrowing: true } : {}),
               madeById: singleId,
-              ...(incomeSourceId ? { incomeSourceId } : {}),
-              ...(depositSourceKind ? { sourceKind: depositSourceKind } : {}),
+              ...(incomeSourceId && !notIncome ? { incomeSourceId } : {}),
+              ...(depositSourceKind && !notIncome ? { sourceKind: depositSourceKind } : {}),
               ...(appliesTo ? { appliesToMonth: appliesTo.month, appliesToYear: appliesTo.year } : {}),
               accountId: selectedAccountId ?? undefined,
             },
@@ -4395,7 +4401,7 @@ export default function BankScreen() {
               )}
 
               {/* Saved income sources are for one named depositor; the group can choose Other. */}
-              {isDeposit && (singleDepositorId || depositorIds.length === 0) && (
+              {isDeposit && !notIncome && (singleDepositorId || depositorIds.length === 0) && (
                 <>
                   <Text style={[styles.label, { color: colors.mutedForeground }]}>
                     {singleDepositorId ? 'Which of their income streams?' : 'Where did this money come from?'}{' '}
