@@ -98,3 +98,22 @@ export function onOpenQuickActionsArranger(listener: () => void): () => void {
 export function openQuickActionsArranger(): void {
   for (const open of openers) open();
 }
+
+// A screen in edit mode puts its Save bar where the quick-action bar sits, so the
+// bar steps aside until editing ends ("save button at the bottom", 8 Oct 2026).
+let quickBarHidden = false;
+const quickBarListeners = new Set<(hidden: boolean) => void>();
+export function setQuickBarHidden(hidden: boolean): void {
+  if (quickBarHidden === hidden) return;
+  quickBarHidden = hidden;
+  for (const listener of quickBarListeners) listener(hidden);
+}
+export function useQuickBarHidden(): boolean {
+  const [hidden, setHidden] = useState(quickBarHidden);
+  useEffect(() => {
+    quickBarListeners.add(setHidden);
+    setHidden(quickBarHidden);
+    return () => { quickBarListeners.delete(setHidden); };
+  }, []);
+  return hidden;
+}

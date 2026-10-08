@@ -175,7 +175,8 @@ export default function BankScreen() {
   const topPad = Platform.OS === 'web' ? 67 : insets.top;
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const { shortcut } = useLocalSearchParams<{ shortcut?: string }>();
+  const { shortcut, editTx, accountId: linkedAccountId } = useLocalSearchParams<{ shortcut?: string; editTx?: string; accountId?: string }>();
+  const handledEditTx = useRef<string | null>(null);
   const handledShortcut = useRef<string | null>(null);
 
   const { data: group } = useGetGroup();
@@ -609,6 +610,22 @@ export default function BankScreen() {
     handledShortcut.current = shortcut;
     openModal(shortcut === 'bank-transfer' ? 'bank_transfer' : shortcut === 'withdraw' ? 'disbursement' : 'deposit');
   }, [shortcut]);
+
+  // Edit on an M-Pesa or bank entry in Activity opens it here, on its own account,
+  // where the balance follows the change (?editTx=<id>&accountId=<id>).
+  useEffect(() => {
+    if (!editTx || handledEditTx.current === editTx) return;
+    const wanted = Number(linkedAccountId);
+    if (Number.isInteger(wanted) && wanted > 0 && accounts.some((account) => account.id === wanted) && selectedAccountId !== wanted) {
+      selectAccount(wanted);
+      return;
+    }
+    const tx = data?.transactions.find((row) => row.id === Number(editTx));
+    if (!tx) return;
+    handledEditTx.current = editTx;
+    openEdit(tx as Tx);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editTx, linkedAccountId, accounts, selectedAccountId, data]);
 
   const closeModal = () => {
     if (submitting) return;
