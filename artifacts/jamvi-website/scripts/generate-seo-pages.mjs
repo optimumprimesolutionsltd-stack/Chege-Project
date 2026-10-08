@@ -52,6 +52,8 @@ const CRAWL = {
   "/guides/how-to-budget-in-kenya": { changefreq: "yearly", priority: "0.7" },
   "/blog": { changefreq: "weekly", priority: "0.7" },
   "/blog/how-far-jamvi-has-come": { changefreq: "yearly", priority: "0.6" },
+  "/blog/a-year-of-mpesa-sorted": { changefreq: "yearly", priority: "0.6" },
+  "/blog/one-jamvi-phone-and-web": { changefreq: "yearly", priority: "0.6" },
   "/terms": { changefreq: "yearly", priority: "0.3" },
   "/privacy": { changefreq: "yearly", priority: "0.3" },
   "/download": { changefreq: "monthly", priority: "0.6" },

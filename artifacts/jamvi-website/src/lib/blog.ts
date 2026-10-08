@@ -199,4 +199,157 @@ export const BLOG_POSTS: readonly BlogPost[] = [
       text: `Bring last month's M-Pesa statement and have it sorted in minutes. Free for your first ${TRIAL_DAYS} days, then KES ${price} a month.`,
     },
   },
+  {
+    slug: "/blog/a-year-of-mpesa-sorted",
+    title: "From a Year of M-Pesa to a Budget You Trust",
+    description:
+      "How Jamvi turns months of M-Pesa statements into a sorted budget at your own pace: confirm what you know, save the rest as Not sure, and check every shilling against your statement.",
+    label: "A year of M-Pesa, sorted",
+    readingMinutes: 4,
+    published: "2026-10-08",
+    heading: "From a year of M-Pesa to a budget you trust",
+    intro:
+      "We imported nine months of our own M-Pesa, January to September, about 1,500 entries, and sorted them over a few evenings. Everything that made that hard is now easier in Jamvi.",
+    sections: [
+      {
+        heading: "Work through it at your own pace",
+        body: [
+          "A year of entries takes more than one sitting. Jamvi lets you confirm a little at a time, and only what you have confirmed is saved.",
+        ],
+        points: [
+          {
+            title: "Nothing saves by accident.",
+            text: "Every line starts as Jamvi's suggestion. You confirm it, change it or leave it for later, and Save takes only what you confirmed.",
+          },
+          {
+            title: "Pick up where you left off.",
+            text: "Close the app halfway and your choices are still there. Read the same statement again and everything you confirmed is kept.",
+          },
+          {
+            title: "A month at a time.",
+            text: "Filter a long statement by month, or search by name, word or amount, then confirm or file everything found in one go.",
+          },
+          {
+            title: "Undo.",
+            text: "Tapped the wrong category? Undo takes back your last changes, one step at a time.",
+          },
+        ],
+      },
+      {
+        heading: "Not sure? Save it anyway",
+        body: [
+          "Some old payments nobody can place. They should not hold up the rest, and they should not be forgotten either.",
+        ],
+        points: [
+          {
+            title: "Not sure yet.",
+            text: "Money out goes to a Not sure yet category, so it still counts as spending. Money in is kept without a source.",
+          },
+          {
+            title: "Everything else in one tap.",
+            text: "Put every entry Jamvi could not place under Not sure, and save the whole statement at once.",
+          },
+          {
+            title: "Reminded until it is done.",
+            text: "Home shows how many entries are left to sort, with a badge on the Home tab. Settle each one whenever you remember, a month at a time.",
+          },
+        ],
+      },
+      {
+        heading: "Jamvi learns as you go",
+        body: [
+          "Tell Jamvi once where a payee belongs and it suggests that every time after. It learns from till and paybill numbers too, so a shop under a different spelling is still the same shop.",
+          "Payments that belong to your chama or another budget you run can be sent there straight from your own import, and Jamvi remembers that payee belongs there.",
+        ],
+      },
+      {
+        heading: "Check every shilling against your statement",
+        body: [
+          "Home shows your M-Pesa balance as Jamvi has it, so you can compare it with the M-Pesa app at a glance.",
+        ],
+        points: [
+          {
+            title: "Both balances, side by side.",
+            text: "Read a statement and Jamvi shows its balance and M-Pesa's for the day before the statement starts and its last day.",
+          },
+          {
+            title: "Every difference, listed.",
+            text: "What Jamvi has that M-Pesa does not, and what M-Pesa has that Jamvi does not, such as a charge that was never saved.",
+          },
+          {
+            title: "Fixed where it is shown.",
+            text: "Remove a duplicate with Undo, add a missing charge, or use the statement's amount, without leaving the import.",
+          },
+        ],
+      },
+      {
+        heading: "Your M-Pesa messages, read for you",
+        body: [
+          "On Android, the version of Jamvi that reads SMS can read your M-Pesa messages for any period you choose, and tell you the moment a new one arrives, even with the app closed. It only reads M-Pesa's own messages, only after Android asks you, and you can turn it off at any time.",
+        ],
+      },
+    ],
+    cta: {
+      heading: "Start with one month.",
+      text: `Bring last month's M-Pesa statement and see it sorted. Free for your first ${TRIAL_DAYS} days, then KES ${price} a month.`,
+    },
+  },
+  {
+    slug: "/blog/one-jamvi-phone-and-web",
+    title: "One Jamvi on Your Phone and the Web, for You and Your Group",
+    description:
+      "Everything Jamvi does on your phone now works on the web too. Budgets that remember their history, groups that work like your own budget, Undo, and one link to get the Android app.",
+    label: "One Jamvi, phone and web",
+    readingMinutes: 3,
+    published: "2026-10-08",
+    heading: "One Jamvi on your phone and the web, for you and your group",
+    intro:
+      "We put the phone app and the web app side by side, screen by screen, and closed every gap. Whatever you can do in one, you can now do in the other.",
+    sections: [
+      {
+        heading: "The same app in both places",
+        body: [
+          "The web gained every expense and every bit of income in one list, spending by item, the income trend, business profit, a debt-free date for your loans, a budget plan, a budget against actual report and a How do I help page.",
+          "The phone gained period totals, a six-month spending trend, each member's contributions month by month, and a warning when a savings goal and its contributions disagree.",
+        ],
+      },
+      {
+        heading: "Your budget and your groups, alike",
+        body: [
+          "A Personal budget has everything a group has, and a group has Reports and Search on the phone too. Every group works the same way, whoever set it up.",
+        ],
+        points: [
+          {
+            title: "For a chama or church.",
+            text: "See what each member was expected to give against what they gave, for any months or exact dates.",
+          },
+          {
+            title: "Budgets that remember.",
+            text: "Change a budget from this month on, or for this month only. Income streams work the same way, so last year's reports still show last year's plan.",
+          },
+          {
+            title: "Add a category anywhere.",
+            text: "Every way of adding a category takes a monthly budget and can create a new heading on the spot.",
+          },
+        ],
+      },
+      {
+        heading: "Mistakes are easy to undo",
+        body: [
+          "Delete a bank entry, an expense or a budget category, and a bar offers Undo for a few seconds. Tap it and the entry is back exactly as it was, still linked to its charge, debt or split.",
+          "Saving carries on in the background while you use other apps, waits out a brief break in the connection, and shows its progress when you come back.",
+        ],
+      },
+      {
+        heading: "Getting the app",
+        body: [
+          "The Android app is one link: jamvi.co.ke/download. It always gives the newest version, with install steps and what Android's warnings mean. Once installed, updates arrive inside the app. On an iPhone, Jamvi works in your browser.",
+        ],
+      },
+    ],
+    cta: {
+      heading: "Use it where you are.",
+      text: `On your phone or at jamvi.co.ke, one subscription covers your own budget and every group you belong to. Free for your first ${TRIAL_DAYS} days.`,
+    },
+  },
 ];
