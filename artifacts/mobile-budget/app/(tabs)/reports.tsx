@@ -26,6 +26,8 @@ import { budgetReport, householdRows } from '@/lib/budgetReport';
 import { PDF_SECTIONS, DEFAULT_PDF_SECTIONS, parsePdfSections, pdfSectionParams, type PdfSectionKey } from '@/lib/reportPdfSections';
 import { useColors } from '@/hooks/useColors';
 import { monthLedgerHref } from '@/lib/monthLink';
+import { reportInsights } from '@/lib/reportInsights';
+import { InsightsCard } from '@/components/InsightsCard';
 import { PageScrollView } from '@/components/PageScrollReset';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -265,6 +267,9 @@ export default function ReportsScreen() {
 
   const { data: expenses    = [], isLoading: loadingExp,     isError: expensesError, refetch: refetchExp     } = useGetExpenses(queryParams);
   const { data: catBreakdown = [], isLoading: loadingCat,    isError: categoryError, refetch: refetchCat     } = useGetDashboardCategoryBreakdown(queryParams);
+  // Last month by category, for What stands out (lib/reportInsights) to compare with.
+  const previousParams = month === 1 ? { month: 12, year: year - 1 } : { month: month - 1, year };
+  const { data: previousBreakdown = [] } = useGetDashboardCategoryBreakdown(previousParams);
   const { data: summary,          isLoading: loadingSummary, isError: summaryError, refetch: refetchSummary } = useGetDashboardSummary(queryParams);
   const {
     data: incomeStreamReport,
@@ -1007,6 +1012,30 @@ export default function ReportsScreen() {
                 This money moved through the account without being earned or spent, so it is in none of the figures
                 above. It is here because otherwise the balance changes for reasons this page never mentions.
               </Text>
+            </View>
+          ) : null}
+
+          {/* ── What stands out: a few plain sentences, each a tap from where to act ── */}
+          {!progressLoading && !progressError ? (
+            <View style={styles.section}>
+              <InsightsCard
+                month={month}
+                year={year}
+                insights={reportInsights({
+                  current: catBreakdown,
+                  previous: previousBreakdown,
+                  previousLabel: MONTHS_SHORT[previousParams.month - 1],
+                  totalSpent,
+                  totalBudget,
+                  totalIncome: incomeStreamReport?.totalFunding ?? 0,
+                  dayOfMonth: (() => {
+                    const today = new Date(Date.now() + 3 * 3_600_000);
+                    return today.getUTCFullYear() === year && today.getUTCMonth() + 1 === month ? today.getUTCDate() : null;
+                  })(),
+                  daysInMonth: new Date(Date.UTC(year, month, 0)).getUTCDate(),
+                  monthEndLabel: `${new Date(Date.UTC(year, month, 0)).getUTCDate()} ${MONTHS_SHORT[month - 1]}`,
+                })}
+              />
             </View>
           ) : null}
 
