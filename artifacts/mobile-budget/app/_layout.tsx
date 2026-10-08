@@ -17,13 +17,15 @@ import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useFonts } from 'expo-font';
-import { Stack, router, useSegments } from 'expo-router';
+import { Stack, router, usePathname, useSegments } from 'expo-router';
 import { refreshAfterSave, refreshShownHistory } from '@/lib/refreshAfterSave';
 import * as SplashScreen from 'expo-splash-screen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEntitlements } from '@/hooks/useEntitlements';
 import { readPlanChoice, shouldShowPlanChoice } from '@/lib/planChoice';
-import { consumeResumePoint } from '@/lib/resumeAfterUpdate';
+import { consumeResumePoint, saveResumePoint } from '@/lib/resumeAfterUpdate';
+import { keepWhatsNew, shouldInstallOnReturn, takeWhatsNew } from '@/lib/updateTiming';
+import { useImportProgress } from '@/lib/importProgress';
 import * as Updates from 'expo-updates';
 import {
   getGetWorkspacesQueryKey,
@@ -52,43 +54,67 @@ import { afterQuiet } from '@/lib/refreshAfterChange';
 // does not ask Expo about updates every few seconds.
 const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
 
-// Check for OTA updates and show an update prompt when one is available.
+// OTA updates download quietly and go in at a natural break - the next fresh
+// start, or coming back after a while away (lib/updateTiming) - never in the
+// middle of what somebody is doing ("my issue the update removes me from my
+// current session", 8 Oct 2026). What is new is shown once it is in.
 // Skipped in development (Expo Go / dev-client) where Updates is not active.
-// Returns state consumed by RootLayout to render the <UpdatePrompt> overlay.
+// Returns the notes RootLayout shows in <UpdatePrompt>.
 function useUpdatePrompt() {
   const [updateNotes, setUpdateNotes] = useState<string[] | null>(null);
   const lastCheckedAt = useRef(0);
-  // Read inside the listener without making it a dependency, so subscribing
-  // does not tear down and re-subscribe every time the message changes.
-  const showing = useRef(false);
-  showing.current = updateNotes !== null;
+  const downloaded = useRef(false);
+  const awaySince = useRef<number | null>(null);
+  // Read inside the listener without making them dependencies.
+  const pathname = usePathname();
+  const where = useRef(pathname);
+  where.current = pathname;
+  const importProgress = useImportProgress();
+  const saving = useRef(false);
+  saving.current = importProgress?.stage === 'saving';
 
   const check = useCallback(async () => {
-    if (__DEV__ || !Updates.isEnabled) return;
-    if (showing.current) return;
+    if (__DEV__ || !Updates.isEnabled || downloaded.current) return;
     const now = Date.now();
     if (now - lastCheckedAt.current < UPDATE_CHECK_INTERVAL_MS) return;
     lastCheckedAt.current = now;
     try {
       const result = await Updates.checkForUpdateAsync();
       if (!result.isAvailable) return;
+      const fetched = await Updates.fetchUpdateAsync();
+      const manifest = (fetched.manifest ?? result.manifest) as { id?: string } | undefined;
       // What is new, from the note published with it (see app.config.js).
-      setUpdateNotes(updateNotesFrom(result.manifest));
+      await keepWhatsNew(manifest?.id, updateNotesFrom(manifest), AsyncStorage);
+      downloaded.current = true;
     } catch {
       // Network unavailable or server error — silently ignore.
     }
   }, []);
 
   useEffect(() => {
+    // Just updated: say what is new, once.
+    if (!__DEV__ && Updates.isEnabled) {
+      void takeWhatsNew(Updates.updateId, AsyncStorage).then((notes) => { if (notes) setUpdateNotes(notes); });
+    }
     void check();
 
-    // Nobody force-quits a phone app. Checking only on mount meant the prompt
-    // appeared solely after a genuinely cold start — so somebody who leaves
-    // Jamvi open and comes back to it was never offered an update at all, and
-    // published OTAs looked as though they had not shipped. Ask again whenever
-    // the app returns to the foreground.
+    // Nobody force-quits a phone app, so checking only on a cold start meant
+    // updates were rarely seen. Check whenever the app comes back to the
+    // foreground, and put a downloaded update in when it comes back after a
+    // while away - a fresh start for the person, so nothing is cut off.
     const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'active') void check();
+      if (state === 'background') {
+        awaySince.current = Date.now();
+        return;
+      }
+      if (state !== 'active') return;
+      const awayMs = awaySince.current === null ? null : Date.now() - awaySince.current;
+      awaySince.current = null;
+      if (shouldInstallOnReturn({ downloaded: downloaded.current, awayMs, saving: saving.current })) {
+        void saveResumePoint(where.current, AsyncStorage).then(() => Updates.reloadAsync()).catch(() => {});
+        return;
+      }
+      void check();
     });
     return () => subscription.remove();
   }, [check]);

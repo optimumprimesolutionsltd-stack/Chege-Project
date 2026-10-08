@@ -8,10 +8,10 @@ describe('an update brings you back to the import', () => {
     expect(isResumable('/mpesa-import')).toBe(true);
   });
 
-  it('waits while an M-Pesa save is running, and says so', () => {
-    const prompt = readFileSync('components/UpdatePrompt.tsx', 'utf8');
-    expect(prompt).toContain('disabled={installing || importSaving}');
-    expect(prompt).toContain('`Update after your save (${importProgress.done} of ${importProgress.total})`');
+  it('waits while an M-Pesa save is running', () => {
+    const layout = readFileSync('app/_layout.tsx', 'utf8');
+    expect(layout).toContain("saving.current = importProgress?.stage === 'saving';");
+    expect(layout).toContain('shouldInstallOnReturn({ downloaded: downloaded.current, awayMs, saving: saving.current })');
   });
 });
 

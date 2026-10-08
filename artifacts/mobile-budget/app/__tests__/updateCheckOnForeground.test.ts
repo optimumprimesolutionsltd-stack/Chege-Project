@@ -10,7 +10,9 @@ const layout = readFileSync('app/_layout.tsx', 'utf8');
 describe('asking for updates more than once', () => {
   it('asks again whenever the app returns to the foreground', () => {
     expect(layout).toContain("AppState.addEventListener('change', (state) => {");
-    expect(layout).toContain("if (state === 'active') void check();");
+    expect(layout).toContain("if (state !== 'active') return;");
+    const listener = layout.slice(layout.indexOf('AppState.addEventListener'));
+    expect(listener).toContain('void check();');
   });
 
   it('lets go of the listener when the layout goes away', () => {
@@ -34,18 +36,26 @@ describe('without asking Expo on every app switch', () => {
     expect(layout).toContain('if (now - lastCheckedAt.current < UPDATE_CHECK_INTERVAL_MS) return;');
   });
 
-  it('does not ask again while the prompt is already up', () => {
-    expect(layout).toContain('if (showing.current) return;');
+  it('does not download again once an update is waiting, and stays out of the way in development', () => {
+    expect(layout).toContain('if (__DEV__ || !Updates.isEnabled || downloaded.current) return;');
   });
 
-  it('reads the prompt state through a ref, not a dependency', () => {
+  it('reads what it needs through refs, not dependencies', () => {
     // As a dependency it would tear down and re-subscribe the listener every
-    // time the message changed.
-    expect(layout).toContain('showing.current = updateNotes !== null;');
+    // time the screen or a save changed.
+    expect(layout).toContain('where.current = pathname;');
     expect(layout).toContain('}, [check]);');
   });
+});
 
-  it('stays out of the way in development', () => {
-    expect(layout).toContain('if (__DEV__ || !Updates.isEnabled) return;');
+// "My issue the update removes me from my current session" (8 Oct 2026).
+describe('never restarting in the middle of something', () => {
+  it('downloads quietly and puts the update in on coming back after a while away', () => {
+    expect(layout).toContain('const fetched = await Updates.fetchUpdateAsync();');
+    expect(layout).toContain('if (shouldInstallOnReturn({ downloaded: downloaded.current, awayMs, saving: saving.current })) {');
+  });
+
+  it('says what is new once the update is in', () => {
+    expect(layout).toContain('void takeWhatsNew(Updates.updateId, AsyncStorage)');
   });
 });

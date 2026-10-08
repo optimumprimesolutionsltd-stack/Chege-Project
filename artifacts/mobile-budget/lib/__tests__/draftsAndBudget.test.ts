@@ -74,10 +74,10 @@ describe('the draft is used where work piles up', () => {
     expect(day).toContain('testID="bank-day-restored-reset"');
   });
 
-  it('the update prompt says unfinished work is kept', () => {
+  it('an update never restarts the app in the middle of unfinished work', () => {
     const prompt = read('components/UpdatePrompt.tsx');
-    expect(prompt).toContain('hasUnsavedWork()');
-    expect(prompt).toContain('Your unfinished work is kept.');
+    expect(prompt).not.toContain('reloadAsync');
+    expect(prompt).toContain('Jamvi was updated');
   });
 });
 
