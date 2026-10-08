@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { bankAccountKeys, businessMatches, parseOwnerBusiness, withBankAccountKeys } from '@/lib/ownerBusiness';
+import { bankAccountKeys, businessMatches, parseOwnerBusiness, unassignedBusinessAccounts, withBankAccountKeys } from '@/lib/ownerBusiness';
 
 // "the process should be create a business name first and then this. otherwise
 // you will have duplicate businesses coz of wrong naming" and "the business
@@ -22,6 +22,7 @@ describe("My business's accounts", () => {
   });
 
   it("fills in the business's bank accounts from Bank - only that business's, and only with a number", () => {
+    // One with no business chosen on Bank is nobody's yet: listed apart, counted for none.
     const accounts = [
       { id: 1, name: 'KCB Ujenzi', accountNumber: '1234 5678' },
       { id: 2, name: 'Hermda Equity', accountNumber: '9988776' },
@@ -30,10 +31,9 @@ describe("My business's accounts", () => {
       { id: 5, name: 'Business, which one not said', accountNumber: '5551112' },
     ];
     const businessOf = new Map<number, number | null>([[1, 9], [2, 10], [3, 9], [5, null]]);
-    expect(bankAccountKeys(accounts, businessOf, 9)).toEqual([
-      { key: '#12345678', account: 'KCB Ujenzi' },
-      { key: '#5551112', account: 'Business, which one not said' },
-    ]);
+    expect(bankAccountKeys(accounts, businessOf, 9)).toEqual([{ key: '#12345678', account: 'KCB Ujenzi' }]);
+    expect(bankAccountKeys(accounts, businessOf, undefined)).toEqual([]);
+    expect(unassignedBusinessAccounts(accounts, businessOf).map((account) => account.id)).toEqual([5]);
   });
 
   it('matches entries naming those accounts without them being typed', () => {

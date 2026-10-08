@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { customFetch, getGetJointAccountQueryKey, useGetGroup, useGetJointAccounts } from '@workspace/api-client-react';
 import { useBusinessAccounts } from '@/hooks/useBusinessAccounts';
 import { LISTS_AN_EDIT_CHANGES } from '@/lib/showSavedEdit';
-import { bankAccountKeys, businessKeyFor, businessMatches, ownerBusinessKey, parseOwnerBusiness, withBankAccountKeys, withKey, withSkipped, type OwnerBusiness } from '@/lib/ownerBusiness';
+import { unassignedBusinessAccounts, bankAccountKeys, businessKeyFor, businessMatches, ownerBusinessKey, parseOwnerBusiness, withBankAccountKeys, withKey, withSkipped, type OwnerBusiness } from '@/lib/ownerBusiness';
 import { payeeName } from '@/lib/payeeLearning';
 
 type Marked = { ready: boolean; transactionIds: number[] };
@@ -34,8 +34,8 @@ export function useOwnerBusiness() {
   const { data: accounts = [] } = useGetJointAccounts();
   const { businessOf } = useBusinessAccounts();
   const fromBank = useMemo(
-    () => (business.incomeSourceId === undefined && !business.name ? [] : bankAccountKeys(accounts, businessOf, business.incomeSourceId)),
-    [accounts, businessOf, business.incomeSourceId, business.name],
+    () => bankAccountKeys(accounts, businessOf, business.incomeSourceId),
+    [accounts, businessOf, business.incomeSourceId],
   );
   const matching = useMemo(() => withBankAccountKeys(business, fromBank), [business, fromBank]);
 
@@ -80,7 +80,9 @@ export function useOwnerBusiness() {
     return payeeName(entry.description) || entry.description;
   }, [business, mark, save]);
 
-  return { business, matching, fromBank, ready: marked?.ready === true, markedIds, save, mark, unmark, markFromEntry };
+  const unassigned = useMemo(() => unassignedBusinessAccounts(accounts, businessOf), [accounts, businessOf]);
+
+  return { business, matching, fromBank, unassigned, ready: marked?.ready === true, markedIds, save, mark, unmark, markFromEntry };
 }
 
 /**

@@ -148,8 +148,8 @@ export function businessTitle(direction: 'in' | 'out', name: string): string {
  * The business's own bank accounts, as set on Bank (Business, and which one):
  * their account numbers count as the business's without being typed here
  * ("the business accounts created should auto populate here", 8 Oct 2026).
- * An account set as a business's with no business chosen counts for whichever
- * business this is.
+ * Only accounts set to this business: one with no business chosen on Bank is
+ * nobody's yet, so it is not counted for any (unassignedBusinessAccounts).
  */
 export function bankAccountKeys(
   accounts: ReadonlyArray<{ id: number; name: string; accountNumber?: string | null }>,
@@ -157,9 +157,8 @@ export function bankAccountKeys(
   incomeSourceId: number | undefined,
 ): Array<{ key: string; account: string }> {
   return accounts.flatMap((account) => {
-    if (!businessOf.has(account.id)) return [];
-    const owner = businessOf.get(account.id) ?? null;
-    if (owner !== null && incomeSourceId !== undefined && owner !== incomeSourceId) return [];
+    if (!businessOf.has(account.id) || incomeSourceId === undefined) return [];
+    if ((businessOf.get(account.id) ?? null) !== incomeSourceId) return [];
     const digits = digitsOf(account.accountNumber ?? '');
     return digits.length >= 5 ? [{ key: `#${digits}`, account: account.name }] : [];
   });
@@ -168,3 +167,7 @@ export function bankAccountKeys(
 /** The business with its bank accounts' numbers added: what entries are matched against. */
 export const withBankAccountKeys = (business: OwnerBusiness, keys: ReadonlyArray<{ key: string }>): OwnerBusiness =>
   keys.reduce((acc, one) => withKey(acc, one.key), business);
+
+/** Business accounts on Bank with no business chosen yet: shown, so they can be set there. */
+export const unassignedBusinessAccounts = <T extends { id: number }>(accounts: readonly T[], businessOf: ReadonlyMap<number, number | null>): T[] =>
+  accounts.filter((account) => businessOf.has(account.id) && (businessOf.get(account.id) ?? null) === null);

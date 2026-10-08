@@ -13,7 +13,6 @@ import { useColors } from '@/hooks/useColors';
 import { PageScrollView } from '@/components/PageScrollReset';
 import { useOwnerBusiness } from '@/hooks/useOwnerBusiness';
 import { useBusinesses } from '@/hooks/useBusinesses';
-import { useQuery } from '@tanstack/react-query';
 import { businessKeyFor, businessKeyLabel, businessMatches, withKey, withoutKey, withSkipped, type OwnerBusiness } from '@/lib/ownerBusiness';
 import { plainSaveError } from '@/lib/saveRetry';
 
@@ -22,7 +21,7 @@ type Row = Parameters<typeof businessMatches>[0][number];
 export default function MyBusinessScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { business, matching, fromBank, ready, markedIds, save, mark } = useOwnerBusiness();
+  const { business, matching, fromBank, unassigned, ready, markedIds, save, mark } = useOwnerBusiness();
   const { data: accounts = [] } = useGetJointAccounts();
   const [typed, setTyped] = useState('');
   const [working, setWorking] = useState(false);
@@ -31,13 +30,7 @@ export default function MyBusinessScreen() {
   // cannot end up under two spellings ("create a business name first ...
   // one should not go to this step if he has not passed the stage of creating
   // a name", 8 Oct 2026).
-  const namedBusinesses = useBusinesses();
-  const { data: streams = [] } = useQuery<Array<{ id: number; name: string }>>({
-    queryKey: ['income-sources', '__group__'],
-    queryFn: () => customFetch<Array<{ id: number; name: string }>>('/api/income-sources'),
-    staleTime: 30_000,
-  });
-  const myBusinesses = streams.filter((stream) => namedBusinesses.ids.has(stream.id));
+  const myBusinesses = useBusinesses().list;
   // Set up before businesses were picked: the typed name, when it is one of them.
   const chosen = myBusinesses.find((one) => one.id === business.incomeSourceId)
     ?? myBusinesses.find((one) => one.name.trim().toLowerCase() === business.name.trim().toLowerCase())
@@ -157,26 +150,7 @@ export default function MyBusinessScreen() {
 
       <View style={{ gap: 8 }}>
         <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>Its numbers and names</Text>
-        {fromBank.map((one) => (
-          <View key={`bank-${one.key}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: colors.border, borderRadius: 8, padding: 12 }} testID={`my-business-bank-${one.key}`}>
-            <Feather name="credit-card" size={14} color={colors.mutedForeground} />
-            <View style={{ flex: 1 }}>
-              <Text style={{ color: colors.foreground }}>{one.account} · {businessKeyLabel(one.key)}</Text>
-              <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>A business account on Bank. Change it there.</Text>
-            </View>
-          </View>
-        ))}
-        {business.keys.length === 0 && fromBank.length === 0 ? (
-          <Text style={{ color: colors.mutedForeground, fontSize: 13 }} testID="my-business-none">None yet.</Text>
-        ) : business.keys.map((key) => (
-          <View key={key} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: colors.border, borderRadius: 8, padding: 12 }} testID={`my-business-key-${key}`}>
-            <Feather name={key.startsWith('#') ? 'hash' : 'briefcase'} size={14} color={colors.mutedForeground} />
-            <Text style={{ flex: 1, color: colors.foreground }}>{businessKeyLabel(key)}</Text>
-            <Pressable onPress={() => remove(key)} hitSlop={10} accessibilityRole="button" accessibilityLabel={`Remove ${businessKeyLabel(key)}`}>
-              <Feather name="x" size={18} color={colors.mutedForeground} />
-            </Pressable>
-          </View>
-        ))}
+        {/* First, so it is never pushed below a long list ("am not able to add", 8 Oct 2026). */}
         {chosen ? (<>
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <TextInput
@@ -197,6 +171,31 @@ export default function MyBusinessScreen() {
           Write it as M-Pesa or the bank shows it. For a bank account, add its account number, or the paybill and account number together (for example 522522 1234567) - a bank's paybill on its own would catch every payment to that bank. New entries that name it are marked as they come in. Open one on Bank and choose "Not my business" to sort it out another way.
         </Text>
         </>) : null}
+        {unassigned.length > 0 ? (
+          <Text style={{ color: colors.mutedForeground, fontSize: 12, lineHeight: 18 }} testID="my-business-unassigned">
+            {unassigned.map((account) => account.name).join(', ')} {unassigned.length === 1 ? 'is a business account' : 'are business accounts'} on Bank with no business chosen. Open {unassigned.length === 1 ? 'it' : 'each'} on Bank and choose which business, and it is listed under that business here.
+          </Text>
+        ) : null}
+        {fromBank.map((one) => (
+          <View key={`bank-${one.key}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: colors.border, borderRadius: 8, padding: 12 }} testID={`my-business-bank-${one.key}`}>
+            <Feather name="credit-card" size={14} color={colors.mutedForeground} />
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: colors.foreground }}>{one.account} · {businessKeyLabel(one.key)}</Text>
+              <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>A business account on Bank. Change it there.</Text>
+            </View>
+          </View>
+        ))}
+        {business.keys.length === 0 && fromBank.length === 0 ? (
+          <Text style={{ color: colors.mutedForeground, fontSize: 13 }} testID="my-business-none">None yet.</Text>
+        ) : business.keys.map((key) => (
+          <View key={key} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: colors.border, borderRadius: 8, padding: 12 }} testID={`my-business-key-${key}`}>
+            <Feather name={key.startsWith('#') ? 'hash' : 'briefcase'} size={14} color={colors.mutedForeground} />
+            <Text style={{ flex: 1, color: colors.foreground }}>{businessKeyLabel(key)}</Text>
+            <Pressable onPress={() => remove(key)} hitSlop={10} accessibilityRole="button" accessibilityLabel={`Remove ${businessKeyLabel(key)}`}>
+              <Feather name="x" size={18} color={colors.mutedForeground} />
+            </Pressable>
+          </View>
+        ))}
       </View>
 
       {chosen && matching.keys.length > 0 ? (

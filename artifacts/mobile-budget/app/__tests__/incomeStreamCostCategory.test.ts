@@ -11,7 +11,8 @@ const reports = readFileSync('app/(tabs)/reports.tsx', 'utf8');
 describe('linking categories as an income stream\'s cost', () => {
   it('only a manager sees the link control, matching the server\'s own rule', () => {
     expect(reports).toContain("canManageCostCategories = group?.role === 'owner' || group?.role === 'admin'");
-    expect(reports).toContain('!unattributed && canManageCostCategories');
+    // An income stream has no cost link on Reports any more: a business's costs are set on Budget and Bank.
+    expect(reports).not.toContain('!unattributed && canManageCostCategories');
   });
 
   it('shows the sales-minus-cost breakdown, naming every linked category', () => {
@@ -21,9 +22,9 @@ describe('linking categories as an income stream\'s cost', () => {
     expect(reports).toContain('= {formatKES(stream.total)} profit');
   });
 
-  it('reads every category currently linked to a stream, not just one', () => {
-    expect(reports).toContain('const linkedCostCategories = unattributed');
-    expect(reports).toContain('categories.filter((category) => category.reducesIncomeSourceId === stream.incomeSourceId)');
+  it('links no categories to an income stream: an income stream is income', () => {
+    expect(reports).toContain('const linkedCostCategories: typeof categories = [];');
+    expect(reports).not.toContain('categories.filter((category) => category.reducesIncomeSourceId === stream.incomeSourceId)');
   });
 
   it('toggles a category on or off a stream without touching any other category already linked to it', () => {

@@ -553,10 +553,11 @@ export default function AddExpenseSheet() {
 
   // Load this payer's income sources from DB
   const { data: incomeSources = [], isLoading: sourcesLoading } = useQuery<IncomeSource[]>({
-    queryKey: ['income-sources', paidById],
+    queryKey: ['income-sources', 'streams', paidById],
     queryFn: async () => {
       if (!paidById) return [];
-      return customFetch<IncomeSource[]>(`/api/income-sources?userId=${paidById}`);
+      // Income streams only: a business is never one (api-server lib/business-streams).
+      return customFetch<IncomeSource[]>(`/api/income-sources?userId=${paidById}&streams=only`);
     },
     enabled: !!paidById,
     staleTime: 60_000,
@@ -825,7 +826,7 @@ export default function AddExpenseSheet() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, name, isMain: false }),
       });
-      queryClient.invalidateQueries({ queryKey: ['income-sources', userId] });
+      queryClient.invalidateQueries({ queryKey: ['income-sources'] });
       queryClient.invalidateQueries({ queryKey: ['income-sources', 'payers'] });
       if (userId === paidById) {
         queryClient.setQueryData<IncomeSource[]>(['income-sources', paidById], (previous = []) => [

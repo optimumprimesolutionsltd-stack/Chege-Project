@@ -32,6 +32,7 @@ import { Feather } from '@expo/vector-icons';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useBusinesses } from '@/hooks/useBusinesses';
 import { useColors } from '@/hooks/useColors';
 import { PageScrollView } from '@/components/PageScrollReset';
 import { useAuth } from '@/lib/auth';
@@ -238,6 +239,8 @@ export default function BankDayScreen() {
 
   // Whose income streams to offer on money in: the person's own in a Personal
   // budget, the group's in a shared one (deposits there go to the joint bank).
+  // A business is never an income stream (hooks/useBusinesses).
+  const businesses = useBusinesses();
   const { data: incomeSources = [] } = useQuery<{ id: number; name: string; userId?: string | null }[]>({
     queryKey: ['income-sources', !isSharedWorkspace ? user?.id ?? '__me__' : '__group__'],
     queryFn: () => customFetch<{ id: number; name: string }[]>(
@@ -856,7 +859,7 @@ export default function BankDayScreen() {
                       Where did this money come from? (optional)
                     </Text>
                     <View style={styles.kindRow}>
-                      {incomeSources.map((source) => {
+                      {incomeSources.filter((source) => !businesses.ids.has(source.id)).map((source) => {
                         const selected = row.incomeSourceId === source.id;
                         return (
                           <TouchableOpacity

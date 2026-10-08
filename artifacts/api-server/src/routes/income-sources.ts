@@ -7,6 +7,7 @@ import { and, eq, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getActiveGroupId, isGroupManager, requireMemberSelfAttribution, requireTransactionEligibility } from "../lib/activeGroup";
 import { dedupeIncomeSources, normalizeIncomeSourceName } from "./income-source-utils";
+import { businessStreamIds } from "../lib/business-streams";
 export { dedupeIncomeSources, normalizeIncomeSourceName } from "./income-source-utils";
 
 const router = Router();
@@ -49,7 +50,11 @@ router.get("/income-sources", async (req, res) => {
   const year = Number(req.query.year);
   const month = Number(req.query.month);
   const forMonth = Number.isInteger(year) && Number.isInteger(month) && month >= 1 && month <= 12 && year >= 2000 && year <= 2100;
-  const sources = dedupeIncomeSources(rows);
+  // ?streams=only: your income streams, without My businesses - a business is
+  // never an income stream (lib/business-streams). Pickers for money in ask
+  // this way; screens about businesses read them from /api/businesses.
+  const businesses = req.query.streams === "only" ? new Set(await businessStreamIds(groupId)) : new Set<number>();
+  const sources = dedupeIncomeSources(rows).filter((source) => !businesses.has(source.id));
   res.json(forMonth ? await monthExpected(groupId, sources, year, month) : sources);
 });
 

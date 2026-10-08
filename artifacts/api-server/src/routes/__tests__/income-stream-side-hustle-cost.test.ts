@@ -72,32 +72,23 @@ function mockIncomeSources(rows: Array<{
   mockedDb.select.mockReturnValue(chain as never);
 }
 
-// The route issues the cost query before the funding query (see dashboard.ts),
-// so the first db.execute() resolves the costs-by-source rows and the second
-// resolves the funding CTE rows.
-function mockExecuteCalls(costRows: unknown[], fundingRows: unknown[]) {
-  mockedDb.execute
-    .mockImplementationOnce(() => Promise.resolve({ rows: costRows }))
-    .mockImplementationOnce(() => Promise.resolve({ rows: fundingRows }));
-}
-
-describe("GET /dashboard/income-streams — side-hustle cost categories", () => {
+// "remove logic of income streams as businesses to avoid confusion" (8 Oct
+// 2026): an income stream is income. Costs linked to it are ordinary spending,
+// and a business's costs belong to the Business report (lib/business-streams).
+describe("GET /dashboard/income-streams - an income stream is what came in", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("subtracts a linked category's spend from its income source's profit, and reports the subtraction as costs", async () => {
-    mockExecuteCalls(
-      [{ incomeSourceId: 9, cost: "1800" }],
-      [{
-        incomeSourceId: 9,
-        sourceName: "Side hustle",
-        ownerId: "member-b",
-        ownerName: "Baraka",
-        total: "6000",
-        transactionCount: "3",
-      }],
-    );
+  it("takes nothing off a stream, whatever categories are linked to it", async () => {
+    mockedDb.execute.mockImplementationOnce(() => Promise.resolve({ rows: [{
+      incomeSourceId: 9,
+      sourceName: "Side hustle",
+      ownerId: "member-b",
+      ownerName: "Baraka",
+      total: "6000",
+      transactionCount: "3",
+    }] }));
     mockIncomeSources([
       { id: 9, name: "Side hustle", userId: "member-b", expectedMonthlyAmount: 0, ownerName: "Baraka" },
     ]);
@@ -106,34 +97,14 @@ describe("GET /dashboard/income-streams — side-hustle cost categories", () => 
 
     expect(response.status).toBe(200);
     expect(response.body.streams).toEqual([
-      expect.objectContaining({ incomeSourceId: 9, total: 4200, costs: 1800, transactionCount: 3 }),
+      expect.objectContaining({ incomeSourceId: 9, total: 6000, costs: 0, transactionCount: 3 }),
     ]);
-    expect(response.body.totalFunding).toBe(4200);
+    expect(response.body.totalFunding).toBe(6000);
+    expect(mockedDb.execute).toHaveBeenCalledTimes(1);
   });
 
-  it("shows a loss when a linked category cost money this month but nothing was sold yet", async () => {
-    mockExecuteCalls([{ incomeSourceId: 9, cost: "1800" }], []);
-    mockIncomeSources([
-      { id: 9, name: "Side hustle", userId: "member-b", expectedMonthlyAmount: 0, ownerName: "Baraka" },
-    ]);
-
-    const response = await request(buildApp()).get("/dashboard/income-streams?month=5&year=2026");
-
-    expect(response.status).toBe(200);
-    expect(response.body.streams).toEqual([
-      expect.objectContaining({ incomeSourceId: 9, total: -1800, costs: 1800, transactionCount: 0 }),
-    ]);
-  });
-
-  it("leaves an income source with no linked cost category untouched", async () => {
-    mockExecuteCalls([], [{
-      incomeSourceId: 7,
-      sourceName: "Salary",
-      ownerId: "member-a",
-      ownerName: "Amina",
-      total: "1800",
-      transactionCount: "2",
-    }]);
+  it("shows nothing received, not a loss, for a stream with nothing in this month", async () => {
+    mockedDb.execute.mockImplementationOnce(() => Promise.resolve({ rows: [] }));
     mockIncomeSources([
       { id: 7, name: "Salary", userId: "member-a", expectedMonthlyAmount: 2000, ownerName: "Amina" },
     ]);
@@ -142,7 +113,7 @@ describe("GET /dashboard/income-streams — side-hustle cost categories", () => 
 
     expect(response.status).toBe(200);
     expect(response.body.streams).toEqual([
-      expect.objectContaining({ incomeSourceId: 7, total: 1800, costs: 0 }),
+      expect.objectContaining({ incomeSourceId: 7, total: 0, costs: 0 }),
     ]);
   });
 });

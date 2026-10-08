@@ -73,17 +73,18 @@ describe("and the Reports tab says so", () => {
 // "What did I spend this month? KES 530,892" - stock for a side hustle counted
 // as household spending on Home, when the Budget report already left it out.
 describe("Home's spent and budget", () => {
-  it("leave out a side hustle's costs, as the Budget report does", () => {
-    expect(dashboard).toContain("const businessCosts = await incomeStreamCostLines(groupId, monthFrom, monthTo)");
-    expect(dashboard).toContain("const totalBudget = sumBudget(budgetRows.filter((row) => row.reducesIncomeSourceId == null));");
+  // Only a business's costs (My businesses): "remove logic of income streams as businesses" (8 Oct 2026).
+  it("leave out a business's costs, as the Budget report does", () => {
+    expect(dashboard).toContain("const businessCosts = await incomeStreamCostLines(groupId, monthFrom, monthTo, { personalOnly: true })");
+    expect(dashboard).toContain("const totalBudget = sumBudget(budgetRows.filter((row) => row.reducesIncomeSourceId == null || !businessIds.has(row.reducesIncomeSourceId)));");
   });
 });
 
 // "Can stock or any cost of goods sold be removed from here and put on its own tab?"
 describe("What you spend on, household or business", () => {
-  it("leaves a side hustle's costs out for household, lists only them for business, and keeps everything with no scope", () => {
+  it("leaves a business's costs out for household, lists only them for business, and keeps everything with no scope", () => {
     expect(dashboard).toContain('const scope = req.query.scope === "household" || req.query.scope === "business" ? req.query.scope : null;');
-    expect(dashboard).toContain("bc.reduces_income_source_id IS NOT NULL AND bc.name = spending.category");
+    expect(dashboard).toContain("${businessCostLink(groupId, sql`bc.reduces_income_source_id`)} AND bc.name = spending.category");
     expect(dashboard).toContain('scope === "business" ? sql`AND ${isBusinessCost}` : scope === "household" ? sql`AND NOT ${isBusinessCost}` : sql``');
   });
 
@@ -95,9 +96,10 @@ describe("What you spend on, household or business", () => {
 
 // The website's Reports "Spending" for a date range counted stock.
 describe("period totals", () => {
-  it("take a side hustle's costs out of spending and out of money in together", () => {
-    expect(dashboard).toContain("const businessCosts = await incomeStreamCostLines(groupId, start.raw, end.raw)");
+  // A business's sales are already out of money in (lib/business-streams), so only its costs come off here.
+  it("take a business's costs out of spending, and leave money in as it is", () => {
+    expect(dashboard).toContain("const businessCosts = await incomeStreamCostLines(groupId, start.raw, end.raw, { personalOnly: true })");
     expect(dashboard).toContain('const spendingTotal = Math.max(0, numberValue("spendingTotal") - businessCosts);');
-    expect(dashboard).toContain('const contributionTotal = numberValue("contributionTotal") - (numberValue("spendingTotal") - spendingTotal);');
+    expect(dashboard).toContain('const contributionTotal = numberValue("contributionTotal");');
   });
 });

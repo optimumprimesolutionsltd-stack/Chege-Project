@@ -46,7 +46,11 @@ export function buildBusinessReport(input: {
   /** What each stream brought in over the period (All income's "received"). */
   salesByStream: Map<number, number>;
   costLines: BusinessCostRow[];
-  /** Every stream with a category linked to it, spent on this period or not. */
+  /**
+   * The businesses reported on: My businesses whose profit is counted, costs
+   * this period or not. Nothing else is a business - an income stream with
+   * costs linked to it included (lib/business-streams).
+   */
   linkedStreamIds: number[];
   /** Streams the group owns. A linked id not here is somebody else's, and left out. */
   streamNames: Map<number, string>;
@@ -57,8 +61,7 @@ export function buildBusinessReport(input: {
     previous: { from: string; to: string; salesByStream: Map<number, number>; costLines: BusinessCostRow[] };
   };
 }) {
-  const ids = [...new Set([...input.linkedStreamIds, ...input.costLines.map((line) => line.incomeSourceId)])]
-    .filter((id) => input.streamNames.has(id));
+  const ids = [...new Set(input.linkedStreamIds)].filter((id) => input.streamNames.has(id));
 
   const businesses = ids.map((id) => {
     const lines = input.costLines.filter((line) => line.incomeSourceId === id && Math.abs(line.amount) >= 0.005);

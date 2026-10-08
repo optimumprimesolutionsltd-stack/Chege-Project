@@ -323,6 +323,8 @@ export default function BankScreen() {
   // "Who is this for?" on an entry: Personal (null), or one of the businesses (components/WhoIsThisFor).
   const [forBusinessId, setForBusinessId] = useState<number | null>(null);
   const businesses = useBusinesses();
+  // The payee's name, typed on the card (components/WhoIsThisFor), kept in Named accounts after Save.
+  const [whoForPayeeName, setWhoForPayeeName] = useState('');
   const [addedBusinessIds, setAddedBusinessIds] = useState<number[]>([]);
   const [accountIsBusiness, setAccountIsBusiness] = useState<boolean | null>(null);
   // Which business, for somebody with more than one: an income stream, as in the
@@ -561,22 +563,16 @@ export default function BankScreen() {
   // named supplier, or just added here. Salary and the like are not offered.
   const costOfCategory = useMemo(() => new Map(
     (categories as unknown as Array<{ name: string; reducesIncomeSourceId?: number | null }>)
-      .filter((row) => row.reducesIncomeSourceId != null)
+      // A business's costs (My businesses) only: a link to an income stream makes nothing a business cost.
+      .filter((row) => row.reducesIncomeSourceId != null && businesses.ids.has(Number(row.reducesIncomeSourceId)))
       .map((row) => [row.name, Number(row.reducesIncomeSourceId)]),
-  ), [categories]);
+  ), [categories, businesses.ids]);
+  // My businesses only - an income stream is never one (hooks/useBusinesses).
   const whoForBusinesses = useMemo(() => {
-    // Named in My businesses: only those (lib: api-server business-streams).
-    if (businesses.named) {
-      return allIncomeSources.filter((src) => businesses.ids.has(src.id) || addedBusinessIds.includes(src.id)).map((src) => ({ id: src.id, name: src.name }));
-    }
-    const ids = new Set<number>([
-      ...costOfCategory.values(),
-      ...[...businessAccounts.businessOf.values()].filter((id): id is number => id != null),
-      ...namedPayees.named.map((one) => one.incomeSourceId).filter((id): id is number => id != null),
-      ...addedBusinessIds,
-    ]);
-    return allIncomeSources.filter((src) => ids.has(src.id)).map((src) => ({ id: src.id, name: src.name }));
-  }, [allIncomeSources, costOfCategory, businessAccounts.businessOf, namedPayees.named, addedBusinessIds, businesses.named, businesses.ids]);
+    const listed = businesses.list.map((one) => ({ id: one.id, name: one.name, countsProfit: one.countsProfit }));
+    const added = allIncomeSources.filter((src) => addedBusinessIds.includes(src.id) && !businesses.ids.has(src.id)).map((src) => ({ id: src.id, name: src.name }));
+    return [...listed, ...added];
+  }, [allIncomeSources, addedBusinessIds, businesses.list, businesses.ids]);
   const whoForCosts = useMemo(
     () => (forBusinessId === null ? [] : [...costOfCategory.entries()].filter(([, id]) => id === forBusinessId).map(([name]) => name).sort((a, b) => a.localeCompare(b))),
     [costOfCategory, forBusinessId],
@@ -856,11 +852,11 @@ export default function BankScreen() {
    * money in as that business's sales - and money in from the same payer with
    * no source yet is offered to follow.
    */
-  const rememberWhoFor = async (entry: { id: number; description: string; direction: 'in' | 'out'; business: number; category: string }) => {
+  const rememberWhoFor = async (entry: { id: number; description: string; direction: 'in' | 'out'; business: number; category: string; name?: string }) => {
     const label = payeeName(entry.description).replace(/^Received from\s+/i, '') || entry.description;
     if (entry.direction === 'out') {
       if (!entry.category) return;
-      await namedPayees.add({ key: namedKeyFor(referenceOf(entry.description) || label), name: namedPayees.nameFor(entry.description) ?? label, category: entry.category, incomeSourceId: entry.business });
+      await namedPayees.add({ key: namedKeyFor(referenceOf(entry.description) || label), name: entry.name?.trim() || namedPayees.nameFor(entry.description) || label, category: entry.category, incomeSourceId: entry.business });
       return;
     }
     const key = rulesStorageKey(group?.id);
@@ -1418,6 +1414,7 @@ export default function BankScreen() {
         .map((split) => [split.userId as string, String(split.amount)]),
     ));
     setIncomeSourceId(tx.incomeSourceId ?? null);
+    setWhoForPayeeName(namedPayees.nameFor(tx.description) ?? '');
     setForBusinessId(type === 'disbursement'
       ? costOfCategory.get(tx.expenseCategory ?? '') ?? null
       : type === 'deposit' && tx.incomeSourceId != null && whoForBusinesses.some((one) => one.id === tx.incomeSourceId) ? tx.incomeSourceId : null);
@@ -2216,10 +2213,10 @@ export default function BankScreen() {
       // under the old one are offered to follow (lib/samePayee).
       let samePayeeOffer: { description: string; from: string; to: string; rows: Array<{ id: number; amount: number; date: string }> } | null = null;
       // Said to be one of the businesses: remembered for it after the save (rememberWhoFor).
-      let whoFor: { id: number; description: string; direction: 'in' | 'out'; business: number; category: string } | null = null;
+      let whoFor: { id: number; description: string; direction: 'in' | 'out'; business: number; category: string; name?: string } | null = null;
       if (editingTransactionId !== null && forBusinessId !== null && (txType === 'deposit' || txType === 'disbursement')) {
         const editing = data?.transactions.find((transaction) => transaction.id === editingTransactionId);
-        if (editing) whoFor = { id: editing.id, description: editing.description, direction: txType === 'deposit' ? 'in' : 'out', business: forBusinessId, category: expenseCategory.trim() };
+        if (editing) whoFor = { id: editing.id, description: editing.description, direction: txType === 'deposit' ? 'in' : 'out', business: forBusinessId, category: expenseCategory.trim(), name: whoForPayeeName };
       }
       if (editingTransactionId !== null) {
         const editingTransaction = data?.transactions.find((transaction) => transaction.id === editingTransactionId);
@@ -3564,7 +3561,7 @@ export default function BankScreen() {
                   </Text>
                   <Text style={{ marginTop: 14, color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>Which business?</Text>
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
-                    {allIncomeSources.filter((stream) => !businesses.named || businesses.ids.has(stream.id)).map((stream) => {
+                    {allIncomeSources.filter((stream) => businesses.ids.has(stream.id)).map((stream) => {
                       const on = accountBusinessId === stream.id && !newBusinessName.trim();
                       return (
                         <TouchableOpacity
@@ -4854,7 +4851,8 @@ export default function BankScreen() {
                     <Text style={{ fontWeight: '400', fontSize: 11 }}>(optional)</Text>
                   </Text>
                   <View style={styles.memberRow}>
-                    {depositSources.map((src) => {
+                    {/* Income streams only: a business's money in is chosen above, under Who is this for? */}
+                    {depositSources.filter((src) => !businesses.ids.has(src.id)).map((src) => {
                       const selected = incomeSourceId === src.id;
                       return (
                         <TouchableOpacity
@@ -5006,6 +5004,8 @@ export default function BankScreen() {
                       onCategory={setExpenseCategory}
                       onAddCost={addWhoForCost}
                       onAddBusiness={addWhoForBusiness}
+                      payeeName={whoForPayeeName}
+                      onPayeeName={setWhoForPayeeName}
                     />
                   ) : null}
                   <Text style={[styles.label, { color: colors.mutedForeground }]}>What kind of money is this?</Text>
