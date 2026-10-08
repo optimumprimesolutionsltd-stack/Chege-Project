@@ -60,3 +60,18 @@ describe('where it is offered', () => {
     expect(screen).toContain('withSkipped(acc, row.id)');
   });
 });
+
+// "Also a bank can have an account number and a paybill number" (8 Oct 2026).
+describe('a bank account: paybill and account number together', () => {
+  it('keeps both, and matches only when both appear', () => {
+    expect(businessKeyFor('522522 1234567')).toBe('#522522+1234567');
+    expect(businessKeyFor('522522 acc 1234567')).toBe('#522522+1234567');
+    expect(businessKeyFor('Paybill 522522, account no. 1234567')).toBe('#522522+1234567');
+    expect(namesBusiness('KCB Paybill 522522 Acc 1234567', ['#522522+1234567'])).toBe(true);
+    expect(namesBusiness('KCB Paybill 522522 Acc 7654321', ['#522522+1234567'])).toBe(false);
+  });
+
+  it('a phone number written in groups is still one number', () => {
+    expect(businessKeyFor('0712 345 678')).toBe('#0712345678');
+  });
+});
