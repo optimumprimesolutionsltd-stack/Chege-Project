@@ -1,6 +1,7 @@
 import { db } from "@workspace/db";
 import { sql } from "drizzle-orm";
 import { logger } from "./logger";
+import { notOwnerBusinessMoney } from "./owner-business-money";
 
 /**
  * Entries saved as "Not sure", to be sorted out later (migration 0053).
@@ -101,6 +102,7 @@ export async function gatherMoneyInWithoutSource(groupId: number, from?: string,
       AND t."savings_goal_id" IS NULL
       AND t."bank_transfer_id" IS NULL
       AND t."transfer_direction" IS NULL
+      ${notOwnerBusinessMoney(sql`t."id"`)}
       AND NOT EXISTS (
         SELECT 1 FROM "joint_account_deposit_splits" s
         WHERE s."transaction_id" = t."id" AND s."contributor_id" IS NOT NULL)

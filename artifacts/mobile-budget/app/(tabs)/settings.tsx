@@ -2162,6 +2162,20 @@ export default function SettingsScreen() {
               <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
             </View>
           </Pressable>
+          <Pressable testID="open-my-business" onPress={() => router.push('/my-business' as never)} style={styles.row}>
+            <View style={[styles.rowLeft, { flexShrink: 0, flex: 0 }]}>
+              <View style={[styles.rowIcon, { backgroundColor: colors.primary + '18' }]}>
+                <Feather name="briefcase" size={16} color={colors.primary} />
+              </View>
+              <Text style={[styles.rowLabel, { color: colors.foreground }]} numberOfLines={1}>My business's accounts</Text>
+            </View>
+            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6, marginLeft: 12 }}>
+              <Text style={[styles.rowValue, { color: colors.mutedForeground, flexShrink: 1 }]} numberOfLines={1}>
+                Owner's money, not income or spending
+              </Text>
+              <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+            </View>
+          </Pressable>
           <Pressable testID="open-subscription" onPress={() => router.push('/subscription')} style={styles.row}>
             <View style={[styles.rowLeft, { flexShrink: 0, flex: 0 }]}>
               <View style={[styles.rowIcon, { backgroundColor: colors.primary + '18' }]}>

@@ -28,6 +28,8 @@ import { markReturning } from '@/lib/lastRoute';
 import { isNotSure } from '@/lib/entriesToSort';
 import { LISTS_AN_EDIT_CHANGES, withSavedRow } from '@/lib/showSavedEdit';
 import { PassThroughPair, type PairEntry } from '@/components/PassThroughPair';
+import { useAutoMarkBusiness, useOwnerBusiness } from '@/hooks/useOwnerBusiness';
+import { businessTitle } from '@/lib/ownerBusiness';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useColors } from '@/hooks/useColors';
 import { UndoDeleteBar, useUndoableDelete } from '@/components/UndoDeleteBar';
@@ -391,6 +393,8 @@ export default function BankScreen() {
   const { mutateAsync: createDeposit } = useCreateDeposit();
   const { mutateAsync: createDisbursement } = useCreateDisbursement();
   const { mutateAsync: updateTransaction } = useUpdateJointAccountTransaction();
+  const ownerBusiness = useOwnerBusiness();
+  const editingBusinessMoney = editingTransactionId !== null && ownerBusiness.markedIds.has(editingTransactionId);
   const { mutateAsync: deleteTransaction } = useDeleteJointAccountTransaction();
   const { mutateAsync: deleteExpense } = useDeleteExpense();
   // Deleting waits a few seconds for Undo (components/UndoDeleteBar).
@@ -1777,7 +1781,9 @@ export default function BankScreen() {
     }
     // Paying somebody you owe needs no category: the cost was usually recorded
     // when the debt was taken on, and paying it off is not a second one.
-    if (txType === 'disbursement' && withdrawDest !== 'savings' && withdrawDest !== 'lend' && withdrawDest !== 'party' && !expenseCategory.trim()) {
+    if (editingBusinessMoney) {
+      // Money between you and your business carries no category (lib/ownerBusiness).
+    } else if (txType === 'disbursement' && withdrawDest !== 'savings' && withdrawDest !== 'lend' && withdrawDest !== 'party' && !expenseCategory.trim()) {
       Alert.alert('Category required', 'Choose or add a category for this withdrawal.');
       return;
     }
@@ -2189,6 +2195,8 @@ export default function BankScreen() {
 
   // A delete waiting for Undo is already out of the list.
   const transactions: Tx[] = (data?.transactions ?? []).filter((tx) => !undoable.isHidden(`tx:${tx.id}`));
+  // Money between you and your own business: marked as it arrives, titled for it (lib/ownerBusiness).
+  useAutoMarkBusiness(data?.transactions);
   // A period narrows the list and the figures to those dates. "All time"
   // leaves the account exactly as the server reports it.
   const period = periodFor(periodPreset, nairobiToday(), { from: periodFrom, to: periodTo });
@@ -3087,6 +3095,7 @@ export default function BankScreen() {
                       : dep && item.isBorrowing ? (item.debtPartyName ? `Borrowed from ${item.debtPartyName}` : 'Borrowed money')
                       : dep && item.settlesContributorId && item.debtPartyName ? `Repaid by ${item.debtPartyName}`
                       : !dep && item.isLending ? (item.debtPartyName ? `Lent to ${item.debtPartyName}` : 'Money lent out')
+                      : ownerBusiness.markedIds.has(item.id) ? businessTitle(dep ? 'in' : 'out', ownerBusiness.business.name)
                       : !dep && item.expenseCategory ? item.expenseCategory
                       : !dep && item.settlesContributorId ? (item.debtPartyName ? `Paid to ${item.debtPartyName}` : 'Debt payment')
                       : dep && item.incomeSourceId && incomeSourceNames.get(item.incomeSourceId) ? incomeSourceNames.get(item.incomeSourceId)
@@ -5324,6 +5333,61 @@ export default function BankScreen() {
                   {sitting.outflow > 0 ? ` · KES ${formatKES(sitting.outflow)} out` : ''}
                   {sitting.inflow > 0 ? ` · KES ${formatKES(sitting.inflow)} in` : ''}
                 </Text>
+              ) : null}
+
+              {/* Money between you and your own business (lib/ownerBusiness). */}
+              {editingTransactionId !== null && !editingTransfer && (txType === 'deposit' || txType === 'disbursement') ? (
+                editingBusinessMoney ? (
+                  <View style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 8, padding: 12, gap: 6 }} testID="bank-business-money">
+                    <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>
+                      {businessTitle(txType === 'deposit' ? 'in' : 'out', ownerBusiness.business.name)}
+                    </Text>
+                    <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>
+                      Money between you and your business: not income, not spending. A category or source chosen above is not saved.
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => {
+                        const id = editingTransactionId;
+                        void ownerBusiness.unmark(id).then(() => closeModal()).catch((error: unknown) =>
+                          Alert.alert('Could not change it', error instanceof Error ? error.message : 'Try again.'));
+                      }}
+                      testID="bank-not-my-business"
+                    >
+                      <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>Not my business - sort it out another way</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    onPress={() => {
+                      const tx = (data?.transactions ?? []).find((row) => row.id === editingTransactionId);
+                      if (!tx) return;
+                      Alert.alert(
+                        'Money between you and your business?',
+                        `Not income or spending. Jamvi will also mark other entries naming ${tx.description} the same way. Change the list in Settings > My business's accounts.`,
+                        [
+                          { text: 'Cancel', style: 'cancel' },
+                          {
+                            text: 'It is my business',
+                            onPress: () => {
+                              void ownerBusiness.markFromEntry({ id: tx.id, description: tx.description })
+                                .then(() => closeModal())
+                                .catch((error: unknown) => Alert.alert('Could not mark it', error instanceof Error ? error.message : 'Try again.'));
+                            },
+                          },
+                        ],
+                      );
+                    }}
+                    disabled={submitting}
+                    activeOpacity={0.8}
+                    testID="bank-my-business"
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10 }}
+                  >
+                    <Feather name="briefcase" size={14} color={colors.primary} />
+                    <Text style={{ flex: 1, color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>
+                      This is my business's money
+                    </Text>
+                  </TouchableOpacity>
+                )
               ) : null}
 
               {/* Money that only passed through: this entry and its other half, together. */}
