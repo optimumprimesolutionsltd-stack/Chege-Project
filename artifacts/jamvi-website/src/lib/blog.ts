@@ -51,6 +51,66 @@ const annual = JAMVI_PACKAGE.annualPriceKes.toLocaleString("en-KE");
 
 export const BLOG_POSTS: readonly BlogPost[] = [
   {
+    slug: "/blog/plan-groceries-not-food",
+    title: "Plan Groceries, Not Food: A Simpler Start in Jamvi",
+    description:
+      "Setting up Jamvi now asks you to plan Groceries, Rent and Fuel rather than one big figure for Food, Housing and Transport. Each category totals its subcategories, you can add your own, and Everyday budgeting comes picked.",
+    label: "Plan Groceries, not Food",
+    readingMinutes: 3,
+    published: "2026-10-08",
+    heading: "Plan Groceries, not Food: a simpler start in Jamvi",
+    intro:
+      "Ask most people how much they spend on Food in a month and they will guess. Ask how much goes on groceries, the market and eating out, and they usually know. Jamvi's setup now asks the second question: each category you pick opens into the smaller things it is made of, you put an amount against each one, and the category adds them up for you.",
+    sections: [
+      {
+        heading: "What you will see",
+        body: [
+          "On the last step of setup, \"how much will you plan for each category?\", every category you chose is now a small card. Its subcategories sit inside it, each with its own KES box, and the card's total updates as you type.",
+        ],
+        points: [
+          { title: "Food.", text: "Groceries, Market shopping, Eating out." },
+          { title: "Housing.", text: "Rent, Mortgage, Service charge." },
+          { title: "Utilities.", text: "Electricity, Water, Cooking gas, Garbage collection." },
+          { title: "Transport.", text: "Matatu & bus, Fuel, Boda boda, Parking." },
+          { title: "Health.", text: "Hospital & clinic, Medicine, SHA contributions." },
+          { title: "Education.", text: "School fees, Uniform, School trips, Tuition." },
+        ],
+      },
+      {
+        heading: "The category adds itself up",
+        body: [
+          "Every category Jamvi offers has its own list, including the ones for a chama, a church, a wedding and a student group. Leave any box blank if you are not sure yet; Planned total at the bottom adds up everything you did fill in.",
+          "The category itself has no box. Food is whatever Groceries, Market shopping and Eating out add up to, so the two can never disagree.",
+        ],
+      },
+      {
+        heading: "Add your own",
+        body: [
+          "Every card ends with an \"Add a subcategory\" field. Type a name, tap the plus (Add on the web), and it joins the list with its own amount box. Use it for whatever your household spends on that Jamvi did not guess: HELB repayments under Loans, a house help's salary under Household, chicken feed under a Farm category you added yourself.",
+          "A category you created during setup starts with no subcategories, so its card reads \"Add a subcategory to plan an amount\". Add one or two and plan against those. Jamvi will not let a name appear twice in the same plan, because each category and subcategory in a budget has its own name.",
+        ],
+      },
+      {
+        heading: "Everyday budgeting comes picked",
+        body: [
+          "Setup also asks how long your budget runs. Most people are budgeting the money they live on, month after month, so \"Everyday budgeting\" is now selected for you, on the phone and on the web.",
+          "Planning for something with an end, such as a trip, a school term or a wedding? Tap \"Up to 1 week\", \"Up to 3 months\" or \"Set an end date\" instead. You can change it later from Settings.",
+        ],
+      },
+      {
+        heading: "After setup",
+        body: [
+          "The Budget screen works the same way. A category with subcategories is a heading: you set amounts on Groceries or Rent, and Food or Housing shows their total. Spending is recorded on the subcategory too, so you see where the money actually went, not just that Food ran over.",
+          "Budgets you already have are not changed. The new setup applies to every budget or group you set up from now on. On the phone, open Jamvi and tap \"Update now\" when the update prompt appears; on the web it is already live.",
+        ],
+      },
+    ],
+    cta: {
+      heading: "Plan the things you can actually estimate.",
+      text: `Set up Jamvi in a few minutes, with Groceries, Rent and Fuel ready to plan. Free for your first ${TRIAL_DAYS} days, then KES ${price} a month.`,
+    },
+  },
+  {
     slug: "/blog/how-far-jamvi-has-come",
     title: "How Far Jamvi Has Come, and What It Does for You",
     description:

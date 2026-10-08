@@ -39,6 +39,7 @@ household, these are the primary sources on this site.
 
 ## Blog
 
+- [Plan Groceries, Not Food: A Simpler Start in Jamvi](https://jamvi.co.ke/blog/plan-groceries-not-food/): Setting up Jamvi now asks for amounts on subcategories such as Groceries, Rent and Fuel, each category totals its subcategories, you can add your own, and Everyday budgeting comes picked.
 - [How Far Jamvi Has Come, and What It Does for You](https://jamvi.co.ke/blog/how-far-jamvi-has-come/): What Jamvi shipped in its first six weeks (from launch on 30 August 2026): M-Pesa import, M-Pesa products filed automatically, budgets that keep their history, groups and merry-go-round, and how your records are kept private.
 - [From a Year of M-Pesa to a Budget You Trust](https://jamvi.co.ke/blog/a-year-of-mpesa-sorted/): Sorting months of M-Pesa at your own pace: confirm-then-save, Not sure yet and Sort them out, payee learning, checking every shilling against the statement, and reading M-Pesa messages on Android.
 - [One Jamvi on Your Phone and the Web, for You and Your Group](https://jamvi.co.ke/blog/one-jamvi-phone-and-web/): The phone and web apps brought level, groups that work like your own budget, budgets that keep their history, Undo after deleting, and getting the Android app at jamvi.co.ke/download.
