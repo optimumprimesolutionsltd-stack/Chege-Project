@@ -19,6 +19,7 @@ import { useColors } from '@/hooks/useColors';
 import { isNotSure, isToCheck, NOT_SURE_CATEGORY, sameParty, type EntryToSort } from '@/lib/entriesToSort';
 import { AddIncomeSourceChip } from '@/components/AddIncomeSourceChip';
 import { SortAsDebt } from '@/components/SortAsDebt';
+import { LISTS_AN_EDIT_CHANGES, withoutSorted } from '@/lib/showSavedEdit';
 import { NewCategoryOffer } from '@/components/NewCategoryOffer';
 import { CreateCategorySheet } from '@/components/CreateCategorySheet';
 import { matchesSearch } from '@/lib/bankSearch';
@@ -85,11 +86,16 @@ export default function SortEntriesScreen() {
     [entries, month, searched, rangeFrom, rangeTo],
   );
 
-  const done = async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['entries-to-sort'] }),
-      queryClient.invalidateQueries({ queryKey: getGetJointAccountQueryKey() }),
-    ]);
+  // Sorted entries leave the list as soon as they save; the list and the
+  // account are fetched again behind it. Waiting for the whole account first
+  // kept a sorted entry here, still Not sure yet, for a long while ("when I
+  // make changes, they don't reflect immediately", 8 Oct 2026).
+  const done = async (sortedIds: readonly number[] = []) => {
+    if (sortedIds.length > 0) {
+      queryClient.setQueryData<{ entries: EntryToSort[] }>(['entries-to-sort'], (cached) => withoutSorted(cached, sortedIds));
+    }
+    void queryClient.invalidateQueries({ queryKey: getGetJointAccountQueryKey() });
+    for (const queryKey of LISTS_AN_EDIT_CHANGES) void queryClient.invalidateQueries({ queryKey });
   };
   // The last change, kept so it can be undone: "there is no undo button in
   // Sort them out" (4 Oct 2026) - and "All 12" is a lot to take back by hand.
@@ -139,7 +145,7 @@ export default function SortEntriesScreen() {
           undo: async () => { for (const one of changed) await putBack(one); },
         });
       }
-      await done();
+      await done(changed.map((one) => one.id));
       setBusy(null);
     }
   };
@@ -238,7 +244,7 @@ export default function SortEntriesScreen() {
                   undo: async () => { for (const one of changed) await putBack(one); },
                 });
               }
-              await done();
+              await done(changed.map((one) => one.id));
               setBusy(null);
             }
           },
@@ -263,7 +269,7 @@ export default function SortEntriesScreen() {
           });
         },
       });
-      await done();
+      await done([entry.id]);
     } catch (error) {
       Alert.alert('Could not change it', plainSaveError(error));
     } finally {
@@ -293,7 +299,7 @@ export default function SortEntriesScreen() {
     } catch (error) {
       Alert.alert('Could not change it', plainSaveError(error));
     } finally {
-      await done();
+      await done(list.map((one) => one.id));
       setBusy(null);
     }
   };

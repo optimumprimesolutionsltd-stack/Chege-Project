@@ -26,6 +26,7 @@ const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
 import { router, useLocalSearchParams } from 'expo-router';
 import { markReturning } from '@/lib/lastRoute';
 import { isNotSure } from '@/lib/entriesToSort';
+import { LISTS_AN_EDIT_CHANGES, withSavedRow } from '@/lib/showSavedEdit';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useColors } from '@/hooks/useColors';
 import { UndoDeleteBar, useUndoableDelete } from '@/components/UndoDeleteBar';
@@ -773,6 +774,8 @@ export default function BankScreen() {
     queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
     queryClient.invalidateQueries({ queryKey: getGetSavingsGoalsQueryKey() });
     queryClient.invalidateQueries({ queryKey: getGetExpensesQueryKey() });
+    // And every list showing an entry's category or Not sure yet (lib/showSavedEdit).
+    for (const queryKey of LISTS_AN_EDIT_CHANGES) queryClient.invalidateQueries({ queryKey });
   };
 
   const invalidateAccounts = async () => {
@@ -1958,7 +1961,7 @@ export default function BankScreen() {
             }),
           });
         }
-        await updateTransaction({
+        const saved = await updateTransaction({
           id: editingTransactionId,
           data: {
             amount: parsed,
@@ -1996,6 +1999,10 @@ export default function BankScreen() {
             accountId: selectedAccountId ?? undefined,
           },
         });
+        // On the list now, not after the whole account comes back (lib/showSavedEdit).
+        if (saved?.id != null) {
+          queryClient.setQueriesData({ queryKey: getGetJointAccountQueryKey() }, (cached: unknown) => withSavedRow(cached, saved));
+        }
       } else if (txType === 'deposit') {
         const isJoint = isSharedWorkspace && validDepositorIds.length === 0;
         const isMultiDepositor = validDepositorIds.length > 1;
