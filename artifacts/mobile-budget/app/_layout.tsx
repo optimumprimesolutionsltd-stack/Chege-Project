@@ -24,7 +24,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEntitlements } from '@/hooks/useEntitlements';
 import { readPlanChoice, shouldShowPlanChoice } from '@/lib/planChoice';
 import { consumeResumePoint, saveResumePoint } from '@/lib/resumeAfterUpdate';
-import { keepWhatsNew, shouldInstallAtStart, shouldInstallOnReturn, takeWhatsNew } from '@/lib/updateTiming';
+import { forgetWhatsNew, keepWhatsNew, shouldInstallOnReturn, takeWhatsNew } from '@/lib/updateTiming';
 import { backTarget, notePath } from '@/lib/lastRoute';
 import { useImportProgress } from '@/lib/importProgress';
 import * as Updates from 'expo-updates';
@@ -55,17 +55,20 @@ import { afterQuiet } from '@/lib/refreshAfterChange';
 // does not ask Expo about updates every few seconds.
 const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
 
-// OTA updates download quietly and go in at a natural break - the next fresh
-// start, or coming back after a while away (lib/updateTiming) - never in the
-// middle of what somebody is doing ("my issue the update removes me from my
-// current session", 8 Oct 2026). What is new is shown once it is in.
+// OTA updates download quietly, then ask: Update now, or Later. Later lets it
+// go in at a natural break - coming back after a while away (lib/updateTiming),
+// or the next fresh start - never in the middle of what somebody is doing ("my
+// issue the update removes me from my current session", 8 Oct 2026). It used to
+// restart by itself when ready at a fresh start, and the "was updated" sheet
+// after it closed on any tap ("appearing for a flick of a second", 8 Oct 2026).
 // Skipped in development (Expo Go / dev-client) where Updates is not active.
-// Returns the notes RootLayout shows in <UpdatePrompt>.
+// Returns what RootLayout shows in <UpdatePrompt>.
 function useUpdatePrompt() {
   const [updateNotes, setUpdateNotes] = useState<string[] | null>(null);
+  // A downloaded update waiting for Update now or Later: what is new in it.
+  const [readyNotes, setReadyNotes] = useState<string[] | null>(null);
   const lastCheckedAt = useRef(0);
   const downloaded = useRef(false);
-  const startedAt = useRef(Date.now());
   const awaySince = useRef<number | null>(null);
   // Read inside the listener without making them dependencies.
   const pathname = usePathname();
@@ -88,12 +91,10 @@ function useUpdatePrompt() {
       const fetched = await Updates.fetchUpdateAsync();
       const manifest = (fetched.manifest ?? result.manifest) as { id?: string } | undefined;
       // What is new, from the note published with it (see app.config.js).
-      await keepWhatsNew(manifest?.id, updateNotesFrom(manifest), AsyncStorage);
+      const notes = updateNotesFrom(manifest);
+      await keepWhatsNew(manifest?.id, notes, AsyncStorage);
       downloaded.current = true;
-      // Ready within moments of opening, before anything was done: put it in now.
-      if (shouldInstallAtStart({ msSinceStart: Date.now() - startedAt.current, saving: saving.current, pathname: where.current })) {
-        await Updates.reloadAsync();
-      }
+      setReadyNotes(notes);
     } catch {
       // Network unavailable or server error — silently ignore.
     }
@@ -127,7 +128,26 @@ function useUpdatePrompt() {
     return () => subscription.remove();
   }, [check]);
 
-  return { updateNotes, dismiss: () => setUpdateNotes(null) };
+  // Update now: back where they were after the restart, and the list it just
+  // showed is not shown again.
+  const updateNow = useCallback(async () => {
+    try {
+      await saveResumePoint(where.current, AsyncStorage);
+      await forgetWhatsNew(AsyncStorage);
+      await Updates.reloadAsync();
+    } catch {
+      setReadyNotes(null);
+    }
+  }, []);
+
+  return {
+    updateNotes,
+    dismiss: () => setUpdateNotes(null),
+    // Not while an M-Pesa import is saving: a restart would cut it off.
+    readyNotes: importProgress?.stage === 'saving' ? null : readyNotes,
+    updateNow,
+    later: () => setReadyNotes(null),
+  };
 }
 
 // Configure API client at module level — must be before any component renders.
@@ -537,7 +557,7 @@ function RootLayoutNav() {
 }
 
 export default function RootLayout() {
-  const { updateNotes, dismiss } = useUpdatePrompt();
+  const { updateNotes, dismiss, readyNotes, updateNow, later } = useUpdatePrompt();
   // The redesign's faces, loaded under the family names every screen already
   // uses, so the whole app changes typeface without touching each style:
   // Atkinson Hyperlegible for reading text (it holds up on cheap screens) and
@@ -592,9 +612,11 @@ export default function RootLayout() {
         {/* Update prompt — rendered outside QueryClientProvider so it works even
             before the user is authenticated, and outside ErrorBoundary so a
             render error in the main tree doesn't swallow the prompt. */}
-        {updateNotes && (
-          <UpdatePrompt notes={updateNotes} onDismiss={dismiss} />
-        )}
+        {readyNotes ? (
+          <UpdatePrompt kind="ready" notes={readyNotes} onUpdate={updateNow} onDismiss={later} />
+        ) : updateNotes ? (
+          <UpdatePrompt kind="done" notes={updateNotes} onDismiss={dismiss} />
+        ) : null}
       </AppearanceProvider>
     </SafeAreaProvider>
   );

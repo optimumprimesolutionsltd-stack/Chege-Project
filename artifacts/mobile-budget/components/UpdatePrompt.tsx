@@ -1,13 +1,17 @@
 /**
- * UpdatePrompt — what is new, once an OTA update has gone in.
+ * UpdatePrompt — an OTA update ready to go in, or one that just has.
  *
- * Updates download quietly and go in at a natural break (app/_layout,
- * lib/updateTiming): asking "Update now" restarted Jamvi in the middle of what
- * the person was doing (8 Oct 2026). This slides up afterwards and lists what
- * is new, from the note published with the update (JAMVI_UPDATE_NOTE, see
- * app.config.js), so it can be tried out - or a general line when there is none.
+ * "ready": downloaded, with what is new, and the choice - Update now, or Later,
+ * which lets it go in at a natural break (app/_layout, lib/updateTiming).
+ * "done": it went in on its own; what is new, so it can be tried out.
+ * The list comes from the note published with the update (JAMVI_UPDATE_NOTE,
+ * see app.config.js), or a general line when there is none.
+ *
+ * Only its buttons (or Android Back, as Later) close it. A tap on the dimmed
+ * screen used to, so a tap already on its way closed it the moment it
+ * appeared - "for a flick of a second" (8 Oct 2026).
  */
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
@@ -21,12 +25,17 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 
 interface Props {
+  kind: 'ready' | 'done';
   /** What is new, one item each; empty for the general line. */
   notes: string[];
+  /** "ready" only: put it in now (restarts Jamvi where the person is). */
+  onUpdate?: () => Promise<void>;
+  /** Later, or Got it. */
   onDismiss: () => void;
 }
 
-export function UpdatePrompt({ notes, onDismiss }: Props) {
+export function UpdatePrompt({ kind, notes, onUpdate, onDismiss }: Props) {
+  const [updating, setUpdating] = useState(false);
   const insets = useSafeAreaInsets();
   const slideAnim = useRef(new Animated.Value(400)).current;
   const backdropAnim = useRef(new Animated.Value(0)).current;
@@ -64,13 +73,10 @@ export function UpdatePrompt({ notes, onDismiss }: Props) {
   }
 
   return (
-    <Modal transparent animationType="none" statusBarTranslucent>
-      {/* Backdrop */}
-      <Animated.View
-        style={[styles.backdrop, { opacity: backdropAnim }]}
-        pointerEvents="box-none"
-      >
-        <Pressable style={StyleSheet.absoluteFill} onPress={dismiss} />
+    <Modal transparent animationType="none" statusBarTranslucent onRequestClose={() => { if (!updating) dismiss(); }}>
+      {/* Backdrop - dims, and takes taps without closing anything */}
+      <Animated.View style={[styles.backdrop, { opacity: backdropAnim }]}>
+        <Pressable style={StyleSheet.absoluteFill} accessible={false} />
       </Animated.View>
 
       {/* Sheet */}
@@ -85,11 +91,11 @@ export function UpdatePrompt({ notes, onDismiss }: Props) {
 
         {/* Icon badge */}
         <View style={styles.iconWrap}>
-          <Feather name="check-circle" size={28} color="#E9B949" />
+          <Feather name={kind === 'ready' ? 'download' : 'check-circle'} size={28} color="#E9B949" />
         </View>
 
         {/* Heading */}
-        <Text style={styles.title}>Jamvi was updated</Text>
+        <Text style={styles.title}>{kind === 'ready' ? 'An update is ready' : 'Jamvi was updated'}</Text>
         {notes.length > 0 ? (
           <View style={styles.notes} testID="update-notes">
             <Text style={styles.notesHead}>What's new</Text>
@@ -101,15 +107,38 @@ export function UpdatePrompt({ notes, onDismiss }: Props) {
             ))}
           </View>
         ) : (
-          <Text style={styles.message}>Jamvi now has the latest improvements and fixes.</Text>
+          <Text style={styles.message}>
+            {kind === 'ready' ? 'The latest improvements and fixes for Jamvi.' : 'Jamvi now has the latest improvements and fixes.'}
+          </Text>
         )}
-        <Pressable
-          style={({ pressed }) => [styles.primaryBtn, pressed && styles.primaryBtnPressed]}
-          onPress={dismiss}
-          testID="update-got-it"
-        >
-          <Text style={styles.primaryBtnText}>Got it</Text>
-        </Pressable>
+        {kind === 'ready' ? (
+          <>
+            <Pressable
+              style={({ pressed }) => [styles.primaryBtn, pressed && styles.primaryBtnPressed, updating && styles.primaryBtnLoading]}
+              disabled={updating}
+              onPress={() => {
+                setUpdating(true);
+                void onUpdate?.().finally(() => setUpdating(false));
+              }}
+              testID="update-now"
+            >
+              <Text style={styles.primaryBtnText}>{updating ? 'Updating…' : 'Update now'}</Text>
+            </Pressable>
+            <Text style={styles.hint}>Jamvi restarts and brings you back to this screen.</Text>
+            <Pressable style={styles.laterBtn} disabled={updating} onPress={dismiss} testID="update-later">
+              <Text style={styles.laterText}>Later</Text>
+            </Pressable>
+            <Text style={styles.hint}>It goes in on its own the next time you open Jamvi.</Text>
+          </>
+        ) : (
+          <Pressable
+            style={({ pressed }) => [styles.primaryBtn, pressed && styles.primaryBtnPressed]}
+            onPress={dismiss}
+            testID="update-got-it"
+          >
+            <Text style={styles.primaryBtnText}>Got it</Text>
+          </Pressable>
+        )}
       </Animated.View>
     </Modal>
   );
@@ -224,8 +253,16 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   laterBtn: {
-    paddingVertical: 14,
+    paddingVertical: 12,
     alignItems: 'center',
+  },
+  hint: {
+    fontSize: 12,
+    fontFamily: 'Inter_400Regular',
+    color: 'rgba(245,240,232,0.5)',
+    textAlign: 'center',
+    marginTop: -4,
+    marginBottom: 8,
   },
   laterText: {
     fontSize: 14,
