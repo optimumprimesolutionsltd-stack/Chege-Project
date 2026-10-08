@@ -39,6 +39,7 @@ household, these are the primary sources on this site.
 
 ## Blog
 
+- [From a Screenshot to Every Phone in an Afternoon](https://jamvi.co.ke/blog/shipping-subcategory-planning/): How Jamvi shipped planning on subcategories to every phone and the web on 5 October 2026, and the checks that keep categories totalling their subcategories.
 - [Plan Groceries, Not Food: A Simpler Start in Jamvi](https://jamvi.co.ke/blog/plan-groceries-not-food/): Setting up Jamvi now asks for amounts on subcategories such as Groceries, Rent and Fuel, each category totals its subcategories, you can add your own, and Everyday budgeting comes picked.
 - [How Far Jamvi Has Come, and What It Does for You](https://jamvi.co.ke/blog/how-far-jamvi-has-come/): What Jamvi shipped in its first six weeks (from launch on 30 August 2026): M-Pesa import, M-Pesa products filed automatically, budgets that keep their history, groups and merry-go-round, and how your records are kept private.
 - [From a Year of M-Pesa to a Budget You Trust](https://jamvi.co.ke/blog/a-year-of-mpesa-sorted/): Sorting months of M-Pesa at your own pace: confirm-then-save, Not sure yet and Sort them out, payee learning, checking every shilling against the statement, and reading M-Pesa messages on Android.

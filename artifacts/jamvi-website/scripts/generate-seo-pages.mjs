@@ -51,6 +51,7 @@ const CRAWL = {
   "/guides/mpesa-payments-in-jamvi": { changefreq: "yearly", priority: "0.7" },
   "/guides/how-to-budget-in-kenya": { changefreq: "yearly", priority: "0.7" },
   "/blog": { changefreq: "weekly", priority: "0.7" },
+  "/blog/shipping-subcategory-planning": { changefreq: "yearly", priority: "0.6" },
   "/blog/plan-groceries-not-food": { changefreq: "yearly", priority: "0.6" },
   "/blog/how-far-jamvi-has-come": { changefreq: "yearly", priority: "0.6" },
   "/blog/a-year-of-mpesa-sorted": { changefreq: "yearly", priority: "0.6" },
