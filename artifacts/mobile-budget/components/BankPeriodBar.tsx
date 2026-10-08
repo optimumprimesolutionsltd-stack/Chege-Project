@@ -1,18 +1,11 @@
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Feather } from '@expo/vector-icons';
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Platform, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { useColors } from '@/hooks/useColors';
 import type { PeriodPreset } from '@/lib/bankPeriod';
-
-const PRESETS: Array<{ value: PeriodPreset; label: string }> = [
-  { value: 'all', label: 'All time' },
-  { value: 'this-month', label: 'This month' },
-  { value: 'last-month', label: 'Last month' },
-  { value: 'this-year', label: 'This year' },
-  { value: 'custom', label: 'Pick dates' },
-];
+import { monthsOfYear, yearsOf } from '@/lib/yearMonths';
 
 const isoOf = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -20,7 +13,12 @@ const isoOf = (date: Date) =>
 const show = (iso: string) =>
   iso ? new Date(`${iso}T00:00:00`).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Choose';
 
-/** A date period for the Bank tab: quick ranges, or a from and to date. */
+/**
+ * A date period for the Bank tab: All time, the whole year, each month Jan to
+ * Dec with how many entries it holds ("on the bank tab, i requested to see
+ * months here", 8 Oct 2026 - as in Sort them out), or a from and to date. A ‹ year ›
+ * switch shows when the entries span more than one year.
+ */
 export function BankPeriodBar({
   preset,
   onPreset,
@@ -28,6 +26,7 @@ export function BankPeriodBar({
   to,
   onFrom,
   onTo,
+  entries = [],
 }: {
   preset: PeriodPreset;
   onPreset: (next: PeriodPreset) => void;
@@ -35,15 +34,41 @@ export function BankPeriodBar({
   to: string;
   onFrom: (next: string) => void;
   onTo: (next: string) => void;
+  /** The account's entries, for each month's count and the years offered. */
+  entries?: readonly { date: string | null }[];
 }) {
   const colors = useColors();
   const [picking, setPicking] = useState<'from' | 'to' | null>(null);
+  const thisYear = new Date().getFullYear();
+  const [year, setYear] = useState(() => {
+    const chosen = Number(preset.startsWith('month:') ? preset.slice(6, 10) : preset.startsWith('year:') ? preset.slice(5) : NaN);
+    return Number.isInteger(chosen) && chosen > 1900 ? chosen : thisYear;
+  });
+  const years = useMemo(() => yearsOf(entries, thisYear), [entries, thisYear]);
+  const months = useMemo(() => monthsOfYear(entries, year), [entries, year]);
+  const options: Array<{ value: PeriodPreset; label: string; count?: number }> = [
+    { value: 'all', label: 'All time' },
+    { value: `year:${year}`, label: year === thisYear ? 'This year' : `All ${year}` },
+    ...months.map((month) => ({ value: `month:${month.key}` as PeriodPreset, label: month.label, count: month.count })),
+    { value: 'custom', label: 'Pick dates' },
+  ];
 
   return (
     <View style={{ gap: 8, marginBottom: 10 }} testID="bank-period">
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, alignItems: 'center' }}>
         <Feather name="calendar" size={15} color={colors.mutedForeground} />
-        {PRESETS.map((option) => {
+        {years.length > 1 ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }} testID="bank-period-year">
+            <Pressable disabled={year <= years[0]} onPress={() => setYear((current) => current - 1)} hitSlop={8} accessibilityRole="button" accessibilityLabel="Previous year">
+              <Feather name="chevron-left" size={18} color={year <= years[0] ? colors.border : colors.primary} />
+            </Pressable>
+            <Text style={{ color: colors.foreground, fontFamily: 'Inter_700Bold', fontSize: 13 }}>{year}</Text>
+            <Pressable disabled={year >= years[years.length - 1]} onPress={() => setYear((current) => current + 1)} hitSlop={8} accessibilityRole="button" accessibilityLabel="Next year">
+              <Feather name="chevron-right" size={18} color={year >= years[years.length - 1] ? colors.border : colors.primary} />
+            </Pressable>
+          </View>
+        ) : null}
+        {options.map((option) => {
           const active = preset === option.value;
           return (
             <Pressable
@@ -59,10 +84,11 @@ export function BankPeriodBar({
                 borderWidth: 1,
                 borderColor: active ? colors.primary : colors.border,
                 backgroundColor: active ? colors.primary : colors.muted,
+                opacity: option.count === 0 && !active ? 0.45 : 1,
               }}
             >
               <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: active ? colors.primaryForeground : colors.foreground }}>
-                {option.label}
+                {option.label}{option.count !== undefined ? ` (${option.count})` : ''}
               </Text>
             </Pressable>
           );

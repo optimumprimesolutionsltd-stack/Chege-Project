@@ -1,6 +1,7 @@
 import { balanceAsAt, type BalanceAccount } from './balanceAsAt';
 
-export type PeriodPreset = 'all' | 'this-month' | 'last-month' | 'this-year' | 'custom';
+/** `month:YYYY-MM` is one calendar month, `year:YYYY` one whole year (BankPeriodBar's Jan-Dec row). */
+export type PeriodPreset = 'all' | 'this-month' | 'last-month' | 'this-year' | 'custom' | `month:${string}` | `year:${string}`;
 
 export interface Period {
   /** Inclusive, YYYY-MM-DD. */
@@ -35,6 +36,16 @@ export function periodFor(
   custom: { from: string; to: string } = { from: '', to: '' },
 ): Period | null {
   const [y, m] = today.split('-').map(Number);
+  if (preset.startsWith('month:')) {
+    const [py, pm] = preset.slice(6).split('-').map(Number);
+    if (!py || !pm) return null;
+    return { from: `${py}-${pad(pm)}-01`, to: `${py}-${pad(pm)}-${pad(lastDay(py, pm))}` };
+  }
+  if (preset.startsWith('year:')) {
+    const py = Number(preset.slice(5));
+    if (!py) return null;
+    return { from: `${py}-01-01`, to: `${py}-12-31` };
+  }
   switch (preset) {
     case 'all':
       return null;
@@ -53,6 +64,8 @@ export function periodFor(
       const to = custom.to || '9999-12-31';
       return from <= to ? { from, to } : { from: to, to: from };
     }
+    default:
+      return null;
   }
 }
 

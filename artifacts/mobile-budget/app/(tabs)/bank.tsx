@@ -2885,6 +2885,7 @@ export default function BankScreen() {
             to={periodTo}
             onFrom={setPeriodFrom}
             onTo={setPeriodTo}
+            entries={data?.transactions ?? []}
           />
           {transactions.length > 0 ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -3049,6 +3050,23 @@ export default function BankScreen() {
                   {data?.accountName ? `${data.accountName} · ` : ''}
                   {canManageAccount ? 'Edit or delete' : canEditTransaction(item) ? 'Edit today' : ''}
                 </Text>
+                {/* Money in with no source is Not sure until it is sorted, and says so
+                    ("not yet sorted", 8 Oct 2026). Personal budget only: money in to a
+                    Shared group is members' contributions. */}
+                {dep && !isSharedWorkspace && !item.incomeSourceId && !(item.contributorSplits ?? []).some((split) => split.incomeSourceId)
+                  && !item.isBorrowing && !item.settlesContributorId && !item.savingsGoalId && !item.bankTransferId && !item.reversal && !item.transferDirection ? (
+                  <Pressable
+                    onPress={() => router.push('/sort-entries' as never)}
+                    hitSlop={6}
+                    accessibilityRole="button"
+                    accessibilityLabel="Not sure where this came from. Sort it out"
+                    testID={`bank-not-sure-${item.id}`}
+                    style={{ alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999, backgroundColor: '#f59e0b22' }}
+                  >
+                    <Feather name="help-circle" size={11} color="#d97706" />
+                    <Text style={{ color: '#d97706', fontSize: 11, fontFamily: 'Inter_600SemiBold' }}>Not sure · Sort it out</Text>
+                  </Pressable>
+                ) : null}
               </View>
               <View style={{ alignItems: 'flex-end', gap: 8 }}>
                  <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72} style={[styles.txAmount, { color: dep ? '#4ade80' : '#f87171' }]}>
