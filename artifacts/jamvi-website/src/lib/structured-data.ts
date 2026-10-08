@@ -16,6 +16,7 @@ import { FAQ_ENTRIES } from "./faq-content";
 import { SITE_ORIGIN, DEFAULT_OG_IMAGE } from "./site-seo";
 import { SEGMENTS } from "./segments";
 import { GUIDES } from "./guides";
+import { BLOG_POSTS } from "./blog";
 
 const ORGANISATION_ID = `${SITE_ORIGIN}/#organisation`;
 const WEBSITE_ID = `${SITE_ORIGIN}/#website`;
@@ -94,11 +95,13 @@ const BREADCRUMB_LABELS: Record<string, string> = {
   "/about": "About",
   "/faq": "Questions",
   "/guides": "Guides",
+  "/blog": "Blog",
   "/terms": "Terms of Service",
   "/privacy": "Privacy Policy",
   "/download": "Android app",
   ...Object.fromEntries(SEGMENTS.map((segment) => [segment.slug, segment.label])),
   ...Object.fromEntries(GUIDES.map((guide) => [guide.slug, guide.label])),
+  ...Object.fromEntries(BLOG_POSTS.map((post) => [post.slug, post.label])),
 };
 
 /** An Article, so a guide can earn a headline-and-date result and be read as
@@ -114,6 +117,24 @@ function article(route: string) {
     inLanguage: "en-KE",
     datePublished: guide.updated,
     dateModified: guide.updated,
+    mainEntityOfPage: `${SITE_ORIGIN}${route}/`,
+    image: DEFAULT_OG_IMAGE,
+    author: { "@id": ORGANISATION_ID },
+    publisher: { "@id": ORGANISATION_ID },
+  };
+}
+
+/** A BlogPosting: the dated, news kind of Article. */
+function blogPosting(route: string) {
+  const post = BLOG_POSTS.find((entry) => entry.slug === route);
+  if (!post) return null;
+  return {
+    "@type": "BlogPosting",
+    headline: post.heading,
+    description: post.description,
+    inLanguage: "en-KE",
+    datePublished: post.published,
+    dateModified: post.published,
     mainEntityOfPage: `${SITE_ORIGIN}${route}/`,
     image: DEFAULT_OG_IMAGE,
     author: { "@id": ORGANISATION_ID },
@@ -139,6 +160,9 @@ export function structuredDataFor(route: string): object {
 
   const guideArticle = article(route);
   if (guideArticle) graph.push(guideArticle);
+
+  const post = blogPosting(route);
+  if (post) graph.push(post);
 
   const label = BREADCRUMB_LABELS[route];
   if (label) graph.push(breadcrumbs(route, label));

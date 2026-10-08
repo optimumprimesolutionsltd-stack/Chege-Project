@@ -1,6 +1,7 @@
 import { JAMVI_PACKAGE, TRIAL_DAYS } from "@workspace/jamvi-pricing";
 import { SEGMENTS } from "./segments";
 import { GUIDES } from "./guides";
+import { BLOG_POSTS } from "./blog";
 
 export const SITE_ORIGIN = "https://jamvi.co.ke";
 // 1200x630, which is the slot WhatsApp, X and LinkedIn actually render. The
@@ -55,6 +56,11 @@ const PAGES: Record<string, SeoEntry> = {
     description:
       "Practical guides on chama record-keeping, tracking who has paid and splitting household bills, plus straight answers on what Jamvi costs and how M-Pesa payments work.",
   },
+  "/blog": {
+    title: "Blog: News From the Mat",
+    description:
+      "What we have built into Jamvi, what changed and what it means for your money: M-Pesa import, budgets, chamas and shared groups in Kenya.",
+  },
   "/terms": {
     title: "Terms of Service",
     description:
@@ -85,6 +91,11 @@ for (const segment of SEGMENTS) {
 // Guides do the same - their title and description live beside the article.
 for (const guide of GUIDES) {
   PAGES[guide.slug] = { title: guide.title, description: guide.description };
+}
+
+// Blog posts too.
+for (const post of BLOG_POSTS) {
+  PAGES[post.slug] = { title: post.title, description: post.description };
 }
 
 export const SITE_SEO: Record<string, SeoEntry> = PAGES;
