@@ -2613,7 +2613,7 @@ export default function Bank() {
                     {isSharedWorkspace && <div className="space-y-2 sm:col-span-2">
                       <label className="text-sm font-semibold text-foreground">Who is withdrawing?</label>
                       <div className="grid grid-cols-3 gap-2" data-testid="withdrawal-attribution">
-                        {/* The group — default selection */}
+                        {/* The shared account itself, by its own name — default selection */}
                         <button
                           key="joint-bank"
                           type="button"
@@ -2625,7 +2625,7 @@ export default function Bank() {
                               : "bg-card border-input text-foreground hover:bg-muted/40"
                           }`}
                         >
-                          The group
+                          {account?.accountName ?? "The shared account"}
                         </button>
 
                         {/* Named member chips — one at a time */}
