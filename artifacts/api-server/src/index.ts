@@ -1,5 +1,6 @@
 import { ensureMpesaNames } from "./lib/mpesa-names";
 import { ensureEntriesToSort } from "./lib/entries-to-sort";
+import { fixBorrowedNotIncome } from "./lib/borrowed-not-income";
 import { ensurePossibleDuplicates } from "./lib/possible-duplicates";
 import { ensureImportSaveJobs } from "./lib/import-save-jobs";
 import { ensureEveryBudgetHasAnAccount } from "./lib/default-account";
@@ -78,6 +79,7 @@ async function startServer() {
   void ensureIncomeMonths();
   void ensureMpesaNames();
   void ensureEntriesToSort();
+  void fixBorrowedNotIncome();
   void ensurePossibleDuplicates();
   void ensureImportSaveJobs();
   void ensureEveryBudgetHasAnAccount();

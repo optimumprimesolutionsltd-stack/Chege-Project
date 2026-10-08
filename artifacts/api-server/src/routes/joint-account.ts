@@ -196,6 +196,8 @@ const UpdateJointAccountInput = z.object({
   // Omitted leaves whoever was recorded alone: an edit that never touches the
   // party must not drop it.
   settlesContributorId: z.number().int().positive().nullable().optional(),
+  // Money in that was borrowed. Omitted leaves it as it was.
+  isBorrowing: z.boolean().optional(),
   // Omitted leaves the note as it was; null or empty clears it.
   notes: z.string().trim().max(1000).nullable().optional(),
   sourceKind: z.enum(["income_source", "other"]).optional(),
@@ -1710,7 +1712,23 @@ router.put("/joint-account/:id", async (req, res): Promise<void> => {
       return;
     }
     const hasSplits = !!contributorSplits?.length;
-    const incomeSourceId = hasSplits
+    // Borrowed, or paid back by somebody who owed it: not income, so it has no
+    // income source. An edit used to keep "Ujenzi salary" on money marked as
+    // borrowed from Ujenzi, and never marked it borrowed at all (8 Oct 2026).
+    const isBorrowing = parsed.data.isBorrowing ?? existing.isBorrowing;
+    const settlesContributorId = parsed.data.settlesContributorId === undefined
+      ? existing.settlesContributorId
+      : parsed.data.settlesContributorId;
+    if (parsed.data.settlesContributorId != null) {
+      const [party] = await db
+        .select({ id: groupContributorsTable.id })
+        .from(groupContributorsTable)
+        .where(and(eq(groupContributorsTable.id, parsed.data.settlesContributorId), eq(groupContributorsTable.groupId, groupId)))
+        .limit(1);
+      if (!party) { res.status(400).json({ error: "That person is not in this budget." }); return; }
+    }
+    const notIncome = isBorrowing || settlesContributorId !== null;
+    const incomeSourceId = hasSplits || notIncome
       ? null
       : parsed.data.incomeSourceId === undefined
       ? existing.incomeSourceId
@@ -1728,6 +1746,8 @@ router.put("/joint-account/:id", async (req, res): Promise<void> => {
           madeById: hasSplits ? null : madeById,
           description,
           incomeSourceId,
+          isBorrowing,
+          settlesContributorId,
           expenseCategory: null,
           accountId,
           ...(parsed.data.notes === undefined ? {} : { notes: parsed.data.notes?.trim() || null }),

@@ -119,7 +119,7 @@ describe("a posting remembers who it was for", () => {
 
   it("refuses a party from another budget", () => {
     expect(bank).toContain("const paidPartyId = parsed.data.settlesContributorId;");
-    expect((bank.match(/That person is not in this budget\./g) ?? []).length).toBe(2);
+    expect((bank.match(/That person is not in this budget\./g) ?? []).length).toBe(3); // create, payment edit, and money-in edit (8 Oct 2026)
   });
 
   it("is left alone by an edit that never touched it", () => {
