@@ -23,7 +23,7 @@ import DateTimePicker, { type DateTimePickerEvent } from '@react-native-communit
 
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'];
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { markReturning } from '@/lib/lastRoute';
 import { isNotSure } from '@/lib/entriesToSort';
 import { LISTS_AN_EDIT_CHANGES, withSavedRow } from '@/lib/showSavedEdit';
@@ -210,8 +210,28 @@ export default function BankScreen() {
 
   // Modal state
   const [modalVisible, setModalVisible] = useState(false);
+  // An edit opened from All expenses or Activity: the Bank list is covered while
+  // the entry opens and while it goes back, so it does not flash up in between
+  // ("when I want to edit, the tab flickers first to the bank tab", 8 Oct 2026).
+  const [editFromElsewhere, setEditFromElsewhere] = useState(false);
+  useFocusEffect(useCallback(() => () => setEditFromElsewhere(false), []));
   useEffect(() => {
-    if (modalVisible || !returnAfterEdit.current) return;
+    if (!editFromElsewhere || modalVisible) return;
+    // Never left covering Bank if the entry cannot be opened.
+    const giveUp = setTimeout(() => setEditFromElsewhere(false), 8000);
+    return () => clearTimeout(giveUp);
+  }, [editFromElsewhere, modalVisible]);
+  const sheetWasOpen = useRef(false);
+  useEffect(() => {
+    if (modalVisible) {
+      sheetWasOpen.current = true;
+      return;
+    }
+    if (!returnAfterEdit.current) {
+      // Closed with nowhere to go back to: Bank is where the person is now.
+      if (sheetWasOpen.current) setEditFromElsewhere(false);
+      return;
+    }
     const back = returnAfterEdit.current;
     returnAfterEdit.current = null;
     markReturning(back);
@@ -640,6 +660,12 @@ export default function BankScreen() {
 
   // Edit on an M-Pesa or bank entry in Activity opens it here, on its own account,
   // where the balance follows the change (?editTx=<id>&accountId=<id>).
+  useEffect(() => {
+    if (editTx && handledEditTx.current !== editTx) {
+      sheetWasOpen.current = false;
+      setEditFromElsewhere(true);
+    }
+  }, [editTx]);
   useEffect(() => {
     if (!editTx || handledEditTx.current === editTx) return;
     const wanted = Number(linkedAccountId);
@@ -5770,6 +5796,11 @@ export default function BankScreen() {
         </KeyboardAvoidingView>
       </Modal>
       <UndoDeleteBar pending={undoable.pending} onUndo={undoable.undo} />
+      {editFromElsewhere ? (
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }]} testID="bank-edit-cover">
+          {modalVisible ? null : <ActivityIndicator color={colors.primary} />}
+        </View>
+      ) : null}
       {pairFor ? (
         <PassThroughPair
           entry={pairFor}
