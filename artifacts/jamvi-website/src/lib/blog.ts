@@ -51,6 +51,93 @@ const annual = JAMVI_PACKAGE.annualPriceKes.toLocaleString("en-KE");
 
 export const BLOG_POSTS: readonly BlogPost[] = [
   {
+    slug: "/blog/shipping-subcategory-planning",
+    title: "From a Screenshot to Every Phone in an Afternoon",
+    description:
+      "How Jamvi went from one suggestion on a screenshot to a release on every phone and the web on 5 October 2026: planning on subcategories, categories that total themselves, and the checks that keep it safe.",
+    label: "Shipping subcategory planning",
+    readingMinutes: 4,
+    published: "2026-10-08",
+    heading: "From a screenshot to every phone in an afternoon",
+    intro:
+      "On 5 October 2026 Jamvi went from one suggestion on a screenshot to a release on every phone and the web, in a single afternoon. Setup now plans amounts against subcategories only, a category shows just their total, and Everyday budgeting is preselected. Here is why we made the change, and how we made sure it could not go wrong.",
+    sections: [
+      {
+        heading: "Why we changed it",
+        body: [
+          "The last step of setup used to ask for one figure per category: Food, Housing, Utilities, each with a single box. A figure for all of Food is a guess, and a budget built from guesses goes over in the first week. New budgets also started without subcategories, so there was nowhere finer to record spending.",
+          "The suggestion was short: open the subcategories and put the amount boxes against them, not the parents. A follow-up made it a rule for the whole app. Amounts live only on subcategories, and a category only shows the total of what is inside it. The Budget screen already worked that way, so setup was the part out of step.",
+        ],
+      },
+      {
+        heading: "One afternoon, step by step",
+        body: [
+          "Each step was tested before it went out: more than 3,900 automated tests across the phone app, the web app and the server.",
+        ],
+        milestones: [
+          {
+            date: "5 Oct",
+            title: "Phone setup and the server",
+            text: "Categories open into subcategories with their own amounts, the server creates them under their category, and Everyday budgeting is preselected on phone and web.",
+          },
+          {
+            date: "5 Oct",
+            title: "Update sent to every phone",
+            text: "Delivered to the installed app, so nobody had to download anything new.",
+          },
+          {
+            date: "5 Oct",
+            title: "Web setup follows",
+            text: "jamvi.co.ke plans on subcategories the same way, from the same list.",
+          },
+          {
+            date: "5 Oct",
+            title: "The rule holds everywhere",
+            text: "The server now refuses an amount on a category that has subcategories, from any app version.",
+          },
+        ],
+      },
+      {
+        heading: "How it holds together",
+        body: [
+          "Getting the screen right was the easy part. The work was making sure the new rule could not quietly break.",
+        ],
+        points: [
+          {
+            title: "Every category has a list.",
+            text: "44 categories, from Food to a wedding's Catering, each open into one to four subcategories. A check fails if any category setup offers is missing one, so a category never needs a box of its own.",
+          },
+          {
+            title: "No name can clash.",
+            text: "A budget allows each category name once, so no subcategory repeats another, or a category, a debt such as Bank loan, or the built-in M-Pesa charges. That is why Loans gets \"Loan repayments\", not \"Bank loan\".",
+          },
+          {
+            title: "Categories stay honest.",
+            text: "The server creates subcategories under their category and keeps the category at zero. If a subcategory already exists, it only fills in an amount that was blank, and it never moves a category that lives somewhere else.",
+          },
+          {
+            title: "Phone and web cannot drift apart.",
+            text: "The web keeps its own copy of the list, and a check requires the two to be identical.",
+          },
+          {
+            title: "Your existing budgets were not touched.",
+            text: "Nothing was rewritten. Only new setups get subcategories.",
+          },
+        ],
+      },
+      {
+        heading: "Tell us what is missing",
+        body: [
+          "We picked the subcategory names to match how Kenyan households spend: Matatu & bus, Boda boda, SHA contributions, Harambees. If a name does not sound like you, or something you spend on every month is missing, tell us on WhatsApp or at info@jamvi.co.ke. Lists like these are quick to change.",
+        ],
+      },
+    ],
+    cta: {
+      heading: "Start with a budget that adds itself up.",
+      text: `Set up Jamvi in a few minutes, with Groceries, Rent and Fuel ready to plan. Free for your first ${TRIAL_DAYS} days, then KES ${price} a month.`,
+    },
+  },
+  {
     slug: "/blog/plan-groceries-not-food",
     title: "Plan Groceries, Not Food: A Simpler Start in Jamvi",
     description:
