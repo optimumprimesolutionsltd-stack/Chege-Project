@@ -13,8 +13,8 @@ describe('business or personal, for every account', () => {
   });
 
   it('is saved on the server after the account, and shown on the account chip', () => {
-    expect(bank).toContain('await businessAccounts.setBusiness(account.id, accountIsBusiness)');
-    expect(bank).toContain('testID={`bank-account-business-${account.id}`}');
+    expect(bank).toContain('await businessAccounts.setBusiness(account.id, accountIsBusiness, businessId)');
+    expect(bank).toContain("testID={group.label ? `bank-accounts-${group.business ? 'business' : 'personal'}` : 'bank-accounts-all'}");
   });
 
   it('the Business report lists each business account; the income list says what was left out', () => {
@@ -22,5 +22,22 @@ describe('business or personal, for every account', () => {
     const income = readFileSync('app/income-ledger.tsx', 'utf8');
     expect(income).toContain('from your business');
     expect(income).toContain('into business accounts');
+  });
+});
+
+// "A user has many businesses, it's good to specify to which business the money
+// is going" / "they look overcrowded" (8 Oct 2026).
+describe('which business, and accounts grouped by it', () => {
+  const bank = readFileSync('app/(tabs)/bank.tsx', 'utf8');
+
+  it('asks which business for a business account, or takes a new one', () => {
+    expect(bank).toContain('testID={`bank-account-business-of-${stream.id}`}');
+    expect(bank).toContain('testID="bank-account-new-business"');
+    expect(bank).toContain("await businessAccounts.setBusiness(account.id, accountIsBusiness, businessId)");
+  });
+
+  it('groups accounts: Personal, then one row per business', () => {
+    expect(bank).toContain("{ label: 'Personal', business: false,");
+    expect(bank).toContain("label: streamId === null ? 'Business' : incomeSourceNames.get(streamId) ?? 'Business',");
   });
 });

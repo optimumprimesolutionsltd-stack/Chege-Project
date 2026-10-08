@@ -26,7 +26,7 @@ type Entry = { date: string; description: string; amount: number };
 type Line = { category: string; amount: number; shareOfSales?: number | null; entries?: Entry[]; more?: number };
 type Figures = { sales: number; costOfGoodsSold: number; grossProfit: number; expenses: number; netProfit: number };
 /** One of the business's own bank accounts over the period (api-server businessAccountSummary). */
-type BusinessAccount = { accountId: number; name: string; moneyIn: number; moneyOut: number; byCategory: Array<{ category: string; amount: number }> };
+type BusinessAccount = { accountId: number; name: string; businessName?: string | null; moneyIn: number; moneyOut: number; byCategory: Array<{ category: string; amount: number }> };
 
 type Statement = {
   incomeSourceId: number;
@@ -331,7 +331,7 @@ export default function BusinessScreen() {
           <View key={account.accountId} style={[styles.note, { borderColor: colors.border, gap: 6 }]} testID={`business-account-${account.accountId}`}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <Feather name="briefcase" size={14} color={colors.primary} />
-              <Text style={{ flex: 1, color: colors.foreground, fontFamily: 'Inter_700Bold' }}>{account.name}</Text>
+              <Text style={{ flex: 1, color: colors.foreground, fontFamily: 'Inter_700Bold' }}>{account.businessName ? `${account.businessName} · ${account.name}` : account.name}</Text>
             </View>
             <Text style={{ color: colors.foreground }}>In KES {kes(account.moneyIn)} · Out KES {kes(account.moneyOut)} · Net KES {kes(account.moneyIn - account.moneyOut)}</Text>
             {account.byCategory.slice(0, 6).map((line) => (
