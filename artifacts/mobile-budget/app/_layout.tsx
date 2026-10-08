@@ -612,10 +612,13 @@ export default function RootLayout() {
         {/* Update prompt — rendered outside QueryClientProvider so it works even
             before the user is authenticated, and outside ErrorBoundary so a
             render error in the main tree doesn't swallow the prompt. */}
-        {readyNotes ? (
-          <UpdatePrompt kind="ready" notes={readyNotes} onUpdate={updateNow} onDismiss={later} />
-        ) : updateNotes ? (
-          <UpdatePrompt kind="done" notes={updateNotes} onDismiss={dismiss} />
+        {/* What the update just installed stays until Got it; a newer one that
+            arrives meanwhile is offered after it, not in its place ("Jamvi was
+            updated" vanished when the next download finished, 8 Oct 2026). */}
+        {updateNotes ? (
+          <UpdatePrompt key="done" kind="done" notes={updateNotes} onDismiss={dismiss} />
+        ) : readyNotes ? (
+          <UpdatePrompt key="ready" kind="ready" notes={readyNotes} onUpdate={updateNow} onDismiss={later} />
         ) : null}
       </AppearanceProvider>
     </SafeAreaProvider>
