@@ -499,7 +499,7 @@ export default function HistoryScreen() {
     // An M-Pesa or bank entry opens on Bank, where its balance follows the change.
     if ((exp as { fromBankPosting?: boolean }).fromBankPosting) {
       const accountId = (exp as { accountId?: number | null }).accountId;
-      router.push(`/(tabs)/bank?editTx=${-exp.id}${accountId ? `&accountId=${accountId}` : ''}` as never);
+      router.push(`/(tabs)/bank?editTx=${-exp.id}${accountId ? `&accountId=${accountId}` : ''}&returnTo=${encodeURIComponent('/(tabs)/history')}` as never);
       return;
     }
     router.push(getExpenseEditHref(exp) as never);

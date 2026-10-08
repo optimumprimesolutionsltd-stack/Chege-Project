@@ -24,6 +24,7 @@ import DateTimePicker, { type DateTimePickerEvent } from '@react-native-communit
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'];
 import { router, useLocalSearchParams } from 'expo-router';
+import { markReturning } from '@/lib/lastRoute';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useColors } from '@/hooks/useColors';
 import { UndoDeleteBar, useUndoableDelete } from '@/components/UndoDeleteBar';
@@ -177,8 +178,12 @@ export default function BankScreen() {
   const topPad = Platform.OS === 'web' ? 67 : insets.top;
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const { shortcut, editTx, accountId: linkedAccountId } = useLocalSearchParams<{ shortcut?: string; editTx?: string; accountId?: string }>();
+  const { shortcut, editTx, accountId: linkedAccountId, returnTo } = useLocalSearchParams<{ shortcut?: string; editTx?: string; accountId?: string; returnTo?: string }>();
   const handledEditTx = useRef<string | null>(null);
+  // Where an edit opened from elsewhere (Activity, All expenses) came from: once it is
+  // saved or closed the person goes back there, with their place kept, instead of
+  // being left on Bank ("kindly do an overhaul and fix", 8 Oct 2026).
+  const returnAfterEdit = useRef<string | null>(null);
   const handledShortcut = useRef<string | null>(null);
 
   const { data: group } = useGetGroup();
@@ -198,6 +203,13 @@ export default function BankScreen() {
 
   // Modal state
   const [modalVisible, setModalVisible] = useState(false);
+  useEffect(() => {
+    if (modalVisible || !returnAfterEdit.current) return;
+    const back = returnAfterEdit.current;
+    returnAfterEdit.current = null;
+    markReturning(back);
+    router.navigate(back as never);
+  }, [modalVisible]);
   const [txType, setTxType] = useState<TxType>('deposit');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
@@ -629,6 +641,7 @@ export default function BankScreen() {
     const tx = data?.transactions.find((row) => row.id === Number(editTx));
     if (!tx) return;
     handledEditTx.current = editTx;
+    returnAfterEdit.current = typeof returnTo === 'string' && returnTo.startsWith('/') ? returnTo : null;
     openEdit(tx as Tx);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editTx, linkedAccountId, accounts, selectedAccountId, data]);

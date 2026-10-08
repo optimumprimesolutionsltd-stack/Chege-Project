@@ -29,3 +29,14 @@ describe('an update goes in at a natural break', () => {
     expect(await takeWhatsNew('update-2', storage)).toBeNull();
   });
 });
+
+// "Didnt get it" (8 Oct 2026): one close and reopen is enough.
+describe('an update ready at a fresh start goes in then', () => {
+  it('only in the first moments, on Home, with nothing saving', async () => {
+    const { FRESH_START_MS, shouldInstallAtStart } = await import('@/lib/updateTiming');
+    expect(shouldInstallAtStart({ msSinceStart: 3_000, saving: false, pathname: '/' })).toBe(true);
+    expect(shouldInstallAtStart({ msSinceStart: FRESH_START_MS + 1, saving: false, pathname: '/' })).toBe(false);
+    expect(shouldInstallAtStart({ msSinceStart: 3_000, saving: false, pathname: '/bank' })).toBe(false);
+    expect(shouldInstallAtStart({ msSinceStart: 3_000, saving: true, pathname: '/' })).toBe(false);
+  });
+});

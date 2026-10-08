@@ -2234,7 +2234,15 @@ export default function SettingsScreen() {
               <View style={[styles.rowIcon, { backgroundColor: colors.muted }]}>
                 <Feather name="refresh-cw" size={16} color={colors.mutedForeground} />
               </View>
-              <Text style={[styles.rowLabel, { color: colors.foreground }]}>Check for updates</Text>
+              <View>
+                <Text style={[styles.rowLabel, { color: colors.foreground }]}>Check for updates</Text>
+                {/* Which version is running, so "did I get it?" can be answered on the phone. */}
+                <Text style={{ color: colors.mutedForeground, fontSize: 11, marginTop: 2 }} testID="running-update">
+                  {Updates.createdAt
+                    ? `This version: ${Updates.createdAt.toLocaleDateString('en-KE', { day: 'numeric', month: 'short' })}, ${Updates.createdAt.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })}`
+                    : 'This version: the one installed with the app'}
+                </Text>
+              </View>
             </View>
             {checkingUpdate ? <ActivityIndicator size="small" color={colors.mutedForeground} /> : <Feather name="chevron-right" size={16} color={colors.mutedForeground} />}
           </Pressable>
