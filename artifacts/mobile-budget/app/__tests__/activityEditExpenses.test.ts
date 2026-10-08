@@ -30,7 +30,9 @@ describe('Edit on Activity expenses', () => {
   });
 
   it('opens an M-Pesa or bank entry on Bank, on its own account', () => {
-    expect(history).toContain('router.push(`/(tabs)/bank?editTx=${-exp.id}${accountId ? `&accountId=${accountId}` : \'\'}` as never);');
+    expect(history).toContain("router.push(`/(tabs)/bank?editTx=${-exp.id}${accountId ? `&accountId=${accountId}` : ''}&returnTo=${encodeURIComponent('/(tabs)/history')}` as never);");
+    // And back to Activity once the edit is saved or closed, with its place kept.
+    expect(bank).toContain('markReturning(back);');
     expect(bank).toContain('openEdit(tx as Tx);');
     expect(bank).toContain('selectAccount(wanted);');
   });

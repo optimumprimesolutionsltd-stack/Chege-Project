@@ -20,6 +20,18 @@ export const INSTALL_AFTER_AWAY_MS = 5 * 60 * 1000;
 
 const NOTES_KEY = 'jamvi:update-whats-new';
 
+/**
+ * Just opened and not yet used: the same natural break as coming back after a
+ * while. Without this, closing and reopening Jamvi only downloaded an update -
+ * the first open ran the old version - so it took a second reopen, and "didnt
+ * get it" (8 Oct 2026).
+ */
+export const FRESH_START_MS = 20 * 1000;
+
+export function shouldInstallAtStart({ msSinceStart, saving, pathname }: { msSinceStart: number; saving: boolean; pathname: string | null }): boolean {
+  return !saving && msSinceStart <= FRESH_START_MS && (pathname === null || pathname === '/' || pathname === '/login');
+}
+
 export function shouldInstallOnReturn({ downloaded, awayMs, saving }: { downloaded: boolean; awayMs: number | null; saving: boolean }): boolean {
   return downloaded && !saving && awayMs !== null && awayMs >= INSTALL_AFTER_AWAY_MS;
 }

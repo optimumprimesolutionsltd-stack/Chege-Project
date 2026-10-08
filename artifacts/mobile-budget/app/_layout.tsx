@@ -24,8 +24,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEntitlements } from '@/hooks/useEntitlements';
 import { readPlanChoice, shouldShowPlanChoice } from '@/lib/planChoice';
 import { consumeResumePoint, saveResumePoint } from '@/lib/resumeAfterUpdate';
-import { keepWhatsNew, shouldInstallOnReturn, takeWhatsNew } from '@/lib/updateTiming';
-import { notePath } from '@/lib/lastRoute';
+import { keepWhatsNew, shouldInstallAtStart, shouldInstallOnReturn, takeWhatsNew } from '@/lib/updateTiming';
+import { backTarget, notePath } from '@/lib/lastRoute';
 import { useImportProgress } from '@/lib/importProgress';
 import * as Updates from 'expo-updates';
 import {
@@ -65,6 +65,7 @@ function useUpdatePrompt() {
   const [updateNotes, setUpdateNotes] = useState<string[] | null>(null);
   const lastCheckedAt = useRef(0);
   const downloaded = useRef(false);
+  const startedAt = useRef(Date.now());
   const awaySince = useRef<number | null>(null);
   // Read inside the listener without making them dependencies.
   const pathname = usePathname();
@@ -89,6 +90,10 @@ function useUpdatePrompt() {
       // What is new, from the note published with it (see app.config.js).
       await keepWhatsNew(manifest?.id, updateNotesFrom(manifest), AsyncStorage);
       downloaded.current = true;
+      // Ready within moments of opening, before anything was done: put it in now.
+      if (shouldInstallAtStart({ msSinceStart: Date.now() - startedAt.current, saving: saving.current, pathname: where.current })) {
+        await Updates.reloadAsync();
+      }
     } catch {
       // Network unavailable or server error — silently ignore.
     }
@@ -290,15 +295,21 @@ function RootLayoutNav() {
     return () => { active = false; };
   }, [isAuthenticated, user?.id, user?.needsDisplayName, isTabsRoute, entitlements]);
 
-  // Keep Android's hardware back action inside Jamvi. A back press from a
-  // tab returns to the beginning instead of closing the app unexpectedly;
-  // a second press from Home requires an explicit exit choice.
+  // Keep Android's hardware back action inside Jamvi. A back press from a tab
+  // goes to the tab visited before it, where it was left (lib/lastRoute) - it
+  // used to always go to Home and start it over. With nowhere left to go back
+  // to, leaving Jamvi needs an explicit choice.
   useEffect(() => {
     if (Platform.OS !== 'android' || !isAuthenticated || !isTabsRoute) return;
 
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      const target = backTarget();
+      if (target) {
+        router.navigate(target as never);
+        return true;
+      }
       if (!isTabsHome) {
-        router.replace('/(tabs)');
+        router.navigate('/(tabs)' as never);
         return true;
       }
 
@@ -332,8 +343,14 @@ function RootLayoutNav() {
         return;
       }
 
+      const target = backTarget();
+      if (target) {
+        window.history.pushState(guardState, '', homeUrl);
+        router.navigate(target as never);
+        return;
+      }
       if (!isTabsHome) {
-        router.replace('/(tabs)');
+        router.navigate('/(tabs)' as never);
         return;
       }
 
