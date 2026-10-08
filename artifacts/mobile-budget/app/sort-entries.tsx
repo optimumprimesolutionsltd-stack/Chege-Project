@@ -19,6 +19,7 @@ import { useColors } from '@/hooks/useColors';
 import { isNotSure, isToCheck, NOT_SURE_CATEGORY, sameParty, type EntryToSort } from '@/lib/entriesToSort';
 import { AddIncomeSourceChip } from '@/components/AddIncomeSourceChip';
 import { SortAsDebt } from '@/components/SortAsDebt';
+import { PassThroughPair } from '@/components/PassThroughPair';
 import { LISTS_AN_EDIT_CHANGES, withoutSorted } from '@/lib/showSavedEdit';
 import { NewCategoryOffer } from '@/components/NewCategoryOffer';
 import { CreateCategorySheet } from '@/components/CreateCategorySheet';
@@ -321,6 +322,8 @@ export default function SortEntriesScreen() {
 
   // "Debt" on an entry: lent, borrowed or paid back, and who with (components/SortAsDebt).
   const [debtFor, setDebtFor] = useState<EntryToSort | null>(null);
+  // "Passed through my M-Pesa": this entry and its other half, together (components/PassThroughPair).
+  const [pairFor, setPairFor] = useState<EntryToSort | null>(null);
 
   const chip = { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.muted } as const;
 
@@ -463,6 +466,11 @@ export default function SortEntriesScreen() {
                   <Feather name="users" size={13} color={colors.primary} />
                   <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>{entry.direction === 'out' ? 'Lent / paid a debt' : 'Borrowed / paid back'}</Text>
                 </Pressable>
+                <Pressable disabled={busy !== null} onPress={() => setPairFor(entry)} accessibilityRole="button" testID={`sort-entry-${entry.id}-pass-through`}
+                  style={{ ...chip, flexDirection: 'row', alignItems: 'center', gap: 4, borderColor: colors.primary, backgroundColor: `${colors.primary}14` }}>
+                  <Feather name="repeat" size={13} color={colors.primary} />
+                  <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>Passed through</Text>
+                </Pressable>
                 {entry.direction === 'out' ? (
                   <Pressable disabled={busy !== null} onPress={() => setNewCategoryFor(entry)} accessibilityRole="button" testID={`sort-entry-${entry.id}-new-category-sheet`}
                     style={{ ...chip, flexDirection: 'row', alignItems: 'center', gap: 4, borderColor: colors.primary, backgroundColor: `${colors.primary}14` }}>
@@ -554,6 +562,17 @@ export default function SortEntriesScreen() {
             setNewCategoryFor(null);
             void queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
             sort(entry, { expenseCategory: name }, name);
+          }}
+        />
+      ) : null}
+      {pairFor ? (
+        <PassThroughPair
+          entry={pairFor}
+          onClose={() => setPairFor(null)}
+          onDone={(change) => {
+            setPairFor(null);
+            setLastChange({ text: change.text, undo: change.undo });
+            void done(change.ids);
           }}
         />
       ) : null}

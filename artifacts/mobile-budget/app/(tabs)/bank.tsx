@@ -27,6 +27,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { markReturning } from '@/lib/lastRoute';
 import { isNotSure } from '@/lib/entriesToSort';
 import { LISTS_AN_EDIT_CHANGES, withSavedRow } from '@/lib/showSavedEdit';
+import { PassThroughPair, type PairEntry } from '@/components/PassThroughPair';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useColors } from '@/hooks/useColors';
 import { UndoDeleteBar, useUndoableDelete } from '@/components/UndoDeleteBar';
@@ -647,6 +648,23 @@ export default function BankScreen() {
     openEdit(tx as Tx);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editTx, linkedAccountId, accounts, selectedAccountId, data]);
+
+  // "Passed through my M-Pesa", opened from an entry's edit sheet (components/PassThroughPair).
+  const [pairFor, setPairFor] = useState<PairEntry | null>(null);
+  const openPair = () => {
+    const tx = editingTransactionId === null ? null : (data?.transactions ?? []).find((row) => row.id === editingTransactionId);
+    if (!tx) return;
+    const entry: PairEntry = {
+      id: tx.id,
+      direction: tx.type === 'deposit' ? 'in' : 'out',
+      amount: Number(tx.amount),
+      date: tx.date,
+      description: tx.description,
+      accountId: selectedAccountId,
+    };
+    closeModal();
+    setPairFor(entry);
+  };
 
   const closeModal = () => {
     if (submitting) return;
@@ -5308,6 +5326,17 @@ export default function BankScreen() {
                 </Text>
               ) : null}
 
+              {/* Money that only passed through: this entry and its other half, together. */}
+              {editingTransactionId !== null && !editingTransfer && (txType === 'deposit' || txType === 'disbursement') ? (
+                <TouchableOpacity onPress={openPair} disabled={submitting} activeOpacity={0.8} testID="bank-pass-through-pair"
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10 }}>
+                  <Feather name="repeat" size={14} color={colors.primary} />
+                  <Text style={{ flex: 1, color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>
+                    Passed through your M-Pesa? Sort it out with the other half
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
+
               {/* Submit */}
               <TouchableOpacity
                 style={[
@@ -5629,6 +5658,27 @@ export default function BankScreen() {
         </KeyboardAvoidingView>
       </Modal>
       <UndoDeleteBar pending={undoable.pending} onUndo={undoable.undo} />
+      {pairFor ? (
+        <PassThroughPair
+          entry={pairFor}
+          onClose={() => setPairFor(null)}
+          onDone={(change) => {
+            setPairFor(null);
+            Alert.alert('Sorted out', change.text, [
+              {
+                text: 'Undo',
+                style: 'cancel',
+                onPress: () => {
+                  void change.undo()
+                    .catch(() => Alert.alert('Could not undo it', 'Open each entry and change it back.'))
+                    .finally(() => { void queryClient.invalidateQueries({ queryKey: getGetJointAccountQueryKey() }); });
+                },
+              },
+              { text: 'OK' },
+            ]);
+          }}
+        />
+      ) : null}
     </View>
   );
 }
