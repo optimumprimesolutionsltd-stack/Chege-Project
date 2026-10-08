@@ -1,5 +1,5 @@
 import type { DebtLink } from './mpesaDebts';
-import { fuzzyCategory, isFeePosting, looksLikePerson, ruleCategory, wordCategory, type PayeeRules } from './payeeLearning';
+import { fuzzyCategory, isFeePosting, looksLikePerson, ruleCategory, ruleSource, wordCategory, type PayeeRules } from './payeeLearning';
 import { loanOf, productCategory, productOf, savingsOf } from './mpesaProducts';
 import { knownPayeeCategory } from './knownPayees';
 
@@ -351,8 +351,11 @@ export function initialChoices(
     };
     if (line.direction === 'in') {
       // A loan drawn (Fuliza, M-Shwari, KCB M-PESA, Hustler Fund) is borrowed, never income, so it is offered no source.
-      const source = line.description && loanOf(line)?.kind !== 'borrowed' && !savingsOf(line) && !sourceNotGuessed(line) ? suggestIncomeSource(line.description, history) : null;
-      choices[line.index] = { ...choices[line.index], incomeSourceId: source, sourceAuto: source !== null, ...(notSureIn(line) ? { confirmed: true } : {}) };
+      // A source the person kept for this payer comes first (payeeLearning ruleSource):
+      // a business's customer is that business's sales, even from a person's number.
+      const kept = line.description && loanOf(line)?.kind !== 'borrowed' && !savingsOf(line) ? ruleSource(line.description, rules) : null;
+      const source = kept ?? (line.description && loanOf(line)?.kind !== 'borrowed' && !savingsOf(line) && !sourceNotGuessed(line) ? suggestIncomeSource(line.description, history) : null);
+      choices[line.index] = { ...choices[line.index], incomeSourceId: source, sourceAuto: source !== null, ...(notSureIn(line) && kept === null ? { confirmed: true } : {}) };
     }
   }
   return choices;
@@ -469,6 +472,11 @@ export function refreshSuggestions(
     // gets its airtime, bundles, charges and loans filed too (see filedByJamvi).
     const untouched = current.confirmed === undefined && current.include && destinationOf(current) === 'category';
     if (line.direction === 'in') {
+      const kept = line.description && loanOf(line)?.kind !== 'borrowed' && !savingsOf(line) ? ruleSource(line.description, rules) : null;
+      if (kept !== null && (current.incomeSourceId == null || current.sourceAuto)) {
+        next[line.index] = { ...current, incomeSourceId: kept, sourceAuto: true };
+        continue;
+      }
       if (untouched && (loanOf(line)?.kind === 'borrowed' || savingsOf(line) || notSureIn(line))) {
         next[line.index] = { ...current, incomeSourceId: null, sourceAuto: false, confirmed: true };
         continue;

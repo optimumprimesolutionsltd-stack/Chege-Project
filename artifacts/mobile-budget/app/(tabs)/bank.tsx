@@ -31,9 +31,12 @@ import { PassThroughPair, type PairEntry } from '@/components/PassThroughPair';
 import { useAutoMarkBusiness, useOwnerBusiness } from '@/hooks/useOwnerBusiness';
 import { useBusinessAccounts } from '@/hooks/useBusinessAccounts';
 import { useNamedPayees } from '@/hooks/useNamedPayees';
+import { WhoIsThisFor } from '@/components/WhoIsThisFor';
+import { namedKeyFor } from '@/lib/namedPayees';
+import { samePayeeName } from '@/lib/samePayee';
 import { businessTitle } from '@/lib/ownerBusiness';
 import { categoryChanged, moveSummary, parseRememberAsked, rememberAskedKey, rememberStep, samePayeeToMove } from '@/lib/samePayee';
-import { parseStoredRules, payeeKey, ruleCategory, rulesStorageKey, withRule } from '@/lib/payeeLearning';
+import { parseStoredRules, payeeKey, payeeName, referenceOf, ruleCategory, rulesStorageKey, withRule, withSourceRule } from '@/lib/payeeLearning';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useColors } from '@/hooks/useColors';
 import { UndoDeleteBar, useUndoableDelete } from '@/components/UndoDeleteBar';
@@ -316,6 +319,9 @@ export default function BankScreen() {
   const businessAccounts = useBusinessAccounts();
   // Outside accounts the person named (lib/namedPayees): shown by that name.
   const namedPayees = useNamedPayees();
+  // "Who is this for?" on an entry: Personal (null), or one of the businesses (components/WhoIsThisFor).
+  const [forBusinessId, setForBusinessId] = useState<number | null>(null);
+  const [addedBusinessIds, setAddedBusinessIds] = useState<number[]>([]);
   const [accountIsBusiness, setAccountIsBusiness] = useState<boolean | null>(null);
   // Which business, for somebody with more than one: an income stream, as in the
   // Business report, or a new one named here.
@@ -549,6 +555,26 @@ export default function BankScreen() {
     () => new Map(allIncomeSources.map((src) => [src.id, src.name])),
     [allIncomeSources],
   );
+  // The businesses: income streams with costs linked, a business account, a
+  // named supplier, or just added here. Salary and the like are not offered.
+  const costOfCategory = useMemo(() => new Map(
+    (categories as unknown as Array<{ name: string; reducesIncomeSourceId?: number | null }>)
+      .filter((row) => row.reducesIncomeSourceId != null)
+      .map((row) => [row.name, Number(row.reducesIncomeSourceId)]),
+  ), [categories]);
+  const whoForBusinesses = useMemo(() => {
+    const ids = new Set<number>([
+      ...costOfCategory.values(),
+      ...[...businessAccounts.businessOf.values()].filter((id): id is number => id != null),
+      ...namedPayees.named.map((one) => one.incomeSourceId).filter((id): id is number => id != null),
+      ...addedBusinessIds,
+    ]);
+    return allIncomeSources.filter((src) => ids.has(src.id)).map((src) => ({ id: src.id, name: src.name }));
+  }, [allIncomeSources, costOfCategory, businessAccounts.businessOf, namedPayees.named, addedBusinessIds]);
+  const whoForCosts = useMemo(
+    () => (forBusinessId === null ? [] : [...costOfCategory.entries()].filter(([, id]) => id === forBusinessId).map(([name]) => name).sort((a, b) => a.localeCompare(b))),
+    [costOfCategory, forBusinessId],
+  );
 
   // Fetch income sources for the selected withdrawer (withdrawal destination chips)
   const { data: withdrawSources = [] } = useQuery<MemberIncomeSource[]>({
@@ -779,6 +805,97 @@ export default function BankScreen() {
         ],
       );
     })();
+  };
+
+  const chooseWhoFor = (id: number | null) => {
+    setForBusinessId(id);
+    if (id === null) return;
+    if (txType === 'deposit') {
+      setIncomeSourceId(id);
+      return;
+    }
+    // Money out for a business: one of its costs.
+    const costs = [...costOfCategory.entries()].filter(([, owner]) => owner === id).map(([name]) => name);
+    if (!costs.includes(expenseCategory.trim())) setExpenseCategory(costs.sort((a, b) => a.localeCompare(b))[0] ?? '');
+  };
+  const addWhoForCost = async (name: string) => {
+    if (forBusinessId === null) return;
+    try {
+      await customFetch('/api/budget-categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, budgetAmount: 0, priority: 3, parentId: null, reducesIncomeSourceId: forBusinessId, costKind: 'cogs', isRecurring: true, activeMonth: null, activeYear: null }),
+      });
+      await queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
+      setExpenseCategory(name);
+    } catch (error) {
+      Alert.alert('Could not add that cost', error instanceof Error ? error.message : 'Please try again.');
+    }
+  };
+  const addWhoForBusiness = async (name: string) => {
+    if (!user?.id) return;
+    try {
+      const created = await customFetch<{ id: number }>('/api/income-sources', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id, name }),
+      });
+      await queryClient.invalidateQueries({ queryKey: ['income-sources'] });
+      setAddedBusinessIds((ids) => [...ids, created.id]);
+      chooseWhoFor(created.id);
+    } catch (error) {
+      Alert.alert('Could not add that business', error instanceof Error ? error.message : 'Please try again.');
+    }
+  };
+  /**
+   * After Save, for an entry said to be a business's: the payee is remembered
+   * for it - money out as a named account filed under the business's cost,
+   * money in as that business's sales - and money in from the same payer with
+   * no source yet is offered to follow.
+   */
+  const rememberWhoFor = async (entry: { id: number; description: string; direction: 'in' | 'out'; business: number; category: string }) => {
+    const label = payeeName(entry.description).replace(/^Received from\s+/i, '') || entry.description;
+    if (entry.direction === 'out') {
+      if (!entry.category) return;
+      await namedPayees.add({ key: namedKeyFor(referenceOf(entry.description) || label), name: namedPayees.nameFor(entry.description) ?? label, category: entry.category, incomeSourceId: entry.business });
+      return;
+    }
+    const key = rulesStorageKey(group?.id);
+    const rules = parseStoredRules(await AsyncStorage.getItem(key).catch(() => null));
+    await AsyncStorage.setItem(key, JSON.stringify(withSourceRule(rules, entry.description, entry.business))).catch(() => {});
+    const who = samePayeeName(entry.description);
+    const others = (data?.transactions ?? []).filter((row) =>
+      row.id !== entry.id && row.type === 'deposit' && row.incomeSourceId == null && !row.isBorrowing && row.settlesContributorId == null &&
+      row.bankTransferId == null && row.savingsGoalId == null && !!who && samePayeeName(row.description) === who);
+    if (others.length === 0) return;
+    const business = incomeSourceNames.get(entry.business) ?? 'the business';
+    Alert.alert(
+      `More from ${label}`,
+      `${others.length} other money in from ${label} has no source. File ${others.length === 1 ? 'it' : 'them'} as ${business}'s sales too?`,
+      [
+        { text: 'Just this one', style: 'cancel' },
+        {
+          text: `File ${others.length}`,
+          onPress: () => {
+            void (async () => {
+              let moved = 0;
+              try {
+                for (const row of others) {
+                  const saved = await updateTransaction({ id: row.id, data: { amount: Number(row.amount), date: row.date, incomeSourceId: entry.business } as never });
+                  if (saved?.id != null) queryClient.setQueriesData({ queryKey: getGetJointAccountQueryKey() }, (cached: unknown) => withSavedRow(cached, saved));
+                  moved += 1;
+                }
+                Alert.alert('Filed', `${moved} from ${label} filed as ${business}'s sales.`);
+              } catch (error) {
+                Alert.alert('Could not file them all', `${moved} of ${others.length} filed. ${error instanceof Error ? error.message : ''}`.trim());
+              } finally {
+                invalidateBalance();
+              }
+            })();
+          },
+        },
+      ],
+    );
   };
 
   const closeModal = () => {
@@ -1303,6 +1420,9 @@ export default function BankScreen() {
         .map((split) => [split.userId as string, String(split.amount)]),
     ));
     setIncomeSourceId(tx.incomeSourceId ?? null);
+    setForBusinessId(type === 'disbursement'
+      ? costOfCategory.get(tx.expenseCategory ?? '') ?? null
+      : type === 'deposit' && tx.incomeSourceId != null && whoForBusinesses.some((one) => one.id === tx.incomeSourceId) ? tx.incomeSourceId : null);
     setDepositSourceKind(null);
     setWithdrawerId(type === 'disbursement'
       ? (!isSharedWorkspace ? user?.id ?? null : tx.madeById ?? null)
@@ -2097,6 +2217,12 @@ export default function BankScreen() {
       // A payment moved to another category: the payee's other payments still
       // under the old one are offered to follow (lib/samePayee).
       let samePayeeOffer: { description: string; from: string; to: string; rows: Array<{ id: number; amount: number; date: string }> } | null = null;
+      // Said to be one of the businesses: remembered for it after the save (rememberWhoFor).
+      let whoFor: { id: number; description: string; direction: 'in' | 'out'; business: number; category: string } | null = null;
+      if (editingTransactionId !== null && forBusinessId !== null && (txType === 'deposit' || txType === 'disbursement')) {
+        const editing = data?.transactions.find((transaction) => transaction.id === editingTransactionId);
+        if (editing) whoFor = { id: editing.id, description: editing.description, direction: txType === 'deposit' ? 'in' : 'out', business: forBusinessId, category: expenseCategory.trim() };
+      }
       if (editingTransactionId !== null) {
         const editingTransaction = data?.transactions.find((transaction) => transaction.id === editingTransactionId);
         if (editingTransaction && txType === 'disbursement' && withdrawDest !== 'party' && withdrawDest !== 'lend' && withdrawDest !== 'savings' && !editingBusinessMoney) {
@@ -2315,6 +2441,9 @@ export default function BankScreen() {
       }
       finishEntry(keepOpen, { amount: parsed + (txType === 'disbursement' ? chargeToPost : 0), direction: txType === 'deposit' ? 'in' : 'out' });
       await invalidateBalance();
+      // The named account goes in first, so the payee's other payments are offered
+      // with the remembered category already in place.
+      if (whoFor) await rememberWhoFor(whoFor).catch(() => {});
       if (samePayeeOffer) {
         offerSamePayee(samePayeeOffer);
       } else if (repaidBy) {
@@ -4326,6 +4455,19 @@ export default function BankScreen() {
               {/* Somebody paying back what they owe. Kept above who deposited
                   it, because the answer changes what the money means: a
                   repayment is not income, so no income source is asked for. */}
+              {isDeposit && editingTransactionId !== null && !editingTransfer && !editingBusinessMoney && !repayingParty && !isBorrowing ? (
+                <WhoIsThisFor
+                  direction="in"
+                  businesses={whoForBusinesses}
+                  businessId={forBusinessId}
+                  onBusiness={chooseWhoFor}
+                  costs={[]}
+                  category=""
+                  onCategory={() => {}}
+                  onAddCost={async () => {}}
+                  onAddBusiness={addWhoForBusiness}
+                />
+              ) : null}
               {isDeposit ? (
                 <>
                   <Text style={[styles.label, { color: colors.mutedForeground }]}>What kind of money is this?</Text>
@@ -4855,6 +4997,19 @@ export default function BankScreen() {
                       is the same question: ordinary spending, paying somebody
                       you owe, or lending. Borrowing and lending are the two
                       directions of one idea and should not look unrelated. */}
+                  {editingTransactionId !== null && !editingTransfer && !editingBusinessMoney && withdrawDest !== 'party' && withdrawDest !== 'lend' && withdrawDest !== 'savings' ? (
+                    <WhoIsThisFor
+                      direction="out"
+                      businesses={whoForBusinesses}
+                      businessId={forBusinessId}
+                      onBusiness={chooseWhoFor}
+                      costs={whoForCosts}
+                      category={expenseCategory}
+                      onCategory={setExpenseCategory}
+                      onAddCost={addWhoForCost}
+                      onAddBusiness={addWhoForBusiness}
+                    />
+                  ) : null}
                   <Text style={[styles.label, { color: colors.mutedForeground }]}>What kind of money is this?</Text>
                   <TouchableOpacity
                     style={[styles.input, styles.pickerButton, { borderColor: colors.border, backgroundColor: colors.muted }]}

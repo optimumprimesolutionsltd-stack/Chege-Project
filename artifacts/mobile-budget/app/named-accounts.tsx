@@ -91,7 +91,7 @@ export default function NamedAccountsScreen() {
         await customFetch('/api/budget-categories', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: typed, budgetAmount: 0, priority: 1, parentId: null, reducesIncomeSourceId: business, costKind: 'cogs', isRecurring: true, activeMonth: null, activeYear: null }),
+          body: JSON.stringify({ name: typed, budgetAmount: 0, priority: 3, parentId: null, reducesIncomeSourceId: business, costKind: 'cogs', isRecurring: true, activeMonth: null, activeYear: null }),
         });
         void queryClient.invalidateQueries({ queryKey: ['/api/budget-categories'] });
         return typed;
