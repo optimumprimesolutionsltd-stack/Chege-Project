@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const screen = readFileSync('app/business.tsx', 'utf8');
+const sheet = readFileSync('components/BusinessCostCategories.tsx', 'utf8');
 
 // "Make it more detailed if the user wants, with the option of hiding."
 describe('business details', () => {
@@ -58,17 +59,19 @@ describe('income stream details', () => {
     expect(reports).toContain('.filter((portion) => (portion.incomeSourceId ?? null) === (incomeSourceId ?? null))');
   });
 
-  it('list each linked cost as cost of goods sold or an expense', () => {
-    expect(reports).toContain("{category.name} · {category.costKind === 'expense' ? 'Expense' : 'Cost of goods sold'}");
+  // An income stream has no costs now; a business's are on its Business report (components/BusinessCostCategories).
+  it('list no costs under an income stream', () => {
+    expect(reports).not.toContain('COSTS THIS MONTH');
   });
 });
 
-// "Can't see cost categories": the way in was a link inside Reports' income
-// stream cards. Each statement now links there.
+// "Can you attach a category to a business ... add it to the business report"
+// (8 Oct 2026): the sheet opens on the statement itself, not on Reports.
 describe('changing which costs count', () => {
-  it('is a link on every statement', () => {
-    expect(screen).toContain("router.navigate({ pathname: '/(tabs)/reports', params: { costsFor: String(incomeSourceId), costsName: name } });");
-    expect(screen).toContain('if (router.canDismiss()) router.dismissAll();');
+  it('is a link on every statement, opening its Cost categories there', () => {
+    expect(screen).toContain('const changeCosts = (incomeSourceId: number, name: string) => setCostsFor({ id: incomeSourceId, name });');
+    expect(screen).toContain('<BusinessCostCategories business={costsFor} onClose={() => setCostsFor(null)} />');
+    expect(screen).not.toContain("pathname: '/(tabs)/reports', params: { costsFor");
     expect(screen).toContain('testID={`business-change-costs-${business.incomeSourceId}`}');
   });
 });

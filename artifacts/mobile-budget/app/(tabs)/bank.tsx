@@ -3435,7 +3435,10 @@ export default function BankScreen() {
                     brought in from M-Pesa: members' own contributions need no source
                     ("should also apply to shared budget too"). */}
                 {dep && (!isSharedWorkspace || (item.mpesaReceipt && !(item.contributorSplits ?? []).length)) && !item.incomeSourceId && !(item.contributorSplits ?? []).some((split) => split.incomeSourceId)
-                  && !item.isBorrowing && !item.settlesContributorId && !item.savingsGoalId && !item.bankTransferId && !item.reversal && !item.transferDirection ? (
+                  && !item.isBorrowing && !item.settlesContributorId && !item.savingsGoalId && !item.bankTransferId && !item.reversal && !item.transferDirection
+                  // Money from your business is sorted - it is your own money, not income - as Sort them out already reads it
+                  // ("already sorted, why does it still show?", 8 Oct 2026).
+                  && !ownerBusiness.markedIds.has(item.id) ? (
                   <Pressable
                     onPress={() => router.push('/sort-entries' as never)}
                     hitSlop={6}
