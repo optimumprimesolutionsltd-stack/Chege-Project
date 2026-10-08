@@ -27,6 +27,20 @@ type Row = {
   reversal?: unknown;
 };
 
+/**
+ * The payee as one name, however M-Pesa wrote it that time: capitals, phone,
+ * till and masked numbers ("0712***678"), punctuation and "Ltd" set aside.
+ * Matching on the exact text left most of a payee's payments where they were -
+ * "the app says it has moved them but I still find them all over" (8 Oct 2026).
+ */
+export function samePayeeName(description: string | null | undefined): string {
+  return payeeKey(description ?? '')
+    .replace(/[^\p{L}\s]/gu, ' ')
+    .split(/\s+/)
+    .filter((word) => word && !['ltd', 'limited', 'co', 'the', 'plc'].includes(word))
+    .join(' ');
+}
+
 const same = (a: string | null | undefined, b: string | null | undefined) =>
   (a ?? '').trim().toLocaleLowerCase('en-KE') === (b ?? '').trim().toLocaleLowerCase('en-KE');
 
@@ -36,7 +50,7 @@ const same = (a: string | null | undefined, b: string | null | undefined) =>
  * reversal. Oldest first.
  */
 export function samePayeeToMove<T extends Row>(rows: readonly T[], edited: { id: number; description: string }, from: string, to: string): T[] {
-  const key = payeeKey(edited.description);
+  const key = samePayeeName(edited.description);
   if (!key || !to.trim() || isNotSure(to) || same(from, to)) return [];
   return rows
     .filter((row) =>
@@ -49,7 +63,7 @@ export function samePayeeToMove<T extends Row>(rows: readonly T[], edited: { id:
       !row.isLending &&
       row.settlesContributorId == null &&
       !row.reversal &&
-      !!row.description && payeeKey(row.description) === key &&
+      !!row.description && samePayeeName(row.description) === key &&
       (same(row.expenseCategory, from) || isNotSure(row.expenseCategory)))
     .sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
 }
@@ -64,4 +78,40 @@ export function moveSummary(rows: ReadonlyArray<Pick<Row, 'amount' | 'date'>>): 
   const first = monthOf(rows[0].date);
   const last = monthOf(rows[rows.length - 1].date);
   return `${rows.length} ${rows.length === 1 ? 'payment' : 'payments'}, KES ${Math.round(total).toLocaleString('en-KE')}, ${first === last ? first : `${first} – ${last}`}`;
+}
+
+/** A payment really moved to another category: not to Not sure yet, and not to the one it had. */
+export function categoryChanged(from: string | null | undefined, to: string): boolean {
+  return !!to.trim() && !isNotSure(to) && !same(from, to);
+}
+
+/**
+ * Payees already asked "Remember this category?" - asked once each, whatever
+ * the answer ("the remember this category should only be asked once, not every
+ * time", 8 Oct 2026). Kept per budget on this device, beside the rules.
+ */
+export const rememberAskedKey = (groupId: number | string | undefined): string => `jamvi:payee-rule-asked:${groupId ?? 'none'}`;
+
+export function parseRememberAsked(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? parsed.filter((key): key is string => typeof key === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * What to do about remembering, after a payment's category was changed:
+ *  - 'update': a category is already remembered for this payee - it follows the
+ *    correction, without asking;
+ *  - 'ask': never asked about this payee - ask, once;
+ *  - 'none': asked before, or nothing to remember.
+ */
+export function rememberStep(description: string, to: string, remembered: string, asked: readonly string[]): 'update' | 'ask' | 'none' {
+  const key = payeeKey(description);
+  if (!key || !to.trim() || isNotSure(to)) return 'none';
+  if (remembered) return same(remembered, to) ? 'none' : 'update';
+  return asked.includes(key) ? 'none' : 'ask';
 }
