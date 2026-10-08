@@ -46,6 +46,23 @@ export async function ensureEntriesToSort(): Promise<void> {
         "group_id" integer NOT NULL REFERENCES "groups"("id") ON DELETE CASCADE,
         "created_at" timestamp with time zone NOT NULL DEFAULT now()
       )`);
+    // Money in saved earlier from a person, a bank or an agent, with a
+    // source Jamvi may have guessed: listed once to check (gatherSourcedToCheck).
+    // `income_source_id` is the source it had then; changing it takes it off.
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "entries_to_check" (
+        "transaction_id" integer PRIMARY KEY
+          REFERENCES "joint_account_transactions"("id") ON DELETE CASCADE,
+        "group_id" integer NOT NULL REFERENCES "groups"("id") ON DELETE CASCADE,
+        "income_source_id" integer NOT NULL,
+        "created_at" timestamp with time zone NOT NULL DEFAULT now()
+      )`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS "entries_to_check_group_idx" ON "entries_to_check" ("group_id")`);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "entries_to_check_gathered" (
+        "group_id" integer PRIMARY KEY REFERENCES "groups"("id") ON DELETE CASCADE,
+        "created_at" timestamp with time zone NOT NULL DEFAULT now()
+      )`);
     ready = true;
     logger.info("Entries to sort are ready");
   } catch (err) {
@@ -91,4 +108,53 @@ export async function gatherMoneyInWithoutSource(groupId: number, from?: string)
     ON CONFLICT ("transaction_id") DO NOTHING
     RETURNING "transaction_id"`);
   return (added as { rows?: unknown[] }).rows?.length ?? 0;
+}
+
+/**
+ * How an imported entry from a person, a bank or a cash deposit at an agent was
+ * worded when it was saved: "Received from ..." (lib/mpesa-parser, the web's
+ * statement-import), "Money received", the agent's "Deposit of Funds at Agent",
+ * or a bank's name (the phone and web isBankPayee, with Postgres word edges).
+ */
+export const FROM_PEOPLE_BANKS_AGENTS = String.raw`^(received from |money received$|deposit of funds)`;
+export const BANK_NAME = String.raw`\y(bank|paybill account|equity|kcb|co-?op(erative)?|ncba|stanbic|absa|i\s?&\s?m|dtb|diamond trust|stanchart|standard chartered|sidian|sbm|gulf african|family bank|prime bank|credit bank|bank of africa|consolidated bank|national bank|housing finance|hfc)\y`;
+
+/**
+ * Money in from people, banks and agents, saved from M-Pesa before these
+ * started under Not sure, that has a source: the source may have been
+ * Jamvi's guess, and nothing saved says whether it was. "Ensure to sort what
+ * is done historically" (8 Oct 2026) - each is listed to check with its source
+ * kept, never cleared, since the person may have chosen it. Done once per
+ * budget; what is checked or changed stays off. Personal budget only. How many
+ * were added.
+ */
+export async function gatherSourcedToCheck(groupId: number): Promise<number> {
+  if (!ready) return 0;
+  return db.transaction(async (trx) => {
+    const first = await trx.execute(sql`
+      INSERT INTO "entries_to_check_gathered" ("group_id") VALUES (${groupId})
+      ON CONFLICT ("group_id") DO NOTHING
+      RETURNING "group_id"`);
+    if (((first as { rows?: unknown[] }).rows?.length ?? 0) === 0) return 0;
+    const added = await trx.execute(sql`
+      INSERT INTO "entries_to_check" ("transaction_id", "group_id", "income_source_id")
+      SELECT t."id", t."group_id", t."income_source_id"
+      FROM "joint_account_transactions" t
+      WHERE t."group_id" = ${groupId}
+        AND t."type" = 'deposit'
+        AND t."income_source_id" IS NOT NULL
+        AND t."mpesa_receipt" IS NOT NULL
+        AND (t."description" ~* ${FROM_PEOPLE_BANKS_AGENTS} OR t."description" ~* ${BANK_NAME})
+        AND t."is_borrowing" = false
+        AND t."settles_contributor_id" IS NULL
+        AND t."savings_goal_id" IS NULL
+        AND t."bank_transfer_id" IS NULL
+        AND t."transfer_direction" IS NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM "reversal_links" r
+          WHERE r."reversal_transaction_id" = t."id" OR r."original_transaction_id" = t."id")
+      ON CONFLICT ("transaction_id") DO NOTHING
+      RETURNING "transaction_id"`);
+    return (added as { rows?: unknown[] }).rows?.length ?? 0;
+  });
 }

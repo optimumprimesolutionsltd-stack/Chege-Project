@@ -1,5 +1,7 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { initialChoices, refreshSuggestions, sourceNotGuessed, type PreviewLine } from '@/lib/mpesaImport';
+import { isToCheck } from '@/lib/entriesToSort';
 
 // "So money received from people and bank should go to not sure" (8 Oct 2026).
 const line = (over: Partial<PreviewLine>): PreviewLine => ({
@@ -46,5 +48,24 @@ describe('money in that is not given a source from history', () => {
   it('other money in still learns its source', () => {
     expect(sourceNotGuessed({ type: 'other', description: 'ACME LTD SALARY' })).toBe(false);
     expect(initialChoices([line({ type: 'other', description: 'ACME LTD SALARY' })], history as never, [], '')[0].incomeSourceId).toBe(9);
+  });
+});
+
+// "Ensure to sort what is done historically" (8 Oct 2026): money in saved earlier
+// with a source is listed to check it, with Keep, on both screens.
+describe('money in listed to check its source', () => {
+  it('is told apart from money in saved as Not sure', () => {
+    const entry = { id: 1, type: 'deposit', direction: 'in' as const, amount: 5, date: '2026-08-01', description: 'National Bank' };
+    expect(isToCheck({ ...entry, incomeSourceId: 7 })).toBe(true);
+    expect(isToCheck({ ...entry, incomeSourceId: null })).toBe(false);
+    expect(isToCheck({ ...entry, direction: 'out', incomeSourceId: 7 })).toBe(false);
+  });
+
+  it('offers Keep and no "Leave it with no source" on phone and web', () => {
+    const phone = readFileSync('app/sort-entries.tsx', 'utf8');
+    const web = readFileSync('../family-budget/src/pages/sort-entries.tsx', 'utf8');
+    expect(phone).toContain('testID={`sort-entry-${entry.id}-keep`}');
+    expect(web).toContain('data-testid={`sort-entry-${entry.id}-keep`}');
+    for (const screen of [phone, web]) expect(screen).toContain("&& !isToCheck(entry) ? (");
   });
 });

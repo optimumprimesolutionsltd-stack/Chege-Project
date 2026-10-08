@@ -25,7 +25,12 @@ export type EntryToSort = {
   description: string;
   /** Its note, if it has one. */
   notes?: string | null;
+  /** Money in saved earlier with a source, listed to check it (api-server gatherSourcedToCheck). */
+  incomeSourceId?: number | null;
 };
+
+/** Money in listed with the source it already has, to keep or change - not saved as Not sure. */
+export const isToCheck = (entry: EntryToSort): boolean => entry.direction === "in" && entry.incomeSourceId != null;
 
 export const isNotSure = (category: string | null | undefined): boolean =>
   (category ?? "").trim().toLowerCase() === NOT_SURE_CATEGORY.toLowerCase();

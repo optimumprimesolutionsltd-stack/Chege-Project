@@ -3,7 +3,7 @@ import { z } from "zod";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { db, jointAccountTxTable } from "@workspace/db";
 import { getActiveGroupId, requireGroupManager } from "../lib/activeGroup";
-import { entriesToSortReady, gatherMoneyInWithoutSource, NOT_SURE_CATEGORY } from "../lib/entries-to-sort";
+import { entriesToSortReady, gatherMoneyInWithoutSource, gatherSourcedToCheck, NOT_SURE_CATEGORY } from "../lib/entries-to-sort";
 import { reversalLinksReady } from "../lib/reversal-links";
 import { DEBT_KINDS, sortAsDebt, unsortDebt } from "../lib/sort-as-debt";
 
@@ -58,9 +58,13 @@ router.get("/entries-to-sort", async (req, res): Promise<void> => {
   // person left it so (lib/entries-to-sort). Personal budget only: money in to a
   // Shared group is members' contributions. Never worth failing the list over.
   if (req.group?.isPrivate) await gatherMoneyInWithoutSource(groupId).catch(() => 0);
+  if (req.group?.isPrivate) await gatherSourcedToCheck(groupId).catch(() => 0);
   const marked = entriesToSortReady()
     ? sql`OR (${jointAccountTxTable.type} = 'deposit' AND ${jointAccountTxTable.incomeSourceId} IS NULL
-        AND ${jointAccountTxTable.id} IN (SELECT "transaction_id" FROM "entries_to_sort" WHERE "group_id" = ${groupId}))`
+        AND ${jointAccountTxTable.id} IN (SELECT "transaction_id" FROM "entries_to_sort" WHERE "group_id" = ${groupId}))
+      OR (${jointAccountTxTable.type} = 'deposit' AND EXISTS (SELECT 1 FROM "entries_to_check" c
+        WHERE c."transaction_id" = ${jointAccountTxTable.id} AND c."group_id" = ${groupId}
+          AND c."income_source_id" = ${jointAccountTxTable.incomeSourceId}))`
     : sql``;
   // Either half of a reversal has nothing left to sort: the payment and its money
   // back cancel out. A payment saved as Not sure and reversed later stayed on the
@@ -78,6 +82,8 @@ router.get("/entries-to-sort", async (req, res): Promise<void> => {
       description: jointAccountTxTable.description,
       // The entry's own note, shown and kept while it is sorted out.
       notes: jointAccountTxTable.notes,
+      // Set only on money in listed to check (lib/entries-to-sort gatherSourcedToCheck).
+      incomeSourceId: jointAccountTxTable.incomeSourceId,
     })
     .from(jointAccountTxTable)
     .where(and(
@@ -144,6 +150,39 @@ router.delete("/entries-to-sort/:transactionId", async (req, res): Promise<void>
       SELECT ${id}, ${groupId}
        WHERE EXISTS (SELECT 1 FROM "joint_account_transactions" WHERE "id" = ${id} AND "group_id" = ${groupId} AND "type" = 'deposit')
       ON CONFLICT DO NOTHING`);
+  }
+  res.status(204).end();
+});
+
+const checkedSchema = markSchema.extend({ again: z.boolean().optional() });
+
+/**
+ * Money in listed to check, kept with the source it has ("Keep ..."): off the
+ * list. `again` (Undo) puts it back, with the source it has now.
+ */
+router.post("/entries-to-sort/checked", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  if (!entriesToSortReady()) {
+    res.status(503).json({ error: "Entries to sort cannot be kept yet." });
+    return;
+  }
+  const parsed = checkedSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Send the entries you checked." });
+    return;
+  }
+  const ids = [...new Set(parsed.data.transactionIds)];
+  if (parsed.data.again) {
+    for (const id of ids) {
+      await db.execute(sql`
+        INSERT INTO "entries_to_check" ("transaction_id", "group_id", "income_source_id")
+        SELECT t."id", t."group_id", t."income_source_id" FROM "joint_account_transactions" t
+         WHERE t."id" = ${id} AND t."group_id" = ${groupId} AND t."type" = 'deposit' AND t."income_source_id" IS NOT NULL
+        ON CONFLICT ("transaction_id") DO UPDATE SET "income_source_id" = EXCLUDED."income_source_id"`);
+    }
+  } else {
+    for (const id of ids) await db.execute(sql`DELETE FROM "entries_to_check" WHERE "transaction_id" = ${id} AND "group_id" = ${groupId}`);
   }
   res.status(204).end();
 });
