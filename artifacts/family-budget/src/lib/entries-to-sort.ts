@@ -29,6 +29,8 @@ export type EntryToSort = {
   incomeSourceId?: number | null;
   /** Who it is recorded under. */
   madeById?: string | null;
+  /** Its account (servers before 8 Oct 2026 leave it out). */
+  accountId?: number | null;
 };
 
 /** Money in listed with the source it already has, to keep or change - not saved as Not sure. */

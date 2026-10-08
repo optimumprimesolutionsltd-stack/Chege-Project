@@ -123,10 +123,24 @@ const exists = (category: string, categoryNames: readonly string[]) => categoryN
 const numberKey = (number: string | null | undefined): string => (number ? `#${number}` : '');
 
 /** A rule's key in words a person can read. */
-export const ruleLabel = (key: string): string => (key.startsWith('#') ? `Till or paybill ${key.slice(1)}` : key);
+export const ruleLabel = (key: string): string =>
+  key.startsWith('#ref:') ? `Account ${key.slice(5)}` : key.startsWith('#') ? `Till or paybill ${key.slice(1)}` : key;
 
-/** The category the person asked to keep for this payee, or ''. A till or paybill number, when there is one, wins over the name. */
+/**
+ * The account a paybill payment was made to, as the import writes it: the
+ * digits in brackets at the end ("Kenya Commercial Bank (1234567)"), or ''.
+ */
+export const referenceOf = (description: string): string =>
+  description.match(/\(([^)]*)\)\s*$/)?.[1].replace(/\D/g, '') ?? '';
+
+/**
+ * The category the person asked to keep for this payee, or ''. An account
+ * named in Named accounts wins (one KCB account is the landlord, not every KCB
+ * payment - lib/namedPayees), then a till or paybill number, then the name.
+ */
 export function ruleCategory(description: string, rules: PayeeRules, number?: string | null): string {
+  const reference = referenceOf(description);
+  if (reference.length >= 4 && rules[`#ref:${reference}`]) return rules[`#ref:${reference}`];
   const byNumber = numberKey(number);
   if (byNumber && rules[byNumber]) return rules[byNumber];
   const key = payeeKey(description);

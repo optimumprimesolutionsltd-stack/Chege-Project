@@ -84,7 +84,9 @@ export function namesBusiness(description: string | null | undefined, keys: read
   return keys.some((key) => {
     if (key.startsWith('#')) {
       const numbers = key.slice(1).split('+');
-      return numbers.every((number) => number.length >= 4) && numbers.every((number) => digits.includes(number));
+      // A saved paybill payment keeps the account, not the paybill (lib/namedPayees).
+      const wanted = numbers.length > 1 ? numbers.slice(1) : numbers;
+      return wanted.every((number) => number.length >= 4 && digits.includes(number));
     }
     const name = words(key);
     return name.length > 0 && name.every((word) => said.has(word));
