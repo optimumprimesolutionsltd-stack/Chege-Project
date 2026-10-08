@@ -60,6 +60,7 @@ export function Footer() {
             <h4 className="font-mono text-xs uppercase tracking-[0.12em] mb-5 text-accent font-semibold">Company</h4>
             <ul className="space-y-3">
               <li><Link href="/about" className="text-primary-foreground/80 hover:text-accent hover:underline underline-offset-4 transition-colors text-[15px] outline-none focus-visible:text-accent">Our Story</Link></li>
+              <li><Link href="/blog" className="text-primary-foreground/80 hover:text-accent hover:underline underline-offset-4 transition-colors text-[15px] outline-none focus-visible:text-accent">Blog</Link></li>
               <li><Link href="/faq" className="text-primary-foreground/80 hover:text-accent hover:underline underline-offset-4 transition-colors text-[15px] outline-none focus-visible:text-accent">FAQ</Link></li>
               <li><a href={`mailto:${JAMVI_SUPPORT_EMAIL}`} className="text-primary-foreground/80 hover:text-accent hover:underline underline-offset-4 transition-colors text-[15px] outline-none focus-visible:text-accent">Contact</a></li>
             </ul>

@@ -16,6 +16,7 @@ export function Navbar() {
     { href: "/features", label: "Features" },
     { href: "/pricing", label: "Pricing" },
     { href: "/guides", label: "Guides" },
+    { href: "/blog", label: "Blog" },
     { href: "/about", label: "About" },
     { href: "/faq", label: "FAQ" },
     { href: "/download", label: "Get the app" }

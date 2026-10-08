@@ -149,13 +149,14 @@ for (const location of locations) {
   }
 }
 
-// llms.txt is a hand-maintained file, not generated from GUIDES the way the
+// llms.txt is a hand-maintained file, not generated from GUIDES or BLOG_POSTS the way the
 // sitemap is — which is exactly how a guide added after it was last edited
 // went missing from it. The sitemap is already the source of truth for
 // "which guides exist"; this just makes sure llms.txt actually agrees.
 const llmsTxt = await readFile(path.join(outputDir, "llms.txt"), "utf8");
 for (const location of locations) {
-  if (!new URL(location).pathname.startsWith("/guides/")) continue;
+  const { pathname } = new URL(location);
+  if (!pathname.startsWith("/guides/") && !pathname.startsWith("/blog/")) continue;
   if (!llmsTxt.includes(location)) {
     note(new URL(location).pathname, "is in the sitemap but missing from llms.txt.");
   }

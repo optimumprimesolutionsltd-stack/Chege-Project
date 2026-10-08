@@ -25,6 +25,9 @@ import { SEGMENTS } from '@/lib/segments';
 import Guides from '@/pages/guides';
 import { GuidePage } from '@/pages/guide';
 import { GUIDES } from '@/lib/guides';
+import Blog from '@/pages/blog';
+import { BlogPostPage } from '@/pages/blog-post';
+import { BLOG_POSTS } from '@/lib/blog';
 
 const queryClient = new QueryClient();
 
@@ -47,6 +50,12 @@ function Router() {
             {GUIDES.map((guide) => (
               <Route key={guide.slug} path={guide.slug}>
                 <GuidePage guide={guide} />
+              </Route>
+            ))}
+            <Route path="/blog" component={Blog} />
+            {BLOG_POSTS.map((post) => (
+              <Route key={post.slug} path={post.slug}>
+                <BlogPostPage post={post} />
               </Route>
             ))}
             {SEGMENTS.map((segment) => (

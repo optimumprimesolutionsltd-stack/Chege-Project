@@ -27,6 +27,7 @@ const OPENERS: Record<string, string> = {
   "/faq": "Hi Jamvi — I have a question that wasn't in your FAQ.",
   "/about": "Hi Jamvi — I'd like to know more about you.",
   "/guides": "Hi Jamvi — I was reading one of your guides and have a question.",
+  "/blog": "Hi Jamvi — I was reading your blog and have a question.",
 };
 
 const DEFAULT_OPENER = "Hi Jamvi — I'd like to know more about the app.";
