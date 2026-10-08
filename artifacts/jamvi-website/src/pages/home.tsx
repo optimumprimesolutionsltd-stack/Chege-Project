@@ -55,6 +55,10 @@ export default function Home() {
               <p className="mt-6 text-sm text-muted-foreground">
                 KES {price} a month after the trial. Groups cost nothing extra.
               </p>
+              <p className="mt-2 text-sm text-foreground/75" data-testid="home-how-to-start">
+                How to start: ask M-Pesa for your statement, install Jamvi, read it in - then Jamvi keeps up.{" "}
+                <Link href="/download#getting-started" className="font-bold text-primary underline">The four steps</Link>
+              </p>
             </div>
 
             {/* The demo. */}

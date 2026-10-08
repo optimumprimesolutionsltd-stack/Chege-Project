@@ -36,4 +36,22 @@ describe('jamvi.co.ke/download', () => {
     expect(serving).toContain('releases/download/jamvi-android/jamvi-sms.apk');
     expect(serving).toContain('env.JAMVI_SMS_APK_URL');
   });
+
+  // "Do not confuse the user with giving him an apk that will be blocked anyway" (8 Oct 2026).
+  it('never offers a phone the message-reading download, only how to get it', () => {
+    const page = read('../jamvi-website/src/pages/download.tsx');
+    expect(page).toContain('setOnPhone(/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent));');
+    expect(page).toMatch(/\{onPhone === false && \(\s+<a href=\{JAMVI_SMS_APK_PATH\}/);
+    expect(page).toContain('data-testid="sms-version-on-phone"');
+  });
+
+  // "The first instance should be a user being told to import an mpesa statement
+  // from date of his choice ... from there onwards the app starts reading" (8 Oct 2026).
+  it('guides the start: the statement first, then install, read it in, keep up - linked from the home page', () => {
+    const page = read('../jamvi-website/src/pages/download.tsx');
+    expect(page).toContain('id="getting-started"');
+    expect(page).toContain('title: "Ask M-Pesa for your statement first",');
+    expect(page).toContain('title: "Let Jamvi keep up",');
+    expect(read('../jamvi-website/src/pages/home.tsx')).toContain('<Link href="/download#getting-started"');
+  });
 });
