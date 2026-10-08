@@ -1,12 +1,13 @@
 /**
- * UpdatePrompt — shown when a new OTA update is ready.
+ * UpdatePrompt — what is new, once an OTA update has gone in.
  *
- * Slides up from the bottom of the screen. Lists what is new, from the note
- * published with the update (JAMVI_UPDATE_NOTE, see app.config.js), so it can
- * be tried out - or a general line when there is none - and gives the user
- * two choices: update now (downloads + reloads) or dismiss until next launch.
+ * Updates download quietly and go in at a natural break (app/_layout,
+ * lib/updateTiming): asking "Update now" restarted Jamvi in the middle of what
+ * the person was doing (8 Oct 2026). This slides up afterwards and lists what
+ * is new, from the note published with the update (JAMVI_UPDATE_NOTE, see
+ * app.config.js), so it can be tried out - or a general line when there is none.
  */
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   Animated,
   Easing,
@@ -15,16 +16,9 @@ import {
   StyleSheet,
   Text,
   View,
-  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import * as Updates from 'expo-updates';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { usePathname } from 'expo-router';
-import { saveResumePoint } from '@/lib/resumeAfterUpdate';
-import { useImportProgress } from '@/lib/importProgress';
-import { hasUnsavedWork } from '@/lib/unsavedWork';
 
 interface Props {
   /** What is new, one item each; empty for the general line. */
@@ -34,9 +28,6 @@ interface Props {
 
 export function UpdatePrompt({ notes, onDismiss }: Props) {
   const insets = useSafeAreaInsets();
-  const pathname = usePathname();
-  const [installing, setInstalling] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const slideAnim = useRef(new Animated.Value(400)).current;
   const backdropAnim = useRef(new Animated.Value(0)).current;
 
@@ -72,26 +63,6 @@ export function UpdatePrompt({ notes, onDismiss }: Props) {
     ]).start(() => onDismiss());
   }
 
-  // Restarting for an update in the middle of an M-Pesa save would cut it
-  // off: the update waits until the save is done.
-  const importProgress = useImportProgress();
-  const importSaving = importProgress?.stage === 'saving';
-
-  async function applyUpdate() {
-    if (importSaving) return;
-    setInstalling(true);
-    setError(null);
-    try {
-      await Updates.fetchUpdateAsync();
-      // The restart begins on Home. Note where they were so it can go back.
-      await saveResumePoint(pathname, AsyncStorage);
-      await Updates.reloadAsync();
-    } catch {
-      setInstalling(false);
-      setError('Could not download the update. Check your connection and try again.');
-    }
-  }
-
   return (
     <Modal transparent animationType="none" statusBarTranslucent>
       {/* Backdrop */}
@@ -99,7 +70,7 @@ export function UpdatePrompt({ notes, onDismiss }: Props) {
         style={[styles.backdrop, { opacity: backdropAnim }]}
         pointerEvents="box-none"
       >
-        <Pressable style={StyleSheet.absoluteFill} onPress={installing ? undefined : dismiss} />
+        <Pressable style={StyleSheet.absoluteFill} onPress={dismiss} />
       </Animated.View>
 
       {/* Sheet */}
@@ -114,11 +85,11 @@ export function UpdatePrompt({ notes, onDismiss }: Props) {
 
         {/* Icon badge */}
         <View style={styles.iconWrap}>
-          <Feather name="download-cloud" size={28} color="#E9B949" />
+          <Feather name="check-circle" size={28} color="#E9B949" />
         </View>
 
         {/* Heading */}
-        <Text style={styles.title}>Update ready</Text>
+        <Text style={styles.title}>Jamvi was updated</Text>
         {notes.length > 0 ? (
           <View style={styles.notes} testID="update-notes">
             <Text style={styles.notesHead}>What's new</Text>
@@ -130,44 +101,15 @@ export function UpdatePrompt({ notes, onDismiss }: Props) {
             ))}
           </View>
         ) : (
-          <Text style={styles.message}>A new version of Jamvi is ready with the latest improvements and fixes.</Text>
+          <Text style={styles.message}>Jamvi now has the latest improvements and fixes.</Text>
         )}
-        {hasUnsavedWork() ? (
-          <Text style={styles.message} testID="update-keeps-work">
-            Your unfinished work is kept. It will be here when Jamvi restarts.
-          </Text>
-        ) : null}
-
-        {/* Error */}
-        {error && <Text style={styles.errorText}>{error}</Text>}
-
-        {/* Primary CTA */}
         <Pressable
-          style={({ pressed }) => [styles.primaryBtn, pressed && styles.primaryBtnPressed, installing && styles.primaryBtnLoading]}
-          onPress={applyUpdate}
-          disabled={installing || importSaving}
-          testID="update-now"
+          style={({ pressed }) => [styles.primaryBtn, pressed && styles.primaryBtnPressed]}
+          onPress={dismiss}
+          testID="update-got-it"
         >
-          {installing ? (
-            <ActivityIndicator color="#fff" size="small" />
-          ) : (
-            <>
-              <Feather name="refresh-cw" size={16} color="#fff" style={{ marginRight: 8 }} />
-              <Text style={styles.primaryBtnText}>
-                {importSaving && importProgress?.stage === 'saving'
-                  ? `Update after your save (${importProgress.done} of ${importProgress.total})`
-                  : 'Update now'}
-              </Text>
-            </>
-          )}
+          <Text style={styles.primaryBtnText}>Got it</Text>
         </Pressable>
-
-        {/* Dismiss */}
-        {!installing && (
-          <Pressable onPress={dismiss} style={styles.laterBtn}>
-            <Text style={styles.laterText}>Remind me later</Text>
-          </Pressable>
-        )}
       </Animated.View>
     </Modal>
   );

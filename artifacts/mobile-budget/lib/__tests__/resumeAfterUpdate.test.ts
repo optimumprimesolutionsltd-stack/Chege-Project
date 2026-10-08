@@ -38,7 +38,7 @@ describe('coming back to the same screen after an update restarts the app', () =
   });
   it('is saved before either restart and restored from the root layout', () => {
     const read = (p: string) => readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
-    expect(read('components/UpdatePrompt.tsx')).toContain('await saveResumePoint(pathname, AsyncStorage);\n      await Updates.reloadAsync();');
+    expect(read('app/_layout.tsx')).toContain('void saveResumePoint(where.current, AsyncStorage).then(() => Updates.reloadAsync())');
     expect(read('app/(tabs)/settings.tsx')).toContain("saveResumePoint('/settings', AsyncStorage).then(() => Updates.reloadAsync())");
     expect(read('app/_layout.tsx')).toContain('consumeResumePoint(AsyncStorage)');
   });
