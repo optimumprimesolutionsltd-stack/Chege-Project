@@ -24,6 +24,8 @@ export type NamedPayee = {
   name: string;
   /** Where its payments go; none to leave that as it is. */
   category?: string;
+  /** The business (income stream) it is paid for: its category is that business's cost. */
+  incomeSourceId?: number;
 };
 
 export const namedPayeesKey = (groupId: number | string | undefined): string => `jamvi:named-payees:${groupId ?? 'none'}`;
@@ -36,7 +38,12 @@ export function parseNamedPayees(raw: string | null | undefined): NamedPayee[] {
     return parsed.flatMap((item) => {
       const one = item as Partial<NamedPayee> | null;
       if (!one || typeof one.key !== 'string' || !one.key || typeof one.name !== 'string' || !one.name.trim()) return [];
-      return [{ key: one.key, name: one.name.trim(), ...(typeof one.category === 'string' && one.category.trim() ? { category: one.category.trim() } : {}) }];
+      return [{
+        key: one.key,
+        name: one.name.trim(),
+        ...(typeof one.category === 'string' && one.category.trim() ? { category: one.category.trim() } : {}),
+        ...(typeof one.incomeSourceId === 'number' ? { incomeSourceId: one.incomeSourceId } : {}),
+      }];
     });
   } catch {
     return [];
