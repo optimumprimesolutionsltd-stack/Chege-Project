@@ -19,6 +19,7 @@ import {
   groupsTable,
   usersTable,
 } from "@workspace/db";
+import { inPersonalAccount } from "../lib/business-accounts";
 import { db } from "@workspace/db";
 import { getActiveGroupId } from "../lib/activeGroup";
 import { parseBudgetSummaryPeriod } from "../lib/ai-budget-summary";
@@ -47,7 +48,7 @@ router.get("/ai/budget-summary", async (req, res): Promise<void> => {
   const isIncome = sql`${jointAccountTxTable.settlesContributorId} IS NULL AND NOT ${jointAccountTxTable.isBorrowing} AND ${jointAccountTxTable.transferDirection} IS DISTINCT FROM 'from_savings' ${notAReversal(jointAccountTxTable.id)}`;
   // Spending recorded through a bank or an M-Pesa import is a categorised
   // disbursement, as on Home.
-  const isBankSpending = sql`${jointAccountTxTable.type} = 'disbursement' AND ${jointAccountTxTable.bankTransferId} IS NULL AND ${jointAccountTxTable.expenseCategory} IS NOT NULL AND ${jointAccountTxTable.expenseId} IS NULL`;
+  const isBankSpending = sql`${jointAccountTxTable.type} = 'disbursement' AND ${jointAccountTxTable.bankTransferId} IS NULL AND ${jointAccountTxTable.expenseCategory} IS NOT NULL AND ${jointAccountTxTable.expenseId} IS NULL${inPersonalAccount(jointAccountTxTable.accountId)}`;
   // As at today, as the Bank screen shows it: a posting dated ahead has not happened yet.
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Nairobi", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 
