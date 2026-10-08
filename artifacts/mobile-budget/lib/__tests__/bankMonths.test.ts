@@ -26,6 +26,7 @@ describe('money in with no source on Bank', () => {
     const bank = readFileSync('app/(tabs)/bank.tsx', 'utf8');
     expect(bank).toContain('testID={`bank-not-sure-${item.id}`}');
     expect(bank).toContain("onPress={() => router.push('/sort-entries' as never)}");
-    expect(bank).toContain('{dep && !isSharedWorkspace && !item.incomeSourceId');
+    // In a Shared group only money in brought in from M-Pesa ("should also apply to shared budget too").
+    expect(bank).toContain('{dep && (!isSharedWorkspace || (item.mpesaReceipt && !(item.contributorSplits ?? []).length)) && !item.incomeSourceId');
   });
 });

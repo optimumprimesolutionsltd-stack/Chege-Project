@@ -57,8 +57,10 @@ router.get("/entries-to-sort", async (req, res): Promise<void> => {
   // Money in with no source joins the list by itself, every year, unless the
   // person left it so (lib/entries-to-sort). Personal budget only: money in to a
   // Shared group is members' contributions. Never worth failing the list over.
-  if (req.group?.isPrivate) await gatherMoneyInWithoutSource(groupId).catch(() => 0);
-  if (req.group?.isPrivate) await gatherSourcedToCheck(groupId).catch(() => 0);
+  // In a Shared group only imported money in from people, banks and agents
+  // (lib/entries-to-sort), not members' contributions.
+  await gatherMoneyInWithoutSource(groupId, undefined, !req.group?.isPrivate).catch(() => 0);
+  await gatherSourcedToCheck(groupId).catch(() => 0);
   const marked = entriesToSortReady()
     ? sql`OR (${jointAccountTxTable.type} = 'deposit' AND ${jointAccountTxTable.incomeSourceId} IS NULL
         AND ${jointAccountTxTable.id} IN (SELECT "transaction_id" FROM "entries_to_sort" WHERE "group_id" = ${groupId}))
@@ -84,6 +86,8 @@ router.get("/entries-to-sort", async (req, res): Promise<void> => {
       notes: jointAccountTxTable.notes,
       // Set only on money in listed to check (lib/entries-to-sort gatherSourcedToCheck).
       incomeSourceId: jointAccountTxTable.incomeSourceId,
+      // Who it is recorded under, so Undo can put a changed depositor back.
+      madeById: jointAccountTxTable.madeById,
     })
     .from(jointAccountTxTable)
     .where(and(
@@ -114,10 +118,6 @@ router.get("/entries-to-sort", async (req, res): Promise<void> => {
 router.post("/entries-to-sort/money-in-without-source", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
-  if (!req.group?.isPrivate) {
-    res.status(403).json({ error: "This is for a Personal budget: money in to a group is members' contributions." });
-    return;
-  }
   if (!entriesToSortReady()) {
     res.status(503).json({ error: "Entries to sort cannot be kept yet." });
     return;
@@ -129,7 +129,7 @@ router.post("/entries-to-sort/money-in-without-source", async (req, res): Promis
     res.status(400).json({ error: "Send the day to start from as YYYY-MM-DD." });
     return;
   }
-  const added = await gatherMoneyInWithoutSource(groupId, from.data.from);
+  const added = await gatherMoneyInWithoutSource(groupId, from.data.from, !req.group?.isPrivate);
   res.json({ added });
 });
 

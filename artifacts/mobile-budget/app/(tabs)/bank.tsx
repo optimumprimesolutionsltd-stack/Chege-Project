@@ -143,6 +143,8 @@ type Tx = {
   bankTransferId?: string | null;
   bankTransferAccountId?: number | null;
   bankTransferAccountName?: string | null;
+  /** The M-Pesa receipt it was imported from, when it was. */
+  mpesaReceipt?: string | null;
   // userId is optional now that a portion can be credited to a contributor
   // recorded by name, who has no account to point at.
   contributorSplits?: { userId?: string; contributorId?: number; amount: number; incomeSourceId?: number | null }[];
@@ -3057,9 +3059,10 @@ export default function BankScreen() {
                   {canManageAccount ? 'Edit or delete' : canEditTransaction(item) ? 'Edit today' : ''}
                 </Text>
                 {/* Money in with no source is Not sure until it is sorted, and says so
-                    ("not yet sorted", 8 Oct 2026). Personal budget only: money in to a
-                    Shared group is members' contributions. */}
-                {dep && !isSharedWorkspace && !item.incomeSourceId && !(item.contributorSplits ?? []).some((split) => split.incomeSourceId)
+                    ("not yet sorted", 8 Oct 2026). In a Shared group only money in
+                    brought in from M-Pesa: members' own contributions need no source
+                    ("should also apply to shared budget too"). */}
+                {dep && (!isSharedWorkspace || (item.mpesaReceipt && !(item.contributorSplits ?? []).length)) && !item.incomeSourceId && !(item.contributorSplits ?? []).some((split) => split.incomeSourceId)
                   && !item.isBorrowing && !item.settlesContributorId && !item.savingsGoalId && !item.bankTransferId && !item.reversal && !item.transferDirection ? (
                   <Pressable
                     onPress={() => router.push('/sort-entries' as never)}

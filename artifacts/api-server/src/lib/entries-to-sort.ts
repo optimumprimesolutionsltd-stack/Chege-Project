@@ -80,10 +80,15 @@ export async function ensureEntriesToSort(): Promise<void> {
  * "Want to fix old entries too - ship all to sort them out" (7 Oct 2026):
  * done each time the list is read, so nothing waits on a button. How many were
  * added.
+ *
+ * In a Shared group money in is mostly members' contributions, which need no
+ * source, so only money in brought in from M-Pesa from a person, a bank or an
+ * agent is gathered there ("should also apply to shared budget too", 8 Oct 2026).
  */
-export async function gatherMoneyInWithoutSource(groupId: number, from?: string): Promise<number> {
+export async function gatherMoneyInWithoutSource(groupId: number, from?: string, shared = false): Promise<number> {
   if (!ready) return 0;
   const since = from ? sql`AND t."date" >= ${from}` : sql``;
+  const sharedOnly = shared ? fromPeopleBanksAgents : sql``;
   const added = await db.execute(sql`
     INSERT INTO "entries_to_sort" ("transaction_id", "group_id")
     SELECT t."id", t."group_id"
@@ -105,6 +110,7 @@ export async function gatherMoneyInWithoutSource(groupId: number, from?: string)
       AND NOT EXISTS (
         SELECT 1 FROM "entries_left_unsourced" l WHERE l."transaction_id" = t."id")
       ${since}
+      ${sharedOnly}
     ON CONFLICT ("transaction_id") DO NOTHING
     RETURNING "transaction_id"`);
   return (added as { rows?: unknown[] }).rows?.length ?? 0;
@@ -119,14 +125,17 @@ export async function gatherMoneyInWithoutSource(groupId: number, from?: string)
 export const FROM_PEOPLE_BANKS_AGENTS = String.raw`^(received from |money received$|deposit of funds)`;
 export const BANK_NAME = String.raw`\y(bank|paybill account|equity|kcb|co-?op(erative)?|ncba|stanbic|absa|i\s?&\s?m|dtb|diamond trust|stanchart|standard chartered|sidian|sbm|gulf african|family bank|prime bank|credit bank|bank of africa|consolidated bank|national bank|housing finance|hfc)\y`;
 
+/** Imported money in from a person, a bank or an agent. */
+const fromPeopleBanksAgents = sql`AND t."mpesa_receipt" IS NOT NULL AND (t."description" ~* ${FROM_PEOPLE_BANKS_AGENTS} OR t."description" ~* ${BANK_NAME})`;
+
 /**
  * Money in from people, banks and agents, saved from M-Pesa before these
  * started under Not sure, that has a source: the source may have been
  * Jamvi's guess, and nothing saved says whether it was. "Ensure to sort what
  * is done historically" (8 Oct 2026) - each is listed to check with its source
  * kept, never cleared, since the person may have chosen it. Done once per
- * budget; what is checked or changed stays off. Personal budget only. How many
- * were added.
+ * budget; what is checked or changed stays off. Every budget, Shared groups
+ * too: only imported money in is ever gathered. How many were added.
  */
 export async function gatherSourcedToCheck(groupId: number): Promise<number> {
   if (!ready) return 0;
