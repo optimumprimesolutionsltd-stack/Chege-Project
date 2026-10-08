@@ -19,12 +19,12 @@ import DateTimePicker, { type DateTimePickerEvent } from '@react-native-communit
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
 import { UndoDeleteBar, useUndoableDelete } from '@/components/UndoDeleteBar';
 import { deletedLabel } from '@/lib/undoDelete';
 import { useListEditor } from '@/hooks/useListEditor';
-import { ListEditButton, ListEditorFooter, RemoveRowButton } from '@/components/ListEditor';
+import { ListEditButton, ListEditorFooter } from '@/components/ListEditor';
 import { PageFlatList } from '@/components/PageScrollReset';
 import { useAuth } from '@/lib/auth';
 import {
@@ -58,6 +58,7 @@ import { ACTIVITY_TYPE } from '@/lib/activityTypes';
 import { formatDisplayDate as formatDate } from '@/lib/displayFormat';
 import { getCategoryIcon } from '@/lib/categoryIcons';
 import { getExpenseEditHref } from '@/lib/expenseEditLink';
+import { setQuickBarHidden } from '@/lib/layoutPrefs';
 import { workspaceBudgetName } from '@/lib/workspaceIdentity';
 import { GROUP_ATTRIBUTION } from "@/lib/attribution";
 import { ContributionMemberCard } from '@/components/ContributionMemberCard';
@@ -201,6 +202,7 @@ export default function HistoryScreen() {
       isLending?: boolean | null;
       isBorrowing?: boolean | null;
       settlesContributorId?: number | null;
+      accountId?: number | null;
     }>;
     return rows
       .filter((row) =>
@@ -223,6 +225,7 @@ export default function HistoryScreen() {
         description: row.description,
         date: row.date,
         paidByName: row.madeByName ?? null,
+        accountId: row.accountId ?? null,
         fromBankPosting: true as const,
         // A debt entry is removed on Banking, which also offers to put the
         // person's balance in Who owes who back.
@@ -493,8 +496,26 @@ export default function HistoryScreen() {
   });
 
   const openEdit = (exp: Expense) => {
+    // An M-Pesa or bank entry opens on Bank, where its balance follows the change.
+    if ((exp as { fromBankPosting?: boolean }).fromBankPosting) {
+      const accountId = (exp as { accountId?: number | null }).accountId;
+      router.push(`/(tabs)/bank?editTx=${-exp.id}${accountId ? `&accountId=${accountId}` : ''}` as never);
+      return;
+    }
     router.push(getExpenseEditHref(exp) as never);
   };
+  // What Edit can open: a bank entry that is not a debt (debts are changed on Bank), or an expense this person may edit.
+  const canOpenEdit = (exp: Expense) => (exp as { fromBankPosting?: boolean }).fromBankPosting
+    ? !(exp as { isDebtPosting?: boolean }).isDebtPosting && canRemoveExpenseRecord(exp)
+    : canEditExpenseRecord(exp);
+  // In edit mode the Save bar takes the quick-action bar's place at the bottom.
+  const editingExpenses = activeTab === 'expenses' && expEditor.editing;
+  useFocusEffect(
+    useCallback(() => {
+      setQuickBarHidden(editingExpenses);
+      return () => setQuickBarHidden(false);
+    }, [editingExpenses]),
+  );
 
   const closeEdit = () => { setEditingExpense(null); setSaving(false); };
 
@@ -888,24 +909,12 @@ export default function HistoryScreen() {
         </Pressable>
       )}
 
-      {activeTab === 'expenses' && expEditor.editing ? (
-        // In reach at the top while choosing - it used to sit after the last
-        // of hundreds of expenses, so Edit seemed to do nothing.
-        <View style={{ paddingHorizontal: 16 }} testID="history-expense-edit-bar">
-          <ListEditorFooter
-            editor={expEditor}
-            summary={`Tap the bin beside an expense to mark it. ${expenses.filter((exp) => expEditor.isRemoving(exp.id)).length} expense${
-              expenses.filter((exp) => expEditor.isRemoving(exp.id)).length === 1 ? '' : 's'
-            } marked for deletion.`}
-          />
-        </View>
-      ) : null}
 
       {activeTab === 'expenses' ? (
         isLoading ? (
           <ActivityIndicator color={colors.primary} style={{ marginTop: 60 }} size="large" />
         ) : (
-          <PageFlatList scroller={{ top: 12, bottom: insets.bottom + 110 }}
+          <PageFlatList scroller={{ top: 12, bottom: editingExpenses ? 170 : insets.bottom + 110 }}
             data={expenseRows}
             // A FlatList only redraws its rows when data or extraData changes, so
             // without this Edit changed nothing on screen: no remove buttons.
@@ -939,32 +948,49 @@ export default function HistoryScreen() {
                 <View style={styles.groupChild}>
                   <View style={[styles.groupChildLine, { backgroundColor: colors.border }]} />
                   {expEditor.editing ? (
-                    <View style={[styles.groupChildCard, { flexDirection: 'row', alignItems: 'center', gap: 10, paddingLeft: 4 }]}>
-                      {canRemoveExpenseRecord(row.item) ? (
-                        <RemoveRowButton editor={expEditor} id={row.item.id} />
-                      ) : (
-                        // Says why, rather than sitting there doing nothing.
-                        <Pressable
-                          hitSlop={10}
-                          accessibilityRole="button"
-                          accessibilityLabel="Why this cannot be removed here"
-                          testID={`history-locked-${row.item.id}`}
-                          onPress={() => Alert.alert(
-                            'Removed on Banking',
-                            (row.item as { isDebtPosting?: boolean }).isDebtPosting
-                              ? 'This is part of a debt. Remove it on the Bank tab, which also offers to put the balance in Who owes who back.'
-                              : (row.item as { fromBankPosting?: boolean }).fromBankPosting
-                                ? "Only the budget's owner or an admin can remove an M-Pesa or bank entry."
-                                : "Only the person who paid, or the budget's owner or an admin, can remove this expense.",
-                            (row.item as { isDebtPosting?: boolean }).isDebtPosting
-                              ? [{ text: 'Not now', style: 'cancel' }, { text: 'Open Bank', onPress: () => router.push('/(tabs)/bank' as never) }]
-                              : [{ text: 'OK' }],
-                          )}
-                        >
-                          <Feather name="lock" size={13} color={colors.mutedForeground} />
-                        </Pressable>
-                      )}
-                      <View style={{ flex: 1, opacity: expEditor.isRemoving(row.item.id) ? 0.5 : 1 }}>
+                    // Edit and Remove along the top of each entry, clear of the scroll
+                    // arrows on the right; Save floats at the bottom of the screen
+                    // ("an edit button not just remove ... at the top with a save
+                    // button at the bottom", 8 Oct 2026).
+                    <View style={[styles.groupChildCard, { gap: 4 }]} testID={`history-edit-row-${row.item.id}`}>
+                      <View style={styles.editActions}>
+                        {canOpenEdit(row.item) ? (
+                          <Pressable onPress={() => openEdit(row.item)} hitSlop={6} style={styles.editAction} accessibilityRole="button" accessibilityLabel={`Edit ${row.item.description}`} testID={`history-edit-${row.item.id}`}>
+                            <Feather name="edit-2" size={13} color={colors.primary} />
+                            <Text style={[styles.actionBtnText, { color: colors.primary }]}>Edit</Text>
+                          </Pressable>
+                        ) : null}
+                        {canRemoveExpenseRecord(row.item) ? (
+                          <Pressable onPress={() => expEditor.toggleRemoval(row.item.id)} hitSlop={6} style={styles.editAction} accessibilityRole="button" accessibilityLabel={expEditor.isRemoving(row.item.id) ? `Keep ${row.item.description}` : `Remove ${row.item.description}`} testID={`list-remove-${row.item.id}`}>
+                            <Feather name={expEditor.isRemoving(row.item.id) ? 'rotate-ccw' : 'trash-2'} size={13} color={expEditor.isRemoving(row.item.id) ? colors.primary : '#ef4444'} />
+                            <Text style={[styles.actionBtnText, { color: expEditor.isRemoving(row.item.id) ? colors.primary : '#ef4444' }]}>{expEditor.isRemoving(row.item.id) ? 'Keep' : 'Remove'}</Text>
+                          </Pressable>
+                        ) : (
+                          // Says why, rather than sitting there doing nothing.
+                          <Pressable
+                            hitSlop={10}
+                            accessibilityRole="button"
+                            accessibilityLabel="Why this cannot be removed here"
+                            testID={`history-locked-${row.item.id}`}
+                            style={styles.editAction}
+                            onPress={() => Alert.alert(
+                              'Removed on Banking',
+                              (row.item as { isDebtPosting?: boolean }).isDebtPosting
+                                ? 'This is part of a debt. Remove it on the Bank tab, which also offers to put the balance in Who owes who back.'
+                                : (row.item as { fromBankPosting?: boolean }).fromBankPosting
+                                  ? "Only the budget's owner or an admin can remove an M-Pesa or bank entry."
+                                  : "Only the person who paid, or the budget's owner or an admin, can remove this expense.",
+                              (row.item as { isDebtPosting?: boolean }).isDebtPosting
+                                ? [{ text: 'Not now', style: 'cancel' }, { text: 'Open Bank', onPress: () => router.push('/(tabs)/bank' as never) }]
+                                : [{ text: 'OK' }],
+                            )}
+                          >
+                            <Feather name="lock" size={13} color={colors.mutedForeground} />
+                            <Text style={[styles.actionBtnText, { color: colors.mutedForeground }]}>Locked</Text>
+                          </Pressable>
+                        )}
+                      </View>
+                      <View style={{ opacity: expEditor.isRemoving(row.item.id) ? 0.5 : 1 }}>
                         <ExpenseRow expense={row.item} colors={colors} />
                       </View>
                     </View>
@@ -973,7 +999,7 @@ export default function HistoryScreen() {
                       <ExpenseRow
                         expense={row.item}
                         colors={colors}
-                        onEdit={canEditExpenseRecord(row.item) ? () => openEdit(row.item) : undefined}
+                        onEdit={canOpenEdit(row.item) ? () => openEdit(row.item) : undefined}
                         onDelete={canRemoveExpenseRecord(row.item) ? () => handleDelete(row.item) : undefined}
                       />
                     </View>
@@ -982,7 +1008,7 @@ export default function HistoryScreen() {
               );
             }}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
-            contentContainerStyle={[styles.list, { paddingBottom: Platform.OS === 'web' ? 100 : insets.bottom + 100 }]}
+            contentContainerStyle={[styles.list, { paddingBottom: editingExpenses ? 180 : Platform.OS === 'web' ? 100 : insets.bottom + 100 }]}
             showsVerticalScrollIndicator={false}
             ListEmptyComponent={
               <View style={styles.empty}>
@@ -1568,6 +1594,14 @@ export default function HistoryScreen() {
           </KeyboardAvoidingView>
         </View>
       </Modal>
+      {editingExpenses ? (
+        <View style={[styles.editSaveBar, { backgroundColor: colors.card, borderColor: colors.border }]} testID="history-expense-edit-bar">
+          <ListEditorFooter
+            editor={expEditor}
+            summary={`${expenses.filter((exp) => expEditor.isRemoving(exp.id)).length} marked to remove. Edit opens an entry on its own.`}
+          />
+        </View>
+      ) : null}
       <UndoDeleteBar pending={undoable.pending} onUndo={undoable.undo} />
     </View>
   );
@@ -1658,6 +1692,12 @@ function ContributionRow({
 }
 
 const styles = StyleSheet.create({
+  editActions: { flexDirection: 'row', alignItems: 'center', gap: 18, paddingHorizontal: 4, paddingTop: 2 },
+  editAction: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 28 },
+  editSaveBar: {
+    position: 'absolute', left: 12, right: 12, bottom: 8, borderWidth: 1, borderRadius: 14, paddingHorizontal: 12,
+    shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 6,
+  },
   container: { flex: 1 },
   header: { paddingHorizontal: 20, paddingBottom: 14, borderBottomWidth: 1 },
   headerTitleRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginBottom: 10 },

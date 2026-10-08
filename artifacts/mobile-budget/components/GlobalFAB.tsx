@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
 import { ArrangeSheet } from '@/components/ArrangeSheet';
-import { arrange, onOpenQuickActionsArranger, QUICK_ACTION_SLOTS, QUICK_ACTIONS_KEY, useArrangement } from '@/lib/layoutPrefs';
+import { arrange, onOpenQuickActionsArranger, QUICK_ACTION_SLOTS, QUICK_ACTIONS_KEY, useArrangement, useQuickBarHidden } from '@/lib/layoutPrefs';
 
 type QuickAction = { id: string; icon: keyof typeof Feather.glyphMap; label: string; route?: string };
 
@@ -39,6 +39,8 @@ export function GlobalFAB() {
   const router = useRouter();
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  // Stepped aside for a screen's Save bar while it is in edit mode.
+  const hidden = useQuickBarHidden();
 
   // Keep the action footer above the navigator's tab bar and device home indicator.
   const footerBottom = Platform.OS === 'web' ? 84 : insets.bottom + 68;
@@ -47,6 +49,7 @@ export function GlobalFAB() {
     router.push(route as any);
   };
 
+  if (hidden && !arranging) return null;
   return (
     <>
       {bankingOpen && <Pressable style={styles.backdrop} onPress={() => setBankingOpen(false)} />}
