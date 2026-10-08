@@ -45,3 +45,24 @@ describe('naming an outside account', () => {
     expect(screen).toContain("{ text: 'Leave them', style: 'cancel' }");
   });
 });
+
+// "These accounts are not mine, right? Can they be linked to the concerned
+// business?" (8 Oct 2026)
+describe('a named account for one of your businesses', () => {
+  const screen = readFileSync('app/named-accounts.tsx', 'utf8');
+
+  it('asks which business, and keeps it with the name', () => {
+    expect(screen).toContain('testID={`named-account-business-${one.id}`}');
+    expect(parseNamedPayees('[{"key":"#8063876","name":"Supplier","category":"Ujenzi - materials","incomeSourceId":4}]')[0].incomeSourceId).toBe(4);
+  });
+
+  it("files its payments under that business's cost: a new one made for it, or one linked to it", () => {
+    expect(screen).toContain("reducesIncomeSourceId: business, costKind: 'cogs'");
+    expect(screen).toContain('body: JSON.stringify({ reducesIncomeSourceId: business }),');
+  });
+
+  it("never takes a category from another business", () => {
+    expect(screen).toContain("Alert.alert('Already another business\\'s cost'");
+  });
+});
+
