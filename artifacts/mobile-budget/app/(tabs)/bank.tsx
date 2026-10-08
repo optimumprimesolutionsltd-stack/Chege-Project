@@ -30,6 +30,8 @@ import { LISTS_AN_EDIT_CHANGES, withSavedRow } from '@/lib/showSavedEdit';
 import { PassThroughPair, type PairEntry } from '@/components/PassThroughPair';
 import { useAutoMarkBusiness, useOwnerBusiness } from '@/hooks/useOwnerBusiness';
 import { businessTitle } from '@/lib/ownerBusiness';
+import { moveSummary, samePayeeToMove } from '@/lib/samePayee';
+import { parseStoredRules, rulesStorageKey, withRule } from '@/lib/payeeLearning';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useColors } from '@/hooks/useColors';
 import { UndoDeleteBar, useUndoableDelete } from '@/components/UndoDeleteBar';
@@ -668,6 +670,35 @@ export default function BankScreen() {
     };
     closeModal();
     setPairFor(entry);
+  };
+
+  const offerSamePayee = (offer: { description: string; from: string; to: string; rows: Array<{ id: number; amount: number; date: string }> }) => {
+    const moveAll = async () => {
+      let moved = 0;
+      try {
+        for (const row of offer.rows) {
+          await updateTransaction({ id: row.id, data: { amount: row.amount, date: row.date, expenseCategory: offer.to } as never });
+          moved += 1;
+        }
+        // The next import files this payee there too.
+        const key = rulesStorageKey(group?.id);
+        const rules = parseStoredRules(await AsyncStorage.getItem(key).catch(() => null));
+        await AsyncStorage.setItem(key, JSON.stringify(withRule(rules, offer.description, offer.to))).catch(() => {});
+      } catch (error) {
+        Alert.alert('Could not move them all', `${moved} of ${offer.rows.length} moved. ${error instanceof Error ? error.message : ''}`.trim());
+      } finally {
+        invalidateBalance();
+        void queryClient.invalidateQueries({ queryKey: getGetJointAccountQueryKey() });
+      }
+    };
+    Alert.alert(
+      `More from ${offer.description}`,
+      `${moveSummary(offer.rows)} still under ${offer.from || 'no category'}${offer.from && !isNotSure(offer.from) ? ' or Not sure yet' : ''}. Move them to ${offer.to} too? Future imports will file ${offer.description} there.`,
+      [
+        { text: 'Just this one', style: 'cancel' },
+        { text: `Move all ${offer.rows.length}`, onPress: () => void moveAll() },
+      ],
+    );
   };
 
   const closeModal = () => {
@@ -1959,8 +1990,23 @@ export default function BankScreen() {
       // already has a parent, and on the split-deposit branch, which the fee
       // field is not offered alongside.
       let createdPostingId: number | undefined;
+      // A payment moved to another category: the payee's other payments still
+      // under the old one are offered to follow (lib/samePayee).
+      let samePayeeOffer: { description: string; from: string; to: string; rows: Array<{ id: number; amount: number; date: string }> } | null = null;
       if (editingTransactionId !== null) {
         const editingTransaction = data?.transactions.find((transaction) => transaction.id === editingTransactionId);
+        if (editingTransaction && txType === 'disbursement' && withdrawDest !== 'party' && withdrawDest !== 'lend' && withdrawDest !== 'savings' && !editingBusinessMoney) {
+          const from = editingTransaction.expenseCategory ?? '';
+          const rows = samePayeeToMove(data?.transactions ?? [], editingTransaction, from, expenseCategory);
+          if (rows.length > 0) {
+            samePayeeOffer = {
+              description: editingTransaction.description,
+              from,
+              to: expenseCategory.trim(),
+              rows: rows.map((row) => ({ id: row.id, amount: Number(row.amount), date: row.date })),
+            };
+          }
+        }
         const contributorSplits = txType === 'deposit' && validDepositorIds.length > 1
           ? validDepositorIds.map((userId) => ({
               userId,
@@ -2164,7 +2210,9 @@ export default function BankScreen() {
       }
       finishEntry(keepOpen, { amount: parsed + (txType === 'disbursement' ? chargeToPost : 0), direction: txType === 'deposit' ? 'in' : 'out' });
       await invalidateBalance();
-      if (repaidBy) {
+      if (samePayeeOffer) {
+        offerSamePayee(samePayeeOffer);
+      } else if (repaidBy) {
         offerRepaymentSettlement(repaidBy, parsed);
       } else if (borrowedAgainst?.kind === 'debt') {
         offerDebtIncrease(borrowedAgainst.name, parsed);

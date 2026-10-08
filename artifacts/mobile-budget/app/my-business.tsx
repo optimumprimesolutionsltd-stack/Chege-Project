@@ -138,7 +138,7 @@ export default function MyBusinessScreen() {
             value={typed}
             onChangeText={setTyped}
             onSubmitEditing={() => void add()}
-            placeholder="Till, paybill, account or phone number, or its name"
+            placeholder="Till, paybill + account, phone number, or its name"
             placeholderTextColor={colors.mutedForeground}
             testID="my-business-add-input"
             style={{ flex: 1, borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, color: colors.foreground }}
@@ -149,7 +149,7 @@ export default function MyBusinessScreen() {
           </Pressable>
         </View>
         <Text style={{ color: colors.mutedForeground, fontSize: 12, lineHeight: 18 }}>
-          Write it as M-Pesa or the bank shows it. New entries that name it are marked as they come in. Open one on Bank and choose "Not my business" to sort it out another way.
+          Write it as M-Pesa or the bank shows it. For a bank account, add its account number, or the paybill and account number together (for example 522522 1234567) - a bank's paybill on its own would catch every payment to that bank. New entries that name it are marked as they come in. Open one on Bank and choose "Not my business" to sort it out another way.
         </Text>
       </View>
 

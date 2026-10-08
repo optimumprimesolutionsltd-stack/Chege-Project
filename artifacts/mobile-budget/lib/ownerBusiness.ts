@@ -54,12 +54,25 @@ const digitsOf = (text: string) => text.replace(/\D/g, '');
 export function businessKeyFor(text: string): string {
   const trimmed = text.trim();
   if (!trimmed) return '';
+  // A paybill and an account number together ("522522 1234567", "522522 acc
+  // 1234567"): both must appear. A bank's paybill is shared by everyone who
+  // pays that bank, so on its own it would catch every payment to the bank
+  // ("a bank can have an account number and a paybill number", 8 Oct 2026).
+  // Groups of five digits or more are separate numbers; shorter groups are one
+  // number written in parts ("0712 345 678").
+  const groups = trimmed.split(/\D+/).filter(Boolean);
+  const onlyNumberWords = trimmed.replace(/\d+/g, ' ').replace(/\b(acc(ount)?|a\/c|no|number|paybill|till|and)\b/gi, ' ').replace(/[^a-z]/gi, '') === '';
+  if (onlyNumberWords && groups.length >= 2 && groups.every((group) => group.length >= 5)) return `#${groups.join('+')}`;
   const digits = digitsOf(trimmed);
   if (digits.length >= 5 && /^[\d\s+()-]+$/.test(trimmed)) return `#${digits}`;
   return payeeKey(trimmed);
 }
 
-export const businessKeyLabel = (key: string): string => (key.startsWith('#') ? `Number ${key.slice(1)}` : key);
+export const businessKeyLabel = (key: string): string => {
+  if (!key.startsWith('#')) return key;
+  const [first, ...rest] = key.slice(1).split('+');
+  return rest.length === 0 ? `Number ${first}` : `Paybill ${first}, account ${rest.join(', ')}`;
+};
 
 const words = (text: string) => text.toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').split(/\s+/).filter((word) => word.length > 1);
 
@@ -69,7 +82,10 @@ export function namesBusiness(description: string | null | undefined, keys: read
   const digits = digitsOf(description);
   const said = new Set(words(description));
   return keys.some((key) => {
-    if (key.startsWith('#')) return key.length > 5 && digits.includes(key.slice(1));
+    if (key.startsWith('#')) {
+      const numbers = key.slice(1).split('+');
+      return numbers.every((number) => number.length >= 4) && numbers.every((number) => digits.includes(number));
+    }
     const name = words(key);
     return name.length > 0 && name.every((word) => said.has(word));
   });
