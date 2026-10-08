@@ -27,6 +27,8 @@ const PAIRS: Array<[string, string]> = [
   ['lib/statementImport.ts', '../family-budget/src/lib/statement-import.ts'],
   ['lib/otherBudgetOptions.ts', '../family-budget/src/lib/other-budget-options.ts'],
   ['lib/knownPayees.ts', '../family-budget/src/lib/known-payees.ts'],
+  ['lib/personNumber.ts', '../family-budget/src/lib/personNumber.ts'],
+  ['lib/payeeNicknames.ts', '../family-budget/src/lib/payee-nicknames.ts'],
 ];
 
 describe('the phone and the web share one copy of the logic', () => {

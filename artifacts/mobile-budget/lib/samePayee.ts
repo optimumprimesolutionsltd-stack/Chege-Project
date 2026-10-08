@@ -10,6 +10,7 @@
  */
 import { isNotSure } from './entriesToSort';
 import { payeeKey } from './payeeLearning';
+import { tagOf, withoutPersonTag } from './personNumber';
 
 type Row = {
   id: number;
@@ -34,11 +35,14 @@ type Row = {
  * "the app says it has moved them but I still find them all over" (8 Oct 2026).
  */
 export function samePayeeName(description: string | null | undefined): string {
-  return payeeKey(description ?? '')
+  const name = payeeKey(withoutPersonTag(description ?? ''))
     .replace(/[^\p{L}\s]/gu, ' ')
     .split(/\s+/)
     .filter((word) => word && !['ltd', 'limited', 'co', 'the', 'plc'].includes(word))
     .join(' ');
+  // A person's number tag stays: two John Kamaus are two people (lib/personNumber).
+  const tag = tagOf(description);
+  return name && tag ? `${name} ${tag}` : name;
 }
 
 const same = (a: string | null | undefined, b: string | null | undefined) =>

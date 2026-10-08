@@ -17,6 +17,8 @@
  * ("Mary", "Kamau"), and two Marys filed under Food say nothing about a third
  * ("did we solve the logic of common words categorization?", 8 Oct 2026).
  */
+import { tagOf, withoutPersonTag } from './personNumber';
+
 export type PayeeRules = Record<string, string>;
 
 type Past = { type: string; description: string; expenseCategory?: string | null; chargeForTransactionId?: number | null };
@@ -47,7 +49,7 @@ const BUSINESS = new Set([
  * that no longer say what kind of payment they were.
  */
 export function looksLikePerson(description: string): boolean {
-  const words = clean(payeeName(description)).split(/\s+/).filter(Boolean);
+  const words = clean(payeeName(withoutPersonTag(description))).split(/\s+/).filter(Boolean);
   if (words.length < 2 || words.length > 3) return false;
   return words.every((word) => /^\p{L}{2,}$/u.test(word) && !BUSINESS.has(word));
 }
@@ -144,7 +146,10 @@ export function ruleCategory(description: string, rules: PayeeRules, number?: st
   const byNumber = numberKey(number);
   if (byNumber && rules[byNumber]) return rules[byNumber];
   const key = payeeKey(description);
-  return key ? rules[key] ?? '' : '';
+  if (key && rules[key]) return rules[key];
+  // A person with their number's tag: a rule kept before numbers were (lib/personNumber).
+  const byName = tagOf(description) ? payeeKey(withoutPersonTag(description)) : '';
+  return byName ? rules[byName] ?? '' : '';
 }
 
 /**
@@ -235,7 +240,9 @@ export const sourceRuleKey = (description: string): string => {
 /** The income source kept for money in from this payer, or null. */
 export function ruleSource(description: string, rules: PayeeRules): number | null {
   const key = sourceRuleKey(description);
-  const kept = key ? Number(rules[key]) : NaN;
+  // A person with their number's tag: their own rule, else one kept by name before numbers were (lib/personNumber).
+  const byName = tagOf(description) ? sourceRuleKey(withoutPersonTag(description)) : '';
+  const kept = key && rules[key] ? Number(rules[key]) : byName ? Number(rules[byName]) : NaN;
   return Number.isInteger(kept) && kept > 0 ? kept : null;
 }
 

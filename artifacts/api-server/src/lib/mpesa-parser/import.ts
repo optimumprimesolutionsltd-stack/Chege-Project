@@ -1,4 +1,5 @@
 import { parseMpesaMessage } from "./parser";
+import { personTagOf, phoneIn, withPersonTag } from "./person-number";
 import { MPESA_PARSER_VERSION, type MpesaTransactionType } from "./types";
 
 /** Most messages one paste may carry, so a mistake cannot become a huge request. */
@@ -240,7 +241,10 @@ export function toImportItem(message: string, index: number): ImportItem {
     direction,
     type: tx.transactionType,
     amount: tx.amount,
-    description: describe(tx.transactionType, tx.merchantOrCounterparty, tx.transactionType === "reversal" ? tx.originalTransactionId : tx.accountReference),
+    // A person: their number's tag after the name, so two of the same name stay two people (person-number).
+    description: tx.transactionType === "person_payment" || tx.transactionType === "person_receipt"
+      ? withPersonTag(describe(tx.transactionType, tx.merchantOrCounterparty, tx.accountReference), personTagOf(phoneIn(message)))
+      : describe(tx.transactionType, tx.merchantOrCounterparty, tx.transactionType === "reversal" ? tx.originalTransactionId : tx.accountReference),
     named: Boolean(tx.merchantOrCounterparty),
     date: tx.date,
     // Only an outgoing payment carries a cost worth recording.
