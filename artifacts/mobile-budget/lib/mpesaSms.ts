@@ -52,6 +52,24 @@ const startOf = (iso: string): number => new Date(`${iso}T00:00:00`).getTime();
  * M-Pesa's messages from `from` to `to` (both days included), oldest first,
  * asking Android's permission the first time.
  */
+/**
+ * Asks Android once for reading M-Pesa's messages, for keeping up after the
+ * first statement (lib/mpesaFirstStart). Already allowed is allowed.
+ */
+export async function askToReadSms(): Promise<{ ok: true } | { ok: false; reason: 'denied' | 'blocked' | 'unavailable' }> {
+  if (!native || !canReadSms()) return { ok: false, reason: 'unavailable' };
+  const permission = PermissionsAndroid.PERMISSIONS.READ_SMS;
+  if (await PermissionsAndroid.check(permission)) return { ok: true };
+  const answer = await PermissionsAndroid.request(permission, {
+    title: 'Keep up with your M-Pesa?',
+    message: 'Jamvi reads only M-Pesa’s new messages, each time you open it. They are read into a list for you to review and are not kept; only the entries you save are stored.',
+    buttonPositive: 'Allow',
+    buttonNegative: 'Not now',
+  });
+  if (answer === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN) return { ok: false, reason: 'blocked' };
+  return answer === PermissionsAndroid.RESULTS.GRANTED ? { ok: true } : { ok: false, reason: 'denied' };
+}
+
 export async function readMpesaSms(from: string, to: string): Promise<SmsResult> {
   if (!native || !canReadSms()) return { ok: false, reason: 'unavailable' };
   const permission = PermissionsAndroid.PERMISSIONS.READ_SMS;
