@@ -7,6 +7,11 @@
  * 2026). So an update now downloads quietly and goes in at a natural break -
  * the next fresh start, or coming back after a while away - and says what is
  * new once it is in.
+ *
+ * Restarting by itself the moment an update arrived took the choice away, and
+ * the "was updated" sheet that followed closed on any tap, so it showed "for a
+ * flick of a second" (8 Oct 2026). Now a ready update asks: Update now, or
+ * Later - and Later lets it go in at the next natural break.
  */
 
 type Storage = {
@@ -20,18 +25,6 @@ export const INSTALL_AFTER_AWAY_MS = 5 * 60 * 1000;
 
 const NOTES_KEY = 'jamvi:update-whats-new';
 
-/**
- * Just opened and not yet used: the same natural break as coming back after a
- * while. Without this, closing and reopening Jamvi only downloaded an update -
- * the first open ran the old version - so it took a second reopen, and "didnt
- * get it" (8 Oct 2026).
- */
-export const FRESH_START_MS = 20 * 1000;
-
-export function shouldInstallAtStart({ msSinceStart, saving, pathname }: { msSinceStart: number; saving: boolean; pathname: string | null }): boolean {
-  return !saving && msSinceStart <= FRESH_START_MS && (pathname === null || pathname === '/' || pathname === '/login');
-}
-
 export function shouldInstallOnReturn({ downloaded, awayMs, saving }: { downloaded: boolean; awayMs: number | null; saving: boolean }): boolean {
   return downloaded && !saving && awayMs !== null && awayMs >= INSTALL_AFTER_AWAY_MS;
 }
@@ -43,6 +36,15 @@ export async function keepWhatsNew(updateId: string | null | undefined, notes: s
     await storage.setItem(NOTES_KEY, JSON.stringify({ updateId, notes }));
   } catch {
     /* only the note is lost; the update still goes in */
+  }
+}
+
+/** Updating from the prompt, which already listed what is new: not said twice. */
+export async function forgetWhatsNew(storage: Storage): Promise<void> {
+  try {
+    await storage.removeItem(NOTES_KEY);
+  } catch {
+    /* at worst the list shows once more */
   }
 }
 
