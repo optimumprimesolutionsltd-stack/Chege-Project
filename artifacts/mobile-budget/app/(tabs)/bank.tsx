@@ -32,6 +32,7 @@ import { useAutoMarkBusiness, useOwnerBusiness } from '@/hooks/useOwnerBusiness'
 import { useBusinessAccounts } from '@/hooks/useBusinessAccounts';
 import { useNamedPayees } from '@/hooks/useNamedPayees';
 import { WhoIsThisFor } from '@/components/WhoIsThisFor';
+import { useBusinesses } from '@/hooks/useBusinesses';
 import { namedKeyFor } from '@/lib/namedPayees';
 import { samePayeeName } from '@/lib/samePayee';
 import { businessTitle } from '@/lib/ownerBusiness';
@@ -321,6 +322,7 @@ export default function BankScreen() {
   const namedPayees = useNamedPayees();
   // "Who is this for?" on an entry: Personal (null), or one of the businesses (components/WhoIsThisFor).
   const [forBusinessId, setForBusinessId] = useState<number | null>(null);
+  const businesses = useBusinesses();
   const [addedBusinessIds, setAddedBusinessIds] = useState<number[]>([]);
   const [accountIsBusiness, setAccountIsBusiness] = useState<boolean | null>(null);
   // Which business, for somebody with more than one: an income stream, as in the
@@ -563,6 +565,10 @@ export default function BankScreen() {
       .map((row) => [row.name, Number(row.reducesIncomeSourceId)]),
   ), [categories]);
   const whoForBusinesses = useMemo(() => {
+    // Named in My businesses: only those (lib: api-server business-streams).
+    if (businesses.named) {
+      return allIncomeSources.filter((src) => businesses.ids.has(src.id) || addedBusinessIds.includes(src.id)).map((src) => ({ id: src.id, name: src.name }));
+    }
     const ids = new Set<number>([
       ...costOfCategory.values(),
       ...[...businessAccounts.businessOf.values()].filter((id): id is number => id != null),
@@ -570,7 +576,7 @@ export default function BankScreen() {
       ...addedBusinessIds,
     ]);
     return allIncomeSources.filter((src) => ids.has(src.id)).map((src) => ({ id: src.id, name: src.name }));
-  }, [allIncomeSources, costOfCategory, businessAccounts.businessOf, namedPayees.named, addedBusinessIds]);
+  }, [allIncomeSources, costOfCategory, businessAccounts.businessOf, namedPayees.named, addedBusinessIds, businesses.named, businesses.ids]);
   const whoForCosts = useMemo(
     () => (forBusinessId === null ? [] : [...costOfCategory.entries()].filter(([, id]) => id === forBusinessId).map(([name]) => name).sort((a, b) => a.localeCompare(b))),
     [costOfCategory, forBusinessId],
@@ -835,12 +841,9 @@ export default function BankScreen() {
   const addWhoForBusiness = async (name: string) => {
     if (!user?.id) return;
     try {
-      const created = await customFetch<{ id: number }>('/api/income-sources', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id, name }),
-      });
-      await queryClient.invalidateQueries({ queryKey: ['income-sources'] });
+      // A business, named as one (My businesses), not just another income stream.
+      const created = await businesses.create(name);
+      if (!created) return;
       setAddedBusinessIds((ids) => [...ids, created.id]);
       chooseWhoFor(created.id);
     } catch (error) {
@@ -1082,13 +1085,8 @@ export default function BankScreen() {
         : await createAccount({ data: { name, accountNumber: accountNumber || undefined } });
       let businessId = accountIsBusiness ? accountBusinessId : null;
       if (accountIsBusiness && newBusinessName.trim() && user?.id) {
-        const created = await customFetch<{ id: number }>('/api/income-sources', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: user.id, name: newBusinessName.trim() }),
-        }).catch(() => null);
+        const created = await businesses.create(newBusinessName.trim()).catch(() => null);
         if (created?.id) businessId = created.id;
-        void queryClient.invalidateQueries({ queryKey: ['income-sources'] });
       }
       if (
         accountIsBusiness !== businessAccounts.businessIds.has(account.id) ||
@@ -3566,7 +3564,7 @@ export default function BankScreen() {
                   </Text>
                   <Text style={{ marginTop: 14, color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>Which business?</Text>
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
-                    {allIncomeSources.map((stream) => {
+                    {allIncomeSources.filter((stream) => !businesses.named || businesses.ids.has(stream.id)).map((stream) => {
                       const on = accountBusinessId === stream.id && !newBusinessName.trim();
                       return (
                         <TouchableOpacity

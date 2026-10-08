@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { ruleSource, sourceRuleKey, withSourceRule } from '@/lib/payeeLearning';
+import { payeeKey, ruleSource, sourceRuleKey, withSourceRule } from '@/lib/payeeLearning';
 import { initialChoices, type PreviewLine } from '@/lib/mpesaImport';
 
 // "Since the app already recognizes a bank account, it can ask: is it paying for
@@ -20,6 +20,15 @@ describe('money in remembered for a business', () => {
     const line = { index: 0, status: 'ready', direction: 'in', type: 'person_receipt', amount: 2000, description: 'Received from Mary Wanjiku', date: '2026-10-08', receipt: 'ABC', fee: null, mpesaBalance: null, alreadyRecorded: null } as unknown as PreviewLine;
     const choices = initialChoices([line], [], [], '', withSourceRule({}, 'Mary Wanjiku', 7));
     expect(choices[0].incomeSourceId).toBe(7);
+  });
+});
+
+describe('money out to a personal number remembered for a business', () => {
+  it('the next import files a payment to that person under the business cost - by their name, as kept', () => {
+    const line = { index: 0, status: 'ready', direction: 'out', type: 'person_payment', amount: 3000, description: 'John Kamau', payeeNumber: '0712345678', date: '2026-10-08', receipt: 'DEF', fee: null, mpesaBalance: null, alreadyRecorded: null } as unknown as PreviewLine;
+    const rules = { [payeeKey('John Kamau')]: 'Ujenzi - materials' };
+    const choices = initialChoices([line], [], ['Ujenzi - materials'], '', rules);
+    expect(choices[0].category).toBe('Ujenzi - materials');
   });
 });
 

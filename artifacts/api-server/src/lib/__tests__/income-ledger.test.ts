@@ -58,7 +58,7 @@ describe("the income ledger", () => {
 
     expect(ledger.entries.map((entry) => entry.transactionId)).toEqual([1]);
     expect(ledger.total).toBe(40000);
-    expect(ledger.otherMoneyIn).toEqual({ borrowed: 20000, repaidToYou: 5000, fromSavings: 7000, moneyBack: 0, fromYourBusiness: 0, inBusinessAccounts: 0 });
+    expect(ledger.otherMoneyIn).toEqual({ borrowed: 20000, repaidToYou: 5000, fromSavings: 7000, moneyBack: 0, fromYourBusiness: 0, inBusinessAccounts: 0, businessSales: 0 });
   });
 
   it("names every stream and person on a split deposit, once each, in the order entered", () => {
@@ -109,7 +109,7 @@ describe("the income ledger", () => {
       costs: 0,
       streams: [],
       entries: [],
-      otherMoneyIn: { borrowed: 0, repaidToYou: 0, fromSavings: 0, moneyBack: 0, fromYourBusiness: 0, inBusinessAccounts: 0 },
+      otherMoneyIn: { borrowed: 0, repaidToYou: 0, fromSavings: 0, moneyBack: 0, fromYourBusiness: 0, inBusinessAccounts: 0, businessSales: 0 },
     });
   });
 });

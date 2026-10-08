@@ -124,7 +124,7 @@ export default function IncomeLedgerScreen() {
   const entries = data?.entries ?? [];
   const other = data?.otherMoneyIn;
   // Totals newer than the generated client (api-server lib/income-ledger).
-  const business = (other ?? {}) as { fromYourBusiness?: number; inBusinessAccounts?: number };
+  const business = (other ?? {}) as { fromYourBusiness?: number; inBusinessAccounts?: number; businessSales?: number };
   const otherParts = [
     other?.borrowed ? `KES ${formatKES(other.borrowed)} borrowed` : null,
     other?.repaidToYou ? `KES ${formatKES(other.repaidToYou)} paid back to you` : null,
@@ -133,6 +133,7 @@ export default function IncomeLedgerScreen() {
     // Not income: your own money from your business, and the business's own accounts.
     business.fromYourBusiness ? `KES ${formatKES(business.fromYourBusiness)} from your business` : null,
     business.inBusinessAccounts ? `KES ${formatKES(business.inBusinessAccounts)} into business accounts` : null,
+    business.businessSales ? `KES ${formatKES(business.businessSales)} your businesses' sales` : null,
   ].filter((part): part is string => part != null);
 
   // Days are already newest-first from the server; this only groups them so

@@ -3,6 +3,7 @@ import { ensureEntriesToSort } from "./lib/entries-to-sort";
 import { fixBorrowedNotIncome } from "./lib/borrowed-not-income";
 import { ensureOwnerBusiness } from "./lib/owner-business-money";
 import { ensureBusinessAccounts } from "./lib/business-accounts";
+import { ensureBusinessStreams } from "./lib/business-streams";
 import { ensurePossibleDuplicates } from "./lib/possible-duplicates";
 import { ensureImportSaveJobs } from "./lib/import-save-jobs";
 import { ensureEveryBudgetHasAnAccount } from "./lib/default-account";
@@ -86,6 +87,7 @@ async function startServer() {
   void ensureImportSaveJobs();
   void ensureOwnerBusiness();
   void ensureBusinessAccounts();
+  void ensureBusinessStreams();
   void ensureEveryBudgetHasAnAccount();
 
   void ensureSubscriptionPlanCatalogue()
