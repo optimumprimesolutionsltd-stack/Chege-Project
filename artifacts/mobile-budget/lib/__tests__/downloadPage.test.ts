@@ -36,4 +36,11 @@ describe('jamvi.co.ke/download', () => {
     expect(serving).toContain('releases/download/jamvi-android/jamvi-sms.apk');
     expect(serving).toContain('env.JAMVI_SMS_APK_URL');
   });
+
+  // The bot (optimum-prime-lead-notifier) answers exactly this text with the APK as a file.
+  it('asks the WhatsApp bot for the app with the exact text the bot answers', () => {
+    const button = read('../jamvi-website/src/components/whatsapp-button.tsx');
+    expect(button).toContain('export const APK_REQUEST_TEXT = "Hi Jamvi, please send me the Android app";');
+    expect(read('../jamvi-website/src/pages/download.tsx')).toContain('href={APK_ON_WHATSAPP_LINK}');
+  });
 });
