@@ -103,10 +103,12 @@ import { UndoDeleteBar, useUndoableDelete } from '@/components/UndoDeleteBar';
 import { deletedLabel } from '@/lib/undoDelete';
 import type { DebtEntryLink } from '@/lib/debtLinks';
 import { canReadStatements, chooseStatement, statementBase64, type ChosenStatement } from '@/lib/statementFile';
-import { canNotifySms, canReadSms, newMpesaSms, parseSmsAuto, readMpesaSms, setSmsNotify, SMS_PERIODS, smsAutoKey, smsBatches, smsNotifyOn, smsPeriodRange, smsRefusal, type SmsAuto, type SmsPeriod } from '@/lib/mpesaSms';
+import { askToReadSms, canNotifySms, canReadSms, newMpesaSms, parseSmsAuto, readMpesaSms, setSmsNotify, SMS_PERIODS, smsAutoKey, smsBatches, smsNotifyOn, smsPeriodRange, smsRefusal, type SmsAuto, type SmsPeriod } from '@/lib/mpesaSms';
 import { isoDay, longDay, monthStartIso } from '@/lib/dayRange';
 import { MonthStepper } from '@/components/MonthStepper';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import { MpesaFirstStart } from '@/components/MpesaFirstStart';
+import { fromStatementStart, keepUpSince, startPresets } from '@/lib/mpesaFirstStart';
 import { shownFileName } from '@/lib/shownFileName';
 import { readPercent } from '@/lib/statementProgress';
 import { balanceAtEndOf, dayBefore, missingInJamvi, notOnStatement, withoutRecordedFuliza, type RecordedRow, fulizaChargeOverlap, fulizaCharges, fulizaOwedBefore, reconcile, statementLines, type StatementReading } from '@/lib/statementImport';
@@ -1037,6 +1039,20 @@ export default function MpesaImportScreen() {
   // in a build that carries it. The texts are kept here only so a line can be
   // matched back to its message; they are never saved.
   const smsReadable = canReadSms();
+  // The first time - nothing brought in from M-Pesa in this budget yet - the
+  // screen leads with one statement from a day the person chooses, and the
+  // other ways in wait one tap away (lib/mpesaFirstStart).
+  const { data: mpesaSummary } = useQuery<{ imported: boolean }>({
+    queryKey: ['mpesa-summary', group?.id ?? null],
+    queryFn: () => customFetch<{ imported: boolean }>('/api/mpesa/summary'),
+    enabled: group?.id != null,
+    staleTime: 60_000,
+  });
+  const firstRun = mpesaSummary?.imported === false && !rereading;
+  const [startFrom, setStartFrom] = useState(() => startPresets()[0].from);
+  const [otherWays, setOtherWays] = useState(false);
+  // Read the first time, so what the statement left out is said and reading new messages starts after it.
+  const firstStatementRef = React.useRef<{ from: string } | null>(null);
   const [smsMessages, setSmsMessages] = useState<string[] | null>(null);
   const [smsFrom, setSmsFrom] = useState<string>(monthStartIso);
   const [smsTo, setSmsTo] = useState<string>(() => isoDay(new Date()));
@@ -1278,8 +1294,12 @@ export default function MpesaImportScreen() {
         if (result.message === READER_STOPPED) throw new Error(READER_STOPPED);
         throw new Error('Jamvi could not open this file. Is it the M-Pesa statement PDF?');
       }
-      const rows = resolveDirections(readStatementRows(result.pages));
-      if (rows.length === 0) throw new Error('Jamvi could not find the payments in this file. Is it the M-Pesa statement PDF?');
+      const allRows = resolveDirections(readStatementRows(result.pages));
+      if (allRows.length === 0) throw new Error('Jamvi could not find the payments in this file. Is it the M-Pesa statement PDF?');
+      // The first time, only from the day chosen (lib/mpesaFirstStart).
+      const rows = firstRun ? fromStatementStart(allRows, startFrom) : allRows;
+      if (rows.length === 0) throw new Error(`Nothing on this statement is from ${longDay(startFrom)} or later. Choose an earlier day, or a statement that reaches it.`);
+      firstStatementRef.current = firstRun ? { from: startFrom } : null;
       if (!checkRunningBalance(rows).ok) {
         throw new Error('This statement does not add up, so Jamvi will not risk recording wrong amounts. Paste your messages instead.');
       }
@@ -2321,6 +2341,44 @@ export default function MpesaImportScreen() {
             Or come back later: the rest of your statement is kept on this phone. Open the M-Pesa screen again and it is here.
           </Text>
         ) : null}
+        {firstStatementRef.current && statementReading && statementLeft === 0 && outcome.saved > 0 ? (
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.primary, gap: 8 }]} testID="mpesa-keep-up">
+            <Text style={[styles.summaryLine, { color: colors.foreground }]}>From here, Jamvi keeps up</Text>
+            {smsReadable ? (
+              smsAuto.on ? (
+                <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0 }]} testID="mpesa-keep-up-on">
+                  Each time you open Jamvi it reads M-Pesa's new messages and shows them on Home for you to save. Nothing is saved without you.
+                </Text>
+              ) : (
+                <>
+                  <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0 }]}>
+                    Let Jamvi read M-Pesa's new messages each time you open it - only M-Pesa's, only new ones after your statement. Nothing is saved without you.
+                  </Text>
+                  <Pressable
+                    onPress={() => void (async () => {
+                      const asked = await askToReadSms();
+                      if (!asked.ok) {
+                        if (asked.reason !== 'unavailable') Alert.alert('Not turned on', smsRefusal(asked.reason));
+                        return;
+                      }
+                      await keepSmsAuto({ on: true, since: keepUpSince(statementReading?.lastDate) });
+                      void queryClient.invalidateQueries({ queryKey: ['new-mpesa-sms'] });
+                    })()}
+                    style={[styles.primary, { backgroundColor: colors.primary }]}
+                    accessibilityRole="button"
+                    testID="mpesa-keep-up-turn-on"
+                  >
+                    <Text style={styles.primaryText}>Read new M-Pesa messages for me</Text>
+                  </Pressable>
+                </>
+              )
+            ) : (
+              <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0 }]} testID="mpesa-keep-up-share">
+                When M-Pesa texts you, select the messages in your Messages app, tap Share and choose Jamvi - they arrive here already read. Or copy and paste them on this screen.
+              </Text>
+            )}
+          </View>
+        ) : null}
         <Pressable
           onPress={() => router.replace('/(tabs)/bank')}
           style={[styles.primary, { backgroundColor: colors.primary }]}
@@ -2335,6 +2393,75 @@ export default function MpesaImportScreen() {
       </PageScrollView>
     );
   }
+
+  // Step 3 of the first time, and one way in among the others after it.
+  const statementCard = (
+    <>
+            {canReadStatements ? (
+              <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]} testID="mpesa-statement">
+                <Text style={[styles.summaryLine, { color: colors.foreground }]}>{firstRun ? 'Your statement' : 'Or use your M-Pesa statement'}</Text>
+                <Text style={[styles.hint, { color: colors.mutedForeground }]}>
+                  Choose the statement PDF and type its password. Jamvi reads it here on your phone. The file and the password are not uploaded or saved.
+                </Text>
+                <Pressable
+                  onPress={pickStatement}
+                  style={[styles.secondary, { borderColor: colors.border, borderWidth: 1, borderRadius: 8 }]}
+                  accessibilityRole="button"
+                  testID="mpesa-statement-choose"
+                >
+                  <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>
+                    {statementFile ? shownFileName(statementFile.name) : 'Choose the statement PDF'}
+                  </Text>
+                </Pressable>
+                <View style={{ justifyContent: 'center' }}>
+                  <TextInput
+                    value={statementPassword}
+                    onChangeText={setStatementPassword}
+                    secureTextEntry={!showStatementPassword}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    placeholder="Statement password"
+                    placeholderTextColor={colors.mutedForeground}
+                    style={[styles.pasteBox, { minHeight: 48, paddingRight: 48, borderColor: colors.border, backgroundColor: colors.muted, color: colors.foreground }]}
+                    testID="mpesa-statement-password"
+                  />
+                  <Pressable
+                    onPress={() => setShowStatementPassword((shown) => !shown)}
+                    hitSlop={10}
+                    accessibilityRole="button"
+                    accessibilityLabel={showStatementPassword ? 'Hide the password' : 'Show the password'}
+                    testID="mpesa-statement-password-toggle"
+                    style={{ position: 'absolute', right: 14 }}
+                  >
+                    <Feather name={showStatementPassword ? 'eye-off' : 'eye'} size={20} color={colors.mutedForeground} />
+                  </Pressable>
+                </View>
+                <Pressable
+                  onPress={readStatement}
+                  disabled={!statementFile || reading}
+                  style={[styles.primary, { backgroundColor: colors.primary, opacity: !statementFile || reading ? 0.6 : 1 }]}
+                  accessibilityRole="button"
+                  testID="mpesa-statement-read"
+                >
+                  {reading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Read my statement</Text>}
+                </Pressable>
+                {readProgress ? (
+                  <View style={{ gap: 6 }} testID="mpesa-read-progress" accessibilityLiveRegion="polite">
+                    <Text style={[styles.hint, { color: colors.foreground }]}>
+                      {readProgress.stage === 'opening'
+                        ? 'Opening your statement…'
+                        : readProgress.stage === 'reading'
+                          ? `Reading page ${readProgress.page} of ${readProgress.of}…`
+                          : 'Checking which of these are already recorded…'}
+                      {` ${readPercent(readProgress)}%`}
+                    </Text>
+                    <ProgressBar fraction={readPercent(readProgress) / 100} color={colors.primary} track={colors.muted} />
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
+    </>
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -2412,6 +2539,18 @@ export default function MpesaImportScreen() {
                 </Pressable>
               </View>
             ) : null}
+            {firstRun ? (
+              <>
+                <MpesaFirstStart from={startFrom} onFrom={setStartFrom} keepsUp={smsReadable} />
+                {statementCard}
+                <Pressable onPress={() => setOtherWays((open) => !open)} accessibilityRole="button" hitSlop={8} testID="mpesa-other-ways"
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingVertical: 6 }}>
+                  <Feather name={otherWays ? 'chevron-up' : 'chevron-down'} size={16} color={colors.primary} />
+                  <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>{otherWays ? 'Hide other ways' : 'No statement? Other ways to bring in M-Pesa'}</Text>
+                </Pressable>
+              </>
+            ) : null}
+            {firstRun && !otherWays ? null : (<>
             {/* The easiest way in, so it leads when this phone can do it. */}
             {smsReadable ? (
               <View style={[styles.card, styles.leadCard, { backgroundColor: colors.card, borderColor: colors.foreground }]} testID="mpesa-sms">
@@ -2553,69 +2692,8 @@ export default function MpesaImportScreen() {
               {reading && !readerJob ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Read my messages</Text>}
             </Pressable>
 
-            {canReadStatements ? (
-              <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]} testID="mpesa-statement">
-                <Text style={[styles.summaryLine, { color: colors.foreground }]}>Or use your M-Pesa statement</Text>
-                <Text style={[styles.hint, { color: colors.mutedForeground }]}>
-                  Choose the statement PDF and type its password. Jamvi reads it here on your phone. The file and the password are not uploaded or saved.
-                </Text>
-                <Pressable
-                  onPress={pickStatement}
-                  style={[styles.secondary, { borderColor: colors.border, borderWidth: 1, borderRadius: 8 }]}
-                  accessibilityRole="button"
-                  testID="mpesa-statement-choose"
-                >
-                  <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>
-                    {statementFile ? shownFileName(statementFile.name) : 'Choose the statement PDF'}
-                  </Text>
-                </Pressable>
-                <View style={{ justifyContent: 'center' }}>
-                  <TextInput
-                    value={statementPassword}
-                    onChangeText={setStatementPassword}
-                    secureTextEntry={!showStatementPassword}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    placeholder="Statement password"
-                    placeholderTextColor={colors.mutedForeground}
-                    style={[styles.pasteBox, { minHeight: 48, paddingRight: 48, borderColor: colors.border, backgroundColor: colors.muted, color: colors.foreground }]}
-                    testID="mpesa-statement-password"
-                  />
-                  <Pressable
-                    onPress={() => setShowStatementPassword((shown) => !shown)}
-                    hitSlop={10}
-                    accessibilityRole="button"
-                    accessibilityLabel={showStatementPassword ? 'Hide the password' : 'Show the password'}
-                    testID="mpesa-statement-password-toggle"
-                    style={{ position: 'absolute', right: 14 }}
-                  >
-                    <Feather name={showStatementPassword ? 'eye-off' : 'eye'} size={20} color={colors.mutedForeground} />
-                  </Pressable>
-                </View>
-                <Pressable
-                  onPress={readStatement}
-                  disabled={!statementFile || reading}
-                  style={[styles.primary, { backgroundColor: colors.primary, opacity: !statementFile || reading ? 0.6 : 1 }]}
-                  accessibilityRole="button"
-                  testID="mpesa-statement-read"
-                >
-                  {reading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Read my statement</Text>}
-                </Pressable>
-                {readProgress ? (
-                  <View style={{ gap: 6 }} testID="mpesa-read-progress" accessibilityLiveRegion="polite">
-                    <Text style={[styles.hint, { color: colors.foreground }]}>
-                      {readProgress.stage === 'opening'
-                        ? 'Opening your statement…'
-                        : readProgress.stage === 'reading'
-                          ? `Reading page ${readProgress.page} of ${readProgress.of}…`
-                          : 'Checking which of these are already recorded…'}
-                      {` ${readPercent(readProgress)}%`}
-                    </Text>
-                    <ProgressBar fraction={readPercent(readProgress) / 100} color={colors.primary} track={colors.muted} />
-                  </View>
-                ) : null}
-              </View>
-            ) : null}
+            </>)}
+            {firstRun ? null : statementCard}
           </>
         ) : (
           <>
