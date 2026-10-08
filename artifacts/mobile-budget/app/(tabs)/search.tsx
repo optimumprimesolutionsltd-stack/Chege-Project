@@ -1,9 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  FlatList,
   Platform,
   Pressable,
+  ScrollView,
+  SectionList,
   StyleSheet,
   Text,
   TextInput,
@@ -18,6 +19,7 @@ import { useColors } from '@/hooks/useColors';
 import { WorkspaceIdentityRow } from '@/components/WorkspaceIdentityRow';
 import { formatDisplayDate } from '@/lib/displayFormat';
 import { byWay, reachedCap, totalsOf, type MoneyWay } from '@/lib/searchDirection';
+import { byMonth, monthLabel, monthsFound, sectionsByMonth } from '@/lib/searchMonths';
 
 type SearchTab = 'all' | 'expenses' | 'bank' | 'goals' | 'income';
 type SearchResult = {
@@ -67,8 +69,15 @@ export default function SearchScreen() {
     queryFn: () => customFetch<SearchResponse>(`/api/search?q=${encodeURIComponent(normalizedQuery)}&tab=${tab}`),
     enabled: normalizedQuery.length >= 2 && Boolean(group?.id),
   });
-  const results = useMemo(() => byWay(search.data?.results ?? [], way), [search.data, way]);
+  // And which month (lib/searchMonths): 'all', or "2026-10".
+  const [month, setMonth] = useState<string>('all');
+  const byWayResults = useMemo(() => byWay(search.data?.results ?? [], way), [search.data, way]);
+  const months = useMemo(() => monthsFound(byWayResults), [byWayResults]);
+  // A new search may find nothing in the month picked before; fall back to all.
+  const activeMonth = month !== 'all' && !months.includes(month) ? 'all' : month;
+  const results = useMemo(() => byMonth(byWayResults, activeMonth), [byWayResults, activeMonth]);
   const totals = useMemo(() => totalsOf(results), [results]);
+  const sections = useMemo(() => sectionsByMonth(results), [results]);
   const submit = () => {
     const value = draft.trim();
     if (value.length >= 2) setQuery(value);
@@ -132,6 +141,27 @@ export default function SearchScreen() {
             );
           })}
         </View>
+        {normalizedQuery.length >= 2 && months.length > 1 && !search.isFetching ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.months} testID="search-month">
+            {['all', ...months].map((key) => {
+              const selected = key === activeMonth;
+              return (
+                <Pressable
+                  key={key}
+                  onPress={() => setMonth(key)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  testID={`search-month-${key}`}
+                  style={[styles.tab, { borderColor: selected ? colors.primary : colors.border, backgroundColor: selected ? `${colors.primary}16` : colors.card }]}
+                >
+                  <Text style={[styles.tabText, { color: selected ? colors.primary : colors.mutedForeground }]}>
+                    {key === 'all' ? 'All months' : monthLabel(key)}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        ) : null}
         {normalizedQuery.length >= 2 && results.length > 0 && !search.isFetching ? (
           <Text style={[styles.subtitle, { color: colors.foreground, fontFamily: 'Inter_600SemiBold' }]} testID="search-totals">
             {totals.count} found
@@ -163,10 +193,21 @@ export default function SearchScreen() {
           <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Try a description, category, contributor or payer name, goal, or income-source name.</Text>
         </View>
       ) : (
-        <FlatList
-          data={results}
+        <SectionList
+          sections={sections}
+          stickySectionHeadersEnabled={false}
           keyExtractor={(item) => `${item.kind}-${item.id}`}
           contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 110 }]}
+          renderSectionHeader={({ section }) => (activeMonth === 'all' && sections.length > 1 ? (
+            <View style={styles.monthHeader} testID={`search-month-header-${section.key}`}>
+              <Text style={[styles.monthTitle, { color: colors.foreground }]}>{section.title}</Text>
+              <Text style={[styles.monthTotals, { color: colors.mutedForeground }]}>
+                {section.totals.count} found
+                {section.totals.in > 0 ? ` · KES ${section.totals.in.toLocaleString('en-KE')} in` : ''}
+                {section.totals.out > 0 ? ` · KES ${section.totals.out.toLocaleString('en-KE')} out` : ''}
+              </Text>
+            </View>
+          ) : null)}
           renderItem={({ item }) => (
             <Pressable
               onPress={() => router.push(destinationFor(item.kind))}
@@ -200,6 +241,10 @@ const styles = StyleSheet.create({
   tabs: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginTop: 12 },
   tab: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7 },
   tabText: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
+  months: { flexDirection: 'row', gap: 7, marginTop: 12, paddingRight: 16 },
+  monthHeader: { paddingTop: 8, paddingBottom: 2 },
+  monthTitle: { fontSize: 14, fontFamily: 'Inter_700Bold' },
+  monthTotals: { marginTop: 2, fontSize: 12, fontFamily: 'Inter_400Regular' },
   loading: { marginTop: 70 },
   list: { padding: 16, gap: 10 },
   result: { minHeight: 72, flexDirection: 'row', alignItems: 'center', gap: 11, borderWidth: 1, borderRadius: 8, padding: 12 },
