@@ -4423,14 +4423,19 @@ export default function BankScreen() {
                 </>
               )}
 
-              {/* ── Withdrawal payer (disbursements only) ── */}
-              {isWithdrawal && members.length > 0 && (
+              {/* ── Withdrawal payer (disbursements only) ── A Shared group's question:
+                  in a Personal budget it is always the person, set when the form
+                  opens, and "The group" means nothing ("this is a personal acc. why ask
+                  who is withdrawing? who is the group?", 8 Oct 2026). */}
+              {isWithdrawal && isSharedWorkspace && members.length > 0 && (
                 <>
                   <Text style={[styles.label, { color: colors.mutedForeground }]}>
                     Who is withdrawing?
                   </Text>
                   <View style={styles.memberRow}>
-                    {/* Group chip */}
+                    {/* The shared account itself, by its own name: "The group" left people
+                        asking who that was ("who is the group? is it joint account? in that
+                        case its a bank. give it a name", 8 Oct 2026). */}
                     <TouchableOpacity
                       testID="bank-withdraw-joint-chip"
                       style={[
@@ -4444,7 +4449,7 @@ export default function BankScreen() {
                       activeOpacity={0.7}
                     >
                       <Feather
-                        name="home"
+                        name="credit-card"
                         size={13}
                         color={withdrawerId === null ? '#f87171' : colors.mutedForeground}
                       />
@@ -4454,7 +4459,7 @@ export default function BankScreen() {
                           { color: withdrawerId === null ? '#f87171' : colors.foreground },
                         ]}
                       >
-                        The group
+                        {selectedAccount?.name ?? 'The shared account'}
                       </Text>
                     </TouchableOpacity>
 
