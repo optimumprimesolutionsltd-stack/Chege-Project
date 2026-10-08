@@ -233,7 +233,7 @@ export const BLOG_POSTS: readonly BlogPost[] = [
           },
           {
             title: "Nothing is deleted if you stop paying.",
-            text: "Your records stay, and your Personal budget keeps working.",
+            text: "Your records stay and you can still see all of them. You just cannot add new entries until you subscribe again, and then everything carries on where you left off.",
           },
           {
             title: "You can leave.",
