@@ -13,6 +13,9 @@
  *     Kisumu" is filed like "Sample Hotel Nakuru";
  *  4. a word in the name that has almost always meant one category, so a hotel never
  *     paid before is filed like the hotels that were.
+ * Steps 3 and 4 are never used for a payment to a person: names share common words
+ * ("Mary", "Kamau"), and two Marys filed under Food say nothing about a third
+ * ("did we solve the logic of common words categorization?", 8 Oct 2026).
  */
 export type PayeeRules = Record<string, string>;
 
@@ -21,10 +24,33 @@ type Past = { type: string; description: string; expenseCategory?: string | null
 const clean = (value: string) => value.trim().replace(/\s+/g, " ").toLocaleLowerCase("en-KE");
 
 // Words that name no one in particular, so sharing them says nothing about who a payee is.
+// Generic business words were missing too: "Kamau General Agencies" and "Wanjiru
+// General Shop" shared "general", which said nothing about either (8 Oct 2026).
 const FILLER = new Set([
   "the", "and", "ltd", "limited", "co", "company", "of", "kenya", "enterprises", "enterprise", "services", "service",
   "sons", "for", "pay", "bill", "online", "payment", "paybill", "till", "mpesa", "safaricom", "account", "acc",
+  "shop", "shops", "store", "stores", "general", "agencies", "agency", "traders", "trading", "investments", "investment",
+  "ventures", "international", "group", "africa", "holdings", "solutions", "mart", "merchants", "supplies",
 ]);
+
+// Words that make a name a business, not a person (see looksLikePerson).
+const BUSINESS = new Set([
+  ...FILLER, "supermarket", "hotel", "restaurant", "cafe", "bar", "pharmacy", "chemist", "hardware", "bank", "sacco",
+  "school", "academy", "church", "hospital", "clinic", "motors", "garage", "petrol", "station", "fuel", "wholesale",
+  "wholesalers", "distributors", "electronics", "salon", "barber", "butchery", "bakery", "boutique", "kiosk", "market",
+  "centre", "center", "foods", "farm", "water", "power", "gas", "insurance", "agent", "paystack", "pesapal", "kplc",
+]);
+
+/**
+ * A payment to a person, by its name alone - two or three plain words, none a
+ * business word ("Mary Wachira", not "Mary Wachira Hardware"). For entries
+ * that no longer say what kind of payment they were.
+ */
+export function looksLikePerson(description: string): boolean {
+  const words = clean(payeeName(description)).split(/\s+/).filter(Boolean);
+  if (words.length < 2 || words.length > 3) return false;
+  return words.every((word) => /^\p{L}{2,}$/u.test(word) && !BUSINESS.has(word));
+}
 
 /** The payee without its account reference: "Sample Utility (42)" is "Sample Utility". */
 export const payeeName = (description: string): string => description.replace(/\s*\([^)]*\)\s*$/, "").trim();

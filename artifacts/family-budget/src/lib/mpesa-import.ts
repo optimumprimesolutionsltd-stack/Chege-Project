@@ -1,5 +1,5 @@
 import type { DebtLink } from "./mpesa-debts";
-import { fuzzyCategory, isFeePosting, ruleCategory, wordCategory, type PayeeRules } from "./payee-learning";
+import { fuzzyCategory, isFeePosting, looksLikePerson, ruleCategory, wordCategory, type PayeeRules } from "./payee-learning";
 import { loanOf, productCategory, productOf, savingsOf } from "./mpesa-products";
 import { knownPayeeCategory } from "./known-payees";
 
@@ -426,8 +426,14 @@ function suggestionFor(
   if (description && isBankPayee(description)) {
     return kept && (categoryNames.length === 0 || categoryNames.includes(kept)) ? kept : "";
   }
-  const similar = description && line.named !== false ? fuzzyCategory(description, history, categoryNames) : "";
-  const byWord = description && line.named !== false ? wordCategory(description, history, categoryNames) : "";
+  // A person is filed by a kept rule or by how that same person was filed before -
+  // "if the app has learnt from history about people categorization then its ok"
+  // (8 Oct 2026) - but never by a similar name or a shared word: names share
+  // common words ("Mary", "Kamau"), and two Marys filed under Food say nothing
+  // about a third. With neither, the person waits as Not sure.
+  const toPerson = line.type === "person_payment" || (line.type === null && looksLikePerson(description));
+  const similar = description && line.named !== false && !toPerson ? fuzzyCategory(description, history, categoryNames) : "";
+  const byWord = description && line.named !== false && !toPerson ? wordCategory(description, history, categoryNames) : "";
   return (
     (kept && (categoryNames.length === 0 || categoryNames.includes(kept)) ? kept : "") ||
     earlier ||
