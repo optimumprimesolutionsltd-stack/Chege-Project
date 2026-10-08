@@ -25,6 +25,7 @@ const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'];
 import { router, useLocalSearchParams } from 'expo-router';
 import { markReturning } from '@/lib/lastRoute';
+import { isNotSure } from '@/lib/entriesToSort';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useColors } from '@/hooks/useColors';
 import { UndoDeleteBar, useUndoableDelete } from '@/components/UndoDeleteBar';
@@ -1979,9 +1980,11 @@ export default function BankScreen() {
             ...(txType === 'disbursement'
               ? withdrawDest === 'lend'
                 ? { isLending: true as const }
-                // A debt payment left without a category is sent as null,
-                // which takes off any the posting had.
-                : withdrawDest === 'party' && !expenseCategory.trim()
+                // A debt payment left without a category - or still on Not sure
+                // yet from before it was sorted - is sent as null, which takes off
+                // any the posting had ("made changes but still showing not sure
+                // yet", 8 Oct 2026).
+                : withdrawDest === 'party' && (!expenseCategory.trim() || isNotSure(expenseCategory))
                   ? { expenseCategory: null }
                   : { expenseCategory, destinationKind: withdrawDest === 'other' ? 'other' : 'category' }
               : {}),
@@ -2089,7 +2092,7 @@ export default function BankScreen() {
               ? { isLending: true }
               // Paying somebody you owe with no category: a debt payment, not
               // spending, so it keeps out of the totals the way a loan does.
-              : withdrawDest === 'party' && !expenseCategory.trim()
+              : withdrawDest === 'party' && (!expenseCategory.trim() || isNotSure(expenseCategory))
                 ? {}
                 : { expenseCategory, destinationKind: withdrawDest === 'other' ? 'other' : 'category' }),
             ...(withdrawDest === 'lend' || withdrawDest === 'party'
@@ -4599,6 +4602,8 @@ export default function BankScreen() {
                           setWithdrawDest('party');
                           setWithdrawSourceName(null);
                           setWithdrawPartyId(null);
+                          // Paying somebody you owe needs no category: Not sure yet is not one.
+                          if (isNotSure(expenseCategory)) setExpenseCategory('');
                           setShowWithdrawKindPicker(false);
                           setShowPartyPicker(true);
                         }}

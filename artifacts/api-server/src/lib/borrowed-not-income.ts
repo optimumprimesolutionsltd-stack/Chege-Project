@@ -31,8 +31,18 @@ export async function fixBorrowedNotIncome(): Promise<void> {
          AND "income_source_id" IS NOT NULL
          AND ("is_borrowing" = true OR "settles_contributor_id" IS NOT NULL)
       RETURNING "id"`);
+    // A payment to somebody you owe that kept "Not sure yet" from before it was
+    // sorted: the debt is its answer, so it needs no category and leaves the list
+    // ("made changes but still showing not sure yet", 8 Oct 2026).
+    const notSureDebts = await db.execute(sql`
+      UPDATE "joint_account_transactions"
+         SET "expense_category" = NULL
+       WHERE "type" = 'disbursement'
+         AND "settles_contributor_id" IS NOT NULL
+         AND lower("expense_category") = 'not sure yet'
+      RETURNING "id"`);
     const count = (result: unknown) => (result as { rows?: unknown[] }).rows?.length ?? 0;
-    logger.info({ markedBorrowed: count(marked), sourcesCleared: count(cleared) }, "Borrowed money and repayments carry no income source");
+    logger.info({ markedBorrowed: count(marked), sourcesCleared: count(cleared), notSureDebtPayments: count(notSureDebts) }, "Borrowed money and repayments carry no income source; debt payments carry no Not sure yet");
   } catch (err) {
     logger.warn({ err }, "Could not clear income sources from borrowed money; will try again at the next start");
   }
