@@ -81,7 +81,7 @@ describe("a missing category is allowed only because it was lent, or paid somebo
 // budget category" and there was no category that would have satisfied it.
 describe("editing a loan out is not refused for having no category", () => {
   it("does not demand one when the row is a loan", () => {
-    expect(bank).toContain("const editingALoanOut = existing.isLending === true;");
+    expect(bank).toContain("const editingALoanOut = existing.isLending === true || await isOwnerBusinessMoney(existing.id);");
     expect(bank).toContain("if (!editingALoanOut && !paysAParty && !expenseCategory) {");
   });
 

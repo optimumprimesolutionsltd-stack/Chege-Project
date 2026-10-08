@@ -31,6 +31,7 @@ import { headingAmong, postingToHeadingError } from "../lib/category-headings";
 import { memberLedgerName } from "../lib/contributor-name";
 import { GROUP_ATTRIBUTION } from "../lib/attribution";
 import { reversalLinksReady, soleReversalCandidate, takenBackReceipt } from "../lib/reversal-links";
+import { isOwnerBusinessMoney } from "../lib/owner-business-money";
 import { enrichTransactions } from "../lib/transaction-details";
 import { ledgerEntries, ledgerTotals } from "../lib/account-ledger";
 import { importTidyKeptReady } from "../lib/import-tidy-kept";
@@ -1727,7 +1728,8 @@ router.put("/joint-account/:id", async (req, res): Promise<void> => {
         .limit(1);
       if (!party) { res.status(400).json({ error: "That person is not in this budget." }); return; }
     }
-    const notIncome = isBorrowing || settlesContributorId !== null;
+    // Money from the owner's own business is not income either (lib/owner-business).
+    const notIncome = isBorrowing || settlesContributorId !== null || await isOwnerBusinessMoney(existing.id);
     const incomeSourceId = hasSplits || notIncome
       ? null
       : parsed.data.incomeSourceId === undefined
@@ -1781,7 +1783,8 @@ router.put("/joint-account/:id", async (req, res): Promise<void> => {
   // not, so editing one demanded a category it must never have and refused
   // the edit when none came. The row itself is the authority: an edit cannot
   // turn ordinary spending into a loan, or the reverse, by omission.
-  const editingALoanOut = existing.isLending === true;
+  // Money put into the owner's own business has no category either (lib/owner-business).
+  const editingALoanOut = existing.isLending === true || await isOwnerBusinessMoney(existing.id);
   // A payment to somebody you owe may carry no category (see DisbursementInput),
   // and an edit may take one off - null clears it - but only while the row is
   // still paying somebody. Everything else keeps needing a category.

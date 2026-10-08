@@ -20,6 +20,7 @@ import { isNotSure, isToCheck, NOT_SURE_CATEGORY, sameParty, type EntryToSort } 
 import { AddIncomeSourceChip } from '@/components/AddIncomeSourceChip';
 import { SortAsDebt } from '@/components/SortAsDebt';
 import { PassThroughPair } from '@/components/PassThroughPair';
+import { useAutoMarkBusiness, useOwnerBusiness } from '@/hooks/useOwnerBusiness';
 import { LISTS_AN_EDIT_CHANGES, withoutSorted } from '@/lib/showSavedEdit';
 import { NewCategoryOffer } from '@/components/NewCategoryOffer';
 import { CreateCategorySheet } from '@/components/CreateCategorySheet';
@@ -64,6 +65,10 @@ export default function SortEntriesScreen() {
   // The same array until the data changes: the suggestions effect keys on it, and a
   // fresh [] each render while loading would restart it for ever.
   const entries = useMemo(() => data?.entries ?? [], [data]);
+  // Entries naming your business are marked as they arrive, and leave the list
+  // when it is fetched again (lib/ownerBusiness).
+  const ownerBusiness = useOwnerBusiness();
+  useAutoMarkBusiness(useMemo(() => (data?.entries ?? []).map((entry) => ({ ...entry, type: entry.direction === 'in' ? 'deposit' : 'disbursement' })), [data]));
   // A month at a time, as in the import.
   const [month, setMonth] = useState<string | null>(null);
   // January to December of one year, each with its count (lib/yearMonths).
@@ -470,6 +475,31 @@ export default function SortEntriesScreen() {
                   style={{ ...chip, flexDirection: 'row', alignItems: 'center', gap: 4, borderColor: colors.primary, backgroundColor: `${colors.primary}14` }}>
                   <Feather name="repeat" size={13} color={colors.primary} />
                   <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>Passed through</Text>
+                </Pressable>
+                <Pressable disabled={busy !== null} accessibilityRole="button" testID={`sort-entry-${entry.id}-my-business`}
+                  onPress={() => Alert.alert(
+                    'Money between you and your business?',
+                    `Not income or spending. Jamvi will also mark other entries naming ${entry.description} the same way.`,
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      {
+                        text: 'It is my business',
+                        onPress: () => {
+                          setBusy(entry.id);
+                          void ownerBusiness.markFromEntry(entry)
+                            .then((name) => {
+                              setLastChange({ text: `${name}: your business`, undo: () => ownerBusiness.unmark(entry.id) });
+                              return done([entry.id]);
+                            })
+                            .catch((error) => Alert.alert('Could not mark it', plainSaveError(error)))
+                            .finally(() => setBusy(null));
+                        },
+                      },
+                    ],
+                  )}
+                  style={{ ...chip, flexDirection: 'row', alignItems: 'center', gap: 4, borderColor: colors.primary, backgroundColor: `${colors.primary}14` }}>
+                  <Feather name="briefcase" size={13} color={colors.primary} />
+                  <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>My business</Text>
                 </Pressable>
                 {entry.direction === 'out' ? (
                   <Pressable disabled={busy !== null} onPress={() => setNewCategoryFor(entry)} accessibilityRole="button" testID={`sort-entry-${entry.id}-new-category-sheet`}
