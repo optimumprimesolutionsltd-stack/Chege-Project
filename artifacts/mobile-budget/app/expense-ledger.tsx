@@ -13,7 +13,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
+import { linkedDay } from '@/lib/monthLink';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import {
   getDashboardExpenseLedger,
@@ -62,8 +63,10 @@ export default function ExpenseLedgerScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
 
-  const [from, setFrom] = useState<string>(monthStartIso);
-  const [to, setTo] = useState<string>(() => isoDay(new Date()));
+  // A month tapped on a Reports trend opens here with its days (lib/monthLink).
+  const linked = useLocalSearchParams<{ from?: string; to?: string }>();
+  const [from, setFrom] = useState<string>(() => linkedDay(linked.from) ?? monthStartIso());
+  const [to, setTo] = useState<string>(() => linkedDay(linked.to) ?? isoDay(new Date()));
   const [picker, setPicker] = useState<null | 'from' | 'to'>(null);
   const [search, setSearch] = useState('');
   // How the entries are laid out: as a statement by day, or filed by what

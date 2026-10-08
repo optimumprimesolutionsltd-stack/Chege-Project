@@ -25,6 +25,7 @@ import { writePdf } from '@/lib/savePdf';
 import { budgetReport, householdRows } from '@/lib/budgetReport';
 import { PDF_SECTIONS, DEFAULT_PDF_SECTIONS, parsePdfSections, pdfSectionParams, type PdfSectionKey } from '@/lib/reportPdfSections';
 import { useColors } from '@/hooks/useColors';
+import { monthLedgerHref } from '@/lib/monthLink';
 import { PageScrollView } from '@/components/PageScrollReset';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -1399,7 +1400,15 @@ export default function ReportsScreen() {
                         const barH = amount > 0 ? Math.max(6, Math.round((amount / max) * 72)) : 2;
                         const isPeak = amount > 0 && amount === max;
                         return (
-                          <View key={`${monthLabel.year}-${monthLabel.month}`} style={styles.trendBarCol}>
+                          // A tap opens that month's income, to see or correct it.
+                          <Pressable
+                            key={`${monthLabel.year}-${monthLabel.month}`}
+                            style={styles.trendBarCol}
+                            onPress={() => router.push(monthLedgerHref('/income-ledger', monthLabel.year, monthLabel.month) as never)}
+                            accessibilityRole="button"
+                            accessibilityLabel={`${stream.sourceName}, ${monthLabel.label}: ${formatKES(amount)}. Open that month's income`}
+                            testID={`income-trend-${stream.incomeSourceId ?? 'unattributed'}-${monthLabel.year}-${monthLabel.month}`}
+                          >
                             {isPeak ? (
                               <Text style={[styles.trendPeakLabel, { color: colors.primary }]}>{shortKES(amount)}</Text>
                             ) : null}
@@ -1417,7 +1426,7 @@ export default function ReportsScreen() {
                             >
                               {monthLabel.label.split(' ')[0]}
                             </Text>
-                          </View>
+                          </Pressable>
                         );
                       })}
                     </View>

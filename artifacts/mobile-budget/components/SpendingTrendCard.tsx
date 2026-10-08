@@ -1,7 +1,9 @@
 import React from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { getGetDashboardTrendsQueryKey, useGetDashboardTrends } from '@workspace/api-client-react';
+import { router } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
+import { monthLedgerHref } from '@/lib/monthLink';
 
 const kes = (value: number) => value.toLocaleString('en-KE', { maximumFractionDigits: 0 });
 const short = (value: number) => (value >= 1_000_000 ? `${(value / 1_000_000).toFixed(1)}M` : value >= 1_000 ? `${Math.round(value / 1_000)}K` : String(Math.round(value)));
@@ -21,7 +23,7 @@ export function SpendingTrendCard() {
   return (
     <View style={{ gap: 8 }} testID="spending-trend-section">
       <Text style={{ color: colors.foreground, fontFamily: 'Inter_700Bold', fontSize: 17 }}>Spending trend</Text>
-      <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_400Regular', fontSize: 13 }}>What was spent each month, last 6 months</Text>
+      <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_400Regular', fontSize: 13 }}>What was spent each month, last 6 months. Tap a month to see it</Text>
       <View style={{ backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, borderRadius: 8, padding: 14 }}>
         {isLoading ? (
           <ActivityIndicator color={colors.primary} />
@@ -35,12 +37,15 @@ export function SpendingTrendCard() {
               const height = month.totalSpent > 0 ? Math.max(6, Math.round((month.totalSpent / max) * 80)) : 2;
               const peak = month.totalSpent > 0 && month.totalSpent === max;
               return (
-                <View key={`${month.year}-${month.month}`} style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}
-                  accessibilityLabel={`${month.label}: ${kes(month.totalSpent)} shillings`} testID={`spending-trend-${month.year}-${month.month}`}>
+                // A tap opens that month's expenses, to see or correct them.
+                <Pressable key={`${month.year}-${month.month}`} style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}
+                  onPress={() => router.push(monthLedgerHref('/expense-ledger', month.year, month.month) as never)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${month.label}: ${kes(month.totalSpent)} shillings. Open that month's expenses`} testID={`spending-trend-${month.year}-${month.month}`}>
                   {peak ? <Text style={{ color: colors.primary, fontSize: 10, fontFamily: 'Inter_600SemiBold' }}>{short(month.totalSpent)}</Text> : null}
                   <View style={{ width: '100%', height, borderRadius: 3, backgroundColor: peak ? colors.primary : colors.primary + '55' }} />
                   <Text style={{ color: peak ? colors.primary : colors.mutedForeground, fontSize: 10 }}>{month.label.split(' ')[0]}</Text>
-                </View>
+                </Pressable>
               );
             })}
           </View>
