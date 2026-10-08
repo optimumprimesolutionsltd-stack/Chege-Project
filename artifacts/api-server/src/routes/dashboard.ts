@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { inMonthOf } from "../lib/month-range";
 import { db } from "@workspace/db";
+import { inPersonalAccount, isInBusinessAccount, businessAccountIds } from "../lib/business-accounts";
+import { isOwnerBusinessMoneySql } from "../lib/owner-business-money";
 import {
   expensesTable,
   expenseCategoryAllocationsTable,
@@ -119,7 +121,7 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
   const [categorisedDisbursementsRow] = await db
     .select({ total: sql<number>`COALESCE(SUM(${jointAccountTxTable.amount}), 0)` })
     .from(jointAccountTxTable)
-    .where(sql`${jointAccountTxTable.groupId} = ${groupId} AND ${jointAccountTxTable.type} = 'disbursement' AND ${jointAccountTxTable.bankTransferId} IS NULL AND ${jointAccountTxTable.expenseCategory} IS NOT NULL AND ${jointAccountTxTable.expenseId} IS NULL AND ${inMonthOf(jointAccountTxTable.date, year, month)}`);
+    .where(sql`${jointAccountTxTable.groupId} = ${groupId} AND ${jointAccountTxTable.type} = 'disbursement' AND ${jointAccountTxTable.bankTransferId} IS NULL AND ${jointAccountTxTable.expenseCategory} IS NOT NULL AND ${jointAccountTxTable.expenseId} IS NULL${inPersonalAccount(jointAccountTxTable.accountId)} AND ${inMonthOf(jointAccountTxTable.date, year, month)}`);
 
   // Money that moved without being earned or spent: borrowed, paid back to
   // you, or lent out. Every figure above leaves all three out, correctly — and
@@ -877,7 +879,7 @@ router.get("/dashboard/category-breakdown", async (req, res): Promise<void> => {
       total: sql<number>`COALESCE(SUM(${jointAccountTxTable.amount}), 0)`,
     })
     .from(jointAccountTxTable)
-    .where(sql`${jointAccountTxTable.groupId} = ${groupId} AND ${jointAccountTxTable.type} = 'disbursement' AND ${jointAccountTxTable.bankTransferId} IS NULL AND ${jointAccountTxTable.expenseCategory} IS NOT NULL AND ${jointAccountTxTable.expenseId} IS NULL AND ${inMonthOf(jointAccountTxTable.date, year, month)}`)
+    .where(sql`${jointAccountTxTable.groupId} = ${groupId} AND ${jointAccountTxTable.type} = 'disbursement' AND ${jointAccountTxTable.bankTransferId} IS NULL AND ${jointAccountTxTable.expenseCategory} IS NOT NULL AND ${jointAccountTxTable.expenseId} IS NULL${inPersonalAccount(jointAccountTxTable.accountId)} AND ${inMonthOf(jointAccountTxTable.date, year, month)}`)
     .groupBy(jointAccountTxTable.expenseCategory);
 
   const spentMap = new Map(spentByCategory.map((s) => [s.category, s.total]));
@@ -1027,7 +1029,7 @@ router.get("/dashboard/category-ledger", async (req, res): Promise<void> => {
       })
       .from(jointAccountTxTable)
       .leftJoin(usersTable, eq(jointAccountTxTable.madeById, usersTable.id))
-      .where(sql`${jointAccountTxTable.groupId} = ${groupId} AND ${jointAccountTxTable.type} = 'disbursement' AND ${jointAccountTxTable.bankTransferId} IS NULL AND ${jointAccountTxTable.expenseCategory} IS NOT NULL AND ${jointAccountTxTable.expenseId} IS NULL AND ${jointAccountTxTable.date} >= ${ledgerFrom} AND ${jointAccountTxTable.date} <= ${ledgerTo}`),
+      .where(sql`${jointAccountTxTable.groupId} = ${groupId} AND ${jointAccountTxTable.type} = 'disbursement' AND ${jointAccountTxTable.bankTransferId} IS NULL AND ${jointAccountTxTable.expenseCategory} IS NOT NULL AND ${jointAccountTxTable.expenseId} IS NULL${inPersonalAccount(jointAccountTxTable.accountId)} AND ${jointAccountTxTable.date} >= ${ledgerFrom} AND ${jointAccountTxTable.date} <= ${ledgerTo}`),
     db.select({
       expenseId: expenseCategoryAllocationsTable.expenseId,
       category: expenseCategoryAllocationsTable.category,
@@ -1168,6 +1170,7 @@ async function loadExpenseLedger(groupId: number, from: string, to: string, sear
         AND ${jointAccountTxTable.bankTransferId} IS NULL
         AND ${jointAccountTxTable.expenseCategory} IS NOT NULL
         AND ${jointAccountTxTable.expenseId} IS NULL
+        ${inPersonalAccount(jointAccountTxTable.accountId)}
         AND ${jointAccountTxTable.date} >= ${from}
         AND ${jointAccountTxTable.date} <= ${to}
         ${search ? sql`AND ${jointAccountTxTable.description} ILIKE ${search} ESCAPE '!'` : sql``}`),
@@ -1260,7 +1263,7 @@ router.get("/dashboard/income-ledger", async (req, res): Promise<void> => {
  * what the business statements take their sales from, so the two agree.
  * `search`, when given, narrows the receipts and leaves stream costs out.
  */
-async function loadIncomeLedger(groupId: number, from: string, to: string, search: string | null) {
+async function loadIncomeLedger(groupId: number, from: string, to: string, search: string | null, { personal = true }: { personal?: boolean } = {}) {
   // Transfers between the group's own accounts (bank_transfer_id) are left out
   // entirely: they are neither income nor money arriving from outside. Every
   // other deposit is fetched and sorted into income or otherMoneyIn by kind.
@@ -1278,6 +1281,11 @@ async function loadIncomeLedger(groupId: number, from: string, to: string, searc
                WHEN t.is_borrowing THEN 'borrowed'
                WHEN t.settles_contributor_id IS NOT NULL THEN 'repaid'
                WHEN t.transfer_direction = 'from_savings' THEN 'from_savings'
+               -- Your own money taken from your business (lib/owner-business).
+               WHEN ${isOwnerBusinessMoneySql(sql`t.id`)} THEN 'owner'
+               -- The business's own account: its sales, not your income - except
+               -- in the Business report, which is where they belong.
+               WHEN ${personal ? isInBusinessAccount(sql`t.account_id`) : sql`false`} THEN 'business_account'
                ELSE 'income'
              END AS kind
       FROM joint_account_transactions t
@@ -1409,6 +1417,7 @@ router.get("/dashboard/spending-by-item", async (req, res): Promise<void> => {
         AND tx.bank_transfer_id IS NULL
         AND tx.expense_id IS NULL
         AND tx.expense_category IS NOT NULL
+        ${inPersonalAccount(sql`tx.account_id`)}
         AND tx.date >= ${from} AND tx.date <= ${to}
     )
     SELECT (array_agg(${groupColumn} ORDER BY spending.date DESC, spending.id DESC))[1] AS "description",
@@ -1478,6 +1487,7 @@ router.get("/dashboard/spending-by-item", async (req, res): Promise<void> => {
         AND tx.bank_transfer_id IS NULL
         AND tx.expense_id IS NULL
         AND tx.expense_category IS NOT NULL
+        ${inPersonalAccount(sql`tx.account_id`)}
         AND tx.date >= ${from} AND tx.date <= ${to}
         AND lower(btrim(${bankMatchColumn})) = lower(btrim(${item}))
     )
@@ -1575,17 +1585,20 @@ router.get("/dashboard/business", async (req, res): Promise<void> => {
   // period of the same length just before, to compare against.
   const previousRange = periodBefore(from, to);
   const [ledger, costLines, linkedStreamIds, streams, costEntries, previousLedger, previousCostLines] = await Promise.all([
-    loadIncomeLedger(groupId, from, to, null),
+    loadIncomeLedger(groupId, from, to, null, { personal: false }),
     incomeStreamCostLines(groupId, from, to),
     linkedCostStreamIds(groupId),
     db.execute(sql`SELECT id, name FROM income_sources WHERE group_id = ${groupId}`),
     detail ? incomeStreamCostEntries(groupId, from, to) : Promise.resolve(undefined),
-    detail ? loadIncomeLedger(groupId, previousRange.from, previousRange.to, null) : Promise.resolve(undefined),
+    detail ? loadIncomeLedger(groupId, previousRange.from, previousRange.to, null, { personal: false }) : Promise.resolve(undefined),
     detail ? incomeStreamCostLines(groupId, previousRange.from, previousRange.to) : Promise.resolve(undefined),
   ]);
   const salesByStreamOf = (incomeLedger: Awaited<ReturnType<typeof loadIncomeLedger>>) =>
     new Map(incomeLedger.streams.filter((stream) => stream.incomeSourceId != null).map((stream) => [Number(stream.incomeSourceId), stream.received]));
-  res.json(buildBusinessReport({
+  // The business's own accounts, kept out of personal figures: what came in and
+  // went out of each over the period, by category (lib/business-accounts).
+  const businessAccounts = await businessAccountSummary(groupId, from, to);
+  res.json({ ...buildBusinessReport({
     from,
     to,
     salesByStream: salesByStreamOf(ledger),
@@ -1601,8 +1614,61 @@ router.get("/dashboard/business", async (req, res): Promise<void> => {
         previous: { from: previousRange.from, to: previousRange.to, salesByStream: salesByStreamOf(previousLedger), costLines: previousCostLines },
       },
     } : {}),
-  }));
+  }), businessAccounts });
 });
+
+type BusinessAccountSummary = {
+  accountId: number;
+  name: string;
+  moneyIn: number;
+  moneyOut: number;
+  byCategory: Array<{ category: string; amount: number }>;
+};
+
+/**
+ * Money in and out of each of the business's own accounts between two days,
+ * inclusive. Moves between your own accounts are left out: they are neither
+ * the business earning nor spending.
+ */
+async function businessAccountSummary(groupId: number, from: string, to: string): Promise<BusinessAccountSummary[]> {
+  const ids = await businessAccountIds(groupId);
+  if (ids.length === 0) return [];
+  const idList = sql.join(ids.map((id) => sql`${id}`), sql`, `);
+  const [totals, categories] = await Promise.all([
+    db.execute(sql`
+      SELECT account.id AS "accountId", account.name,
+             COALESCE(SUM(CASE WHEN tx.type = 'deposit' THEN tx.amount ELSE 0 END), 0)::float8 AS "moneyIn",
+             COALESCE(SUM(CASE WHEN tx.type = 'disbursement' THEN tx.amount ELSE 0 END), 0)::float8 AS "moneyOut"
+      FROM bank_accounts account
+      LEFT JOIN joint_account_transactions tx
+        ON tx.account_id = account.id AND tx.group_id = ${groupId}
+       AND tx.bank_transfer_id IS NULL AND tx.date >= ${from} AND tx.date <= ${to}
+      WHERE account.group_id = ${groupId} AND account.id IN (${idList})
+      GROUP BY account.id, account.name
+      ORDER BY account.name`),
+    db.execute(sql`
+      SELECT tx.account_id AS "accountId", COALESCE(tx.expense_category, 'No category') AS category, SUM(tx.amount)::float8 AS amount
+      FROM joint_account_transactions tx
+      WHERE tx.group_id = ${groupId} AND tx.account_id IN (${idList})
+        AND tx.type = 'disbursement' AND tx.bank_transfer_id IS NULL
+        AND tx.date >= ${from} AND tx.date <= ${to}
+      GROUP BY tx.account_id, COALESCE(tx.expense_category, 'No category')
+      ORDER BY SUM(tx.amount) DESC`),
+  ]);
+  const byAccount = new Map<number, Array<{ category: string; amount: number }>>();
+  for (const row of categories.rows as Array<{ accountId: number; category: string; amount: number }>) {
+    const list = byAccount.get(Number(row.accountId)) ?? [];
+    list.push({ category: row.category, amount: Number(row.amount) });
+    byAccount.set(Number(row.accountId), list);
+  }
+  return (totals.rows as Array<{ accountId: number; name: string; moneyIn: number; moneyOut: number }>).map((row) => ({
+    accountId: Number(row.accountId),
+    name: row.name,
+    moneyIn: Number(row.moneyIn),
+    moneyOut: Number(row.moneyOut),
+    byCategory: byAccount.get(Number(row.accountId)) ?? [],
+  }));
+}
 
 /**
  * What each income stream cost to run between two days, inclusive, category by
@@ -2276,6 +2342,7 @@ router.get("/dashboard/period-totals", async (req, res): Promise<void> => {
       WHERE bank_tx.group_id = ${groupId}
         AND bank_tx.date >= ${start.raw}::date
         AND bank_tx.date <= ${end.raw}::date
+        ${inPersonalAccount(sql`bank_tx.account_id`)}
     ),
     savings_totals AS (
       SELECT
@@ -2456,7 +2523,7 @@ router.get("/dashboard/monthly-report.pdf", async (req, res): Promise<void> => {
     db
       .select({ category: jointAccountTxTable.expenseCategory, total: sql<number>`COALESCE(SUM(${jointAccountTxTable.amount}), 0)` })
       .from(jointAccountTxTable)
-      .where(sql`${jointAccountTxTable.groupId} = ${groupId} AND ${jointAccountTxTable.type} = 'disbursement' AND ${jointAccountTxTable.bankTransferId} IS NULL AND ${jointAccountTxTable.expenseCategory} IS NOT NULL AND ${jointAccountTxTable.expenseId} IS NULL AND ${jointAccountTxTable.date} >= ${rangeFrom} AND ${jointAccountTxTable.date} <= ${rangeTo}`)
+      .where(sql`${jointAccountTxTable.groupId} = ${groupId} AND ${jointAccountTxTable.type} = 'disbursement' AND ${jointAccountTxTable.bankTransferId} IS NULL AND ${jointAccountTxTable.expenseCategory} IS NOT NULL AND ${jointAccountTxTable.expenseId} IS NULL${inPersonalAccount(jointAccountTxTable.accountId)} AND ${jointAccountTxTable.date} >= ${rangeFrom} AND ${jointAccountTxTable.date} <= ${rangeTo}`)
       .groupBy(jointAccountTxTable.expenseCategory),
     db
       .select({ count: sql<number>`COUNT(*)` })
@@ -2722,7 +2789,7 @@ router.get("/dashboard/trends", async (req, res): Promise<void> => {
     const [bankRow] = await db
       .select({ total: sql<number>`COALESCE(SUM(${jointAccountTxTable.amount}), 0)`, count: sql<number>`COUNT(*)` })
       .from(jointAccountTxTable)
-      .where(sql`${jointAccountTxTable.groupId} = ${groupId} AND ${jointAccountTxTable.type} = 'disbursement' AND ${jointAccountTxTable.bankTransferId} IS NULL AND ${jointAccountTxTable.expenseCategory} IS NOT NULL AND ${jointAccountTxTable.expenseId} IS NULL AND ${jointAccountTxTable.date} >= ${monthFrom} AND ${jointAccountTxTable.date} <= ${monthTo}`);
+      .where(sql`${jointAccountTxTable.groupId} = ${groupId} AND ${jointAccountTxTable.type} = 'disbursement' AND ${jointAccountTxTable.bankTransferId} IS NULL AND ${jointAccountTxTable.expenseCategory} IS NOT NULL AND ${jointAccountTxTable.expenseId} IS NULL${inPersonalAccount(jointAccountTxTable.accountId)} AND ${jointAccountTxTable.date} >= ${monthFrom} AND ${jointAccountTxTable.date} <= ${monthTo}`);
     const businessCosts = await incomeStreamCostLines(groupId, monthFrom, monthTo)
       .then((lines) => lines.reduce((sum, line) => sum + line.amount, 0))
       .catch(() => 0);

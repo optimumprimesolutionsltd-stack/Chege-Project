@@ -30,6 +30,7 @@ import debtLinksRouter from "./debt-links";
 import mpesaNamesRouter from "./mpesa-names";
 import entriesToSortRouter from "./entries-to-sort";
 import ownerBusinessRouter from "./owner-business";
+import businessAccountsRouter from "./business-accounts";
 import deleteYearRouter from "./delete-year";
 import {
   publicSubscriptionPlansRouter,
@@ -82,6 +83,7 @@ router.use(debtLinksRouter);
 router.use(mpesaNamesRouter);
 router.use(entriesToSortRouter);
 router.use(ownerBusinessRouter);
+router.use(businessAccountsRouter);
 router.use(deleteYearRouter);
 router.use(incomeSourcesRouter);
 router.use(invitationsRouter);

@@ -149,6 +149,6 @@ describe("the period before, for comparing", () => {
     expect(dashboard).toContain("const prevStart = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() - 1, 1));");
   });
   it("is only loaded when details are asked for", () => {
-    expect(dashboard).toContain("detail ? loadIncomeLedger(groupId, previousRange.from, previousRange.to, null) : Promise.resolve(undefined),");
+    expect(dashboard).toContain("detail ? loadIncomeLedger(groupId, previousRange.from, previousRange.to, null, { personal: false }) : Promise.resolve(undefined),");
   });
 });

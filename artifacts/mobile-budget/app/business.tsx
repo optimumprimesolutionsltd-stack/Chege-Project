@@ -25,6 +25,9 @@ function margin(part: number, sales: number): string | null {
 type Entry = { date: string; description: string; amount: number };
 type Line = { category: string; amount: number; shareOfSales?: number | null; entries?: Entry[]; more?: number };
 type Figures = { sales: number; costOfGoodsSold: number; grossProfit: number; expenses: number; netProfit: number };
+/** One of the business's own bank accounts over the period (api-server businessAccountSummary). */
+type BusinessAccount = { accountId: number; name: string; moneyIn: number; moneyOut: number; byCategory: Array<{ category: string; amount: number }> };
+
 type Statement = {
   incomeSourceId: number;
   name: string;
@@ -322,6 +325,23 @@ export default function BusinessScreen() {
             <Feather name="chevron-right" size={22} color={isCurrentMonth ? colors.muted : colors.foreground} />
           </Pressable>
         </View>
+
+        {/* The business's own bank accounts, kept out of personal (api-server lib/business-accounts). */}
+        {((data as { businessAccounts?: BusinessAccount[] } | undefined)?.businessAccounts ?? []).map((account) => (
+          <View key={account.accountId} style={[styles.note, { borderColor: colors.border, gap: 6 }]} testID={`business-account-${account.accountId}`}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Feather name="briefcase" size={14} color={colors.primary} />
+              <Text style={{ flex: 1, color: colors.foreground, fontFamily: 'Inter_700Bold' }}>{account.name}</Text>
+            </View>
+            <Text style={{ color: colors.foreground }}>In KES {kes(account.moneyIn)} · Out KES {kes(account.moneyOut)} · Net KES {kes(account.moneyIn - account.moneyOut)}</Text>
+            {account.byCategory.slice(0, 6).map((line) => (
+              <View key={line.category} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <Text style={{ color: colors.mutedForeground, flex: 1 }} numberOfLines={1}>{line.category}</Text>
+                <Text style={{ color: colors.mutedForeground }}>KES {kes(line.amount)}</Text>
+              </View>
+            ))}
+          </View>
+        ))}
 
         {isError ? (
           <Pressable onPress={() => refetch()} style={[styles.note, { borderColor: colors.border }]} accessibilityRole="button" testID="business-retry">

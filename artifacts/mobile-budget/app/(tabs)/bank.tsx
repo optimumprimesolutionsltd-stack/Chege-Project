@@ -29,6 +29,7 @@ import { isNotSure } from '@/lib/entriesToSort';
 import { LISTS_AN_EDIT_CHANGES, withSavedRow } from '@/lib/showSavedEdit';
 import { PassThroughPair, type PairEntry } from '@/components/PassThroughPair';
 import { useAutoMarkBusiness, useOwnerBusiness } from '@/hooks/useOwnerBusiness';
+import { useBusinessAccounts } from '@/hooks/useBusinessAccounts';
 import { businessTitle } from '@/lib/ownerBusiness';
 import { categoryChanged, moveSummary, parseRememberAsked, rememberAskedKey, rememberStep, samePayeeToMove } from '@/lib/samePayee';
 import { parseStoredRules, payeeKey, ruleCategory, rulesStorageKey, withRule } from '@/lib/payeeLearning';
@@ -308,6 +309,11 @@ export default function BankScreen() {
   const [showReconcileCategoryPicker, setShowReconcileCategoryPicker] = useState(false);
   const [reconciling, setReconciling] = useState(false);
   const [accountModalVisible, setAccountModalVisible] = useState(false);
+  // Business or personal, asked for every account ("when opening a bank account,
+  // one should be asked if it's for business or personal", 8 Oct 2026). Null
+  // until answered on a new account.
+  const businessAccounts = useBusinessAccounts();
+  const [accountIsBusiness, setAccountIsBusiness] = useState<boolean | null>(null);
   const [accountNameDraft, setAccountNameDraft] = useState('');
   const [accountNumberDraft, setAccountNumberDraft] = useState('');
   const [editingAccountId, setEditingAccountId] = useState<number | null>(null);
@@ -914,6 +920,7 @@ export default function BankScreen() {
     setEditingAccountId(account?.id ?? null);
     setAccountNameDraft(account?.name ?? '');
     setAccountNumberDraft(account?.accountNumber ?? '');
+    setAccountIsBusiness(account ? businessAccounts.businessIds.has(account.id) : null);
     setAccountModalVisible(true);
   };
 
@@ -938,11 +945,19 @@ export default function BankScreen() {
       Alert.alert('Account name required', 'Enter a clear name for this bank account.');
       return;
     }
+    if (accountIsBusiness === null) {
+      Alert.alert('Business or personal?', 'Choose whether this account is yours or your business\'s.');
+      return;
+    }
     setSavingAccount(true);
     try {
       const account = editingAccountId
         ? await updateAccount({ id: editingAccountId, data: { name, accountNumber: accountNumber || null } })
         : await createAccount({ data: { name, accountNumber: accountNumber || undefined } });
+      if (accountIsBusiness !== businessAccounts.businessIds.has(account.id)) {
+        await businessAccounts.setBusiness(account.id, accountIsBusiness).catch((error: unknown) =>
+          Alert.alert('Saved, but not as a business account yet', error instanceof Error ? error.message : 'Open the account again in a minute and choose Business.'));
+      }
       selectAccount(account.id);
       setAccountModalVisible(false);
       await invalidateAccounts();
@@ -2840,6 +2855,9 @@ export default function BankScreen() {
                   testID={`bank-account-${account.id}`}
                 >
                   <Text style={{ color: active ? '#14532d' : '#d1fae5', fontFamily: 'Inter_600SemiBold' }}>{account.name}</Text>
+                  {businessAccounts.businessIds.has(account.id) ? (
+                    <Feather name="briefcase" size={12} color={active ? '#14532d' : '#86efac'} accessibilityLabel="Business account" testID={`bank-account-business-${account.id}`} />
+                  ) : null}
                   {canManageAccount && active && (
                     <TouchableOpacity onPress={() => openAccountEditor(account.id)} hitSlop={8} testID={`bank-edit-account-${account.id}`}>
                       <Feather name="edit-2" size={13} color="#14532d" />
@@ -3340,6 +3358,33 @@ export default function BankScreen() {
                 style={[styles.input, { marginTop: 12, color: colors.foreground, backgroundColor: colors.muted, borderColor: colors.border }]}
                 testID="bank-account-number"
               />
+              <Text style={{ marginTop: 16, color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>Whose account is it?</Text>
+              <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
+                {([
+                  { business: false, label: 'Personal', hint: 'Counts in your income and spending' },
+                  { business: true, label: 'Business', hint: 'Kept out of personal; in the Business report' },
+                ] as const).map((option) => {
+                  const on = accountIsBusiness === option.business;
+                  return (
+                    <TouchableOpacity
+                      key={option.label}
+                      onPress={() => setAccountIsBusiness(option.business)}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: on }}
+                      testID={`bank-account-purpose-${option.business ? 'business' : 'personal'}`}
+                      style={{ flex: 1, borderWidth: 1, borderRadius: 8, padding: 10, borderColor: on ? colors.primary : colors.border, backgroundColor: on ? `${colors.primary}14` : 'transparent' }}
+                    >
+                      <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>{option.label}</Text>
+                      <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>{option.hint}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              {accountIsBusiness ? (
+                <Text style={{ marginTop: 8, color: colors.mutedForeground, fontSize: 12, lineHeight: 17 }}>
+                  Everything in it is the business's: not your income or spending. Moving money between it and your own accounts is a transfer. Its totals show in the Business report.
+                </Text>
+              ) : null}
               <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
                 <TouchableOpacity
                   style={{ minHeight: 48, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 6, borderWidth: 1, borderColor: colors.border }}

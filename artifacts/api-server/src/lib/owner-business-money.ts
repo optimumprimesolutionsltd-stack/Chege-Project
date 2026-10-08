@@ -56,6 +56,12 @@ export function notOwnerBusinessMoney(id: SQL | unknown): SQL {
   return sql`AND NOT EXISTS (SELECT 1 FROM owner_business_money obm WHERE obm.transaction_id = ${id})`;
 }
 
+/** True, in SQL, for an entry marked as money between the owner and their business. */
+export function isOwnerBusinessMoneySql(id: SQL | unknown): SQL {
+  if (!ready) return sql`false`;
+  return sql`EXISTS (SELECT 1 FROM owner_business_money obm WHERE obm.transaction_id = ${id})`;
+}
+
 /** Ids of this budget's entries marked as money between the owner and their business. */
 export async function ownerBusinessIds(groupId: number): Promise<number[]> {
   if (!ready) return [];
