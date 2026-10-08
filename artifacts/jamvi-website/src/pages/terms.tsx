@@ -8,7 +8,7 @@ export default function Terms() {
   useSeo(SITE_SEO["/terms"]);
 
   return (
-    <LegalPage title="Terms of Service" effective="30 August 2026">
+    <LegalPage title="Terms of Service" effective="8 October 2026">
       <p>
         These terms are an agreement between you and{" "}
         <strong>Optimum Prime Solutions Ltd</strong>, a company registered in
@@ -95,10 +95,11 @@ export default function Terms() {
       </p>
       <p>
         New accounts are free for their first {TRIAL_DAYS} days. If a subscription lapses
-        after that, nothing is deleted: you keep your current month and every
-        record you have already entered, earlier months lock rather than
-        disappear, and you become read-only in any Shared group you belong to.
-        Nobody is removed from a group for not paying.
+        after that, nothing is deleted: you keep every record you have already
+        entered and can still view all of it, but your Personal budget and any
+        Shared group you belong to become read-only for you, so you cannot add
+        or change records until you subscribe again. Nobody is removed from a
+        group for not paying.
       </p>
       <p>
         Current prices and what each plan includes are shown on our{" "}

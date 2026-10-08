@@ -24,7 +24,7 @@ const pricingFaqs = [
   {
     question: "What happens after the free days end?",
     answer:
-      `Nothing is deleted, ever. If you do not subscribe, you keep your current month and everything you have already recorded, and you go read-only in any Shared group you belong to. Earlier months lock rather than disappear, and paying brings all of it straight back.`,
+      `Nothing is deleted, ever. If you do not subscribe, you keep everything you have already recorded and can still see all of it, in your Personal budget and in every Shared group you belong to. What stops is adding anything new until you subscribe, and then everything carries on where you left off.`,
   },
   {
     question: "Can someone join my group before they have paid?",
