@@ -1620,6 +1620,9 @@ router.get("/dashboard/business", async (req, res): Promise<void> => {
 type BusinessAccountSummary = {
   accountId: number;
   name: string;
+  /** The business (income stream) it belongs to, when set. */
+  incomeSourceId: number | null;
+  businessName: string | null;
   moneyIn: number;
   moneyOut: number;
   byCategory: Array<{ category: string; amount: number }>;
@@ -1637,15 +1640,18 @@ async function businessAccountSummary(groupId: number, from: string, to: string)
   const [totals, categories] = await Promise.all([
     db.execute(sql`
       SELECT account.id AS "accountId", account.name,
+             bba.income_source_id AS "incomeSourceId", stream.name AS "businessName",
              COALESCE(SUM(CASE WHEN tx.type = 'deposit' THEN tx.amount ELSE 0 END), 0)::float8 AS "moneyIn",
              COALESCE(SUM(CASE WHEN tx.type = 'disbursement' THEN tx.amount ELSE 0 END), 0)::float8 AS "moneyOut"
       FROM bank_accounts account
+      JOIN business_bank_accounts bba ON bba.account_id = account.id
+      LEFT JOIN income_sources stream ON stream.id = bba.income_source_id AND stream.group_id = ${groupId}
       LEFT JOIN joint_account_transactions tx
         ON tx.account_id = account.id AND tx.group_id = ${groupId}
        AND tx.bank_transfer_id IS NULL AND tx.date >= ${from} AND tx.date <= ${to}
       WHERE account.group_id = ${groupId} AND account.id IN (${idList})
-      GROUP BY account.id, account.name
-      ORDER BY account.name`),
+      GROUP BY account.id, account.name, bba.income_source_id, stream.name
+      ORDER BY stream.name NULLS LAST, account.name`),
     db.execute(sql`
       SELECT tx.account_id AS "accountId", COALESCE(tx.expense_category, 'No category') AS category, SUM(tx.amount)::float8 AS amount
       FROM joint_account_transactions tx
@@ -1661,9 +1667,11 @@ async function businessAccountSummary(groupId: number, from: string, to: string)
     list.push({ category: row.category, amount: Number(row.amount) });
     byAccount.set(Number(row.accountId), list);
   }
-  return (totals.rows as Array<{ accountId: number; name: string; moneyIn: number; moneyOut: number }>).map((row) => ({
+  return (totals.rows as Array<{ accountId: number; name: string; incomeSourceId: number | null; businessName: string | null; moneyIn: number; moneyOut: number }>).map((row) => ({
     accountId: Number(row.accountId),
     name: row.name,
+    incomeSourceId: row.incomeSourceId == null ? null : Number(row.incomeSourceId),
+    businessName: row.businessName ?? null,
     moneyIn: Number(row.moneyIn),
     moneyOut: Number(row.moneyOut),
     byCategory: byAccount.get(Number(row.accountId)) ?? [],

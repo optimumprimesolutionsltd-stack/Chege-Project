@@ -317,6 +317,10 @@ export default function BankScreen() {
   // Outside accounts the person named (lib/namedPayees): shown by that name.
   const namedPayees = useNamedPayees();
   const [accountIsBusiness, setAccountIsBusiness] = useState<boolean | null>(null);
+  // Which business, for somebody with more than one: an income stream, as in the
+  // Business report, or a new one named here.
+  const [accountBusinessId, setAccountBusinessId] = useState<number | null>(null);
+  const [newBusinessName, setNewBusinessName] = useState('');
   const [accountNameDraft, setAccountNameDraft] = useState('');
   const [accountNumberDraft, setAccountNumberDraft] = useState('');
   const [editingAccountId, setEditingAccountId] = useState<number | null>(null);
@@ -924,6 +928,8 @@ export default function BankScreen() {
     setAccountNameDraft(account?.name ?? '');
     setAccountNumberDraft(account?.accountNumber ?? '');
     setAccountIsBusiness(account ? businessAccounts.businessIds.has(account.id) : null);
+    setAccountBusinessId(account ? businessAccounts.businessOf.get(account.id) ?? null : null);
+    setNewBusinessName('');
     setAccountModalVisible(true);
   };
 
@@ -957,8 +963,21 @@ export default function BankScreen() {
       const account = editingAccountId
         ? await updateAccount({ id: editingAccountId, data: { name, accountNumber: accountNumber || null } })
         : await createAccount({ data: { name, accountNumber: accountNumber || undefined } });
-      if (accountIsBusiness !== businessAccounts.businessIds.has(account.id)) {
-        await businessAccounts.setBusiness(account.id, accountIsBusiness).catch((error: unknown) =>
+      let businessId = accountIsBusiness ? accountBusinessId : null;
+      if (accountIsBusiness && newBusinessName.trim() && user?.id) {
+        const created = await customFetch<{ id: number }>('/api/income-sources', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: user.id, name: newBusinessName.trim() }),
+        }).catch(() => null);
+        if (created?.id) businessId = created.id;
+        void queryClient.invalidateQueries({ queryKey: ['income-sources'] });
+      }
+      if (
+        accountIsBusiness !== businessAccounts.businessIds.has(account.id) ||
+        (accountIsBusiness && businessId !== (businessAccounts.businessOf.get(account.id) ?? null))
+      ) {
+        await businessAccounts.setBusiness(account.id, accountIsBusiness, businessId).catch((error: unknown) =>
           Alert.alert('Saved, but not as a business account yet', error instanceof Error ? error.message : 'Open the account again in a minute and choose Business.'));
       }
       selectAccount(account.id);
@@ -2847,20 +2866,43 @@ export default function BankScreen() {
               </Text>
             </View>
           ) : (
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
-            {accounts.map((account) => {
+          // Personal and business accounts in two rows, each under its name, once
+          // there is a business account ("they look overcrowded", 8 Oct 2026).
+          <View style={{ gap: 10, marginTop: 8 }}>
+            {(businessAccounts.businessIds.size === 0
+              ? [{ label: null as string | null, business: false, list: accounts }]
+              : [
+                  { label: 'Personal', business: false, list: accounts.filter((account) => !businessAccounts.businessIds.has(account.id)) },
+                  // One row per business, by its name (lib: an income stream).
+                  ...[...new Set(accounts.filter((account) => businessAccounts.businessIds.has(account.id)).map((account) => businessAccounts.businessOf.get(account.id) ?? null))]
+                    .sort((a, b) => (a === null ? 1 : b === null ? -1 : (incomeSourceNames.get(a) ?? '').localeCompare(incomeSourceNames.get(b) ?? '')))
+                    .map((streamId) => ({
+                      label: streamId === null ? 'Business' : incomeSourceNames.get(streamId) ?? 'Business',
+                      business: true,
+                      list: accounts.filter((account) => businessAccounts.businessIds.has(account.id) && (businessAccounts.businessOf.get(account.id) ?? null) === streamId),
+                    })),
+                ]
+            ).filter((group) => group.list.length > 0).map((group) => (
+              <View key={`${group.business ? 'b' : 'p'}:${group.label ?? 'all'}`} style={{ gap: 6 }} testID={group.label ? `bank-accounts-${group.business ? 'business' : 'personal'}` : 'bank-accounts-all'}>
+                {group.label ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                    <Feather name={group.business ? 'briefcase' : 'user'} size={11} color="#86efac" />
+                    <Text style={{ color: '#86efac', fontSize: 11, fontFamily: 'Inter_600SemiBold', letterSpacing: 0.6, textTransform: 'uppercase' }}>{group.label}</Text>
+                  </View>
+                ) : null}
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {group.list.map((account) => {
               const active = account.id === selectedAccount?.id;
               return (
                 <TouchableOpacity
                   key={account.id}
                   onPress={() => selectAccount(account.id)}
+                  // Any account, not only the chosen one: its name, number, and Personal or which business.
+                  onLongPress={canManageAccount ? () => openAccountEditor(account.id) : undefined}
                   style={{ minHeight: 40, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, borderRadius: 12, backgroundColor: active ? '#dcfce7' : '#1f3a2b' }}
                   testID={`bank-account-${account.id}`}
                 >
                   <Text style={{ color: active ? '#14532d' : '#d1fae5', fontFamily: 'Inter_600SemiBold' }}>{account.name}</Text>
-                  {businessAccounts.businessIds.has(account.id) ? (
-                    <Feather name="briefcase" size={12} color={active ? '#14532d' : '#86efac'} accessibilityLabel="Business account" testID={`bank-account-business-${account.id}`} />
-                  ) : null}
                   {canManageAccount && active && (
                     <TouchableOpacity onPress={() => openAccountEditor(account.id)} hitSlop={8} testID={`bank-edit-account-${account.id}`}>
                       <Feather name="edit-2" size={13} color="#14532d" />
@@ -2869,6 +2911,9 @@ export default function BankScreen() {
                 </TouchableOpacity>
               );
             })}
+                </View>
+              </View>
+            ))}
           </View>
           )}
           {!hasBankAccounts && canManageAccount && (
@@ -3386,9 +3431,37 @@ export default function BankScreen() {
                 })}
               </View>
               {accountIsBusiness ? (
-                <Text style={{ marginTop: 8, color: colors.mutedForeground, fontSize: 12, lineHeight: 17 }}>
-                  Everything in it is the business's: not your income or spending. Moving money between it and your own accounts is a transfer. Its totals show in the Business report.
-                </Text>
+                <>
+                  <Text style={{ marginTop: 8, color: colors.mutedForeground, fontSize: 12, lineHeight: 17 }}>
+                    Everything in it is the business's: not your income or spending. Moving money between it and your own accounts is a transfer. Its totals show in the Business report.
+                  </Text>
+                  <Text style={{ marginTop: 14, color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>Which business?</Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+                    {allIncomeSources.map((stream) => {
+                      const on = accountBusinessId === stream.id && !newBusinessName.trim();
+                      return (
+                        <TouchableOpacity
+                          key={stream.id}
+                          onPress={() => { setAccountBusinessId(on ? null : stream.id); setNewBusinessName(''); }}
+                          accessibilityRole="radio"
+                          accessibilityState={{ selected: on }}
+                          testID={`bank-account-business-of-${stream.id}`}
+                          style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, borderWidth: 1, borderColor: on ? colors.primary : colors.border, backgroundColor: on ? `${colors.primary}22` : colors.muted }}
+                        >
+                          <Text style={{ color: on ? colors.primary : colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>{stream.name}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                  <TextInput
+                    value={newBusinessName}
+                    onChangeText={setNewBusinessName}
+                    placeholder={allIncomeSources.length > 0 ? 'Or a new business' : 'The business, e.g. Optimum Prime Solutions'}
+                    placeholderTextColor={colors.mutedForeground}
+                    style={[styles.input, { marginTop: 8, color: colors.foreground, backgroundColor: colors.muted, borderColor: colors.border }]}
+                    testID="bank-account-new-business"
+                  />
+                </>
               ) : null}
               <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
                 <TouchableOpacity

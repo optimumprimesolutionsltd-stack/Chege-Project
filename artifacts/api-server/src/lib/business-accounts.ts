@@ -36,6 +36,10 @@ export async function ensureBusinessAccounts(): Promise<void> {
         "created_at" timestamp with time zone NOT NULL DEFAULT now()
       )`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS "business_bank_accounts_group_idx" ON "business_bank_accounts" ("group_id")`);
+    // Which business, for somebody with more than one ("a user has many
+    // businesses, it's good to specify to which business the money is going",
+    // 8 Oct 2026). A business is an income stream, as in the Business report.
+    await db.execute(sql`ALTER TABLE "business_bank_accounts" ADD COLUMN IF NOT EXISTS "income_source_id" integer REFERENCES "income_sources"("id") ON DELETE SET NULL`);
     ready = true;
     logger.info("Business bank accounts are ready");
   } catch (err) {
@@ -67,20 +71,34 @@ export function isInBusinessAccount(accountId: SQL | unknown): SQL {
 }
 
 export async function businessAccountIds(groupId: number): Promise<number[]> {
+  return (await businessAccounts(groupId)).map((row) => row.accountId);
+}
+
+/** This budget's business accounts, each with the business (income stream) it belongs to, when set. */
+export async function businessAccounts(groupId: number): Promise<Array<{ accountId: number; incomeSourceId: number | null }>> {
   if (!ready) return [];
-  const result = await db.execute(sql`SELECT "account_id" AS id FROM "business_bank_accounts" WHERE "group_id" = ${groupId}`);
-  return (result.rows as Array<{ id: number }>).map((row) => Number(row.id));
+  const result = await db.execute(sql`SELECT "account_id" AS "accountId", "income_source_id" AS "incomeSourceId" FROM "business_bank_accounts" WHERE "group_id" = ${groupId}`);
+  return (result.rows as Array<{ accountId: number; incomeSourceId: number | null }>).map((row) => ({
+    accountId: Number(row.accountId),
+    incomeSourceId: row.incomeSourceId == null ? null : Number(row.incomeSourceId),
+  }));
 }
 
 /** Business or personal, for one of this budget's accounts. False when the account is not this budget's. */
-export async function setAccountPurpose(groupId: number, accountId: number, business: boolean): Promise<boolean> {
+export async function setAccountPurpose(groupId: number, accountId: number, business: boolean, incomeSourceId: number | null = null): Promise<boolean> {
   if (!ready) return false;
   const owned = await db.execute(sql`SELECT 1 FROM "bank_accounts" WHERE "id" = ${accountId} AND "group_id" = ${groupId} LIMIT 1`);
   if (owned.rows.length === 0) return false;
+  // Only one of this budget's own businesses.
+  const stream = incomeSourceId === null
+    ? null
+    : (await db.execute(sql`SELECT 1 FROM "income_sources" WHERE "id" = ${incomeSourceId} AND "group_id" = ${groupId} LIMIT 1`)).rows.length > 0
+      ? incomeSourceId
+      : null;
   if (business) {
     await db.execute(sql`
-      INSERT INTO "business_bank_accounts" ("account_id", "group_id") VALUES (${accountId}, ${groupId})
-      ON CONFLICT ("account_id") DO NOTHING`);
+      INSERT INTO "business_bank_accounts" ("account_id", "group_id", "income_source_id") VALUES (${accountId}, ${groupId}, ${stream})
+      ON CONFLICT ("account_id") DO UPDATE SET "income_source_id" = EXCLUDED."income_source_id"`);
   } else {
     await db.execute(sql`DELETE FROM "business_bank_accounts" WHERE "account_id" = ${accountId} AND "group_id" = ${groupId}`);
   }
