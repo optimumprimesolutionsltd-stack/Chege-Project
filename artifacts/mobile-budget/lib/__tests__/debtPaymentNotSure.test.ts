@@ -9,7 +9,16 @@ describe('a payment to somebody you owe drops Not sure yet', () => {
 
   it('changing to paying somebody you owe clears any category, and Not sure yet is never saved', () => {
     expect(bank).toContain("if (withdrawDest !== 'party') setExpenseCategory('');");
-    expect(bank.match(/withdrawDest === 'party' && \(!expenseCategory\.trim\(\) \|\| isNotSure\(expenseCategory\)\)/g)).toHaveLength(2);
+    expect(bank).toContain('isNotSure(expenseCategory) ||');
+    expect(bank.match(/\? \{ expenseCategory: null \}|: debtPaymentHasNoCategory/g)?.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('a fee category is dropped from a debt payment too (40,000 stayed "M-Pesa charges")', () => {
+    expect(bank).toContain('paymentFiledAsCharge ||');
+    expect(bank).toContain("/^(m-pesa|fuliza) charges$/i.test(expenseCategory.trim())");
+    expect(bank.match(/debtPaymentHasNoCategory/g)).toHaveLength(3);
+    expect(fix).toContain(`lower(btrim(t."expense_category")) IN ('m-pesa charges', 'fuliza charges')`);
+    expect(fix).toContain(`AND t."charge_for_transaction_id" IS NULL`);
   });
 
   it('entries already saved that way are put right at start', () => {

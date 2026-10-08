@@ -41,8 +41,29 @@ export async function fixBorrowedNotIncome(): Promise<void> {
          AND "settles_contributor_id" IS NOT NULL
          AND lower("expense_category") = 'not sure yet'
       RETURNING "id"`);
+    // A payment to somebody you owe left under a fee category - M-Pesa or
+    // Fuliza charges, or the category of its own fee. A payment is never its
+    // own fee: a 40,000 payment changed to "Paying Optimum prime solutions Ltd"
+    // stayed titled "M-Pesa charges" (8 Oct 2026). Fee rows themselves are
+    // left alone.
+    const chargeDebts = await db.execute(sql`
+      UPDATE "joint_account_transactions" t
+         SET "expense_category" = NULL
+       WHERE t."type" = 'disbursement'
+         AND t."settles_contributor_id" IS NOT NULL
+         AND t."charge_for_transaction_id" IS NULL
+         AND t."expense_category" IS NOT NULL
+         AND (
+           lower(btrim(t."expense_category")) IN ('m-pesa charges', 'fuliza charges')
+           OR EXISTS (
+             SELECT 1 FROM "joint_account_transactions" fee
+              WHERE fee."charge_for_transaction_id" = t."id"
+                AND lower(btrim(fee."expense_category")) = lower(btrim(t."expense_category"))
+           )
+         )
+      RETURNING t."id"`);
     const count = (result: unknown) => (result as { rows?: unknown[] }).rows?.length ?? 0;
-    logger.info({ markedBorrowed: count(marked), sourcesCleared: count(cleared), notSureDebtPayments: count(notSureDebts) }, "Borrowed money and repayments carry no income source; debt payments carry no Not sure yet");
+    logger.info({ markedBorrowed: count(marked), sourcesCleared: count(cleared), notSureDebtPayments: count(notSureDebts), feeCategoryDebtPayments: count(chargeDebts) }, "Borrowed money and repayments carry no income source; debt payments carry no Not sure yet or fee category");
   } catch (err) {
     logger.warn({ err }, "Could not clear income sources from borrowed money; will try again at the next start");
   }

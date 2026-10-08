@@ -94,11 +94,11 @@ describe('paying off a debt needs no category', () => {
   });
 
   it('sends no category on a new payment given none, so it stays out of spending', () => {
-    expect(bank).toMatch(/withdrawDest === 'party' && \(!expenseCategory\.trim\(\) \|\| isNotSure\(expenseCategory\)\)\r?\n\s+\? \{\}/);
+    expect(bank).toMatch(/: debtPaymentHasNoCategory\r?\n\s+\? \{\}/);
   });
 
   it('clears the category on an edit given none', () => {
-    expect(bank).toMatch(/withdrawDest === 'party' && \(!expenseCategory\.trim\(\) \|\| isNotSure\(expenseCategory\)\)\r?\n\s+\? \{ expenseCategory: null \}/);
+    expect(bank).toMatch(/: debtPaymentHasNoCategory\r?\n\s+\? \{ expenseCategory: null \}/);
   });
 
   it('reopens a payment to somebody as one', () => {
