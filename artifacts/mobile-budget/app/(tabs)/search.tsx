@@ -17,6 +17,7 @@ import { customFetch, useGetGroup } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
 import { WorkspaceIdentityRow } from '@/components/WorkspaceIdentityRow';
 import { formatDisplayDate } from '@/lib/displayFormat';
+import { byWay, reachedCap, totalsOf, type MoneyWay } from '@/lib/searchDirection';
 
 type SearchTab = 'all' | 'expenses' | 'bank' | 'goals' | 'income';
 type SearchResult = {
@@ -38,6 +39,12 @@ const TABS: Array<{ key: SearchTab; label: string }> = [
   { key: 'income', label: 'Income' },
 ];
 
+const WAYS: Array<{ key: MoneyWay; label: string }> = [
+  { key: 'all', label: 'All' },
+  { key: 'in', label: 'Money in' },
+  { key: 'out', label: 'Money out' },
+];
+
 const destinationFor = (kind: SearchResult['kind']) => {
   if (kind === 'expenses') return '/(tabs)/history';
   if (kind === 'bank') return '/(tabs)/bank';
@@ -52,13 +59,16 @@ export default function SearchScreen() {
   const [draft, setDraft] = useState('');
   const [query, setQuery] = useState('');
   const [tab, setTab] = useState<SearchTab>('all');
+  // Which way the money moved, on top of where to look (lib/searchDirection).
+  const [way, setWay] = useState<MoneyWay>('all');
   const normalizedQuery = query.trim();
   const search = useQuery<SearchResponse>({
     queryKey: ['workspace-search', group?.id, normalizedQuery, tab],
     queryFn: () => customFetch<SearchResponse>(`/api/search?q=${encodeURIComponent(normalizedQuery)}&tab=${tab}`),
     enabled: normalizedQuery.length >= 2 && Boolean(group?.id),
   });
-  const results = useMemo(() => search.data?.results ?? [], [search.data]);
+  const results = useMemo(() => byWay(search.data?.results ?? [], way), [search.data, way]);
+  const totals = useMemo(() => totalsOf(results), [results]);
   const submit = () => {
     const value = draft.trim();
     if (value.length >= 2) setQuery(value);
@@ -103,6 +113,33 @@ export default function SearchScreen() {
             );
           })}
         </View>
+        <View style={styles.tabs} testID="search-way">
+          {WAYS.map((item) => {
+            const selected = item.key === way;
+            return (
+              <Pressable
+                key={item.key}
+                onPress={() => setWay(item.key)}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                testID={`search-way-${item.key}`}
+                style={[styles.tab, { borderColor: selected ? colors.primary : colors.border, backgroundColor: selected ? colors.primary : colors.card }]}
+              >
+                <Text style={[styles.tabText, { color: selected ? colors.primaryForeground : colors.mutedForeground }]}>
+                  {item.key === 'in' ? '↓ ' : item.key === 'out' ? '↑ ' : ''}{item.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        {normalizedQuery.length >= 2 && results.length > 0 && !search.isFetching ? (
+          <Text style={[styles.subtitle, { color: colors.foreground, fontFamily: 'Inter_600SemiBold' }]} testID="search-totals">
+            {totals.count} found
+            {totals.in > 0 ? ` · KES ${totals.in.toLocaleString('en-KE')} in` : ''}
+            {totals.out > 0 ? ` · KES ${totals.out.toLocaleString('en-KE')} out` : ''}
+            {reachedCap(search.data?.results ?? []) ? ' · the first 50 of each kind; type more to narrow it' : ''}
+          </Text>
+        ) : null}
       </View>
 
       {search.isFetching ? (

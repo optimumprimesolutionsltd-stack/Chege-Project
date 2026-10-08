@@ -4626,12 +4626,17 @@ export default function BankScreen() {
                       quietly turned the debt payment back into ordinary spending. */}
                   {withdrawDest !== 'party' && withdrawDest !== 'lend' ? (<>
                   <Text style={[styles.label, { color: colors.mutedForeground }]}>
-                    Where is this money going?{' '}
-                    <Text style={{ fontWeight: '400', fontSize: 11 }}>* required</Text>
+                    Where is it going?{' '}
+                    <Text style={{ fontWeight: '400', fontSize: 11 }}>(optional)</Text>
                   </Text>
                   <View style={styles.memberRow}>
-                    {/* Income source chips for the selected withdrawer */}
-                    {withdrawSources.map((src) => {
+                    {/* Money going out is not income, so it has no income stream: the
+                        withdrawer's streams were offered here, and picking one only
+                        renamed the entry ("should money going out have a source of
+                        income?", 8 Oct 2026). What it was for is its category, below.
+                        An entry saved that way before still shows its stream, so it
+                        can be read; nothing new is offered. */}
+                    {withdrawSources.filter((src) => withdrawDest === 'source' && withdrawSourceName === src.name).map((src) => {
                       const selected = withdrawDest === 'source' && withdrawSourceName === src.name;
                       return (
                         <TouchableOpacity
