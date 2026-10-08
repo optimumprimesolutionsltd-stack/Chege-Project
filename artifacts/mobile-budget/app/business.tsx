@@ -6,6 +6,7 @@ import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { autoLinkReversals, getGetDashboardBusinessQueryKey, useGetDashboardBusiness } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
+import { BusinessCostCategories } from '@/components/BusinessCostCategories';
 import { useColors } from '@/hooks/useColors';
 import { ScrollerScrollView } from '@/components/PageScrollReset';
 
@@ -99,14 +100,9 @@ export default function BusinessScreen() {
     query: { queryKey: getGetDashboardBusinessQueryKey(params) },
   });
   const businesses = (data?.businesses ?? []) as Statement[];
-  // Business sits above the tabs, so pushing the Reports tab changed the tab
-  // underneath and left this screen on top: the button seemed to do nothing.
-  // Close back down to the tabs, then open Reports with this stream's Cost
-  // categories sheet already up.
-  const changeCosts = (incomeSourceId: number, name: string) => {
-    if (router.canDismiss()) router.dismissAll();
-    router.navigate({ pathname: '/(tabs)/reports', params: { costsFor: String(incomeSourceId), costsName: name } });
-  };
+  // Its cost categories, ticked here on the business itself (components/BusinessCostCategories).
+  const [costsFor, setCostsFor] = useState<{ id: number; name: string } | null>(null);
+  const changeCosts = (incomeSourceId: number, name: string) => setCostsFor({ id: incomeSourceId, name });
   const totals = data?.totals;
   // One switch for the whole screen, beside each business's own: every
   // business open, or every one closed.
@@ -287,11 +283,11 @@ export default function BusinessScreen() {
           <Pressable
             onPress={() => changeCosts(business.incomeSourceId, business.name)}
             accessibilityRole="button"
-            accessibilityLabel="Change which costs count, in Reports, Income streams, Cost categories"
+            accessibilityLabel={`${business.name}'s cost categories`}
             hitSlop={6}
             testID={`business-change-costs-${business.incomeSourceId}`}
           >
-            <Text style={[styles.link, { color: colors.primary }]}>Change costs</Text>
+            <Text style={[styles.link, { color: colors.primary }]}>Cost categories</Text>
           </Pressable>
         </View>
       </View>
@@ -356,7 +352,7 @@ export default function BusinessScreen() {
           <View style={[styles.note, { borderColor: colors.border }]} testID="business-none">
             <Text style={[styles.noteText, { color: colors.foreground, fontFamily: 'Inter_600SemiBold' }]}>No business set up yet</Text>
             <Text style={[styles.noteText, { color: colors.mutedForeground }]}>
-              On Reports, open an income stream and link its costs - stock, fuel, repairs - with Cost categories. It then shows here as a business.
+              Add a business in My businesses (the pencil above) with Count its profit on. It shows here, and its Cost categories - stock, fuel, repairs - are set on it.
             </Text>
           </View>
         ) : (
@@ -378,12 +374,13 @@ export default function BusinessScreen() {
             ) : null}
             {businesses.map(statement)}
             <Text style={[styles.footnote, { color: colors.mutedForeground }]}>
-              Sales are what came in under each income stream, as on All income. Which costs are cost of goods sold and which are
-              expenses is set in Reports, Cost categories.
+              Sales are the money in filed for each business. Which costs are cost of goods sold and which are expenses is set
+              under each business, Cost categories.
             </Text>
           </>
         )}
       </ScrollerScrollView>
+      <BusinessCostCategories business={costsFor} onClose={() => setCostsFor(null)} />
     </View>
   );
 }

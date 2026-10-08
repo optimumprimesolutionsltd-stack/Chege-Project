@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const screen = readFileSync('app/business.tsx', 'utf8');
+const sheet = readFileSync('components/BusinessCostCategories.tsx', 'utf8');
 const reports = readFileSync('app/(tabs)/reports.tsx', 'utf8');
 const more = readFileSync('app/(tabs)/more.tsx', 'utf8');
 const layout = readFileSync('app/_layout.tsx', 'utf8');
@@ -58,16 +59,16 @@ describe('getting to it', () => {
 
 describe('choosing what kind of cost a category is', () => {
   it('offers cost of goods sold or expense on each linked category', () => {
-    expect(reports).toContain("['cogs', 'Cost of goods sold'],");
-    expect(reports).toContain("['expense', 'Expense'],");
-    expect(reports).toContain('await updateCostCategory.mutateAsync({ id: categoryId, data: { costKind } });');
+    expect(sheet).toContain("[['cogs', 'Cost of goods sold'], ['expense', 'Expense']]");
+    expect(sheet).toContain('await updateCategory.mutateAsync({ id: categoryId, data: { costKind } });');
   });
 
   it('reads a category with no kind yet as cost of goods sold, as links always were', () => {
-    expect(reports).toContain("pendingKind[category.id] ?? (category.costKind === 'expense' ? 'expense' : 'cogs')");
+    expect(sheet).toContain("pendingKind[category.id] ?? (category.costKind === 'expense' ? 'expense' : 'cogs')");
   });
 
   it('refreshes every month of the statement when a cost changes', () => {
-    expect((reports.match(/invalidateQueries\(\{ queryKey: getGetDashboardBusinessQueryKey\(\) \}\)/g) ?? []).length).toBe(2);
+    expect(sheet).toContain('void queryClient.invalidateQueries({ queryKey: getGetDashboardBusinessQueryKey() });');
+    expect((sheet.match(/await refresh\(\);/g) ?? []).length).toBe(2);
   });
 });

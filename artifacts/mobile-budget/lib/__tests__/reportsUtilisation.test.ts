@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { budgetReport } from '../budgetReport';
 
 const screen = readFileSync('app/(tabs)/reports.tsx', 'utf8');
+const sheet = readFileSync('components/BusinessCostCategories.tsx', 'utf8');
 
 // "17 categories over", figures cut off on the right, and Stock unlinked by one tap.
 describe('Budget utilisation on Reports', () => {
@@ -24,14 +25,13 @@ describe('Budget utilisation on Reports', () => {
 
 describe('unlinking a cost category', () => {
   it('asks first', () => {
-    expect(screen).toContain("{ text: 'Stop counting it', style: 'destructive', onPress: () => void applyCostCategoryChange(category.id, null) },");
+    expect(sheet).toContain("{ text: 'Stop counting it', style: 'destructive', onPress: () => void applyLink(category.id, null) },");
   });
 });
 
 // "Transport is not picking expense": the Expense button sat off the card.
 describe('a cost category row', () => {
   it('puts its kind buttons on their own line, wrapping', () => {
-    expect(screen).toContain("costCategoryOption: { flexDirection: 'column', alignItems: 'stretch',");
-    expect(screen).toContain("<View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 }} testID={`cost-kind-${category.id}`}>");
+    expect(sheet).toContain("<View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>");
   });
 });

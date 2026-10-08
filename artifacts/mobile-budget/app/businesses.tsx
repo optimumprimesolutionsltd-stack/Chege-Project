@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
 import { PageScrollView } from '@/components/PageScrollReset';
 import { useBusinesses } from '@/hooks/useBusinesses';
+import { BusinessCostCategories } from '@/components/BusinessCostCategories';
 
 export default function BusinessesScreen() {
   const colors = useColors();
@@ -26,6 +27,8 @@ export default function BusinessesScreen() {
   const businesses = useBusinesses();
   const [name, setName] = useState('');
   const [working, setWorking] = useState(false);
+  // Its cost categories, ticked several at a time (components/BusinessCostCategories).
+  const [costsFor, setCostsFor] = useState<{ id: number; name: string } | null>(null);
 
   const add = async () => {
     const typed = name.trim();
@@ -99,9 +102,15 @@ export default function BusinessesScreen() {
               </View>
               <Switch value={business.countsProfit} onValueChange={(on) => setCounts(business.id, on)} testID={`business-counts-profit-${business.id}`} />
             </View>
+            <Pressable onPress={() => setCostsFor({ id: business.id, name: business.name })} accessibilityRole="button" testID={`business-cost-categories-${business.id}`}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Feather name="link-2" size={14} color={colors.primary} />
+              <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>Cost categories</Text>
+            </Pressable>
           </View>
         ))}
       </View>
+      <BusinessCostCategories business={costsFor} onClose={() => setCostsFor(null)} />
     </PageScrollView>
   );
 }
