@@ -1984,7 +1984,7 @@ export default function BankScreen() {
                 // yet from before it was sorted - is sent as null, which takes off
                 // any the posting had ("made changes but still showing not sure
                 // yet", 8 Oct 2026).
-                : withdrawDest === 'party' && (!expenseCategory.trim() || isNotSure(expenseCategory))
+                : debtPaymentHasNoCategory
                   ? { expenseCategory: null }
                   : { expenseCategory, destinationKind: withdrawDest === 'other' ? 'other' : 'category' }
               : {}),
@@ -2092,7 +2092,7 @@ export default function BankScreen() {
               ? { isLending: true }
               // Paying somebody you owe with no category: a debt payment, not
               // spending, so it keeps out of the totals the way a loan does.
-              : withdrawDest === 'party' && (!expenseCategory.trim() || isNotSure(expenseCategory))
+              : debtPaymentHasNoCategory
                 ? {}
                 : { expenseCategory, destinationKind: withdrawDest === 'other' ? 'other' : 'category' }),
             ...(withdrawDest === 'lend' || withdrawDest === 'party'
@@ -2316,6 +2316,20 @@ export default function BankScreen() {
     expenseCategory.trim() !== '' &&
     expenseCategory.trim().toLocaleLowerCase() === chargeCategory.trim().toLocaleLowerCase() &&
     !transactions.some((row) => row.id === editingTransactionId && row.chargeForTransactionId != null);
+
+  /**
+   * A payment to somebody you owe saved with no category. Besides an empty
+   * field: Not sure yet left from before it was sorted, and a fee category the
+   * payment was filed under by mistake - a 40,000 payment to Frederick Mundia
+   * stayed "M-Pesa charges" after it was changed to "Paying Optimum prime
+   * solutions Ltd" (8 Oct 2026). A payment is never its own fee.
+   */
+  const debtPaymentHasNoCategory =
+    withdrawDest === 'party' &&
+    (!expenseCategory.trim() ||
+      isNotSure(expenseCategory) ||
+      paymentFiledAsCharge ||
+      /^(m-pesa|fuliza) charges$/i.test(expenseCategory.trim()));
 
   const existingCharge = editingTransactionId === null
     ? null
@@ -4599,11 +4613,14 @@ export default function BankScreen() {
                       <TouchableOpacity
                         style={styles.categoryOption}
                         onPress={() => {
+                          // Changing to paying somebody you owe drops the category the
+                          // entry had - it needs none ("when a change is done, category
+                          // should go away", 8 Oct 2026). Re-choosing it keeps one picked
+                          // on purpose for a purchase never recorded.
+                          if (withdrawDest !== 'party') setExpenseCategory('');
                           setWithdrawDest('party');
                           setWithdrawSourceName(null);
                           setWithdrawPartyId(null);
-                          // Paying somebody you owe needs no category: Not sure yet is not one.
-                          if (isNotSure(expenseCategory)) setExpenseCategory('');
                           setShowWithdrawKindPicker(false);
                           setShowPartyPicker(true);
                         }}
