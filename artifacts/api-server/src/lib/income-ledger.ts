@@ -14,7 +14,7 @@
  * shows them.
  */
 
-export type DepositKind = "income" | "borrowed" | "repaid" | "from_savings" | "money_back" | "owner" | "business_account";
+export type DepositKind = "income" | "borrowed" | "repaid" | "from_savings" | "money_back" | "owner" | "business_account" | "business_sale";
 
 export type IncomeDepositRow = {
   id: number;
@@ -67,7 +67,7 @@ export function buildIncomeLedger(input: {
   const ownStream = (id: number | null) => (id != null && input.streamNames.has(Number(id)) ? Number(id) : null);
   const streamName = (id: number | null) => (id != null ? input.streamNames.get(id) : undefined) ?? NO_INCOME_STREAM;
 
-  const otherMoneyIn = { borrowed: 0, repaidToYou: 0, fromSavings: 0, moneyBack: 0, fromYourBusiness: 0, inBusinessAccounts: 0 };
+  const otherMoneyIn = { borrowed: 0, repaidToYou: 0, fromSavings: 0, moneyBack: 0, fromYourBusiness: 0, inBusinessAccounts: 0, businessSales: 0 };
   const receivedByStream = new Map<number | null, number>();
   const entries = [];
 
@@ -82,6 +82,8 @@ export function buildIncomeLedger(input: {
     // neither is your income (lib/owner-business, lib/business-accounts).
     if (deposit.kind === "owner") { otherMoneyIn.fromYourBusiness += amount; continue; }
     if (deposit.kind === "business_account") { otherMoneyIn.inBusinessAccounts += amount; continue; }
+    // A business's sales: in the Business report, not your income (lib/business-streams).
+    if (deposit.kind === "business_sale") { otherMoneyIn.businessSales += amount; continue; }
 
     // A split deposit names its streams and people on its portions; the
     // deposit's own columns only speak for an unsplit one. Each stream is

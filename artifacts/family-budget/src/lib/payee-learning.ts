@@ -217,6 +217,34 @@ export function withRule(rules: PayeeRules, description: string, category: strin
   return next;
 }
 
+/**
+ * Where money in from this payer goes: an income source kept for them, so a
+ * business"s customer paying from their own M-Pesa or bank is filed as that
+ * business"s sales next time ("this logic should work also when receiving
+ * money", "also with personal numbers", 8 Oct 2026). Kept beside the category
+ * rules under "src:" - by the account in brackets when there is one, else by
+ * the payer"s name.
+ */
+export const sourceRuleKey = (description: string): string => {
+  const reference = referenceOf(description);
+  if (reference.length >= 4) return `src:#ref:${reference}`;
+  const key = payeeKey(description.replace(/^Received from\s+/i, ""));
+  return key ? `src:${key}` : "";
+};
+
+/** The income source kept for money in from this payer, or null. */
+export function ruleSource(description: string, rules: PayeeRules): number | null {
+  const key = sourceRuleKey(description);
+  const kept = key ? Number(rules[key]) : NaN;
+  return Number.isInteger(kept) && kept > 0 ? kept : null;
+}
+
+/** Keeps where money in from this payer goes. */
+export function withSourceRule(rules: PayeeRules, description: string, incomeSourceId: number): PayeeRules {
+  const key = sourceRuleKey(description);
+  return key ? { ...rules, [key]: String(incomeSourceId) } : rules;
+}
+
 /** Forgets a rule. */
 export function withoutRule(rules: PayeeRules, key: string): PayeeRules {
   const next = { ...rules };

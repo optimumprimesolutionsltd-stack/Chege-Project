@@ -12,6 +12,7 @@ import { customFetch, getGetJointAccountQueryKey, useGetBudgetCategories, useGet
 import { useColors } from '@/hooks/useColors';
 import { PageScrollView } from '@/components/PageScrollReset';
 import { useNamedPayees } from '@/hooks/useNamedPayees';
+import { useBusinesses } from '@/hooks/useBusinesses';
 import { isNamedPayee, namedKeyFor, namedKeyLabel } from '@/lib/namedPayees';
 import { isNotSure } from '@/lib/entriesToSort';
 import { payeeName, referenceOf } from '@/lib/payeeLearning';
@@ -49,11 +50,14 @@ export default function NamedAccountsScreen() {
   // business?", 8 Oct 2026). A business is an income stream there.
   const [businessId, setBusinessId] = useState<number | null>(null);
   const [newCostName, setNewCostName] = useState('');
-  const { data: businesses = [] } = useQuery<Array<{ id: number; name: string }>>({
+  const { data: streams = [] } = useQuery<Array<{ id: number; name: string }>>({
     queryKey: ['income-sources', '__group__'],
     queryFn: () => customFetch<Array<{ id: number; name: string }>>('/api/income-sources'),
     staleTime: 30_000,
   });
+  // The businesses named in My businesses, once there are any; until then every stream.
+  const namedBusinesses = useBusinesses();
+  const businesses = namedBusinesses.named ? streams.filter((one) => namedBusinesses.ids.has(one.id)) : streams;
   const businessName = (id: number | null | undefined) => businesses.find((one) => one.id === id)?.name ?? null;
 
   // Categories that carry spending: not a heading, and not Not sure yet. With a
@@ -91,7 +95,7 @@ export default function NamedAccountsScreen() {
         await customFetch('/api/budget-categories', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: typed, budgetAmount: 0, priority: 1, parentId: null, reducesIncomeSourceId: business, costKind: 'cogs', isRecurring: true, activeMonth: null, activeYear: null }),
+          body: JSON.stringify({ name: typed, budgetAmount: 0, priority: 3, parentId: null, reducesIncomeSourceId: business, costKind: 'cogs', isRecurring: true, activeMonth: null, activeYear: null }),
         });
         void queryClient.invalidateQueries({ queryKey: ['/api/budget-categories'] });
         return typed;

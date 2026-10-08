@@ -308,6 +308,9 @@ export default function BusinessScreen() {
           <Text style={[styles.title, { color: colors.foreground }]} numberOfLines={1}>Business</Text>
           <Text style={[styles.subtitle, { color: colors.mutedForeground }]} numberOfLines={1}>Profit and loss for each business</Text>
         </View>
+        <Pressable onPress={() => router.push('/businesses' as never)} accessibilityRole="button" accessibilityLabel="My businesses" hitSlop={8} testID="business-manage">
+          <Feather name="edit-2" size={18} color={colors.primary} />
+        </Pressable>
         {businesses.length > 0 ? (
           <Pressable onPress={toggleAllDetails} accessibilityRole="button" hitSlop={8} testID="business-details-all">
             <Text style={[styles.link, { color: colors.primary }]}>{allDetailed ? 'Hide all details' : 'Show all details'}</Text>
