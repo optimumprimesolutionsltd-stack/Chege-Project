@@ -296,6 +296,15 @@ const NO_GUESS_IN = new Set(["person_receipt", "bank_receipt", "cash_deposit"]);
 export const sourceNotGuessed = (line: { type: string | null; description: string | null }): boolean =>
   (line.type !== null && NO_GUESS_IN.has(line.type)) || Boolean(line.description && isBankPayee(line.description));
 
+/**
+ * Those same lines start under Not sure, filed by Jamvi, so they save with the
+ * rest and Sort them out brings each one back - not left blank for the person
+ * to answer before saving ("the money in from people or agent or bank should
+ * be under not sure until sorted", 8 Oct 2026). Loans and savings keep their own filing.
+ */
+const notSureIn = (line: PreviewLine): boolean =>
+  line.direction === "in" && !loanOf(line) && !savingsOf(line) && sourceNotGuessed(line);
+
 const GROUP_PAYEE = /\b(chama|sacco|welfare|merry|self[- ]?help|group)\b/i;
 const GROUP_CATEGORY_WORDS = ["chama", "sacco", "contribution", "welfare", "merry"];
 
@@ -343,7 +352,7 @@ export function initialChoices(
     if (line.direction === "in") {
       // A loan drawn (Fuliza, M-Shwari, KCB M-PESA, Hustler Fund) is borrowed, never income, so it is offered no source.
       const source = line.description && loanOf(line)?.kind !== "borrowed" && !savingsOf(line) && !sourceNotGuessed(line) ? suggestIncomeSource(line.description, history) : null;
-      choices[line.index] = { ...choices[line.index], incomeSourceId: source, sourceAuto: source !== null };
+      choices[line.index] = { ...choices[line.index], incomeSourceId: source, sourceAuto: source !== null, ...(notSureIn(line) ? { confirmed: true } : {}) };
     }
   }
   return choices;
@@ -454,7 +463,7 @@ export function refreshSuggestions(
     // gets its airtime, bundles, charges and loans filed too (see filedByJamvi).
     const untouched = current.confirmed === undefined && current.include && destinationOf(current) === "category";
     if (line.direction === "in") {
-      if (untouched && (loanOf(line)?.kind === "borrowed" || savingsOf(line))) {
+      if (untouched && (loanOf(line)?.kind === "borrowed" || savingsOf(line) || notSureIn(line))) {
         next[line.index] = { ...current, incomeSourceId: null, sourceAuto: false, confirmed: true };
         continue;
       }

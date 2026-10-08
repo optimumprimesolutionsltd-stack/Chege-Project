@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { initialChoices, sourceNotGuessed, type PreviewLine } from '@/lib/mpesaImport';
+import { initialChoices, refreshSuggestions, sourceNotGuessed, type PreviewLine } from '@/lib/mpesaImport';
 
 // "So money received from people and bank should go to not sure" (8 Oct 2026).
 const line = (over: Partial<PreviewLine>): PreviewLine => ({
@@ -23,6 +23,24 @@ describe('money in that is not given a source from history', () => {
   it('waits with no source, so Sort them out asks', () => {
     expect(initialChoices([line({})], history as never, [], '')[0].incomeSourceId).toBeNull();
     expect(initialChoices([line({ type: 'bank_receipt', description: 'National Bank' })], history as never, [], '')[0].incomeSourceId).toBeNull();
+  });
+
+  // "The money in from people or agent or bank should be under not sure until sorted" (8 Oct 2026).
+  it('starts under Not sure, answered, so it saves and comes back to sort', () => {
+    for (const over of [{}, { type: 'bank_receipt', description: 'National Bank' }, { type: 'cash_deposit', description: 'Deposit of Funds at Agent Till 337638' }]) {
+      const choice = initialChoices([line(over)], history as never, [], '')[0];
+      expect(choice).toMatchObject({ incomeSourceId: null, sourceAuto: false, confirmed: true, include: true });
+    }
+  });
+
+  it('a statement restored from before is filed the same way', () => {
+    const lines = [line({})];
+    const restored = { 0: { include: true, category: '', auto: false, incomeSourceId: 7, sourceAuto: true } };
+    expect(refreshSuggestions(lines, restored as never, history as never, [])[0]).toMatchObject({ incomeSourceId: null, confirmed: true });
+  });
+
+  it('salary and loans are not put under Not sure', () => {
+    expect(initialChoices([line({ type: 'other', description: 'ACME LTD SALARY' })], history as never, [], '')[0].confirmed).toBeUndefined();
   });
 
   it('other money in still learns its source', () => {
