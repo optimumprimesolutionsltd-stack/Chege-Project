@@ -739,12 +739,17 @@ export default function BankScreen() {
         let moved = 0;
         try {
           for (const row of offer.rows) {
-            await updateTransaction({ id: row.id, data: { amount: row.amount, date: row.date, expenseCategory: offer.to } as never });
+            const saved = await updateTransaction({ id: row.id, data: { amount: row.amount, date: row.date, expenseCategory: offer.to } as never });
+            // On the list as each one saves, not after the whole account comes back.
+            if (saved?.id != null) {
+              queryClient.setQueriesData({ queryKey: getGetJointAccountQueryKey() }, (cached: unknown) => withSavedRow(cached, saved));
+            }
             moved += 1;
           }
           // Moving them all says where this payee belongs: remembered, and not asked again.
           await remember();
           await noteAsked();
+          Alert.alert('Moved', `${moved} ${moved === 1 ? 'payment' : 'payments'} to ${offer.description} moved to ${offer.to}.`);
         } catch (error) {
           Alert.alert('Could not move them all', `${moved} of ${offer.rows.length} moved. ${error instanceof Error ? error.message : ''}`.trim());
         } finally {

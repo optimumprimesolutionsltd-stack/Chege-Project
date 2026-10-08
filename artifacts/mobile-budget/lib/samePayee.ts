@@ -27,6 +27,20 @@ type Row = {
   reversal?: unknown;
 };
 
+/**
+ * The payee as one name, however M-Pesa wrote it that time: capitals, phone,
+ * till and masked numbers ("0712***678"), punctuation and "Ltd" set aside.
+ * Matching on the exact text left most of a payee's payments where they were -
+ * "the app says it has moved them but I still find them all over" (8 Oct 2026).
+ */
+export function samePayeeName(description: string | null | undefined): string {
+  return payeeKey(description ?? '')
+    .replace(/[^\p{L}\s]/gu, ' ')
+    .split(/\s+/)
+    .filter((word) => word && !['ltd', 'limited', 'co', 'the', 'plc'].includes(word))
+    .join(' ');
+}
+
 const same = (a: string | null | undefined, b: string | null | undefined) =>
   (a ?? '').trim().toLocaleLowerCase('en-KE') === (b ?? '').trim().toLocaleLowerCase('en-KE');
 
@@ -36,7 +50,7 @@ const same = (a: string | null | undefined, b: string | null | undefined) =>
  * reversal. Oldest first.
  */
 export function samePayeeToMove<T extends Row>(rows: readonly T[], edited: { id: number; description: string }, from: string, to: string): T[] {
-  const key = payeeKey(edited.description);
+  const key = samePayeeName(edited.description);
   if (!key || !to.trim() || isNotSure(to) || same(from, to)) return [];
   return rows
     .filter((row) =>
@@ -49,7 +63,7 @@ export function samePayeeToMove<T extends Row>(rows: readonly T[], edited: { id:
       !row.isLending &&
       row.settlesContributorId == null &&
       !row.reversal &&
-      !!row.description && payeeKey(row.description) === key &&
+      !!row.description && samePayeeName(row.description) === key &&
       (same(row.expenseCategory, from) || isNotSure(row.expenseCategory)))
     .sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
 }

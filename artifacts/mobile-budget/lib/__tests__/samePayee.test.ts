@@ -80,3 +80,30 @@ describe('remembering a payee\'s category is asked once', () => {
     expect(bank).toContain("{ text: 'No', style: 'cancel', onPress: () => void noteAsked() }");
   });
 });
+
+// "The app says it has moved them but I still find them all over" (8 Oct 2026).
+describe('one payee, however M-Pesa wrote it', () => {
+  it('capitals, numbers, masks, punctuation and Ltd are set aside', async () => {
+    const { samePayeeName } = await import('@/lib/samePayee');
+    expect(samePayeeName('EAGLES AFRICAN DISHES LTD')).toBe('eagles african dishes');
+    expect(samePayeeName('Eagles African Dishes 0712***678')).toBe('eagles african dishes');
+    expect(samePayeeName('Eagles-African Dishes (Till 123456)')).toBe('eagles african dishes');
+    expect(samePayeeName('Peter Mbugua')).not.toBe(samePayeeName('Peter Mbugua Kamau'));
+  });
+
+  it('so the move finds them all', async () => {
+    const { samePayeeToMove } = await import('@/lib/samePayee');
+    const rows = [
+      { id: 1, type: 'disbursement', amount: 500, date: '2026-07-29', description: 'Eagles African Dishes', expenseCategory: 'Eat outs' },
+      { id: 2, type: 'disbursement', amount: 500, date: '2026-04-02', description: 'EAGLES AFRICAN DISHES LTD', expenseCategory: 'Boda boda and matatu' },
+      { id: 3, type: 'disbursement', amount: 500, date: '2026-08-02', description: 'Eagles African Dishes 0712***678', expenseCategory: 'Boda boda and matatu' },
+    ];
+    expect(samePayeeToMove(rows, rows[0], 'Boda boda and matatu', 'Eat outs').map((row) => row.id)).toEqual([2, 3]);
+  });
+
+  it('each moved payment shows on the list at once, and Jamvi says how many moved', () => {
+    const bank = readFileSync('app/(tabs)/bank.tsx', 'utf8');
+    expect(bank).toContain("Alert.alert('Moved', `${moved} ${moved === 1 ? 'payment' : 'payments'} to ${offer.description} moved to ${offer.to}.`);");
+    expect(bank).toContain('const saved = await updateTransaction({ id: row.id, data: { amount: row.amount, date: row.date, expenseCategory: offer.to } as never });');
+  });
+});
