@@ -66,7 +66,7 @@ export default function SortEntries() {
       setBusy(null);
     }
   };
-  const sort = (entry: EntryToSort, change: { expenseCategory: string } | { incomeSourceId: number }) =>
+  const sort = (entry: EntryToSort, change: { expenseCategory: string } | { incomeSourceId: number; madeById?: string }) =>
     run(entry, () => updateTx.mutateAsync({ id: entry.id, data: { amount: entry.amount, date: entry.date, ...change } as never }));
   // Money in saved earlier with a source Jamvi may have guessed, listed to check
   // (as on the phone): Keep leaves it as it is; another source takes it off too.
@@ -137,7 +137,7 @@ export default function SortEntries() {
                   onChange={(event) => {
                     const value = event.target.value;
                     if (!value) return;
-                    void (entry.direction === "out" ? sort(entry, { expenseCategory: value }) : sort(entry, { incomeSourceId: Number(value) }));
+                    void (entry.direction === "out" ? sort(entry, { expenseCategory: value }) : sort(entry, { incomeSourceId: Number(value), ...(incomeSources.find((source) => source.id === Number(value))?.userId ? { madeById: incomeSources.find((source) => source.id === Number(value))!.userId } : {}) }));
                   }}
                   className="h-10 min-w-[14rem] flex-1 rounded-md border border-input bg-background px-3 text-sm"
                   aria-label={entry.direction === "out" ? "What was it for?" : "Where did it come from?"}

@@ -84,8 +84,10 @@ describe.skipIf(!hasDb)("gathering money in with no source (integration)", () =>
     expect((await request(app()).post("/entries-to-sort/money-in-without-source").send({ from: "26-1-1" })).status).toBe(400);
   });
 
-  it("is refused in a Shared group, where money in is members' contributions", async () => {
+  // "Should also apply to shared budget too" (8 Oct 2026): a Shared group gathers
+  // only imported money in from people, banks and agents, never members' contributions.
+  it("gathers in a Shared group only what was imported from people, banks and agents", async () => {
     const response = await request(app(false)).post("/entries-to-sort/money-in-without-source");
-    expect(response.status).toBe(403);
+    expect(response.status).toBe(200);
   });
 });

@@ -53,11 +53,11 @@ describe('Sort them out, for a year already saved', () => {
     expect(screen).toContain("{ text: 'Just this one', onPress: () => void sortEach([entry], change, label) },");
     expect(screen).toContain('onPress: () => void sortEach([entry, ...others], change, label) },');
   });
-  it('gathers money in with no source by itself, every year, in a Personal budget only', () => {
+  it('gathers money in with no source by itself, every year - in a Shared group only what was imported', () => {
     // "Want to fix old entries too - ship all to sort them out" (7 Oct 2026): no Find button,
     // the server gathers whenever the list is read, minus what was left with no source.
     const route = read('../api-server/src/routes/entries-to-sort.ts');
-    expect(route).toContain('if (req.group?.isPrivate) await gatherMoneyInWithoutSource(groupId).catch(() => 0);');
+    expect(route).toContain('await gatherMoneyInWithoutSource(groupId, undefined, !req.group?.isPrivate).catch(() => 0);');
     const gather = read('../api-server/src/lib/entries-to-sort.ts');
     expect(gather).toContain('SELECT 1 FROM "entries_left_unsourced" l WHERE l."transaction_id" = t."id")');
     expect(route).toContain('INSERT INTO "entries_left_unsourced" ("transaction_id", "group_id")');
@@ -73,7 +73,7 @@ describe('Sort them out can be undone', () => {
   const screen = read('app/sort-entries.tsx');
   it('keeps the last change - one entry or All N - and puts each back as it was', () => {
     expect(screen).toContain('testID="sort-entries-undo"');
-    expect(screen).toContain("...(one.direction === 'out' ? { expenseCategory: NOT_SURE_CATEGORY } : { incomeSourceId: one.incomeSourceId ?? null })");
+    expect(screen).toContain("...(one.direction === 'out' ? { expenseCategory: NOT_SURE_CATEGORY } : { incomeSourceId: one.incomeSourceId ?? null, ...(one.madeById !== undefined ? { madeById: one.madeById } : {}) })");
     expect(screen).toContain('undo: async () => { for (const one of changed) await putBack(one); },');
   });
   it('undoes "Leave it with no source" by putting it back on the list', () => {

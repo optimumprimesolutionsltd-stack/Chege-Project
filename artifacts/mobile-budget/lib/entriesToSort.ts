@@ -27,6 +27,8 @@ export type EntryToSort = {
   notes?: string | null;
   /** Money in saved earlier with a source, listed to check it (api-server gatherSourcedToCheck). */
   incomeSourceId?: number | null;
+  /** Who it is recorded under. */
+  madeById?: string | null;
 };
 
 /** Money in listed with the source it already has, to keep or change - not saved as Not sure. */

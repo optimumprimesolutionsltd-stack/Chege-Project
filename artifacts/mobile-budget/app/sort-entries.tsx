@@ -113,7 +113,7 @@ export default function SortEntriesScreen() {
   // check, the source it had, which lists it again too.
   const putBack = (one: EntryToSort) => updateTransaction({
     id: one.id,
-    data: { amount: one.amount, date: one.date, ...(one.direction === 'out' ? { expenseCategory: NOT_SURE_CATEGORY } : { incomeSourceId: one.incomeSourceId ?? null }) } as never,
+    data: { amount: one.amount, date: one.date, ...(one.direction === 'out' ? { expenseCategory: NOT_SURE_CATEGORY } : { incomeSourceId: one.incomeSourceId ?? null, ...(one.madeById !== undefined ? { madeById: one.madeById } : {}) }) } as never,
   });
   // An optional note per entry, saved with whatever it is sorted as: "hope we also
   // have a brief description note" (7 Oct 2026). Only a note typed here is sent;
@@ -122,7 +122,7 @@ export default function SortEntriesScreen() {
   const [noteOpen, setNoteOpen] = useState<Set<number>>(() => new Set());
   const rowState = useMemo(() => ({ notes, noteOpen }), [notes, noteOpen]);
   const noteChange = (id: number) => (notes[id] === undefined ? {} : { notes: notes[id].trim() || null });
-  const sortEach = async (list: readonly EntryToSort[], change: { expenseCategory: string } | { incomeSourceId: number }, label: string) => {
+  const sortEach = async (list: readonly EntryToSort[], change: { expenseCategory: string } | { incomeSourceId: number; madeById?: string }, label: string) => {
     setBusy(list[0]?.id ?? null);
     const changed: EntryToSort[] = [];
     try {
@@ -143,8 +143,12 @@ export default function SortEntriesScreen() {
       setBusy(null);
     }
   };
+  // A stream's owner is who the money came in under: in a Shared group the entry
+  // may be the group's or another member's, and the server only takes a stream
+  // that belongs to the depositor ("should also apply to shared budget too", 8 Oct 2026).
+  const sourceChange = (source: { id: number; userId?: string | null }) => ({ incomeSourceId: source.id, ...(source.userId ? { madeById: source.userId } : {}) });
   // The same payer, many times over: offered all at once, never done without asking.
-  const sort = (entry: EntryToSort, change: { expenseCategory: string } | { incomeSourceId: number }, label: string) => {
+  const sort = (entry: EntryToSort, change: { expenseCategory: string } | { incomeSourceId: number; madeById?: string }, label: string) => {
     const others = sameParty(entries, entry);
     if (others.length === 0) {
       void sortEach([entry], change, label);
@@ -503,14 +507,14 @@ export default function SortEntriesScreen() {
                         </Pressable>,
                       ] : []),
                       ...incomeSources.filter((source) => source.id !== entry.incomeSourceId).map((source) => (
-                        <Pressable key={source.id} disabled={busy !== null} onPress={() => sort(entry, { incomeSourceId: source.id }, source.name)} accessibilityRole="button" testID={`sort-entry-${entry.id}-source-${source.id}`} style={chip}>
+                        <Pressable key={source.id} disabled={busy !== null} onPress={() => sort(entry, sourceChange(source), source.name)} accessibilityRole="button" testID={`sort-entry-${entry.id}-source-${source.id}`} style={chip}>
                           <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>{source.name}</Text>
                         </Pressable>
                       )),
                       <AddIncomeSourceChip
                         key="add"
                         testID={`sort-entry-${entry.id}-add-source`}
-                        onCreated={(created) => sort(entry, { incomeSourceId: created.id }, created.name)}
+                        onCreated={(created) => sort(entry, sourceChange(created), created.name)}
                       />,
                     ]}
               </ScrollView>
