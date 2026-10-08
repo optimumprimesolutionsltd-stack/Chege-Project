@@ -65,3 +65,39 @@ export function moveSummary(rows: ReadonlyArray<Pick<Row, 'amount' | 'date'>>): 
   const last = monthOf(rows[rows.length - 1].date);
   return `${rows.length} ${rows.length === 1 ? 'payment' : 'payments'}, KES ${Math.round(total).toLocaleString('en-KE')}, ${first === last ? first : `${first} – ${last}`}`;
 }
+
+/** A payment really moved to another category: not to Not sure yet, and not to the one it had. */
+export function categoryChanged(from: string | null | undefined, to: string): boolean {
+  return !!to.trim() && !isNotSure(to) && !same(from, to);
+}
+
+/**
+ * Payees already asked "Remember this category?" - asked once each, whatever
+ * the answer ("the remember this category should only be asked once, not every
+ * time", 8 Oct 2026). Kept per budget on this device, beside the rules.
+ */
+export const rememberAskedKey = (groupId: number | string | undefined): string => `jamvi:payee-rule-asked:${groupId ?? 'none'}`;
+
+export function parseRememberAsked(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? parsed.filter((key): key is string => typeof key === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * What to do about remembering, after a payment's category was changed:
+ *  - 'update': a category is already remembered for this payee - it follows the
+ *    correction, without asking;
+ *  - 'ask': never asked about this payee - ask, once;
+ *  - 'none': asked before, or nothing to remember.
+ */
+export function rememberStep(description: string, to: string, remembered: string, asked: readonly string[]): 'update' | 'ask' | 'none' {
+  const key = payeeKey(description);
+  if (!key || !to.trim() || isNotSure(to)) return 'none';
+  if (remembered) return same(remembered, to) ? 'none' : 'update';
+  return asked.includes(key) ? 'none' : 'ask';
+}

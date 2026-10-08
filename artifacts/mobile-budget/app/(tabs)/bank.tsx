@@ -30,8 +30,8 @@ import { LISTS_AN_EDIT_CHANGES, withSavedRow } from '@/lib/showSavedEdit';
 import { PassThroughPair, type PairEntry } from '@/components/PassThroughPair';
 import { useAutoMarkBusiness, useOwnerBusiness } from '@/hooks/useOwnerBusiness';
 import { businessTitle } from '@/lib/ownerBusiness';
-import { moveSummary, samePayeeToMove } from '@/lib/samePayee';
-import { parseStoredRules, rulesStorageKey, withRule } from '@/lib/payeeLearning';
+import { categoryChanged, moveSummary, parseRememberAsked, rememberAskedKey, rememberStep, samePayeeToMove } from '@/lib/samePayee';
+import { parseStoredRules, payeeKey, ruleCategory, rulesStorageKey, withRule } from '@/lib/payeeLearning';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useColors } from '@/hooks/useColors';
 import { UndoDeleteBar, useUndoableDelete } from '@/components/UndoDeleteBar';
@@ -699,32 +699,68 @@ export default function BankScreen() {
   };
 
   const offerSamePayee = (offer: { description: string; from: string; to: string; rows: Array<{ id: number; amount: number; date: string }> }) => {
-    const moveAll = async () => {
-      let moved = 0;
-      try {
-        for (const row of offer.rows) {
-          await updateTransaction({ id: row.id, data: { amount: row.amount, date: row.date, expenseCategory: offer.to } as never });
-          moved += 1;
+    void (async () => {
+      const rulesKey = rulesStorageKey(group?.id);
+      const askedKey = rememberAskedKey(group?.id);
+      const rules = parseStoredRules(await AsyncStorage.getItem(rulesKey).catch(() => null));
+      const asked = parseRememberAsked(await AsyncStorage.getItem(askedKey).catch(() => null));
+      // The next import files this payee there (payeeLearning).
+      const remember = async () => {
+        const latest = parseStoredRules(await AsyncStorage.getItem(rulesKey).catch(() => null));
+        await AsyncStorage.setItem(rulesKey, JSON.stringify(withRule(latest, offer.description, offer.to))).catch(() => {});
+      };
+      // Asked once per payee, whatever the answer.
+      const noteAsked = async () => {
+        const key = payeeKey(offer.description);
+        if (!key || asked.includes(key)) return;
+        await AsyncStorage.setItem(askedKey, JSON.stringify([...asked, key])).catch(() => {});
+      };
+      const step = rememberStep(offer.description, offer.to, ruleCategory(offer.description, rules), asked);
+      const askRemember = () => {
+        if (step === 'update') {
+          void remember();
+          return;
         }
-        // The next import files this payee there too.
-        const key = rulesStorageKey(group?.id);
-        const rules = parseStoredRules(await AsyncStorage.getItem(key).catch(() => null));
-        await AsyncStorage.setItem(key, JSON.stringify(withRule(rules, offer.description, offer.to))).catch(() => {});
-      } catch (error) {
-        Alert.alert('Could not move them all', `${moved} of ${offer.rows.length} moved. ${error instanceof Error ? error.message : ''}`.trim());
-      } finally {
-        invalidateBalance();
-        void queryClient.invalidateQueries({ queryKey: getGetJointAccountQueryKey() });
+        if (step !== 'ask') return;
+        Alert.alert(
+          `Remember ${offer.to} for ${offer.description}?`,
+          `Next time ${offer.description} comes in from M-Pesa, it is filed under ${offer.to}. You will not be asked again for ${offer.description}.`,
+          [
+            { text: 'No', style: 'cancel', onPress: () => void noteAsked() },
+            { text: 'Remember', onPress: () => void remember().then(noteAsked) },
+          ],
+        );
+      };
+      if (offer.rows.length === 0) {
+        askRemember();
+        return;
       }
-    };
-    Alert.alert(
-      `More from ${offer.description}`,
-      `${moveSummary(offer.rows)} still under ${offer.from || 'no category'}${offer.from && !isNotSure(offer.from) ? ' or Not sure yet' : ''}. Move them to ${offer.to} too? Future imports will file ${offer.description} there.`,
-      [
-        { text: 'Just this one', style: 'cancel' },
-        { text: `Move all ${offer.rows.length}`, onPress: () => void moveAll() },
-      ],
-    );
+      const moveAll = async () => {
+        let moved = 0;
+        try {
+          for (const row of offer.rows) {
+            await updateTransaction({ id: row.id, data: { amount: row.amount, date: row.date, expenseCategory: offer.to } as never });
+            moved += 1;
+          }
+          // Moving them all says where this payee belongs: remembered, and not asked again.
+          await remember();
+          await noteAsked();
+        } catch (error) {
+          Alert.alert('Could not move them all', `${moved} of ${offer.rows.length} moved. ${error instanceof Error ? error.message : ''}`.trim());
+        } finally {
+          invalidateBalance();
+          void queryClient.invalidateQueries({ queryKey: getGetJointAccountQueryKey() });
+        }
+      };
+      Alert.alert(
+        `More from ${offer.description}`,
+        `${moveSummary(offer.rows)} still under ${offer.from || 'no category'}${offer.from && !isNotSure(offer.from) ? ' or Not sure yet' : ''}. Move them to ${offer.to} too? Future imports will file ${offer.description} there.`,
+        [
+          { text: 'Just this one', style: 'cancel', onPress: askRemember },
+          { text: `Move all ${offer.rows.length}`, onPress: () => void moveAll() },
+        ],
+      );
+    })();
   };
 
   const closeModal = () => {
@@ -2024,7 +2060,8 @@ export default function BankScreen() {
         if (editingTransaction && txType === 'disbursement' && withdrawDest !== 'party' && withdrawDest !== 'lend' && withdrawDest !== 'savings' && !editingBusinessMoney) {
           const from = editingTransaction.expenseCategory ?? '';
           const rows = samePayeeToMove(data?.transactions ?? [], editingTransaction, from, expenseCategory);
-          if (rows.length > 0) {
+          // Changed at all: the others are offered when there are any, and remembering is asked once per payee.
+          if (categoryChanged(from, expenseCategory)) {
             samePayeeOffer = {
               description: editingTransaction.description,
               from,

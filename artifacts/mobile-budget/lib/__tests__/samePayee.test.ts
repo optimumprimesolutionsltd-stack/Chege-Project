@@ -38,7 +38,45 @@ describe("a corrected payment takes the payee's others with it", () => {
     const bank = readFileSync('app/(tabs)/bank.tsx', 'utf8');
     expect(bank).toContain('samePayeeToMove(data?.transactions ?? [], editingTransaction, from, expenseCategory)');
     expect(bank).toContain('offerSamePayee(samePayeeOffer);');
-    expect(bank).toContain('withRule(rules, offer.description, offer.to)');
-    expect(bank).toContain("{ text: 'Just this one', style: 'cancel' }");
+    expect(bank).toContain('withRule(latest, offer.description, offer.to)');
+    expect(bank).toContain("{ text: 'Just this one', style: 'cancel', onPress: askRemember }");
+  });
+});
+
+// "Changed for Peter Mbugua from bodaboda to kinyozi but was not asked ... if
+// the app can remember this category for future. The remember this category
+// should only be asked once, not every time" (8 Oct 2026).
+describe('remembering a payee\'s category is asked once', () => {
+  it('asks when nothing is remembered and it was never asked', async () => {
+    const { rememberStep } = await import('@/lib/samePayee');
+    expect(rememberStep('Peter Mbugua', 'Kinyozi', '', [])).toBe('ask');
+  });
+
+  it('never asks again about a payee already asked, whatever the answer was', async () => {
+    const { rememberStep } = await import('@/lib/samePayee');
+    expect(rememberStep('Peter Mbugua', 'Kinyozi', '', ['peter mbugua'])).toBe('none');
+  });
+
+  it('a remembered category follows a correction without asking', async () => {
+    const { rememberStep } = await import('@/lib/samePayee');
+    expect(rememberStep('Peter Mbugua', 'Kinyozi', 'Boda boda and matatu', [])).toBe('update');
+    expect(rememberStep('Peter Mbugua', 'Kinyozi', 'kinyozi', [])).toBe('none');
+  });
+
+  it('only a real change counts', async () => {
+    const { categoryChanged, parseRememberAsked } = await import('@/lib/samePayee');
+    expect(categoryChanged('Boda boda and matatu', 'Kinyozi')).toBe(true);
+    expect(categoryChanged('Kinyozi', 'kinyozi')).toBe(false);
+    expect(categoryChanged('Kinyozi', 'Not sure yet')).toBe(false);
+    expect(parseRememberAsked('["peter mbugua"]')).toEqual(['peter mbugua']);
+    expect(parseRememberAsked('broken')).toEqual([]);
+  });
+
+  it('Bank asks after the save even when there are no others, and Move all remembers without asking', () => {
+    const bank = readFileSync('app/(tabs)/bank.tsx', 'utf8');
+    expect(bank).toContain('if (categoryChanged(from, expenseCategory)) {');
+    expect(bank).toContain("{ text: 'Just this one', style: 'cancel', onPress: askRemember }");
+    expect(bank).toContain("{ text: 'Remember', onPress: () => void remember().then(noteAsked) }");
+    expect(bank).toContain("{ text: 'No', style: 'cancel', onPress: () => void noteAsked() }");
   });
 });
