@@ -88,6 +88,8 @@ router.get("/entries-to-sort", async (req, res): Promise<void> => {
       incomeSourceId: jointAccountTxTable.incomeSourceId,
       // Who it is recorded under, so Undo can put a changed depositor back.
       madeById: jointAccountTxTable.madeById,
+      // Its account, where "Passed through my M-Pesa" looks for the other half.
+      accountId: jointAccountTxTable.accountId,
     })
     .from(jointAccountTxTable)
     .where(and(
