@@ -242,7 +242,7 @@ describe("a masked phone number", () => {
     expect(item).toMatchObject({
       status: "ready", direction: "in", type: "person_receipt", amount: 250, date: "2026-09-21", named: true,
     });
-    expect(item.description).toBe("Received from Sample Person");
+    expect(item.description).toBe("Received from Sample Person · 07…443");
   });
 
   it.each([
@@ -253,7 +253,7 @@ describe("a masked phone number", () => {
   ])("reads %s", (_name, masked) => {
     const item = toImportItem(RECEIVED.replace("0722***443", masked), 0);
     expect(item.named).toBe(true);
-    expect(item.description).toBe("Received from Sample Person");
+    expect(item.description).toBe("Received from Sample Person · 07…443");
   });
 
   it("reads a payment to a person whose number is masked", () => {
@@ -262,7 +262,7 @@ describe("a masked phone number", () => {
       0,
     );
     expect(item).toMatchObject({ status: "ready", direction: "out", type: "person_payment", named: true });
-    expect(item.description).toBe("Sample Person");
+    expect(item.description).toBe("Sample Person · 07…443");
   });
 
   it("is masked out of a report before anyone reads it", () => {

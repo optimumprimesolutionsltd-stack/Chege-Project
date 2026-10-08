@@ -35,6 +35,9 @@ TWINS = {
     'budgetPlan.ts': ('budget-plan-rows.ts', {}),
     'budgetReport.ts': ('budget-report.ts', {}),
     'debtSummary.ts': ('debt-summary.ts', {}),
+    # Same name on the web, so every file importing it is copied unchanged.
+    'personNumber.ts': ('personNumber.ts', {}),
+    'payeeNicknames.ts': ('payee-nicknames.ts', {}),
 }
 
 

@@ -6,6 +6,8 @@
  * replaces the description an entry is saved with, so the category suggestions
  * that learn from earlier entries learn under the name the person actually uses.
  */
+import { tagOf, withoutPersonTag, withPersonTag } from './personNumber';
+
 export type NicknameMap = Record<string, string>;
 
 /** "  SAMPLE  Shop " and "sample shop" are one payee. */
@@ -54,8 +56,11 @@ export function applyNicknames<T extends { description: string | null; original?
   return lines.map((line) => {
     if (!line.description && !line.original) return line;
     const original = line.original ?? line.description ?? '';
-    const nickname = line.named === false ? undefined : map[nicknameKey(original)];
-    return { ...line, original, description: nickname ?? original };
+    // A person's number tag: their own nickname, else one given to the name before numbers were kept,
+    // and the tag stays on, so two people under one nickname are still two (lib/personNumber).
+    const tag = tagOf(original);
+    const nickname = line.named === false ? undefined : map[nicknameKey(original)] ?? (tag ? map[nicknameKey(withoutPersonTag(original))] : undefined);
+    return { ...line, original, description: nickname ? withPersonTag(nickname, tag) : original };
   });
 }
 

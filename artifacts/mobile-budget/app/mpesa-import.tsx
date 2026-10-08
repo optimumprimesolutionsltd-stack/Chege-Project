@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { withoutPersonTag } from '@/lib/personNumber';
 import {
   ActivityIndicator,
   Alert,
@@ -3906,7 +3907,7 @@ export default function MpesaImportScreen() {
               <Pressable
                 onPress={() => {
                   const line = lines?.find((candidate) => candidate.index === debtFor?.index);
-                  setNewParty({ name: line ? payeeName(line.original ?? line.description ?? '') : '', kind: 'person' });
+                  setNewParty({ name: line ? payeeName(withoutPersonTag(line.original ?? line.description ?? '')) : '', kind: 'person' });
                 }}
                 style={styles.option}
                 accessibilityRole="button"

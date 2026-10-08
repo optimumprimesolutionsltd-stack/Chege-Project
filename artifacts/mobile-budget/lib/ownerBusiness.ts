@@ -19,6 +19,12 @@ import { payeeKey } from './payeeLearning';
 export type OwnerBusiness = {
   /** What to call it: "From Optimum", "To Optimum". */
   name: string;
+  /**
+   * The business it is, from My businesses (an income stream). Picked, never
+   * typed: "the process should be create a business name first ... otherwise
+   * you will have duplicate businesses coz of wrong naming" (8 Oct 2026).
+   */
+  incomeSourceId?: number;
   /** "#<digits>" for a number, else a payee name as payeeKey writes it. */
   keys: string[];
   /** Entries the person said are not business money: never marked again. */
@@ -36,6 +42,7 @@ export function parseOwnerBusiness(raw: string | null | undefined): OwnerBusines
     if (!parsed || typeof parsed !== 'object') return EMPTY_BUSINESS;
     return {
       name: typeof parsed.name === 'string' ? parsed.name : '',
+      ...(typeof parsed.incomeSourceId === 'number' ? { incomeSourceId: parsed.incomeSourceId } : {}),
       keys: Array.isArray(parsed.keys) ? parsed.keys.filter((key): key is string => typeof key === 'string' && key !== '') : [],
       skipped: Array.isArray(parsed.skipped) ? parsed.skipped.filter((id): id is number => typeof id === 'number') : [],
     };
@@ -136,3 +143,28 @@ export function businessTitle(direction: 'in' | 'out', name: string): string {
   const who = name.trim() || 'my business';
   return direction === 'in' ? `From ${who}` : `To ${who}`;
 }
+
+/**
+ * The business's own bank accounts, as set on Bank (Business, and which one):
+ * their account numbers count as the business's without being typed here
+ * ("the business accounts created should auto populate here", 8 Oct 2026).
+ * An account set as a business's with no business chosen counts for whichever
+ * business this is.
+ */
+export function bankAccountKeys(
+  accounts: ReadonlyArray<{ id: number; name: string; accountNumber?: string | null }>,
+  businessOf: ReadonlyMap<number, number | null>,
+  incomeSourceId: number | undefined,
+): Array<{ key: string; account: string }> {
+  return accounts.flatMap((account) => {
+    if (!businessOf.has(account.id)) return [];
+    const owner = businessOf.get(account.id) ?? null;
+    if (owner !== null && incomeSourceId !== undefined && owner !== incomeSourceId) return [];
+    const digits = digitsOf(account.accountNumber ?? '');
+    return digits.length >= 5 ? [{ key: `#${digits}`, account: account.name }] : [];
+  });
+}
+
+/** The business with its bank accounts' numbers added: what entries are matched against. */
+export const withBankAccountKeys = (business: OwnerBusiness, keys: ReadonlyArray<{ key: string }>): OwnerBusiness =>
+  keys.reduce((acc, one) => withKey(acc, one.key), business);

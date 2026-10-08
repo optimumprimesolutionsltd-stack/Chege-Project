@@ -27,7 +27,7 @@ describe("statementLines", () => {
       amount: 93,
       fee: 7,
       date: "2026-09-02",
-      description: "Sample Person",
+      description: "Sample Person · 07…000",
       named: true,
     });
   });
@@ -37,7 +37,7 @@ describe("statementLines", () => {
     const older = at("01 10:00:00", "Funds received from - 2547***000 SAMPLE PERSON", { paidIn: 50 });
     const { lines } = statementLines([newer, older]);
     expect(lines.map((line) => line.date)).toEqual(["2026-09-01", "2026-09-03"]);
-    expect(lines[0]).toMatchObject({ direction: "in", type: "person_receipt", description: "Received from Sample Person" });
+    expect(lines[0]).toMatchObject({ direction: "in", type: "person_receipt", description: "Received from Sample Person · 07…000" });
   });
 
   it("records what a Fuliza loan paid for as ordinary spending, and leaves out the loan itself", () => {
@@ -55,7 +55,7 @@ describe("statementLines", () => {
     const { lines } = statementLines([
       at("27 08:00:00", "Customer Payment to Small Business to - 0743***708 SAMPLE SHOP", { withdrawn: 100 }),
     ]);
-    expect(lines[0]).toMatchObject({ direction: "out", type: "person_payment", amount: 100, description: "Sample Shop" });
+    expect(lines[0]).toMatchObject({ direction: "out", type: "person_payment", amount: 100, description: "Sample Shop · 07…708" });
   });
 
   it("does not name the person for airtime, and names cash withdrawals", () => {

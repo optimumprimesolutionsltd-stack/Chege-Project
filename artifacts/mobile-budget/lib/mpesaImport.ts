@@ -2,6 +2,7 @@ import type { DebtLink } from './mpesaDebts';
 import { fuzzyCategory, isFeePosting, looksLikePerson, ruleCategory, ruleSource, wordCategory, type PayeeRules } from './payeeLearning';
 import { loanOf, productCategory, productOf, savingsOf } from './mpesaProducts';
 import { knownPayeeCategory } from './knownPayees';
+import { tagOf, withoutPersonTag } from './personNumber';
 
 export type AlreadyRecorded = {
   date: string | null;
@@ -205,7 +206,9 @@ const clean = (value: string) => value.trim().replace(/\s+/g, ' ').toLocaleLower
 export function suggestCategory(description: string, history: readonly PastPosting[]): string {
   const wanted = clean(description);
   if (!wanted) return '';
-  return mostUsedFor(history).categories.get(wanted) ?? '';
+  const { categories } = mostUsedFor(history);
+  // A person with their number's tag: how they were filed, else how the name was before numbers were kept (lib/personNumber).
+  return categories.get(wanted) ?? (tagOf(description) ? categories.get(clean(withoutPersonTag(description))) : undefined) ?? '';
 }
 
 /**
@@ -263,7 +266,8 @@ function mostUsedFor(history: readonly PastPosting[]) {
 export function suggestIncomeSource(description: string, history: readonly PastPosting[]): number | null {
   const wanted = clean(description);
   if (!wanted) return null;
-  return mostUsedFor(history).sources.get(wanted) ?? null;
+  const { sources } = mostUsedFor(history);
+  return sources.get(wanted) ?? (tagOf(description) ? sources.get(clean(withoutPersonTag(description))) : undefined) ?? null;
 }
 
 /** Can this line be recorded at all, before anybody has chosen anything? */

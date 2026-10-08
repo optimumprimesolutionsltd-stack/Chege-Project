@@ -1,3 +1,4 @@
+import { personTagOf, phoneIn, withPersonTag } from "./personNumber";
 import type { PreviewLine } from "./mpesa-import";
 import type { StatementRow } from "./statement-table";
 
@@ -292,7 +293,8 @@ export function statementLines(
         direction,
         type: kind,
         amount,
-        description: describe(kind, name, reference),
+        // A person: their number"s tag after the name, so two of the same name stay two people (lib/personNumber).
+        description: kind === "person_payment" || kind === "person_receipt" ? withPersonTag(describe(kind, name, reference), personTagOf(phoneIn(details))) : describe(kind, name, reference),
         named: kind === "airtime_purchase" ? false : Boolean(name),
         payeeNumber: kind === "person_payment" || kind === "person_receipt" || kind === "airtime_purchase" ? null : payeeNumberOf(details),
         date: dateOf(row.time),

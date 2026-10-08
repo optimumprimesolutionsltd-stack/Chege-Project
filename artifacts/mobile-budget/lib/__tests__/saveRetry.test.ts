@@ -70,7 +70,7 @@ describe('adding a debtor or creditor from the import', () => {
 
   it('offers Someone new in the debt sheet, named from the payee', () => {
     expect(phone).toContain('＋ Someone new');
-    expect(phone).toContain("setNewParty({ name: line ? payeeName(line.original ?? line.description ?? '') : '', kind: 'person' });");
+    expect(phone).toContain("setNewParty({ name: line ? payeeName(withoutPersonTag(line.original ?? line.description ?? '')) : '', kind: 'person' });");
     expect(phone).toContain("JSON.stringify({ name, kind: newParty.kind })");
     expect(web).toContain('＋ Someone new');
     expect(web).toContain('JSON.stringify({ name, kind: newParty.kind })');
