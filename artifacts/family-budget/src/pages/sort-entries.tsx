@@ -10,7 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { isNotSure, type EntryToSort } from "@/lib/entries-to-sort";
+import { isNotSure, isToCheck, type EntryToSort } from "@/lib/entries-to-sort";
 import { inMonth, monthsOf } from "@/lib/mpesa-import";
 import { plainSaveError } from "@/lib/save-retry";
 import { formatDate } from "@/lib/utils";
@@ -68,6 +68,19 @@ export default function SortEntries() {
   };
   const sort = (entry: EntryToSort, change: { expenseCategory: string } | { incomeSourceId: number }) =>
     run(entry, () => updateTx.mutateAsync({ id: entry.id, data: { amount: entry.amount, date: entry.date, ...change } as never }));
+  // Money in saved earlier with a source Jamvi may have guessed, listed to check
+  // (as on the phone): Keep leaves it as it is; another source takes it off too.
+  const sourceName = (id: number | null | undefined) => incomeSources.find((source) => source.id === id)?.name ?? "its source";
+  const keep = (entry: EntryToSort) =>
+    run(entry, async () => {
+      const response = await fetch("/api/entries-to-sort/checked", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ transactionIds: [entry.id] }),
+      });
+      if (!response.ok) throw new Error("Could not change it.");
+    });
   const leave = (entry: EntryToSort) =>
     run(entry, async () => {
       const response = await fetch(`/api/entries-to-sort/${entry.id}`, { method: "DELETE", credentials: "include" });
@@ -78,7 +91,7 @@ export default function SortEntries() {
     <div className="space-y-5 pb-12" data-testid="sort-entries-page">
       <div>
         <h1 className="text-2xl font-bold text-foreground">Sort them out</h1>
-        <p className="text-sm text-muted-foreground">Entries you saved as Not sure.</p>
+        <p className="text-sm text-muted-foreground">Entries you saved as Not sure, and money in to check.</p>
       </div>
       {months.length > 1 ? (
         <div className="flex flex-wrap gap-2" data-testid="sort-entries-months">
@@ -113,7 +126,11 @@ export default function SortEntries() {
                 </div>
                 <p className={`font-bold ${entry.direction === "out" ? "text-destructive" : "text-success"}`}>{entry.direction === "out" ? "−" : "+"}{kes(entry.amount)}</p>
               </div>
+              {isToCheck(entry) ? <p className="text-xs text-muted-foreground">Saved under {sourceName(entry.incomeSourceId)}. Is that right?</p> : null}
               <div className="flex flex-wrap gap-2">
+                {isToCheck(entry) ? (
+                  <Button variant="outline" disabled={busy !== null} onClick={() => void keep(entry)} data-testid={`sort-entry-${entry.id}-keep`}>Keep {sourceName(entry.incomeSourceId)}</Button>
+                ) : null}
                 <select
                   defaultValue=""
                   disabled={busy !== null}
@@ -126,12 +143,12 @@ export default function SortEntries() {
                   aria-label={entry.direction === "out" ? "What was it for?" : "Where did it come from?"}
                   data-testid={`sort-entry-${entry.id}-choose`}
                 >
-                  <option value="">{entry.direction === "out" ? "What was it for?" : "Where did it come from?"}</option>
+                  <option value="">{entry.direction === "out" ? "What was it for?" : isToCheck(entry) ? "Change it to..." : "Where did it come from?"}</option>
                   {entry.direction === "out"
                     ? categories.map((name) => <option key={name} value={name}>{name}</option>)
-                    : incomeSources.map((source) => <option key={source.id} value={source.id}>{source.name}</option>)}
+                    : incomeSources.filter((source) => source.id !== entry.incomeSourceId).map((source) => <option key={source.id} value={source.id}>{source.name}</option>)}
                 </select>
-                {entry.direction === "in" ? (
+                {entry.direction === "in" && !isToCheck(entry) ? (
                   <Button variant="ghost" disabled={busy !== null} onClick={() => void leave(entry)} data-testid={`sort-entry-${entry.id}-leave`}>Leave it with no source</Button>
                 ) : null}
               </div>

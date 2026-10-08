@@ -16,7 +16,7 @@ import {
   useUpdateJointAccountTransaction,
 } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
-import { isNotSure, NOT_SURE_CATEGORY, sameParty, type EntryToSort } from '@/lib/entriesToSort';
+import { isNotSure, isToCheck, NOT_SURE_CATEGORY, sameParty, type EntryToSort } from '@/lib/entriesToSort';
 import { AddIncomeSourceChip } from '@/components/AddIncomeSourceChip';
 import { SortAsDebt } from '@/components/SortAsDebt';
 import { NewCategoryOffer } from '@/components/NewCategoryOffer';
@@ -109,10 +109,11 @@ export default function SortEntriesScreen() {
     }
   };
   // Back to where it was: money out under Not sure yet, money in with no source
-  // (still marked, so it is listed again as soon as it has none).
+  // (still marked, so it is listed again as soon as it has none) - or, listed to
+  // check, the source it had, which lists it again too.
   const putBack = (one: EntryToSort) => updateTransaction({
     id: one.id,
-    data: { amount: one.amount, date: one.date, ...(one.direction === 'out' ? { expenseCategory: NOT_SURE_CATEGORY } : { incomeSourceId: null }) } as never,
+    data: { amount: one.amount, date: one.date, ...(one.direction === 'out' ? { expenseCategory: NOT_SURE_CATEGORY } : { incomeSourceId: one.incomeSourceId ?? null }) } as never,
   });
   // An optional note per entry, saved with whatever it is sorted as: "hope we also
   // have a brief description note" (7 Oct 2026). Only a note typed here is sent;
@@ -266,6 +267,48 @@ export default function SortEntriesScreen() {
     }
   };
 
+  // Money in saved earlier with a source Jamvi may have guessed, listed to check:
+  // "Keep" leaves it as it is and takes it off the list ("ensure to sort what is
+  // done historically", 8 Oct 2026). Changing the source takes it off by itself.
+  const sourceName = (id: number | null | undefined) => incomeSources.find((source) => source.id === id)?.name ?? 'its source';
+  const markChecked = (ids: number[], again = false) => customFetch('/api/entries-to-sort/checked', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ transactionIds: ids, ...(again ? { again: true } : {}) }),
+  });
+  const keepEach = async (list: readonly EntryToSort[]) => {
+    setBusy(list[0]?.id ?? null);
+    try {
+      for (const one of list) if (notes[one.id] !== undefined) await updateTransaction({ id: one.id, data: { amount: one.amount, date: one.date, ...noteChange(one.id) } as never });
+      await markChecked(list.map((one) => one.id));
+      const ids = list.map((one) => one.id);
+      setLastChange({
+        text: `${list.length === 1 ? list[0].description : `${list.length} entries`} kept under ${sourceName(list[0].incomeSourceId)}`,
+        undo: async () => { await markChecked(ids, true); },
+      });
+    } catch (error) {
+      Alert.alert('Could not change it', plainSaveError(error));
+    } finally {
+      await done();
+      setBusy(null);
+    }
+  };
+  const keep = (entry: EntryToSort) => {
+    const others = sameParty(entries, entry).filter((other) => isToCheck(other) && other.incomeSourceId === entry.incomeSourceId);
+    if (others.length === 0) {
+      void keepEach([entry]);
+      return;
+    }
+    Alert.alert(
+      `${others.length + 1} entries from ${entry.description}`,
+      `Keep all ${others.length + 1} under ${sourceName(entry.incomeSourceId)}, or just this one?`,
+      [
+        { text: 'Just this one', onPress: () => void keepEach([entry]) },
+        { text: `All ${others.length + 1}`, onPress: () => void keepEach([entry, ...others]) },
+      ],
+    );
+  };
+
   // "Debt" on an entry: lent, borrowed or paid back, and who with (components/SortAsDebt).
   const [debtFor, setDebtFor] = useState<EntryToSort | null>(null);
 
@@ -279,7 +322,7 @@ export default function SortEntriesScreen() {
         </Pressable>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={[styles.title, { color: colors.foreground }]}>Sort them out</Text>
-          <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>Entries you saved as Not sure</Text>
+          <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>Entries you saved as Not sure, and money in to check</Text>
         </View>
       </View>
       {isLoading ? (
@@ -400,7 +443,7 @@ export default function SortEntriesScreen() {
                   {entry.direction === 'out' ? '−' : '+'}{kes(entry.amount)}
                 </Text>
               </View>
-              <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>{entry.direction === 'out' ? 'What was it for?' : 'Where did it come from?'}</Text>
+              <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>{entry.direction === 'out' ? 'What was it for?' : isToCheck(entry) ? `Saved under ${sourceName(entry.incomeSourceId)}. Is that right?` : 'Where did it come from?'}</Text>
               {/* Always in view, not at the start of the sideways row where they scrolled
                   out of sight: "there is no place to create child and parent category and
                   lent/borrowed" (7 Oct 2026). */}
@@ -452,7 +495,14 @@ export default function SortEntriesScreen() {
                       </Pressable>
                     ))
                   : [
-                      ...incomeSources.map((source) => (
+                      ...(isToCheck(entry) ? [
+                        <Pressable key="keep" disabled={busy !== null} onPress={() => keep(entry)} accessibilityRole="button" accessibilityLabel={`Keep ${sourceName(entry.incomeSourceId)}`} testID={`sort-entry-${entry.id}-keep`}
+                          style={{ ...chip, flexDirection: 'row', alignItems: 'center', gap: 4, borderColor: colors.success, backgroundColor: `${colors.success}22` }}>
+                          <Feather name="check" size={13} color={colors.success} />
+                          <Text style={{ color: colors.success, fontFamily: 'Inter_700Bold', fontSize: 13 }}>Keep {sourceName(entry.incomeSourceId)}</Text>
+                        </Pressable>,
+                      ] : []),
+                      ...incomeSources.filter((source) => source.id !== entry.incomeSourceId).map((source) => (
                         <Pressable key={source.id} disabled={busy !== null} onPress={() => sort(entry, { incomeSourceId: source.id }, source.name)} accessibilityRole="button" testID={`sort-entry-${entry.id}-source-${source.id}`} style={chip}>
                           <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>{source.name}</Text>
                         </Pressable>
@@ -475,7 +525,7 @@ export default function SortEntriesScreen() {
                   }}
                 />
               ) : null}
-              {entry.direction === 'in' ? (
+              {entry.direction === 'in' && !isToCheck(entry) ? (
                 <Pressable disabled={busy !== null} onPress={() => void leave(entry)} accessibilityRole="button" testID={`sort-entry-${entry.id}-leave`} style={{ alignSelf: 'flex-start', paddingVertical: 4 }}>
                   <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>Leave it with no source</Text>
                 </Pressable>

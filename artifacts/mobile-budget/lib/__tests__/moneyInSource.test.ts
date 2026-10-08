@@ -73,7 +73,7 @@ describe('Sort them out can be undone', () => {
   const screen = read('app/sort-entries.tsx');
   it('keeps the last change - one entry or All N - and puts each back as it was', () => {
     expect(screen).toContain('testID="sort-entries-undo"');
-    expect(screen).toContain("...(one.direction === 'out' ? { expenseCategory: NOT_SURE_CATEGORY } : { incomeSourceId: null })");
+    expect(screen).toContain("...(one.direction === 'out' ? { expenseCategory: NOT_SURE_CATEGORY } : { incomeSourceId: one.incomeSourceId ?? null })");
     expect(screen).toContain('undo: async () => { for (const one of changed) await putBack(one); },');
   });
   it('undoes "Leave it with no source" by putting it back on the list', () => {
