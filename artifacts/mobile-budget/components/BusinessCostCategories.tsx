@@ -16,8 +16,9 @@ import React, { useCallback, useState } from 'react';
 import { Alert, Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  customFetch,
   getGetBudgetCategoriesQueryKey,
   getGetDashboardBusinessQueryKey,
   useGetBudgetCategories,
@@ -57,6 +58,22 @@ export function BusinessCostCategories({ business, onClose }: {
   };
   const kindOf = (category: Category) => pendingKind[category.id] ?? (category.costKind === 'expense' ? 'expense' : 'cogs');
   const nameOf = (id: number) => businesses.list.find((one) => one.id === id)?.name ?? 'another business';
+
+  // A cost linked to an income stream before income streams stopped being
+  // businesses (#674): it counts as personal spending now, so it is named and
+  // listed first, ready to move to a business with one tap - "we agreed stock
+  // expenses should not show in personal expenses" (8 Oct 2026).
+  const { data: streams = [] } = useQuery<Array<{ id: number; name: string }>>({
+    queryKey: ['income-sources', '__group__'],
+    queryFn: () => customFetch<Array<{ id: number; name: string }>>('/api/income-sources'),
+    staleTime: 30_000,
+  });
+  const oldStreamOf = (category: Category): string | null => {
+    if (category.id in pendingLink) return null;
+    const link = category.reducesIncomeSourceId ?? null;
+    if (link == null || businesses.ids.has(link)) return null;
+    return streams.find((stream) => stream.id === link)?.name ?? 'an income stream';
+  };
 
   const applyLink = useCallback(async (categoryId: number, reducesIncomeSourceId: number | null) => {
     setPendingLink((current) => ({ ...current, [categoryId]: reducesIncomeSourceId }));
@@ -122,7 +139,9 @@ export function BusinessCostCategories({ business, onClose }: {
   };
 
   // A category holding sub-categories carries no spending itself.
-  const leaves = categories.filter((category) => !categories.some((other) => other.parentId === category.id));
+  const leaves = categories
+    .filter((category) => !categories.some((other) => other.parentId === category.id))
+    .sort((a, b) => Number(oldStreamOf(b) != null) - Number(oldStreamOf(a) != null));
   const saving = Object.keys(pendingLink).length > 0 || Object.keys(pendingKind).length > 0;
 
   return (
@@ -161,6 +180,11 @@ export function BusinessCostCategories({ business, onClose }: {
                   <Text style={{ color: colors.foreground, fontFamily: selected ? 'Inter_600SemiBold' : 'Inter_400Regular' }}>
                     {category.name}{selected ? '  ✓' : ''}
                   </Text>
+                  {!selected && oldStreamOf(category) ? (
+                    <Text style={{ color: '#d97706', fontSize: 12, marginTop: 2 }} testID={`business-cost-was-stream-${category.id}`}>
+                      Was a cost of {oldStreamOf(category)} - it counts as your personal spending now. Tap to make it {business?.name ?? 'this business'}&rsquo;s.
+                    </Text>
+                  ) : null}
                   {elsewhere ? (
                     <Text style={{ color: colors.mutedForeground, fontSize: 12, marginTop: 2 }}>{nameOf(linkedTo)}&rsquo;s cost - tap to move it here</Text>
                   ) : null}

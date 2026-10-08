@@ -38,7 +38,7 @@ describe("a business's cost categories", () => {
   });
 
   it('list only categories that carry spending, not ones holding sub-categories', () => {
-    expect(sheet).toContain('const leaves = categories.filter((category) => !categories.some((other) => other.parentId === category.id));');
+    expect(sheet).toContain('.filter((category) => !categories.some((other) => other.parentId === category.id))');
   });
 
   it('refresh the categories, the statement and every personal figure after a change', () => {
@@ -52,5 +52,20 @@ describe("a business's cost categories", () => {
 describe('money from your business on Bank', () => {
   it('is not tagged Not sure', () => {
     expect(readFileSync('app/(tabs)/bank.tsx', 'utf8')).toContain('&& !ownerBusiness.markedIds.has(item.id) ? (');
+  });
+});
+
+// "We agreed stock expenses should not show in personal expenses" (8 Oct 2026):
+// costs linked to an income stream before #674 count as personal now, so the
+// sheet names them and lists them first, one tap from a business.
+describe('a cost linked to an income stream before', () => {
+  it('is named on the sheet, with what it counts as now, and listed first', () => {
+    expect(sheet).toContain('testID={`business-cost-was-stream-${category.id}`}');
+    expect(sheet).toContain('Was a cost of {oldStreamOf(category)} - it counts as your personal spending now.');
+    expect(sheet).toContain('.sort((a, b) => Number(oldStreamOf(b) != null) - Number(oldStreamOf(a) != null));');
+  });
+
+  it('is only an income stream link, never a business one', () => {
+    expect(sheet).toContain('if (link == null || businesses.ids.has(link)) return null;');
   });
 });
