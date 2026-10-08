@@ -41,7 +41,7 @@ describe('a ready update asks first', () => {
   it('never restarts by itself at a fresh start; it offers Update now and Later', () => {
     expect('shouldInstallAtStart' in timing).toBe(false);
     expect(layout).toContain('setReadyNotes(notes);');
-    expect(layout).toContain('<UpdatePrompt kind="ready" notes={readyNotes} onUpdate={updateNow} onDismiss={later} />');
+    expect(layout).toContain('<UpdatePrompt key="ready" kind="ready" notes={readyNotes} onUpdate={updateNow} onDismiss={later} />');
     expect(prompt).toContain('testID="update-now"');
     expect(prompt).toContain('testID="update-later"');
   });
@@ -56,5 +56,17 @@ describe('a ready update asks first', () => {
     await keepWhatsNew('update-3', ['Debt payments'], storage);
     await forgetWhatsNew(storage);
     expect(await takeWhatsNew('update-3', storage)).toBeNull();
+  });
+});
+
+// "It says Jamvi was updated" - and it vanished (8 Oct 2026).
+describe('what an update installed stays until Got it', () => {
+  it('is shown before a newer update is offered, not replaced by it', () => {
+    const layout = readFileSync('app/_layout.tsx', 'utf8');
+    const done = layout.indexOf('<UpdatePrompt key="done" kind="done"');
+    const ready = layout.indexOf('<UpdatePrompt key="ready" kind="ready"');
+    expect(done).toBeGreaterThan(-1);
+    expect(ready).toBeGreaterThan(done);
+    expect(layout).toContain('{updateNotes ? (');
   });
 });
