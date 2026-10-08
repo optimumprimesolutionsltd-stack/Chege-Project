@@ -13,7 +13,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
+import { linkedDay } from '@/lib/monthLink';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import {
   getDashboardExpenseLedger,
@@ -27,6 +28,7 @@ import { useProgressiveDays } from '@/lib/progressiveDays';
 import { ScrollerScrollView } from '@/components/PageScrollReset';
 import { CategorySearchBox } from '@/components/CategorySearchBox';
 import { getExpenseEditHref } from '@/lib/expenseEditLink';
+import { isNotSure } from '@/lib/entriesToSort';
 import { groupByCategory, groupByItem } from '@/lib/groupExpenses';
 import { Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
@@ -61,8 +63,10 @@ export default function ExpenseLedgerScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
 
-  const [from, setFrom] = useState<string>(monthStartIso);
-  const [to, setTo] = useState<string>(() => isoDay(new Date()));
+  // A month tapped on a Reports trend opens here with its days (lib/monthLink).
+  const linked = useLocalSearchParams<{ from?: string; to?: string }>();
+  const [from, setFrom] = useState<string>(() => linkedDay(linked.from) ?? monthStartIso());
+  const [to, setTo] = useState<string>(() => linkedDay(linked.to) ?? isoDay(new Date()));
   const [picker, setPicker] = useState<null | 'from' | 'to'>(null);
   const [search, setSearch] = useState('');
   // How the entries are laid out: as a statement by day, or filed by what
@@ -211,11 +215,16 @@ export default function ExpenseLedgerScreen() {
   }, [entries]);
 
   const renderEntry = (entry: (typeof entries)[number], index: number) => {
-    // Only an expense can be opened; a standalone bank
-    // disbursement is not one, and has no form to open.
+    // An expense opens its form; an M-Pesa or bank entry opens on Bank, on its
+    // own account, where the balance follows the change ("what happens if i see
+    // a wrong entry here? can i tap it and it takes me to where i can edit it",
+    // 8 Oct 2026).
+    const accountId = (entry as { accountId?: number | null }).accountId;
     const href = entry.source === 'expense'
       ? getExpenseEditHref({ id: Number(entry.id.replace('expense-', '')), date: entry.date })
-      : null;
+      : entry.source === 'bank_disbursement'
+        ? `/(tabs)/bank?editTx=${entry.id.replace('bank-disbursement-', '')}${accountId ? `&accountId=${accountId}` : ''}`
+        : null;
     return (
       <Pressable
         key={entry.id}
@@ -236,6 +245,7 @@ export default function ExpenseLedgerScreen() {
           </Text>
         </View>
         <Text style={[styles.rowAmount, { color: colors.foreground }]}>{formatKES(entry.amount)}</Text>
+        {href ? <Feather name="edit-2" size={12} color={colors.mutedForeground} style={{ marginLeft: 6 }} /> : null}
       </Pressable>
     );
   };
@@ -263,6 +273,19 @@ export default function ExpenseLedgerScreen() {
         </Pressable>
         {isOpen ? (
           <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderColor: colors.border, paddingHorizontal: 14 }}>
+            {/* Everything under Not sure yet is sorted fastest in Sort them out,
+                with suggestions and All N at once. */}
+            {isNotSure(group.label) ? (
+              <Pressable
+                onPress={() => router.push('/sort-entries' as never)}
+                accessibilityRole="button"
+                testID="expense-ledger-sort-them-out"
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', marginTop: 10, marginBottom: 4, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, backgroundColor: '#f59e0b22' }}
+              >
+                <Feather name="help-circle" size={13} color="#d97706" />
+                <Text style={{ color: '#d97706', fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>Sort them out</Text>
+              </Pressable>
+            ) : null}
             {group.rows.map(renderEntry)}
           </View>
         ) : null}

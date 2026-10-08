@@ -1159,6 +1159,7 @@ async function loadExpenseLedger(groupId: number, from: string, to: string, sear
         amount: jointAccountTxTable.amount,
         payerName: usersTable.firstName,
         date: jointAccountTxTable.date,
+        accountId: jointAccountTxTable.accountId,
       })
       .from(jointAccountTxTable)
       .leftJoin(usersTable, eq(jointAccountTxTable.madeById, usersTable.id))
@@ -1209,6 +1210,8 @@ async function loadExpenseLedger(groupId: number, from: string, to: string, sear
       paidFromBank: true,
       payerName: disbursement.payerName ?? GROUP_ATTRIBUTION,
       date: String(disbursement.date),
+      // The account it is on, so the report can open it there to be corrected.
+      accountId: disbursement.accountId ?? null,
     })),
   ].sort((a, b) => (a.date === b.date ? b.id.localeCompare(a.id) : b.date.localeCompare(a.date)));
 
