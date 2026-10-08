@@ -10,6 +10,7 @@ import {
 import { useFocusEffect } from 'expo-router';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useFastScroller, type ScrollerInsets } from '@/components/FastScroller';
+import { cameBackFromOnTop } from '@/lib/lastRoute';
 
 // Room kept between the field being typed in and the top of the keyboard.
 const KEYBOARD_GAP = 24;
@@ -31,6 +32,8 @@ export const PageScrollView = React.forwardRef<ScrollView, ScrollViewProps & Wit
   useFocusEffect(
     useCallback(() => {
       const frame = requestAnimationFrame(() => {
+        // Back from a screen it opened (Sort them out from Bank): stay put (lib/lastRoute).
+        if (cameBackFromOnTop()) return;
         ref.current?.scrollTo({ x: 0, y: 0, animated: false });
       });
       return () => cancelAnimationFrame(frame);
@@ -113,6 +116,8 @@ export function PageFlatList<ItemT>({ scroller, ...props }: FlatListProps<ItemT>
   useFocusEffect(
     useCallback(() => {
       const frame = requestAnimationFrame(() => {
+        // Back from a screen it opened (Sort them out from Bank): stay put (lib/lastRoute).
+        if (cameBackFromOnTop()) return;
         ref.current?.scrollToOffset({ offset: 0, animated: false });
       });
       return () => cancelAnimationFrame(frame);

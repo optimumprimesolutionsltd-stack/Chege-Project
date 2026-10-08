@@ -25,6 +25,7 @@ import { useEntitlements } from '@/hooks/useEntitlements';
 import { readPlanChoice, shouldShowPlanChoice } from '@/lib/planChoice';
 import { consumeResumePoint, saveResumePoint } from '@/lib/resumeAfterUpdate';
 import { keepWhatsNew, shouldInstallOnReturn, takeWhatsNew } from '@/lib/updateTiming';
+import { notePath } from '@/lib/lastRoute';
 import { useImportProgress } from '@/lib/importProgress';
 import * as Updates from 'expo-updates';
 import {
@@ -69,6 +70,8 @@ function useUpdatePrompt() {
   const pathname = usePathname();
   const where = useRef(pathname);
   where.current = pathname;
+  // Where the person came from, so a screen they come back to keeps its place (lib/lastRoute).
+  notePath(pathname);
   const importProgress = useImportProgress();
   const saving = useRef(false);
   saving.current = importProgress?.stage === 'saving';
