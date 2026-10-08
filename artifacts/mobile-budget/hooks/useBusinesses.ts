@@ -3,12 +3,15 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { customFetch } from '@workspace/api-client-react';
 import { useAuth } from '@/lib/auth';
 
-type Named = { ready: boolean; incomeSourceIds: number[] };
+export type Business = { id: number; name: string; countsProfit: boolean };
+type Named = { ready: boolean; incomeSourceIds: number[]; businesses?: Business[] };
 
 /**
- * The person's businesses: income streams they named as one (api-server
- * lib/business-streams). Until they name one, `named` is false and the old
- * reading - a stream with costs is a business - still applies.
+ * The person's businesses, named in My businesses (api-server
+ * lib/business-streams). Only these are businesses - never an income stream.
+ * Each either counts its profit here (a Business report) or only passes
+ * through your phone (a salary is drawn from it); either way its money stays
+ * out of your personal income and spending.
  */
 export function useBusinesses() {
   const queryClient = useQueryClient();
@@ -20,6 +23,7 @@ export function useBusinesses() {
     retry: false,
   });
   const ids = useMemo(() => new Set(data?.incomeSourceIds ?? []), [data]);
+  const list = useMemo<Business[]>(() => data?.businesses ?? [], [data]);
 
   const refresh = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: ['businesses'] });
@@ -27,17 +31,20 @@ export function useBusinesses() {
     void queryClient.invalidateQueries({ predicate: (query) => String(query.queryKey[0] ?? '').startsWith('/api/dashboard') });
   }, [queryClient]);
 
-  const setBusiness = useCallback(async (incomeSourceId: number, business: boolean) => {
+  const setBusiness = useCallback(async (incomeSourceId: number, business: boolean, countsProfit?: boolean) => {
     await customFetch(`/api/businesses/${incomeSourceId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ business }),
+      body: JSON.stringify({ business, ...(countsProfit === undefined ? {} : { countsProfit }) }),
     });
     queryClient.setQueryData<Named>(['businesses'], (cached) => {
       const next = new Set(cached?.incomeSourceIds ?? []);
       if (business) next.add(incomeSourceId);
       else next.delete(incomeSourceId);
-      return { ready: cached?.ready ?? true, incomeSourceIds: [...next] };
+      const businesses = (cached?.businesses ?? []).filter((one) => one.id !== incomeSourceId);
+      const before = cached?.businesses?.find((one) => one.id === incomeSourceId);
+      if (business && before) businesses.push({ ...before, countsProfit: countsProfit ?? before.countsProfit });
+      return { ready: cached?.ready ?? true, incomeSourceIds: [...next], businesses };
     });
     refresh();
   }, [queryClient, refresh]);
@@ -50,7 +57,7 @@ export function useBusinesses() {
   const create = useCallback(async (name: string): Promise<{ id: number; name: string } | null> => {
     if (!user?.id || !name.trim()) return null;
     const same = (text: string) => text.trim().replace(/\s+/g, ' ').toLocaleLowerCase('en-KE');
-    const streams = await customFetch<Array<{ id: number; name: string }>>('/api/income-sources').catch(() => []);
+    const streams = await customFetch<Array<{ id: number; name: string }>>('/api/income-sources').catch(() => [] as Array<{ id: number; name: string }>);
     const existing = streams.find((stream) => same(stream.name) === same(name));
     if (existing) {
       await setBusiness(existing.id, true);
@@ -65,5 +72,8 @@ export function useBusinesses() {
     return created;
   }, [setBusiness, user?.id]);
 
-  return { ready: data?.ready === true, ids, named: ids.size > 0, setBusiness, create };
+  /** Count its profit here (a Business report), or its money only passes through. */
+  const setCountsProfit = useCallback((incomeSourceId: number, countsProfit: boolean) => setBusiness(incomeSourceId, true, countsProfit), [setBusiness]);
+
+  return { ready: data?.ready === true, ids, list, named: ids.size > 0, setBusiness, setCountsProfit, create };
 }

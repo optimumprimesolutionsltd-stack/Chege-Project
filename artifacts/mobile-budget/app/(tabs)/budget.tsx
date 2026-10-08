@@ -25,6 +25,7 @@ import { isoDay, longDay, monthStartIso, orderedRange } from '@/lib/dayRange';
 import { incomeTotal, leftToPlan, planWith } from '@/lib/budgetTotals';
 import { effectiveBudgets } from '@workspace/category-tree';
 import { CategorySearchBox } from '@/components/CategorySearchBox';
+import { useBusinesses } from '@/hooks/useBusinesses';
 import { useColors } from '@/hooks/useColors';
 import { UndoDeleteBar, useUndoableDelete } from '@/components/UndoDeleteBar';
 import { deletedLabel } from '@/lib/undoDelete';
@@ -130,10 +131,12 @@ export default function BudgetScreen() {
     queryFn: () => customFetch<BudgetCategory[]>('/api/budget-categories'),
     staleTime: 30_000,
   });
+  const businesses = useBusinesses();
   const { data: incomeSources = [], refetch: refetchIncomeSources } = useQuery<IncomeSource[]>({
     // What each source was expected to bring in, in the month on screen.
     queryKey: ['income-sources', 'budget-report', year, month],
-    queryFn: () => customFetch<IncomeSource[]>(`/api/income-sources?year=${year}&month=${month}`),
+    // Your income streams, without businesses: a business is never one (api-server lib/business-streams).
+    queryFn: () => customFetch<IncomeSource[]>(`/api/income-sources?year=${year}&month=${month}&streams=only`),
     staleTime: 30_000,
   });
   const { data: members = [], refetch: refetchMembers } = useQuery<Member[]>({
@@ -891,7 +894,11 @@ export default function BudgetScreen() {
   // figure can be moved and the effect read off without a calculator. Leaves
   // only, and not an income stream's own costs, which are budgeted apart.
   const hasSubcategories = (id: number) => allCategories.some((category) => (category.parentId ?? null) === id);
-  const isStreamCost = (category: BudgetCategory) => (category as BudgetCategory & { reducesIncomeSourceId?: number | null }).reducesIncomeSourceId != null;
+  // A business's cost (My businesses) is budgeted apart; a link to an income stream is ordinary spending.
+  const isStreamCost = (category: BudgetCategory) => {
+    const link = (category as BudgetCategory & { reducesIncomeSourceId?: number | null }).reducesIncomeSourceId;
+    return link != null && businesses.ids.has(link);
+  };
   const plannedHousehold = reportBudget + unusedCategories
     .filter((category) => !hasSubcategories(category.id) && !isStreamCost(category))
     .reduce((sum, category) => sum + budgetFor(category), 0);
@@ -1032,8 +1039,8 @@ export default function BudgetScreen() {
                       {([
                         { key: 'ledger', label: 'A regular category', testID: 'category-kind-ledger' },
                         { key: 'group', label: 'A group of categories', testID: 'category-kind-group' },
-                        // Only once there is an income stream for it to come off.
-                        ...(incomeSources.length > 0 ? [{ key: 'business', label: 'Related to an income stream', testID: 'category-kind-business' }] : []),
+                        // A business's cost, once there is a business (My businesses) - never an income stream's.
+                        ...(businesses.list.length > 0 ? [{ key: 'business', label: "A business's cost", testID: 'category-kind-business' }] : []),
                       ] as const).map((option) => {
                         const current = formIsGroup ? 'group' : formCostSourceId != null ? 'business' : 'ledger';
                         const on = current === option.key;
@@ -1042,7 +1049,7 @@ export default function BudgetScreen() {
                             key={option.key}
                             onPress={() => {
                               setFormIsGroup(option.key === 'group');
-                              setFormCostSourceId(option.key === 'business' ? (formCostSourceId ?? incomeSources[0]?.id ?? null) : null);
+                              setFormCostSourceId(option.key === 'business' ? (formCostSourceId ?? businesses.list[0]?.id ?? null) : null);
                             }}
                             accessibilityRole="radio"
                             accessibilityState={{ selected: on }}
@@ -1063,14 +1070,14 @@ export default function BudgetScreen() {
                       {formIsGroup
                         ? 'A group holds no money of its own. Add subcategories to it and its budget becomes their total.'
                         : formCostSourceId != null
-                          ? "A cost of earning an income stream - stock, its transport, its rent. It comes off that income stream's profit on Business, not out of the household's budget."
+                          ? "A cost of one of your businesses - stock, its transport, its rent. It is the business's, not the household's budget or spending."
                           : 'Spending and a budget live here. You can put it inside a group below.'}
                     </Text>
                     {!formIsGroup && formCostSourceId != null ? (
                       <View testID="category-side-hustle">
-                        <Text style={[styles.label, { color: colors.mutedForeground }]}>WHICH INCOME STREAM?</Text>
+                        <Text style={[styles.label, { color: colors.mutedForeground }]}>WHICH BUSINESS?</Text>
                         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 6 }}>
-                          {incomeSources.map((source) => {
+                          {businesses.list.map((source) => {
                             const on = formCostSourceId === source.id;
                             return (
                               <Pressable

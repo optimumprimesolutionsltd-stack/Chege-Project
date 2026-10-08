@@ -6,7 +6,7 @@ const budget = readFileSync('app/(tabs)/budget.tsx', 'utf8');
 describe('expected income on the Budget tab follows the month on screen', () => {
   it('loads what each source was expected to bring in that month', () => {
     expect(budget).toContain("queryKey: ['income-sources', 'budget-report', year, month],");
-    expect(budget).toContain('`/api/income-sources?year=${year}&month=${month}`');
+    expect(budget).toContain('`/api/income-sources?year=${year}&month=${month}&streams=only`');
   });
 
   it('asks how far a change reaches, from both ways of editing it', () => {

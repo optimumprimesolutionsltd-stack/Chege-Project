@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { getActiveGroupId, requireGroupManager } from "../lib/activeGroup";
-import { businessStreamIds, businessStreamsReady, setBusinessStream } from "../lib/business-streams";
+import { businessStreams, businessStreamsReady, setBusinessStream } from "../lib/business-streams";
 
 const router = Router();
 
@@ -9,10 +9,11 @@ const router = Router();
 router.get("/businesses", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
-  res.json({ ready: businessStreamsReady(), incomeSourceIds: await businessStreamIds(groupId) });
+  const businesses = await businessStreams(groupId);
+  res.json({ ready: businessStreamsReady(), incomeSourceIds: businesses.map((business) => business.id), businesses });
 });
 
-const flagSchema = z.object({ business: z.boolean() });
+const flagSchema = z.object({ business: z.boolean(), countsProfit: z.boolean().optional() });
 
 /** A business, or back to an ordinary income stream. */
 router.put("/businesses/:incomeSourceId", async (req, res): Promise<void> => {
@@ -29,11 +30,11 @@ router.put("/businesses/:incomeSourceId", async (req, res): Promise<void> => {
     res.status(400).json({ error: "Say whether it is a business." });
     return;
   }
-  if (!(await setBusinessStream(groupId, incomeSourceId, parsed.data.business))) {
+  if (!(await setBusinessStream(groupId, incomeSourceId, parsed.data.business, parsed.data.countsProfit))) {
     res.status(404).json({ error: "Income stream not found" });
     return;
   }
-  res.json({ incomeSourceId, business: parsed.data.business });
+  res.json({ incomeSourceId, business: parsed.data.business, ...(parsed.data.countsProfit === undefined ? {} : { countsProfit: parsed.data.countsProfit }) });
 });
 
 export default router;

@@ -55,9 +55,9 @@ export default function NamedAccountsScreen() {
     queryFn: () => customFetch<Array<{ id: number; name: string }>>('/api/income-sources'),
     staleTime: 30_000,
   });
-  // The businesses named in My businesses, once there are any; until then every stream.
+  // My businesses only - an income stream is never one.
   const namedBusinesses = useBusinesses();
-  const businesses = namedBusinesses.named ? streams.filter((one) => namedBusinesses.ids.has(one.id)) : streams;
+  const businesses = streams.filter((one) => namedBusinesses.ids.has(one.id));
   const businessName = (id: number | null | undefined) => businesses.find((one) => one.id === id)?.name ?? null;
 
   // Categories that carry spending: not a heading, and not Not sure yet. With a

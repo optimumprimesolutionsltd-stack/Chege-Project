@@ -23,6 +23,7 @@ import {
   useGetDashboardExpenseLedger,
 } from '@workspace/api-client-react';
 import { isoDay, longDay, monthStartIso, orderedRange, stepMonth } from '@/lib/dayRange';
+import { useBusinesses } from '@/hooks/useBusinesses';
 import { useColors } from '@/hooks/useColors';
 import { useProgressiveDays } from '@/lib/progressiveDays';
 import { ScrollerScrollView } from '@/components/PageScrollReset';
@@ -138,13 +139,14 @@ export default function ExpenseLedgerScreen() {
   // of its profit there — it is not a personal expense, so it is split out
   // here rather than left to inflate this screen's "expenses" total too.
   const { data: budgetCategories = [] } = useGetBudgetCategories();
+  const businesses = useBusinesses();
   const costCategoryNames = useMemo(
     () => new Set(
       budgetCategories
-        .filter((category) => category.reducesIncomeSourceId != null)
+        .filter((category) => category.reducesIncomeSourceId != null && businesses.ids.has(category.reducesIncomeSourceId))
         .map((category) => category.name.trim().toLocaleLowerCase('en-KE')),
     ),
-    [budgetCategories],
+    [budgetCategories, businesses.ids],
   );
   // A business entry: every category it is filed under is a side hustle's cost.
   const isBusinessEntry = (entry: (typeof allEntries)[number]) =>

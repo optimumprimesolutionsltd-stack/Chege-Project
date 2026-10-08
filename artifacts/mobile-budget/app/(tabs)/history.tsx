@@ -486,10 +486,11 @@ export default function HistoryScreen() {
 
   // Load income sources for whoever paid the expense being edited
   const { data: editSources = [], isLoading: editSourcesLoading } = useQuery<IncomeSource[]>({
-    queryKey: ['income-sources', editForm.paidById],
+    queryKey: ['income-sources', 'streams', editForm.paidById],
     queryFn: async () => {
       if (!editForm.paidById) return [];
-      return customFetch<IncomeSource[]>(`/api/income-sources?userId=${editForm.paidById}`);
+      // Income streams only: a business is never one (api-server lib/business-streams).
+      return customFetch<IncomeSource[]>(`/api/income-sources?userId=${editForm.paidById}&streams=only`);
     },
     enabled: !!editForm.paidById,
     staleTime: 60_000,

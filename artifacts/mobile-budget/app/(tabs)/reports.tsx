@@ -1241,9 +1241,8 @@ export default function ReportsScreen() {
                 {incomeStreamReport?.streams.map(stream => {
                   const unattributed = stream.incomeSourceId == null;
                   const accent = unattributed ? '#f59e0b' : colors.primary;
-                  const linkedCostCategories = unattributed
-                    ? []
-                    : categories.filter((category) => category.reducesIncomeSourceId === stream.incomeSourceId);
+                  // An income stream is income: no costs are linked to it (a business's are, on Budget and Bank).
+                  const linkedCostCategories: typeof categories = [];
                   return (
                     <View
                       key={stream.incomeSourceId ?? 'unattributed'}
@@ -1276,21 +1275,6 @@ export default function ReportsScreen() {
                         <Text style={[styles.variance, { color: colors.mutedForeground }]}>
                           {formatKES(stream.total + stream.costs)} sales − {formatKES(stream.costs)} {linkedCostCategories.map((category) => category.name).join(', ') || 'cost'} = {formatKES(stream.total)} profit
                         </Text>
-                      ) : null}
-                      {!unattributed && canManageCostCategories ? (
-                        <Pressable
-                          onPress={() => setCostCategoryFor({ incomeSourceId: stream.incomeSourceId!, sourceName: stream.sourceName })}
-                          style={styles.costCategoryRow}
-                          accessibilityRole="button"
-                          testID={`income-stream-cost-category-${stream.incomeSourceId}`}
-                        >
-                          <Feather name="link-2" size={13} color={colors.mutedForeground} />
-                          <Text style={[styles.variance, { color: colors.mutedForeground }]}>
-                            {linkedCostCategories.length > 0
-                              ? `Cost categor${linkedCostCategories.length === 1 ? 'y' : 'ies'}: ${linkedCostCategories.map((category) => category.name).join(', ')}`
-                              : 'Link a cost category'}
-                          </Text>
-                        </Pressable>
                       ) : null}
                       {detailedStreams.has(streamKey(stream.incomeSourceId)) ? (
                         <View style={[styles.streamDetails, { borderColor: colors.border }]} testID={`income-stream-detail-list-${streamKey(stream.incomeSourceId)}`}>

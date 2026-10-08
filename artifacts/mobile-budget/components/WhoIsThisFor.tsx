@@ -16,13 +16,16 @@ import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-nativ
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 
-export type Business = { id: number; name: string };
+/** countsProfit false: its money only passes through your phone - no Business report (My businesses). */
+export type Business = { id: number; name: string; countsProfit?: boolean };
 
 export function WhoIsThisFor({
   direction,
   businesses,
   businessId,
   onBusiness,
+  payeeName,
+  onPayeeName,
   costs,
   category,
   onCategory,
@@ -40,8 +43,15 @@ export function WhoIsThisFor({
   onCategory: (name: string) => void;
   /** Adds a cost linked to the chosen business, and picks it. */
   onAddCost: (name: string) => Promise<void>;
-  /** Adds a business (an income stream), and picks it. */
+  /** Adds a business (My businesses), and picks it. */
   onAddBusiness: (name: string) => Promise<void>;
+  /**
+   * What to call the payee - "Lipa Na KCB (8063876)" is "Ujenzi supplier -
+   * Hardware" - kept in Named accounts after Save ("where do I name the
+   * business / supplier?", 8 Oct 2026). Money out only.
+   */
+  payeeName?: string;
+  onPayeeName?: (name: string) => void;
 }) {
   const colors = useColors();
   const chosen = businesses.find((one) => one.id === businessId) ?? null;
@@ -85,8 +95,13 @@ export function WhoIsThisFor({
       {chosen && direction === 'out' ? (
         <>
           <Text style={{ color: colors.mutedForeground, fontSize: 12, lineHeight: 17 }}>
-            One of {chosen.name}'s costs - it counts in {chosen.name}'s profit in the Business report.
+            {chosen.countsProfit === false
+              ? `${chosen.name}'s money, not your spending. Its profit is not counted here, so no Business report.`
+              : `One of ${chosen.name}'s costs - it counts in ${chosen.name}'s profit in the Business report.`}
           </Text>
+          {onPayeeName ? (
+            <TextInput value={payeeName ?? ''} onChangeText={onPayeeName} placeholder="Name this payee, e.g. Hardware supplier" placeholderTextColor={colors.mutedForeground} style={input} testID="who-for-payee-name" />
+          ) : null}
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
             {costs.map((name) => (
               <Pressable key={name} onPress={() => onCategory(name)} accessibilityRole="radio" accessibilityState={{ selected: category === name }} testID={`who-for-cost-${name}`} style={chip(category === name)}>
@@ -107,7 +122,9 @@ export function WhoIsThisFor({
       ) : null}
       {chosen && direction === 'in' ? (
         <Text style={{ color: colors.mutedForeground, fontSize: 12, lineHeight: 17 }}>
-          {chosen.name}'s sales - in the Business report. Money in from this payer goes to {chosen.name} from now on.
+          {chosen.countsProfit === false
+            ? `${chosen.name}'s money, not your income. Money in from this payer goes to ${chosen.name} from now on.`
+            : `${chosen.name}'s sales - in the Business report. Money in from this payer goes to ${chosen.name} from now on.`}
         </Text>
       ) : null}
       {chosen ? (
