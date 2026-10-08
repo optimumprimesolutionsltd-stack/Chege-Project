@@ -30,6 +30,7 @@ import { LISTS_AN_EDIT_CHANGES, withSavedRow } from '@/lib/showSavedEdit';
 import { PassThroughPair, type PairEntry } from '@/components/PassThroughPair';
 import { useAutoMarkBusiness, useOwnerBusiness } from '@/hooks/useOwnerBusiness';
 import { useBusinessAccounts } from '@/hooks/useBusinessAccounts';
+import { useNamedPayees } from '@/hooks/useNamedPayees';
 import { businessTitle } from '@/lib/ownerBusiness';
 import { categoryChanged, moveSummary, parseRememberAsked, rememberAskedKey, rememberStep, samePayeeToMove } from '@/lib/samePayee';
 import { parseStoredRules, payeeKey, ruleCategory, rulesStorageKey, withRule } from '@/lib/payeeLearning';
@@ -313,6 +314,8 @@ export default function BankScreen() {
   // one should be asked if it's for business or personal", 8 Oct 2026). Null
   // until answered on a new account.
   const businessAccounts = useBusinessAccounts();
+  // Outside accounts the person named (lib/namedPayees): shown by that name.
+  const namedPayees = useNamedPayees();
   const [accountIsBusiness, setAccountIsBusiness] = useState<boolean | null>(null);
   const [accountNameDraft, setAccountNameDraft] = useState('');
   const [accountNumberDraft, setAccountNumberDraft] = useState('');
@@ -3193,6 +3196,8 @@ export default function BankScreen() {
         renderItem={({ item }) => {
           const dep = item.type === 'deposit';
           const payerLabel = txPayerLabel(item);
+          // Shown by the name the person gave its account, when they gave one.
+          const shownDescription = namedPayees.nameFor(item.description) ?? item.description;
           const editing = txEditor.editing;
           const removable = canRemoveTx(item);
           const staged = editing && txEditor.isRemoving(item.id);
@@ -3233,7 +3238,7 @@ export default function BankScreen() {
                       : !dep && item.expenseCategory ? item.expenseCategory
                       : !dep && item.settlesContributorId ? (item.debtPartyName ? `Paid to ${item.debtPartyName}` : 'Debt payment')
                       : dep && item.incomeSourceId && incomeSourceNames.get(item.incomeSourceId) ? incomeSourceNames.get(item.incomeSourceId)
-                      : item.description}
+                      : shownDescription}
                   </Text>
                   {item.notes ? (
                     <Feather
@@ -3251,8 +3256,8 @@ export default function BankScreen() {
                     : item.savingsGoalId
                     ? `${item.description} · `
                     : dep
-                      ? `${payerLabel} · ${item.description} · `
-                      : `${payerLabel}${item.expenseCategory && item.description !== item.expenseCategory ? ` · ${item.description}` : ''} · `}
+                      ? `${payerLabel} · ${shownDescription} · `
+                      : `${payerLabel}${item.expenseCategory && item.description !== item.expenseCategory ? ` · ${shownDescription}` : ''} · `}
                   {data?.accountName ? `${data.accountName} · ` : ''}
                   {canManageAccount ? 'Edit or delete' : canEditTransaction(item) ? 'Edit today' : ''}
                 </Text>
@@ -5549,6 +5554,27 @@ export default function BankScreen() {
                     </Text>
                   </TouchableOpacity>
                 )
+              ) : null}
+
+              {/* An outside account paid often, by a name (lib/namedPayees). */}
+              {editingTransactionId !== null && !editingTransfer && txType === 'disbursement' ? (
+                <TouchableOpacity
+                  onPress={() => {
+                    const tx = (data?.transactions ?? []).find((row) => row.id === editingTransactionId);
+                    if (!tx) return;
+                    closeModal();
+                    router.push(`/named-accounts?prefill=${encodeURIComponent(tx.description)}` as never);
+                  }}
+                  disabled={submitting}
+                  activeOpacity={0.8}
+                  testID="bank-name-payee"
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10 }}
+                >
+                  <Feather name="bookmark" size={14} color={colors.primary} />
+                  <Text style={{ flex: 1, color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>
+                    {namedPayees.nameFor((data?.transactions ?? []).find((row) => row.id === editingTransactionId)?.description) ?? 'Name this payee and choose where its payments go'}
+                  </Text>
+                </TouchableOpacity>
               ) : null}
 
               {/* Money that only passed through: this entry and its other half, together. */}
