@@ -58,7 +58,14 @@ module.exports = ({ config }) => {
     plugins: [...(config.plugins ?? []), ...(playStore ? [] : [withArmOnly]), ...(noSms ? [withoutSmsReceiver] : [])],
     android: {
       ...config.android,
-      ...(noSms ? { blockedPermissions: [...(config.android?.blockedPermissions ?? []), 'android.permission.READ_SMS', 'android.permission.RECEIVE_SMS'] } : {}),
+      // The camera is never used: a profile photo comes from the photo library
+      // (settings.tsx). expo-image-picker declares CAMERA anyway; removed, so no
+      // build asks for a permission it has no use for (Google Play reviews each).
+      blockedPermissions: [
+        ...(config.android?.blockedPermissions ?? []),
+        'android.permission.CAMERA',
+        ...(noSms ? ['android.permission.READ_SMS', 'android.permission.RECEIVE_SMS'] : []),
+      ],
     },
     extra: { ...config.extra, ...(note ? { updateNote: note } : {}) },
   };

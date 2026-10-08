@@ -29,7 +29,8 @@ export default function Privacy() {
         <li>a display name, if you set one different from your Google name;</li>
         <li>a profile photo, if you upload one;</li>
         <li>the financial records you enter — contributions, expenses, budgets, savings goals, contribution targets, and any description you write on them;</li>
-        <li>the email addresses of people you invite to a group.</li>
+        <li>the email addresses of people you invite to a group;</li>
+        <li>the M-Pesa phone number you pay your subscription from, which Safaricom needs to send the payment prompt.</li>
       </ul>
       <p>
         <strong>We do not collect bank details, M-Pesa PINs, card numbers, or
@@ -81,6 +82,8 @@ export default function Privacy() {
         <li><strong>Google</strong> — sign-in.</li>
         <li><strong>Render</strong> — hosting and the database.</li>
         <li><strong>Resend</strong> — sending invitation and digest emails.</li>
+        <li><strong>Safaricom</strong> — the M-Pesa payment prompt for your subscription.</li>
+        <li><strong>An AI model provider</strong> — only when you use Ask Jamvi: your question and the figures and entries it needs to answer it are sent to it to be answered.</li>
         <li><strong>Cloudflare</strong> — domain name service and protection.</li>
         <li><strong>An S3-compatible object storage provider</strong> — profile photos.</li>
       </ul>
@@ -113,6 +116,20 @@ export default function Privacy() {
         expenses recorded in a group do not disappear when you close your
         account</strong> — the remaining members keep their history. Where we can,
         we remove your name from it.
+      </p>
+
+      {/* The address given to Google Play for account deletion: /privacy#delete-account. */}
+      <h3 id="delete-account">Deleting your account</h3>
+      <p>
+        In the Jamvi app or on the web, open <strong>Settings</strong> and tap <strong>Delete account</strong> (in
+        the app it is under <strong>App</strong>), then confirm with the code Jamvi emails you. Nothing is erased for 14 days:
+        sign back in before then and the deletion is cancelled. After 14 days your Personal budget and everything in
+        it is erased, you leave every Shared group, and your name, email address and photo are removed. Records of
+        subscription payments are kept as billing history, as the law requires.
+      </p>
+      <p>
+        Cannot sign in? Write to <a href={`mailto:${JAMVI_SUPPORT_EMAIL}`}>{JAMVI_SUPPORT_EMAIL}</a> from the email
+        address on your account and we will delete it for you.
       </p>
 
       <h2>6. Your rights</h2>
