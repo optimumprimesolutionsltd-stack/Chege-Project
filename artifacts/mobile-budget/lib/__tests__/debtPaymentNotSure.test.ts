@@ -7,8 +7,8 @@ describe('a payment to somebody you owe drops Not sure yet', () => {
   const bank = readFileSync('app/(tabs)/bank.tsx', 'utf8');
   const fix = readFileSync('../api-server/src/lib/borrowed-not-income.ts', 'utf8');
 
-  it('the form clears it when the kind is chosen, and never saves it', () => {
-    expect(bank).toContain("if (isNotSure(expenseCategory)) setExpenseCategory('');");
+  it('changing to paying somebody you owe clears any category, and Not sure yet is never saved', () => {
+    expect(bank).toContain("if (withdrawDest !== 'party') setExpenseCategory('');");
     expect(bank.match(/withdrawDest === 'party' && \(!expenseCategory\.trim\(\) \|\| isNotSure\(expenseCategory\)\)/g)).toHaveLength(2);
   });
 

@@ -4599,11 +4599,14 @@ export default function BankScreen() {
                       <TouchableOpacity
                         style={styles.categoryOption}
                         onPress={() => {
+                          // Changing to paying somebody you owe drops the category the
+                          // entry had - it needs none ("when a change is done, category
+                          // should go away", 8 Oct 2026). Re-choosing it keeps one picked
+                          // on purpose for a purchase never recorded.
+                          if (withdrawDest !== 'party') setExpenseCategory('');
                           setWithdrawDest('party');
                           setWithdrawSourceName(null);
                           setWithdrawPartyId(null);
-                          // Paying somebody you owe needs no category: Not sure yet is not one.
-                          if (isNotSure(expenseCategory)) setExpenseCategory('');
                           setShowWithdrawKindPicker(false);
                           setShowPartyPicker(true);
                         }}
