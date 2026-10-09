@@ -36,19 +36,19 @@ describe("the Jamvi package", () => {
     }
   });
 
-  it("costs KES 100 a month and 1,000 a year", () => {
-    expect(JAMVI_PACKAGE.monthlyPriceKes).toBe(100);
-    expect(JAMVI_PACKAGE.annualPriceKes).toBe(1_000);
+  it("costs KES 250 a month and 2,500 a year", () => {
+    expect(JAMVI_PACKAGE.monthlyPriceKes).toBe(250);
+    expect(JAMVI_PACKAGE.annualPriceKes).toBe(2_500);
     expect(JAMVI_PACKAGE.currency).toBe("KES");
-    expect(priceKes(BILLING_INTERVAL.MONTHLY)).toBe(100);
-    expect(priceKes(BILLING_INTERVAL.ANNUAL)).toBe(1_000);
+    expect(priceKes(BILLING_INTERVAL.MONTHLY)).toBe(250);
+    expect(priceKes(BILLING_INTERVAL.ANNUAL)).toBe(2_500);
   });
 
   it("gives two months free on the annual price", () => {
     expect(JAMVI_PACKAGE.annualPriceKes).toBe(JAMVI_PACKAGE.monthlyPriceKes * 10);
     expect(JAMVI_PACKAGE.annualSavingKes)
       .toBe(calculateAnnualSavingKes(JAMVI_PACKAGE.monthlyPriceKes, JAMVI_PACKAGE.annualPriceKes));
-    expect(JAMVI_PACKAGE.annualSavingKes).toBe(200);
+    expect(JAMVI_PACKAGE.annualSavingKes).toBe(500);
   });
 
   it("carries no member limit, because group size is no longer priced", () => {

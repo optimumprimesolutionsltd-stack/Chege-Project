@@ -2,7 +2,7 @@
  * JSON-LD, per route.
  *
  * Meta tags tell a search engine how to render a link. Structured data tells
- * it what the thing *is* - that Jamvi is an application, that it costs KES 100
+ * it what the thing *is* - that Jamvi is an application, that it costs KES 250
  * a month, that these are questions with answers. That is what earns a rich
  * result rather than a plain blue line, and what the AI crawlers read when
  * they answer "what is a good chama app".

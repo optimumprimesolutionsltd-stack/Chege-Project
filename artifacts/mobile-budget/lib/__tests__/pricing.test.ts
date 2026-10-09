@@ -18,7 +18,7 @@ describe('prices come from one place', () => {
     '%s has no typed-in price',
     (file) => {
       const source = readFileSync(file, 'utf8');
-      expect(source).not.toMatch(/KES 100\b|KES 1,000\b|MONTHLY_KES|ANNUAL_KES/);
+      expect(source).not.toMatch(/KES (100|250)\b|KES (1,000|2,500)\b|MONTHLY_KES|ANNUAL_KES/);
       expect(source).toContain('usePrices');
     },
   );

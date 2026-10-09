@@ -3,7 +3,7 @@ export type Prices = { monthly: number; annual: number };
 /** Shown until the server's answer arrives, and if it never does, so a price
  *  is never blank. The server's own numbers (@workspace/jamvi-pricing) win
  *  the moment they load. */
-export const FALLBACK_PRICES: Prices = { monthly: 100, annual: 1000 };
+export const FALLBACK_PRICES: Prices = { monthly: 250, annual: 2500 };
 
 /** The paid package's prices out of GET /api/subscription-plans. */
 export function pricesFromPackages(packages: unknown): Prices {

@@ -203,7 +203,7 @@ export const GUIDES: readonly Guide[] = [
       {
         heading: "The subscription belongs to a person, not the chama",
         body: [
-          "Jamvi is KES 100 a month, or KES 1,000 a year — two months free for paying once. That figure is per person, not per group, and it is never billed to the chama itself. A chama of fifty members is not one bill for fifty people; it is however many of those fifty members choose to have their own subscription.",
+          "Jamvi is KES 250 a month, or KES 2,500 a year — two months free for paying once. That figure is per person, not per group, and it is never billed to the chama itself. A chama of fifty members is not one bill for fifty people; it is however many of those fifty members choose to have their own subscription.",
           "One subscription covers everything that person does in Jamvi: their own Personal budget and every Shared group they belong to. Joining a second chama, or a third, adds nothing to what they pay.",
         ],
       },

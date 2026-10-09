@@ -107,10 +107,10 @@ export const JAMVI_PACKAGE: JamviPackage = {
   displayName: "Jamvi",
   description: "Your own budget, and every group you are part of.",
   audience: "Everyone using Jamvi",
-  monthlyPriceKes: 100,
-  annualPriceKes: 1_000,
+  monthlyPriceKes: 250,
+  annualPriceKes: 2_500,
   currency: "KES",
-  annualSavingKes: 200,
+  annualSavingKes: 500,
   trialDays: TRIAL_DAYS,
   entitlements: ALL_ENTITLEMENTS,
   featureLabels: [

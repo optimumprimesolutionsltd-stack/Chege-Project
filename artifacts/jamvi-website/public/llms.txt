@@ -1,6 +1,6 @@
 # Jamvi
 
-> A budget app built in Kenya that turns your M-Pesa statement or messages into a sorted budget in minutes; the statement is read on your own device and never uploaded. Also a chama and household budget app: track group contributions, see who has paid and who is behind, split household bills, and keep your own budget beside it — in one shared record everybody can see. KES 100 per member per month; groups are free.
+> A budget app built in Kenya that turns your M-Pesa statement or messages into a sorted budget in minutes; the statement is read on your own device and never uploaded. Also a chama and household budget app: track group contributions, see who has paid and who is behind, split household bills, and keep your own budget beside it — in one shared record everybody can see. KES 250 per member per month; groups are free.
 
 Jamvi exists because chamas, churches, families and student groups in Kenya run
 real money through WhatsApp threads and a treasurer's notebook. The money is
@@ -20,7 +20,7 @@ private tally in their head. Built in Nairobi.
 ## Product
 
 - [Features](https://jamvi.co.ke/features/): Record contributions for a whole group at once, a month-by-month paid sheet, expense splitting, shared groups with permissions, and M-Pesa.
-- [Pricing](https://jamvi.co.ke/pricing/): KES 100 per member per month, or KES 1,000 a year. One subscription covers your own budget and every group you belong to — groups themselves are free, so a treasurer does not pay for the members.
+- [Pricing](https://jamvi.co.ke/pricing/): KES 250 per member per month, or KES 2,500 a year. One subscription covers your own budget and every group you belong to — groups themselves are free, so a treasurer does not pay for the members.
 
 ## Guides
 
