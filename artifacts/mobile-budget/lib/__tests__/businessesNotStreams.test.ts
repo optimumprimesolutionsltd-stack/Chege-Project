@@ -57,7 +57,7 @@ describe('naming the payee on the entry', () => {
   const bank = read('app/(tabs)/bank.tsx');
 
   it('is a box on the card, kept in Named accounts after Save', () => {
-    expect(card).toContain('testID="who-for-payee-name"');
+    expect(card).toContain("testID={id('who-for-payee-name')}");
     expect(bank).toContain('payeeName={whoForPayeeName}');
     expect(bank).toContain("name: entry.name?.trim() || namedPayees.nameFor(entry.description) || label");
   });

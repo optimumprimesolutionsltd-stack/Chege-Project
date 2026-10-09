@@ -38,12 +38,12 @@ describe('the question on an entry', () => {
 
   it('is asked on money out and money in: Personal, or a business', () => {
     expect((bank.match(/<WhoIsThisFor/g) ?? []).length).toBe(2);
-    expect(card).toContain('testID="who-for-personal"');
-    expect(card).toContain('testID={`who-for-business-${one.id}`}');
+    expect(card).toContain("testID={id('who-for-personal')}");
+    expect(card).toContain('testID={id(`who-for-business-${one.id}`)}');
   });
 
   it('money out for a business picks or adds one of its costs', () => {
-    expect(card).toContain('testID="who-for-new-cost"');
+    expect(card).toContain("testID={id('who-for-new-cost')}");
     expect(bank).toContain("reducesIncomeSourceId: forBusinessId, costKind: 'cogs'");
   });
 

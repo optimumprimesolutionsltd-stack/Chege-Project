@@ -38,6 +38,7 @@ TWINS = {
     # Same name on the web, so every file importing it is copied unchanged.
     'personNumber.ts': ('personNumber.ts', {}),
     'payeeNicknames.ts': ('payee-nicknames.ts', {}),
+    'importBusiness.ts': ('import-business.ts', {'./mpesaImport': './mpesa-import'}),
 }
 
 

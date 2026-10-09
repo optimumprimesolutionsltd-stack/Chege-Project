@@ -95,7 +95,7 @@ import { isNotSure, needsNotSureCategory, NOT_SURE_CATEGORY, notSureableLines, o
 import { handleLapsedError } from '@/lib/lapsedError';
 import { runPool, savePosting, SAVE_CONCURRENCY, type PostingApi, type Posted } from '@/lib/savePosting';
 import { EarlierSaveRunning, followServerSave, isFollowingServerSave, startServerSave, type ServerJob } from '@/lib/serverSave';
-import { parseStoredRules, payeeKey, payeeName, ruleLabel, rulesStorageKey, withRule, withoutRule, type PayeeRules } from '@/lib/payeeLearning';
+import { parseStoredRules, payeeKey, payeeName, referenceOf, ruleLabel, rulesStorageKey, withRule, withSourceRule, withoutRule, type PayeeRules } from '@/lib/payeeLearning';
 import { saveDebtLinks } from '@/lib/debtReversal';
 import { mpesaNameFor, saveMpesaNames, type MpesaName } from '@/lib/mpesaNames';
 import { isLapsedRefusal, lapsedSaveMessage } from '@/lib/lapsedSave';
@@ -117,6 +117,11 @@ import { balanceAtEndOf, dayBefore, missingInJamvi, notOnStatement, withoutRecor
 import { checkRunningBalance, readStatementRows, resolveDirections } from '@/lib/statementTable';
 import type { ReaderMessage } from '@/lib/statementReaderHtml';
 import { fetchOtherBudgetOptions, type OtherBudgetOptions } from '@/lib/otherBudgetOptions';
+import { WhoIsThisFor } from '@/components/WhoIsThisFor';
+import { useBusinesses } from '@/hooks/useBusinesses';
+import { useNamedPayees } from '@/hooks/useNamedPayees';
+import { namedKeyFor, ruleKeysFor, withNamed } from '@/lib/namedPayees';
+import { businessOfLine, businessPayees, chooseBusiness, chooseNewCost, costOwners, costsOf } from '@/lib/importBusiness';
 import { applyOtherBudgetRules, otherBudgetRuleFor, otherBudgetRuleLabel, otherBudgetRulesKey, parseOtherBudgetRules, rememberOtherBudgetLabel, withOtherBudgetRule, withoutOtherBudgetRule, type OtherBudgetRules } from '@/lib/otherBudgetRules';
 import {
   buildPostings,
@@ -508,6 +513,20 @@ export default function MpesaImportScreen() {
   const { mutateAsync: transferSavingsToBank } = useTransferSavingsToBank();
   const { data: savingsGoalList = [] } = useGetSavingsGoals();
   const savingsGoals = savingsGoalList as unknown as Array<{ id: number; name: string; isCompleted?: boolean }>;
+  // "Who is this for?" on a line: you, or one of My businesses (lib/importBusiness).
+  const businesses = useBusinesses();
+  const namedPayees = useNamedPayees();
+  // Businesses added from a line, shown before My businesses has caught up.
+  const [addedBusinesses, setAddedBusinesses] = useState<Array<{ id: number; name: string }>>([]);
+  const businessIds = useMemo(() => new Set([...businesses.ids, ...addedBusinesses.map((one) => one.id)]), [businesses.ids, addedBusinesses]);
+  const whoForBusinesses = useMemo(
+    () => [...businesses.list, ...addedBusinesses.filter((one) => !businesses.ids.has(one.id))],
+    [businesses.list, businesses.ids, addedBusinesses],
+  );
+  const owners = useMemo(
+    () => costOwners(categories as unknown as Array<{ name: string; reducesIncomeSourceId?: number | null }>, businessIds),
+    [categories, businessIds],
+  );
 
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
   // M-Pesa is usually its own account: start on one that says so.
@@ -611,6 +630,9 @@ export default function MpesaImportScreen() {
   const [shownSkipped, setShownSkipped] = useState(LINES_PER_PAGE);
   // Lines whose extra questions (debt, move, savings...) are open. Each closed line is a few native views instead of a dozen, which is what kept toggling snappy with 200 of them.
   const [openMore, setOpenMore] = useState<Set<number>>(new Set());
+  // "Record it in a separate budget instead" opened on these lines: a business's money
+  // is asked under Who is this for?, so the other-budget question waits to be asked for.
+  const [otherBudgetOpen, setOtherBudgetOpen] = useState<Set<number>>(new Set());
   const [chargeCategory, setChargeCategory] = useState('');
   // A number is a line being categorised; 'charge' is the M-Pesa charges; 'recat:N' is an already-recorded entry whose category is being changed.
   const [picking, setPicking] = useState<number | 'charge' | 'bulk' | `recat:${number}` | null>(null);
@@ -1909,6 +1931,39 @@ export default function MpesaImportScreen() {
     );
   };
 
+  /** Which business a line is for, or null for Personal (lib/importBusiness). */
+  const businessFor = (item: PreviewLine): number | null => businessOfLine(item, choices[item.index], owners, businessIds);
+  const chooseLineBusiness = (index: number, businessId: number | null) =>
+    setChoices((current) => chooseBusiness(lines ?? [], current, index, businessId, owners, businessIds));
+  /** A cost added for the line's business, linked to it as Bank's are, then used on the line. */
+  const addLineCost = async (index: number, name: string) => {
+    const businessId = businessOfLine(lines?.find((line) => line.index === index) ?? { direction: 'out' }, choices[index], owners, businessIds);
+    if (businessId === null) return;
+    try {
+      await customFetch('/api/budget-categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, budgetAmount: 0, priority: 3, parentId: null, reducesIncomeSourceId: businessId, costKind: 'cogs', isRecurring: true, activeMonth: null, activeYear: null }),
+      });
+      await queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
+      setChoices((current) => chooseNewCost(lines ?? [], { ...current, [index]: { ...current[index], businessId } }, index, name));
+    } catch (error) {
+      Alert.alert('Could not add that cost', error instanceof Error ? error.message : 'Please try again.');
+    }
+  };
+  const addLineBusiness = async (index: number, name: string) => {
+    try {
+      // A business, named as one (My businesses), not just another income stream.
+      const created = await businesses.create(name);
+      if (!created) return;
+      setAddedBusinesses((current) => [...current.filter((one) => one.id !== created.id), { id: created.id, name: created.name }]);
+      const ids = new Set([...businessIds, created.id]);
+      setChoices((current) => chooseBusiness(lines ?? [], current, index, created.id, owners, ids));
+    } catch (error) {
+      Alert.alert('Could not add that business', error instanceof Error ? error.message : 'Please try again.');
+    }
+  };
+
   const saveAll = () => {
     if (!lines || saving) return;
     // Said, never silent: a new person's Save did nothing at all, because their
@@ -2273,6 +2328,21 @@ export default function MpesaImportScreen() {
           kept = withRule(kept, item.description, choice.category, item.payeeNumber);
         }
       }
+      // A business's payees, as Bank keeps them (lib/importBusiness): money in from
+      // the payer is that business's sales next time; a payment becomes a named
+      // account filed under the business's cost.
+      let named = namedPayees.named;
+      for (const payee of businessPayees(lines, choices, savedIndexes, owners, businessIds)) {
+        if (payee.direction === 'in') {
+          kept = withSourceRule(kept, payee.description, payee.business);
+          continue;
+        }
+        const label = payeeName(payee.description) || payee.description;
+        const key = namedKeyFor(referenceOf(payee.description) || label);
+        named = withNamed(named, { key, name: payee.name || namedPayees.nameFor(payee.description) || label, category: payee.category, incomeSourceId: payee.business });
+        for (const ruleKey of ruleKeysFor(key)) kept = { ...kept, [ruleKey]: payee.category };
+      }
+      if (named !== namedPayees.named) void namedPayees.replaceAll(named);
       if (kept !== rules) keepRules(kept);
       if (keptOther !== otherRules) keepOtherRules(keptOther);
     }
@@ -3300,7 +3370,29 @@ export default function MpesaImportScreen() {
                       <Feather name="chevron-down" size={16} color={colors.mutedForeground} />
                     </Pressable>
                   ) : null}
-                  {out && choice?.include && choice.debt?.kind !== 'lend' && !isMove(choice) && !isNotSure(choice.category) && canManageBudget ? (
+                  {canManageBudget && choice?.include && destinationOf(choice) === 'category' && (whoForBusinesses.length > 0 || businessFor(item) !== null)
+                    && (out || (!item.type?.startsWith('fuliza_') && item.type !== 'reversal' && loanOf(item)?.kind !== 'borrowed' && !savingsOf(item))) ? (
+                    // A business's payment or sales, filed as the business's here rather than under Not sure and moved on Bank later.
+                    <WhoIsThisFor
+                      compact
+                      testIDSuffix={`-${item.index}`}
+                      direction={out ? 'out' : 'in'}
+                      businesses={whoForBusinesses}
+                      businessId={businessFor(item)}
+                      onBusiness={(id) => chooseLineBusiness(item.index, id)}
+                      costs={costsOf(owners, businessFor(item))}
+                      category={choice.category}
+                      onCategory={(name) => setChoices((current) => chooseNewCost(lines ?? [], current, item.index, name))}
+                      onAddCost={(name) => addLineCost(item.index, name)}
+                      onAddBusiness={(name) => addLineBusiness(item.index, name)}
+                      payeeName={choice.payeeName ?? namedPayees.nameFor(item.description) ?? ''}
+                      onPayeeName={(name) => setChoices((current) => ({ ...current, [item.index]: { ...current[item.index], payeeName: name } }))}
+                      afterSaveNote={(business) => choice.remember === false
+                        ? `Saved as ${business}'s. Jamvi will not remember this payee for it.`
+                        : `The payee's other lines here follow. After Save, Jamvi remembers this payee for ${business}.`}
+                    />
+                  ) : null}
+                  {out && choice?.include && choice.debt?.kind !== 'lend' && !isMove(choice) && !isNotSure(choice.category) && canManageBudget && businessFor(item) === null ? (
                     <Pressable
                       onPress={() => setChoices((current) => ({ ...current, [item.index]: { ...current[item.index], category: NOT_SURE_CATEGORY, auto: false, remember: false } }))}
                       accessibilityRole="button"
@@ -3316,7 +3408,7 @@ export default function MpesaImportScreen() {
                       Saved under Not sure yet. Home will remind you to sort it out.
                     </Text>
                   ) : null}
-                  {out && choice?.include && !isMove(choice) && canManageBudget && item.description && (!choice.category || isNotSure(choice.category)) ? (
+                  {out && choice?.include && !isMove(choice) && canManageBudget && item.description && (!choice.category || isNotSure(choice.category)) && businessFor(item) === null ? (
                     <NewCategoryOffer
                       description={item.description}
                       rows={categories as unknown as CategoryLite[]}
@@ -3469,9 +3561,22 @@ export default function MpesaImportScreen() {
                       </ScrollView>
                     </View>
                   ) : null}
-                  {canManageBudget && choice?.include && (destinationOf(choice) === 'category' || destinationOf(choice) === 'other-budget') && otherManagedBudgets.length > 0 ? (
+                  {canManageBudget && choice?.include && destinationOf(choice) === 'category' && otherManagedBudgets.length > 0 && !otherBudgetOpen.has(item.index) ? (
+                    <Pressable
+                      onPress={() => setOtherBudgetOpen((current) => new Set(current).add(item.index))}
+                      accessibilityRole="button"
+                      hitSlop={6}
+                      style={{ alignSelf: 'flex-start', paddingVertical: 4 }}
+                      testID={`mpesa-line-other-budget-open-${item.index}`}
+                    >
+                      <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>
+                        {whoForBusinesses.length > 0 ? 'Record it in a separate budget instead (not a business)' : 'Record it in a separate budget instead'}
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                  {canManageBudget && choice?.include && (destinationOf(choice) === 'other-budget' || (destinationOf(choice) === 'category' && otherBudgetOpen.has(item.index))) && otherManagedBudgets.length > 0 ? (
                     <View style={{ gap: 6 }} testID={`mpesa-line-other-budget-${item.index}`}>
-                      <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0 }]}>Does this belong to a different budget you run?</Text>
+                      <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0 }]}>Record it in which of your other budgets?</Text>
                       <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
                         {[{ id: null as number | null, name: 'No' }, ...otherManagedBudgets.map((option) => ({ id: option.id as number | null, name: option.name }))].map((option) => {
                           const on = (choice.otherBudget?.groupId ?? null) === option.id;

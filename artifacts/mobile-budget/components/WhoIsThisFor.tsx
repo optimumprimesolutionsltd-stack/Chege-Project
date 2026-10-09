@@ -31,6 +31,9 @@ export function WhoIsThisFor({
   onCategory,
   onAddCost,
   onAddBusiness,
+  testIDSuffix = '',
+  compact = false,
+  afterSaveNote,
 }: {
   direction: 'in' | 'out';
   businesses: readonly Business[];
@@ -52,12 +55,23 @@ export function WhoIsThisFor({
    */
   payeeName?: string;
   onPayeeName?: (name: string) => void;
+  /** Added to every testID, for a screen that shows one per line (the M-Pesa import). */
+  testIDSuffix?: string;
+  /**
+   * One per line on the import: no border box, and the new-business box only
+   * after "+ A business" is tapped, so a long statement stays short.
+   */
+  compact?: boolean;
+  /** What happens after Save, said in place of Bank's wording. */
+  afterSaveNote?: (business: string) => string;
 }) {
   const colors = useColors();
   const chosen = businesses.find((one) => one.id === businessId) ?? null;
   const [newCost, setNewCost] = useState('');
   const [newBusiness, setNewBusiness] = useState('');
   const [adding, setAdding] = useState(false);
+  const [namingBusiness, setNamingBusiness] = useState(!compact);
+  const id = (name: string) => `${name}${testIDSuffix}`;
   const chip = (on: boolean) => ({
     paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, borderWidth: 1,
     borderColor: on ? colors.primary : colors.border, backgroundColor: on ? `${colors.primary}22` : colors.muted,
@@ -69,28 +83,35 @@ export function WhoIsThisFor({
   };
 
   return (
-    <View style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 12, gap: 8, marginBottom: 12 }} testID="who-is-this-for">
+    <View style={compact ? { gap: 6 } : { borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 12, gap: 8, marginBottom: 12 }} testID={id('who-is-this-for')}>
       <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>Who is this for?</Text>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-        <Pressable onPress={() => onBusiness(null)} accessibilityRole="radio" accessibilityState={{ selected: businessId === null }} testID="who-for-personal" style={chip(businessId === null)}>
+        <Pressable onPress={() => onBusiness(null)} accessibilityRole="radio" accessibilityState={{ selected: businessId === null }} testID={id('who-for-personal')} style={chip(businessId === null)}>
           <Text style={{ color: businessId === null ? colors.primary : colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>Personal</Text>
         </Pressable>
         {businesses.map((one) => (
-          <Pressable key={one.id} onPress={() => onBusiness(one.id)} accessibilityRole="radio" accessibilityState={{ selected: businessId === one.id }} testID={`who-for-business-${one.id}`} style={[chip(businessId === one.id), { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+          <Pressable key={one.id} onPress={() => onBusiness(one.id)} accessibilityRole="radio" accessibilityState={{ selected: businessId === one.id }} testID={id(`who-for-business-${one.id}`)} style={[chip(businessId === one.id), { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
             <Feather name="briefcase" size={12} color={businessId === one.id ? colors.primary : colors.mutedForeground} />
             <Text style={{ color: businessId === one.id ? colors.primary : colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>{one.name}</Text>
           </Pressable>
         ))}
+        {!namingBusiness ? (
+          <Pressable onPress={() => setNamingBusiness(true)} accessibilityRole="button" testID={id('who-for-new-business-open')} style={chip(false)}>
+            <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>+ A business</Text>
+          </Pressable>
+        ) : null}
       </View>
+      {namingBusiness ? (
       <View style={{ flexDirection: 'row', gap: 8 }}>
-        <TextInput value={newBusiness} onChangeText={setNewBusiness} placeholder="Or a business not listed" placeholderTextColor={colors.mutedForeground} style={input} testID="who-for-new-business" />
+        <TextInput value={newBusiness} onChangeText={setNewBusiness} placeholder="Or a business not listed" placeholderTextColor={colors.mutedForeground} style={input} testID={id('who-for-new-business')} />
         {newBusiness.trim() ? (
-          <Pressable onPress={() => void add(async () => { await onAddBusiness(newBusiness.trim()); setNewBusiness(''); })} disabled={adding} accessibilityRole="button" testID="who-for-add-business"
+          <Pressable onPress={() => void add(async () => { await onAddBusiness(newBusiness.trim()); setNewBusiness(''); if (compact) setNamingBusiness(false); })} disabled={adding} accessibilityRole="button" testID={id('who-for-add-business')}
             style={{ backgroundColor: colors.primary, borderRadius: 8, paddingHorizontal: 14, justifyContent: 'center' }}>
             {adding ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontFamily: 'Inter_700Bold' }}>Add</Text>}
           </Pressable>
         ) : null}
       </View>
+      ) : null}
 
       {chosen && direction === 'out' ? (
         <>
@@ -100,19 +121,19 @@ export function WhoIsThisFor({
               : `One of ${chosen.name}'s costs - it counts in ${chosen.name}'s profit in the Business report.`}
           </Text>
           {onPayeeName ? (
-            <TextInput value={payeeName ?? ''} onChangeText={onPayeeName} placeholder="Name this payee, e.g. Hardware supplier" placeholderTextColor={colors.mutedForeground} style={input} testID="who-for-payee-name" />
+            <TextInput value={payeeName ?? ''} onChangeText={onPayeeName} placeholder="Name this payee, e.g. Hardware supplier" placeholderTextColor={colors.mutedForeground} style={input} testID={id('who-for-payee-name')} />
           ) : null}
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
             {costs.map((name) => (
-              <Pressable key={name} onPress={() => onCategory(name)} accessibilityRole="radio" accessibilityState={{ selected: category === name }} testID={`who-for-cost-${name}`} style={chip(category === name)}>
+              <Pressable key={name} onPress={() => onCategory(name)} accessibilityRole="radio" accessibilityState={{ selected: category === name }} testID={id(`who-for-cost-${name}`)} style={chip(category === name)}>
                 <Text style={{ color: category === name ? colors.primary : colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>{name}</Text>
               </Pressable>
             ))}
           </View>
           <View style={{ flexDirection: 'row', gap: 8 }}>
-            <TextInput value={newCost} onChangeText={setNewCost} placeholder={`New cost, e.g. ${chosen.name} - materials`} placeholderTextColor={colors.mutedForeground} style={input} testID="who-for-new-cost" />
+            <TextInput value={newCost} onChangeText={setNewCost} placeholder={`New cost, e.g. ${chosen.name} - materials`} placeholderTextColor={colors.mutedForeground} style={input} testID={id('who-for-new-cost')} />
             {newCost.trim() ? (
-              <Pressable onPress={() => void add(async () => { await onAddCost(newCost.trim()); setNewCost(''); })} disabled={adding} accessibilityRole="button" testID="who-for-add-cost"
+              <Pressable onPress={() => void add(async () => { await onAddCost(newCost.trim()); setNewCost(''); })} disabled={adding} accessibilityRole="button" testID={id('who-for-add-cost')}
                 style={{ backgroundColor: colors.primary, borderRadius: 8, paddingHorizontal: 14, justifyContent: 'center' }}>
                 {adding ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontFamily: 'Inter_700Bold' }}>Add</Text>}
               </Pressable>
@@ -128,7 +149,7 @@ export function WhoIsThisFor({
         </Text>
       ) : null}
       {chosen ? (
-        <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>After Save, Jamvi remembers this payee for {chosen.name} and offers to do the same for their other entries.</Text>
+        <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>{afterSaveNote ? afterSaveNote(chosen.name) : `After Save, Jamvi remembers this payee for ${chosen.name} and offers to do the same for their other entries.`}</Text>
       ) : null}
     </View>
   );
