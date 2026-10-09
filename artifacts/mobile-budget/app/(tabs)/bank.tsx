@@ -106,6 +106,9 @@ import { confirmNotAlreadyFromMpesa } from '@/lib/alreadyFromMpesa';
  * every posting is both a nuisance and a way to end up with the month's fees
  * spread over four categories.
  */
+// Entries Bank shows before the whole list has arrived (firstPage below).
+const BANK_FIRST_PAGE = 100;
+
 const CHARGE_CATEGORY_KEY = 'jamvi:last-charge-category';
 /** Money-back entries left as money in: no longer offered for matching on this phone. */
 const MONEY_BACK_LEFT_KEY = 'jamvi:money-back-left';
@@ -211,10 +214,22 @@ export default function BankScreen() {
   // Followed only while Bank is in view (hooks/useOnScreen): hidden behind
   // Sort them out it reloaded the whole account after every entry sorted.
   const jointAccountParams = selectedAccountId ? { accountId: selectedAccountId } : undefined;
-  const { data, isLoading, isFetching, refetch } = useGetJointAccount(
+  const { data: fullData, isLoading: fullLoading, isFetching, refetch } = useGetJointAccount(
     jointAccountParams,
     { query: { queryKey: getGetJointAccountQueryKey(jointAccountParams), subscribed: onScreen } },
   );
+  // The newest entries first, asked for alongside the whole list: they come back
+  // in a fraction of the time, so Bank fills at once and the whole list takes
+  // over when it arrives (docs/account-list-paging.md, 9 Oct 2026). Everything
+  // that needs the whole history waits for it.
+  const firstPageParams = { ...(selectedAccountId ? { accountId: selectedAccountId } : {}), limit: BANK_FIRST_PAGE };
+  const { data: firstPage } = useGetJointAccount(
+    firstPageParams,
+    { query: { queryKey: getGetJointAccountQueryKey(firstPageParams), subscribed: onScreen && !fullData } },
+  );
+  const data = fullData ?? firstPage;
+  const loadingOlder = !fullData && !!firstPage;
+  const isLoading = fullLoading && !firstPage;
 
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = useCallback(async () => {
@@ -2519,7 +2534,8 @@ export default function BankScreen() {
   // A period narrows the list and the figures to those dates. "All time"
   // leaves the account exactly as the server reports it.
   const period = periodFor(periodPreset, nairobiToday(), { from: periodFrom, to: periodTo });
-  const periodSummary = data && period ? summarisePeriod(data as never, period) : null;
+  // A period's figures need every entry in it: worked out once the whole list is here.
+  const periodSummary = fullData && period ? summarisePeriod(fullData as never, period) : null;
   const shownTransactions = period ? transactions.filter((tx) => inPeriod(tx, period)) : transactions;
   // Search narrows the list only; the period's figures stay the period's
   // (lib/bankSearch, "put a search button", 7 Oct 2026).
@@ -3101,7 +3117,10 @@ export default function BankScreen() {
               You can add your own deposit today. An owner or admin handles withdrawals, transfers, and account changes.
             </Text>
           )}
-          {isLoading ? (
+          {loadingOlder ? (
+            <Text style={[styles.managerGuidance, { marginTop: 4 }]} testID="bank-loading-older">Showing your newest {BANK_FIRST_PAGE} - loading older entries…</Text>
+          ) : null}
+          {isLoading || (period && !fullData) ? (
             <ActivityIndicator color="#4ade80" style={{ marginTop: 16, marginBottom: 8 }} />
           ) : (
             <>

@@ -144,7 +144,7 @@ describe('the sitting holds up in use', () => {
     // figure from before the posting that just landed, so the next line would
     // appear to fall from the wrong number — the very figure somebody
     // recording a day is watching.
-    expect(bank).toContain('const { data, isLoading, isFetching, refetch } = useGetJointAccount(');
+    expect(bank).toContain('const { data: fullData, isLoading: fullLoading, isFetching, refetch } = useGetJointAccount(');
     expect(bank).toContain('    !isFetching &&');
   });
 

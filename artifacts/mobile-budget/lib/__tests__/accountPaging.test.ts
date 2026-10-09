@@ -25,3 +25,15 @@ describe('screens ask for only what they show (9 Oct 2026)', () => {
     expect(route).toContain('...(paged ? {');
   });
 });
+
+describe('Bank fills at once (9 Oct 2026)', () => {
+  const bank = readFileSync('app/(tabs)/bank.tsx', 'utf8');
+  it('shows the newest entries while the whole list is on its way, then the whole list', () => {
+    expect(bank).toContain('const firstPageParams = { ...(selectedAccountId ? { accountId: selectedAccountId } : {}), limit: BANK_FIRST_PAGE };');
+    expect(bank).toContain('const data = fullData ?? firstPage;');
+    expect(bank).toContain('testID="bank-loading-older"');
+  });
+  it('a period\'s figures wait for every entry in it', () => {
+    expect(bank).toContain('const periodSummary = fullData && period ? summarisePeriod(fullData as never, period) : null;');
+  });
+});
