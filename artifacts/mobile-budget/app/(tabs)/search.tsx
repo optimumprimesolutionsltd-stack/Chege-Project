@@ -21,6 +21,7 @@ import { WorkspaceIdentityRow } from '@/components/WorkspaceIdentityRow';
 import { formatDisplayDate } from '@/lib/displayFormat';
 import { byWay, reachedCap, totalsOf, type MoneyWay } from '@/lib/searchDirection';
 import { byMonth, monthLabel, monthsFound, sectionsByMonth } from '@/lib/searchMonths';
+import { getExpenseEditHref } from '@/lib/expenseEditLink';
 
 type SearchTab = 'all' | 'expenses' | 'bank' | 'goals' | 'income';
 type SearchResult = {
@@ -31,6 +32,8 @@ type SearchResult = {
   amount: number;
   date?: string | null;
   direction?: 'in' | 'out';
+  /** Bank entries: the account it is on, so tapping opens it there to edit. */
+  accountId?: number | null;
 };
 type SearchResponse = { query: string; tab: SearchTab; results: SearchResult[] };
 
@@ -48,9 +51,14 @@ const WAYS: Array<{ key: MoneyWay; label: string }> = [
   { key: 'out', label: 'Money out' },
 ];
 
-const destinationFor = (kind: SearchResult['kind']) => {
-  if (kind === 'expenses') return '/(tabs)/history';
-  if (kind === 'bank') return '/(tabs)/bank';
+/**
+ * Where a result opens. An expense or a bank entry opens itself, ready to edit
+ * ("need to be able to edit", 9 Oct 2026) - a bank entry on its own account,
+ * coming back to Search after Save - not just the tab it lives on.
+ */
+const destinationFor = ({ kind, id, date, accountId }: SearchResult) => {
+  if (kind === 'expenses') return getExpenseEditHref({ id, date: date ?? '' });
+  if (kind === 'bank') return `/(tabs)/bank?editTx=${id}${accountId ? `&accountId=${accountId}` : ''}&returnTo=${encodeURIComponent('/(tabs)/search')}`;
   if (kind === 'goals') return '/(tabs)/goals';
   return '/(tabs)/budget';
 };
@@ -221,7 +229,10 @@ export default function SearchScreen() {
           ) : null)}
           renderItem={({ item }) => (
             <Pressable
-              onPress={() => router.push(destinationFor(item.kind))}
+              onPress={() => router.push(destinationFor(item) as never)}
+              accessibilityRole="button"
+              accessibilityHint={item.kind === 'expenses' || item.kind === 'bank' ? 'Opens it to edit' : undefined}
+              testID={`search-result-${item.kind}-${item.id}`}
               style={[styles.result, { backgroundColor: colors.card, borderColor: colors.border }]}
             >
               <View style={[styles.icon, { backgroundColor: `${colors.primary}14` }]}>

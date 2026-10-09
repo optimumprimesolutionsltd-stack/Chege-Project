@@ -366,6 +366,8 @@ router.get("/search", async (req, res): Promise<void> => {
     subtitle: jointAccountTxTable.expenseCategory,
     amount: jointAccountTxTable.amount,
     type: jointAccountTxTable.type,
+    // So a result opens that entry on its own account to edit (phone Search).
+    accountId: jointAccountTxTable.accountId,
   };
   // A person's name never appears in an expense's own text fields, only in
   // who paid — the legacy single-payer column, or a funding-split label

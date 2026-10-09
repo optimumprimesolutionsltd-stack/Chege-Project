@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { knownPayeeCategory } from '@/lib/knownPayees';
+import { knownPayeeCategory, knownPayeeOf } from '@/lib/knownPayees';
 import { initialChoices, type PreviewLine } from '@/lib/mpesaImport';
 
 const line = (over: Partial<PreviewLine>): PreviewLine => ({
@@ -97,5 +97,25 @@ describe('a well-known payee in the import', () => {
   it('is never used for money in', () => {
     const choices = initialChoices([line({ direction: 'in', type: 'person_receipt', description: 'Naivas Supermarket' })], [], household);
     expect(choices[0].category).toBe('');
+  });
+});
+
+describe('schools and bookshops by any of their usual names (9 Oct 2026)', () => {
+  it.each([
+    'Riverside Preparatory School', 'St Marys Preparatory', 'Hillcrest Prep School', 'Moi Girls Sch',
+    'Brookhouse Academy', 'Little Stars Montessori', 'Upper Hill Secondary', 'Sunshine Nursery School',
+  ])('%s is a school', (name) => {
+    expect(knownPayeeOf(name)?.key).toBe('school-fees');
+  });
+
+  it.each([
+    'Text Book Centre', 'Savanis Book Centre', 'Prestige Bookshop', 'Nairobi Bookstore', 'Moran Books',
+    'Kenya Stationers', 'Mwalimu Stationery', 'Ruiru Stationary', 'Book Store Ltd',
+  ])('%s is books', (name) => {
+    expect(knownPayeeOf(name)?.key).toBe('books');
+  });
+
+  it("a school's own bookshop is still the school", () => {
+    expect(knownPayeeOf('Brookhouse School Books')?.key).toBe('school-fees');
   });
 });

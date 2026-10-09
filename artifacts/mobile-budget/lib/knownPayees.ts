@@ -158,14 +158,14 @@ const KNOWN_PAYEES: readonly KnownPayee[] = [
   },
   {
     key: 'school-fees',
-    pattern: /\b(?:school|schools|academy|university|college|polytechnic|institute|kindergarten|day ?care|pre-?school)\b/i,
+    pattern: /\b(?:school|schools|sch|academy|academies|preparatory|prep school|montessori|nursery school|secondary|university|college|polytechnic|institute|kindergarten|day ?care|pre-?school)\b/i,
     names: ['School fees', 'Tuition', 'Class fees', 'School fees & classes'],
     words: ['school', 'tuition'],
     standard: { name: 'School fees', parent: 'Education' },
   },
   {
     key: 'books',
-    pattern: /\b(?:book ?shops?|bookstores?|book ?cent(?:re|er)|text ?book|stationers|stationery)\b/i,
+    pattern: /\b(?:books?|book ?shops?|book ?stores?|book ?cent(?:re|er)|text ?books?|stationers?|stationery|stationeries|stationary)\b/i,
     names: ['Books', 'Stationery'],
     words: ['book', 'stationer'],
     standard: { name: 'Books', parent: 'Books & supplies' },
