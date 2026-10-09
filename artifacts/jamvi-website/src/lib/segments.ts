@@ -106,7 +106,7 @@ export const SEGMENTS: Segment[] = [
       {
         question: "What does it cost for one person?",
         answer:
-          `KES 100 a month, or KES 1,000 a year, with the first ${TRIAL_DAYS} days free. That is the whole price whether you use Jamvi alone or belong to five groups.`,
+          `KES 250 a month, or KES 2,500 a year, with the first ${TRIAL_DAYS} days free. That is the whole price whether you use Jamvi alone or belong to five groups.`,
       },
       { question: "Does Jamvi connect to my M-Pesa or bank?", answer: NOT_A_BANK },
     ],
@@ -116,7 +116,7 @@ export const SEGMENTS: Segment[] = [
     label: "Chamas",
     title: "Chama Management App - Contributions & Arrears",
     description:
-      "Record the whole chama's monthly contributions in one action, see who has paid and who is behind on a month-by-month sheet, and keep a history nobody can quietly edit. KES 100 per member; the group pays nothing.",
+      "Record the whole chama's monthly contributions in one action, see who has paid and who is behind on a month-by-month sheet, and keep a history nobody can quietly edit. KES 250 per member; the group pays nothing.",
     heading: "Run your chama without the notebook",
     subheading:
       "Contributions, arrears and the group balance - in one record every member can see.",

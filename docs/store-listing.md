@@ -46,7 +46,7 @@ BUILT IN KENYA
 - Kenyan shillings, M-Pesa first, in plain words.
 - Jamvi records money; it never sends, receives or holds it.
 
-KES 100 a month per person (the price in lib/jamvi-pricing is the source of truth). Free for your
+KES 250 a month per person (the price in lib/jamvi-pricing is the source of truth). Free for your
 first 14 days.
 
 **Screenshots, in this order**
