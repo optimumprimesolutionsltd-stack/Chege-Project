@@ -842,7 +842,8 @@ export default function Bank() {
     setChargeAmount(feeOnThis ? String(feeOnThis.amount) : "");
     setChangingChargeCategory(false);
     if (feeOnThis?.expenseCategory) setChargeCategory(feeOnThis.expenseCategory);
-    setAmount(String(tx.amount));
+    // A refund is a negative payment; the form takes the amount as it reads, and the server keeps it a refund.
+    setAmount(String(Math.abs(Number(tx.amount))));
     setDescription(transactionMode === "transfer"
       ? tx.description.replace(/^Transfer (?:to|from) savings —\s*/, "")
       : tx.description);
@@ -2770,6 +2771,8 @@ export default function Bank() {
           <div className="divide-y divide-border/50">
             {account.transactions.filter((tx) => inPeriod(tx, period)).map((tx) => {
               const isDeposit = tx.type === "deposit";
+              // Money back that takes spending off its category (api-server lib/refunds).
+              const isRefund = tx.type === "disbursement" && Number(tx.amount) < 0;
               const isTransfer = !!tx.savingsGoalId;
               const isBankTransfer = !!tx.bankTransferId;
               const attribution = madeByLabel(tx.madeByName, tx.type);
@@ -2825,9 +2828,10 @@ export default function Bank() {
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
                     <div className="text-right">
-                       <p className={`whitespace-nowrap font-display font-bold text-lg ${isDeposit ? "text-green-600" : "text-destructive"}`}>
-                        {isDeposit ? "+" : "-"}{formatKes(tx.amount)}
+                       <p className={`whitespace-nowrap font-display font-bold text-lg ${isDeposit || isRefund ? "text-green-600" : "text-destructive"}`}>
+                        {isDeposit || isRefund ? "+" : "-"}{formatKes(Math.abs(Number(tx.amount)))}
                       </p>
+                      {isRefund ? <p className="text-xs font-semibold text-green-600" data-testid={`bank-refund-${tx.id}`}>Refund</p> : null}
                       <time
                         dateTime={tx.date}
                         data-testid={`transaction-date-${tx.id}`}

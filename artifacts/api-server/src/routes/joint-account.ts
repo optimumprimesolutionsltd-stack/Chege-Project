@@ -35,6 +35,7 @@ import { isOwnerBusinessMoney } from "../lib/owner-business-money";
 import { enrichTransactions } from "../lib/transaction-details";
 import { ledgerEntries, ledgerTotals } from "../lib/account-ledger";
 import { pageOf } from "../lib/account-page";
+import { refundCategoryFor } from "../lib/refunds";
 import { importTidyKeptReady } from "../lib/import-tidy-kept";
 import { createBankStatementPdf } from "../lib/bank-statement-pdf";
 import { absorbedByOpening, alreadyThere, completeAt, isSavingsAccount, OPENING_NOTE_PATTERN, openingNote, roomIn } from "../lib/savings-accounts";
@@ -140,6 +141,8 @@ const DepositInput = z.object({
 });
 
 const DisbursementInput = z.object({
+  // Money back that reduces spending in its category (lib/refunds).
+  isRefund: z.boolean().optional(),
   amount: NonNegativeBankAmount,
   mpesaReceipt: MpesaReceipt.optional(),
   description: z.string().trim().max(200).optional().default(""),
@@ -188,6 +191,8 @@ const DisbursementInput = z.object({
 });
 
 const UpdateJointAccountInput = z.object({
+  // Money back that reduces spending in its category (lib/refunds).
+  isRefund: z.boolean().optional(),
   amount: NonNegativeBankAmount,
   description: z.string().trim().max(200).optional(),
   date: z.string().min(1),
@@ -1146,6 +1151,12 @@ router.post("/joint-account/disbursement", async (req, res): Promise<void> => {
   }
   const accountId = await requireAccountId(parsed.data.accountId, groupId, res);
   if (accountId === null) return;
+  // A refund (lib/refunds): stored as a negative payment, in the category given,
+  // else the same-day payment's of that amount, else Not sure yet.
+  const isRefund = parsed.data.isRefund === true;
+  const refundCategory = isRefund && expenseCategory === null && !isLending
+    ? await refundCategoryFor(db, groupId, date, amount)
+    : null;
 
   const [tx] = await db
     .insert(jointAccountTxTable)
@@ -1153,15 +1164,15 @@ router.post("/joint-account/disbursement", async (req, res): Promise<void> => {
       groupId,
       accountId,
       type: "disbursement",
-      amount,
+      amount: isRefund ? -Math.abs(amount) : amount,
       mpesaReceipt: parsed.data.mpesaReceipt ?? null,
       // Description is a supporting note. When omitted, retain a meaningful
       // non-null value while reports remain anchored on expenseCategory.
-      description: description || expenseCategory || (isLending ? "Lent out" : "Debt payment"),
+      description: description || expenseCategory || (isRefund ? "Refund" : isLending ? "Lent out" : "Debt payment"),
       notes: parsed.data.notes?.trim() || null,
       date,
       madeById,
-      expenseCategory,
+      expenseCategory: expenseCategory ?? refundCategory,
       isLending,
       settlesContributorId: paidPartyId ?? null,
       chargeForTransactionId: chargeParentId ?? null,
@@ -1846,10 +1857,14 @@ router.put("/joint-account/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: "Add a narration for an Other destination." });
     return;
   }
+  // A refund stays one unless the edit says otherwise, so an app that knows
+  // nothing of refunds, sending the amount as a positive number, keeps it a refund.
+  const staysRefund = existing.type === "disbursement"
+    && (parsed.data.isRefund ?? Number(existing.amount) < 0);
   const [updated] = await db
     .update(jointAccountTxTable)
     .set({
-      amount,
+      amount: staysRefund ? -Math.abs(amount) : Math.abs(amount),
       date,
       madeById: requestedMadeById,
       description,
@@ -2079,6 +2094,8 @@ router.post("/joint-account/:id/reversal", async (req, res): Promise<void> => {
   res.json(await reversalOptions(deposit, groupId));
 });
 
+const REFUNDS_NOT_LINKS = true;
+
 // POST /joint-account/reversals/auto-link — match every money-back entry
 // that has exactly one payment it could have reversed (or one made twice).
 //
@@ -2091,7 +2108,9 @@ router.post("/joint-account/reversals/auto-link", async (req, res): Promise<void
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
   if (!requireGroupManager(req, res)) return;
-  if (!reversalLinksReady()) {
+  // Reversals are refunds now (lib/refunds): nothing is tied to the payment it
+  // undid, so there is nothing to match. Older phones still ask; they get nothing.
+  if (!reversalLinksReady() || REFUNDS_NOT_LINKS) {
     res.json({ linked: 0, needsYou: [] });
     return;
   }

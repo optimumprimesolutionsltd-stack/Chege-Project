@@ -864,6 +864,29 @@ export function buildPostings(line: PreviewLine, choice: Choice, ctx: PostingCon
     };
   }
 
+  // Money back from a reversed payment is a refund (api-server lib/refunds): a
+  // negative payment in the category it came back to - chosen here, else the
+  // server takes the same-day payment's of that amount, else Not sure yet.
+  // Nothing is tied to the payment it undid (9 Oct 2026).
+  if (line.direction === 'in' && line.type === 'reversal') {
+    const category = choice.category.trim();
+    return {
+      kind: 'disbursement' as const,
+      main: {
+        amount: line.amount,
+        description,
+        date,
+        madeById: ctx.userId ?? null,
+        isRefund: true,
+        ...(category ? { expenseCategory: category, destinationKind: 'category' as const } : {}),
+        accountId: ctx.accountId,
+        ...(receipt ? { mpesaReceipt: receipt } : {}),
+        ...(choice.notes?.trim() ? { notes: choice.notes.trim() } : {}),
+      },
+      fee: null,
+    };
+  }
+
   if (line.direction === 'in') {
     // A source is only for income: a repayment or a loan is not, so it takes none.
     const source = choice.incomeSourceId && !choice.debt && loanOf(line)?.kind !== 'borrowed' ? ctx.incomeSources?.find((entry) => entry.id === choice.incomeSourceId) : undefined;

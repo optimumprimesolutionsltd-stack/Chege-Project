@@ -11,6 +11,8 @@ import type { UpdateJointAccountTransactionInputSourceKind } from './updateJoint
 import type { UpdateJointAccountTransactionInputTransferDirection } from './updateJointAccountTransactionInputTransferDirection';
 
 export interface UpdateJointAccountTransactionInput {
+  /** Money back into the account that reduces spending in its category (a reversed or refunded payment). Sent as a positive amount; omitted keeps what the entry is; stored and returned as a negative payment, so every spending total nets it. */
+  isRefund?: boolean;
   /** @minimum 0 */
   amount: number;
   /** Optional supporting detail; withdrawals fall back to their category */
