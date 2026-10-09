@@ -195,7 +195,8 @@ describe('changing budget with a statement open', () => {
   it('keeps the statement and checks it against the new budget instead of clearing it', () => {
     expect(screen).toContain('const kept = statementReadingRef.current;');
     expect(screen).toContain('alreadyRecorded: null');
-    expect(screen).toContain('setChoices(initialChoices(checked, [], [], effectiveChargeCategory, {}, canManageBudget));');
+    // The new budget's own accounts are matched by number too (lib/teachJamvi).
+    expect(screen).toContain('setChoices(startChoices(checked, initialChoices(checked, [], [], effectiveChargeCategory, {}, canManageBudget)));');
   });
 });
 
