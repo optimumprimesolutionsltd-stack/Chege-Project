@@ -20,8 +20,8 @@ describe("search by words", () => {
   });
 
   it("needs every word, each in any of the fields", () => {
-    const description = sql.identifier("description");
-    const notes = sql.identifier("notes");
+    const description = sql`${sql.identifier("description")}`;
+    const notes = sql`${sql.identifier("notes")}`;
     const query = new PgDialect().sqlToQuery(
       everyWord(["william", "nyoro"], (pattern) => [ilike(description, pattern), ilike(notes, pattern)]),
     );
