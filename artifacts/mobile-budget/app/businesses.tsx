@@ -8,8 +8,13 @@
  * Each business either counts its profit here - a side hustle tracked wholly,
  * with a Business report - or its money only passes through your phone: "this
  * is not the whole of Ujenzi in the app and I wouldn't want to track it here,
- * as I am already drawing a salary from the business" (8 Oct 2026). Either way
- * its money in and out stays out of your personal income and spending.
+ * as I am already drawing a salary from the business" (8 Oct 2026).
+ *
+ * A business whose profit counts is asked once whether you pay yourself a
+ * salary from it (lib/businessSalary). Yes: your salary is your income, the
+ * business's profit stays in its report. No: you live on it, so its profit -
+ * sales less costs - is your income, one line on All income. Either way its
+ * costs stay out of your household spending.
  */
 import React, { useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, Switch, Text, TextInput, View } from 'react-native';
@@ -20,6 +25,7 @@ import { useColors } from '@/hooks/useColors';
 import { PageScrollView } from '@/components/PageScrollReset';
 import { useBusinesses } from '@/hooks/useBusinesses';
 import { BusinessCostCategories } from '@/components/BusinessCostCategories';
+import { SALARY_ANSWERS, salaryAnswerHint } from '@/lib/businessSalary';
 
 export default function BusinessesScreen() {
   const colors = useColors();
@@ -45,6 +51,11 @@ export default function BusinessesScreen() {
     }
   };
 
+  const setSalary = (id: number, pays: boolean) => {
+    void businesses.setPaysSalary(id, pays).catch((error) =>
+      Alert.alert('Could not change it', error instanceof Error ? error.message : 'Please try again.'));
+  };
+
   const setCounts = (id: number, counts: boolean) => {
     void businesses.setCountsProfit(id, counts).catch((error) =>
       Alert.alert('Could not change it', error instanceof Error ? error.message : 'Please try again.'));
@@ -59,7 +70,7 @@ export default function BusinessesScreen() {
         <Text style={{ color: colors.foreground, fontFamily: 'Inter_700Bold', fontSize: 20 }}>My businesses</Text>
       </View>
       <Text style={{ color: colors.mutedForeground, fontSize: 14, lineHeight: 20 }}>
-        Money in and out for a business is kept out of your personal income and spending. Your pay from a business - "Ujenzi salary" - is an income stream, set on Budget, not a business.
+        A business's costs are kept out of your household spending. If you pay yourself a salary from it, the salary is your income; if you live on its profit, its profit is.
       </Text>
 
       <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -102,6 +113,29 @@ export default function BusinessesScreen() {
               </View>
               <Switch value={business.countsProfit} onValueChange={(on) => setCounts(business.id, on)} testID={`business-counts-profit-${business.id}`} />
             </View>
+            {business.countsProfit ? (
+              <View style={{ gap: 6 }} testID={`business-pays-salary-${business.id}`}>
+                <Text style={{ color: colors.foreground, fontSize: 13, fontFamily: 'Inter_600SemiBold' }}>Do you pay yourself a salary from it?</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  {SALARY_ANSWERS.map((answer) => {
+                    const on = business.paysSalary === answer.paysSalary;
+                    return (
+                      <Pressable
+                        key={answer.label}
+                        onPress={() => setSalary(business.id, answer.paysSalary)}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: on }}
+                        testID={`business-pays-salary-${business.id}-${answer.paysSalary ? 'yes' : 'no'}`}
+                        style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, borderWidth: 1, borderColor: on ? colors.primary : colors.border, backgroundColor: on ? `${colors.primary}22` : colors.muted }}
+                      >
+                        <Text style={{ color: on ? colors.primary : colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>{answer.label}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                <Text style={{ color: colors.mutedForeground, fontSize: 12, lineHeight: 17 }}>{salaryAnswerHint(business)}</Text>
+              </View>
+            ) : null}
             <Pressable onPress={() => setCostsFor({ id: business.id, name: business.name })} accessibilityRole="button" testID={`business-cost-categories-${business.id}`}
               style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <Feather name="link-2" size={14} color={colors.primary} />

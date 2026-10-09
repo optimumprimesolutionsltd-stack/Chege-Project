@@ -100,6 +100,7 @@ describe("period totals", () => {
   it("take a business's costs out of spending, and leave money in as it is", () => {
     expect(dashboard).toContain("const businessCosts = await incomeStreamCostLines(groupId, start.raw, end.raw, { personalOnly: true })");
     expect(dashboard).toContain('const spendingTotal = Math.max(0, numberValue("spendingTotal") - businessCosts);');
-    expect(dashboard).toContain('const contributionTotal = numberValue("contributionTotal");');
+    // Less the costs of a business its owner lives on, whose sales are in it (lib/business-streams).
+    expect(dashboard).toContain('const contributionTotal = numberValue("contributionTotal") - totalCosts(await ownerIncomeCosts(groupId, start.raw, end.raw));');
   });
 });

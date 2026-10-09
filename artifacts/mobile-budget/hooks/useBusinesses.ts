@@ -3,7 +3,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { customFetch } from '@workspace/api-client-react';
 import { useAuth } from '@/lib/auth';
 
-export type Business = { id: number; name: string; countsProfit: boolean };
+/** paysSalary: "Do you pay yourself a salary from it?" - null until asked (lib/businessSalary). */
+export type Business = { id: number; name: string; countsProfit: boolean; paysSalary?: boolean | null };
 type Named = { ready: boolean; incomeSourceIds: number[]; businesses?: Business[] };
 
 /**
@@ -75,5 +76,22 @@ export function useBusinesses() {
   /** Count its profit here (a Business report), or its money only passes through. */
   const setCountsProfit = useCallback((incomeSourceId: number, countsProfit: boolean) => setBusiness(incomeSourceId, true, countsProfit), [setBusiness]);
 
-  return { ready: data?.ready === true, ids, list, named: ids.size > 0, setBusiness, setCountsProfit, create };
+  /**
+   * "Do you pay yourself a salary from it?" (lib/businessSalary). No: its
+   * profit is your income. Kept on the server, for every phone and the web.
+   */
+  const setPaysSalary = useCallback(async (incomeSourceId: number, paysSalary: boolean) => {
+    await customFetch(`/api/businesses/${incomeSourceId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ business: true, paysSalary }),
+    });
+    queryClient.setQueryData<Named>(['businesses'], (cached) => cached && ({
+      ...cached,
+      businesses: (cached.businesses ?? []).map((one) => (one.id === incomeSourceId ? { ...one, paysSalary } : one)),
+    }));
+    refresh();
+  }, [queryClient, refresh]);
+
+  return { ready: data?.ready === true, ids, list, named: ids.size > 0, setBusiness, setCountsProfit, setPaysSalary, create };
 }

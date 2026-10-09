@@ -34,6 +34,7 @@ import {
 import { ASK_JAMVI_TOOLS, runAskJamviTool } from "../lib/ask-jamvi-tools";
 import { nairobiNow } from "../lib/nairobiTime";
 import { notAReversal } from "../lib/reversal-links";
+import { ownerIncomeCosts, totalCosts } from "./dashboard";
 import { isSavingsAccount } from "../lib/savings-accounts";
 
 const router = Router();
@@ -230,7 +231,14 @@ router.get("/ai/budget-summary", async (req, res): Promise<void> => {
   }));
   const budgeted = categories.reduce((sum, row) => sum + row.budgeted, 0);
   const spent = Number(expenseTotal[0]?.total ?? 0) + Number(bankSpentRow[0]?.total ?? 0);
-  const income = Number(incomeRow[0]?.total ?? 0);
+  // A business its owner lives on counts as its profit, as on All income (routes/dashboard ownerIncomeCosts).
+  const monthFrom = `${year}-${String(month).padStart(2, "0")}-01`;
+  const monthTo = new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
+  const [ownerCostsMonth, ownerCostsAll] = await Promise.all([
+    ownerIncomeCosts(groupId, monthFrom, monthTo),
+    ownerIncomeCosts(groupId, "1900-01-01", today),
+  ]);
+  const income = Number(incomeRow[0]?.total ?? 0) - totalCosts(ownerCostsMonth);
   const allTimeCategories = (allTimeCategoryRows.rows as Array<{ category: string; spent: string | number }>).map((row) => ({
     name: row.category,
     spent: Number(row.spent),
@@ -264,7 +272,7 @@ router.get("/ai/budget-summary", async (req, res): Promise<void> => {
     allLedgerEntries,
     allTimeTotals: {
       spent: Number(allTimeExpenseTotal[0]?.total ?? 0) + Number(allTimeBankSpent[0]?.total ?? 0),
-      incomeReceived: Number(allTimeIncomeTotal[0]?.total ?? 0),
+      incomeReceived: Number(allTimeIncomeTotal[0]?.total ?? 0) - totalCosts(ownerCostsAll),
     },
     allTimeCategories,
     // Savings accounts (M-Shwari, KCB M-PESA...) have no target, so they are not goals to finish (lib/savings-accounts).
