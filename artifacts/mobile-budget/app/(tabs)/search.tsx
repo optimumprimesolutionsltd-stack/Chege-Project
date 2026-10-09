@@ -98,14 +98,14 @@ export default function SearchScreen() {
       <View style={[styles.header, { paddingTop: (Platform.OS === 'web' ? 67 : insets.top) + 12, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <WorkspaceIdentityRow group={group} tone="light" />
         <Text style={[styles.title, { color: colors.foreground }]}>Search</Text>
-        <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>Type to find any expense, payment or goal.</Text>
+        <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>Type a name or any words to find an expense, payment, goal or person.</Text>
         <View style={[styles.searchBox, { borderColor: colors.border, backgroundColor: colors.muted }]}>
           <Feather name="search" size={18} color={colors.mutedForeground} />
           <TextInput
             value={draft}
             onChangeText={setDraft}
             onSubmitEditing={submit}
-            placeholder="Try “Kids offering” or “rent”"
+            placeholder="Try “rent” or a name, like “William Nyoro”"
             placeholderTextColor={colors.mutedForeground}
             style={[styles.input, { color: colors.foreground }]}
             returnKeyType="search"
