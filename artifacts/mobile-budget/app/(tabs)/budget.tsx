@@ -1730,158 +1730,8 @@ export default function BudgetScreen() {
           ) : <ActivityIndicator color="#E9B949" style={{ marginVertical: 16 }} />}
         </LinearGradient>
 
-        <View style={styles.incomeSection} testID="budget-category-quick-add">
-          <View style={styles.incomeHeader}>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.incomeTitle, { color: colors.foreground }]}>Budget categories</Text>
-              <Text style={[styles.incomeSubtitle, { color: colors.mutedForeground }]}>Add what this budget spends on</Text>
-            </View>
-            <Feather name="pie-chart" size={19} color={colors.secondary} />
-          </View>
-          <View style={[styles.incomeAddRow, { borderColor: colors.border, backgroundColor: colors.card }]}>
-            <TextInput
-              style={[styles.incomeAddInput, { color: colors.foreground }]}
-              placeholder="Category name"
-              placeholderTextColor={colors.mutedForeground}
-              value={newCategoryName}
-              onChangeText={setNewCategoryName}
-              editable={!addingCategory}
-              returnKeyType="done"
-              onSubmitEditing={() => void handleAddCategoryInline()}
-              testID="budget-new-category-name"
-            />
-            {!newCategoryIsGroup ? (
-              <TextInput
-                style={[styles.incomeExpectedInput, { color: colors.foreground, borderColor: colors.border }]}
-                placeholder="Budget KES"
-                placeholderTextColor={colors.mutedForeground}
-                value={newCategoryAmount}
-                onChangeText={setNewCategoryAmount}
-                editable={!addingCategory}
-                keyboardType="numeric"
-                returnKeyType="done"
-                testID="budget-new-category-amount"
-              />
-            ) : null}
-          </View>
-          {/* Only offered for a new top-level category — nesting makes it a
-              leaf, and a leaf always carries its own amount, so the choice
-              would have nothing to mean. Without this, the only way to create
-              a plain group here was to type an amount and let it get zeroed
-              out later by putting something inside it. */}
-          {!chosenParent ? (
-            <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
-              {([
-                { key: false, label: 'A regular category', testID: 'budget-new-category-kind-ledger' },
-                { key: true, label: 'A group of categories', testID: 'budget-new-category-kind-group' },
-              ] as const).map((option) => (
-                <Pressable
-                  key={String(option.key)}
-                  onPress={() => setNewCategoryIsGroup(option.key)}
-                  accessibilityRole="radio"
-                  accessibilityState={{ selected: newCategoryIsGroup === option.key }}
-                  testID={option.testID}
-                  style={[styles.priorityChip, {
-                    backgroundColor: newCategoryIsGroup === option.key ? colors.primary + '22' : colors.muted,
-                    borderColor: newCategoryIsGroup === option.key ? colors.primary : colors.border,
-                  }]}
-                >
-                  <Text style={[styles.priorityChipText, { color: newCategoryIsGroup === option.key ? colors.primary : colors.mutedForeground }]}>
-                    {option.label}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          ) : null}
-          {newCategoryIsGroup ? (
-            <Text style={{ color: colors.mutedForeground, fontSize: 11, marginTop: 6, lineHeight: 16 }} testID="budget-new-category-group-hint">
-              A group holds no money of its own. Add subcategories to it and its budget becomes their total.
-            </Text>
-          ) : null}
-          {/* Where it goes, asked here rather than left to be discovered:
-              creating Rent at the top level when it belonged under Housing is
-              the wrong creation this row was making easy. */}
-          <Pressable
-            onPress={() => setShowNewCategoryParent((open) => !open)}
-            testID="budget-new-category-parent"
-            style={[styles.incomeAddRow, { borderColor: colors.border, backgroundColor: colors.card, paddingVertical: 10, marginTop: 8 }]}
-          >
-            <Text style={{ flex: 1, color: chosenParent ? colors.foreground : colors.mutedForeground, fontSize: 13, fontFamily: 'Inter_400Regular' }}>
-              {chosenParent ? `Inside ${chosenParent.name}` : 'Not inside a group'}
-            </Text>
-            <Feather name={showNewCategoryParent ? 'chevron-up' : 'chevron-down'} size={16} color={colors.mutedForeground} />
-          </Pressable>
-          {showNewCategoryParent ? (
-            <View style={[styles.categoryDropdown, { borderColor: colors.border, backgroundColor: colors.card }]}>
-              <Pressable
-                onPress={() => { setNewCategoryParentId(null); setShowNewCategoryParent(false); }}
-                style={styles.categoryOption}
-                testID="budget-new-category-parent-none"
-              >
-                <Text style={{ color: colors.foreground, fontFamily: 'Inter_400Regular' }}>Not inside a group</Text>
-              </Pressable>
-              {eligibleParents.length === 0 ? (
-                <Text style={{ color: colors.mutedForeground, padding: 12, fontSize: 12 }}>
-                  Nothing to nest under yet. Add a category first, then put others inside it.
-                </Text>
-              ) : (
-                eligibleParents.map((row) => (
-                  <Pressable
-                    key={`parent-${row.id}`}
-                    onPress={() => { setNewCategoryParentId(row.id); setNewCategoryIsGroup(false); setShowNewCategoryParent(false); }}
-                    style={styles.categoryOption}
-                    testID={`budget-new-category-parent-${row.id}`}
-                  >
-                    <Text style={{ color: colors.foreground, fontFamily: 'Inter_400Regular' }}>Inside {row.name}</Text>
-                  </Pressable>
-                ))
-              )}
-              {/* Only one level deep, so a subcategory is never offered as a
-                  parent: it would make a category the app then refuses. */}
-              <Text style={{ color: colors.mutedForeground, paddingHorizontal: 12, paddingBottom: 10, fontSize: 11, lineHeight: 16 }}>
-                Only top-level categories are listed. Nesting goes one level deep.
-              </Text>
-            </View>
-          ) : null}
-          {chosenParent && chosenParent.budgetAmount > 0 ? (
-            <Text style={{ color: '#f59e0b', fontSize: 11, marginTop: 6, lineHeight: 16 }} testID="budget-parent-becomes-heading">
-              {chosenParent.name} has KES {formatKES(chosenParent.budgetAmount)} of its own. Putting a category inside
-              it makes it a heading, and its budget becomes the total of what is inside.
-            </Text>
-          ) : null}
-          {/* After every input, not above one of them. */}
-          <Pressable
-            onPress={() => void handleAddCategoryInline()}
-            disabled={addingCategory || newCategoryName.trim() === ''}
-            style={[
-              styles.quickAddAction,
-              {
-                backgroundColor: colors.primary,
-                opacity: addingCategory || newCategoryName.trim() === '' ? 0.45 : 1,
-              },
-            ]}
-            accessibilityRole="button"
-            accessibilityLabel="Add budget category"
-            testID="budget-new-category-add"
-          >
-            {addingCategory ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <>
-                <Feather name="plus" size={16} color="#fff" />
-                <Text style={styles.quickAddActionText}>
-                  {chosenParent ? `Add inside ${chosenParent.name}` : 'Add category'}
-                </Text>
-              </>
-            )}
-          </Pressable>
-          <Pressable onPress={() => openAdd()} testID="budget-open-full-category-form" style={{ paddingVertical: 8 }}>
-            <Text style={{ color: colors.primary, fontSize: 12, fontFamily: 'Inter_600SemiBold' }}>
-              Tier, or a one-month category? Open the full form
-            </Text>
-          </Pressable>
-        </View>
-
+        {/* Income first: what the budget has to spend, before what it is spent on
+            ("make income streams come before anything else", 9 Oct 2026). */}
         <View style={styles.incomeSection}>
           <View style={styles.incomeHeader}>
             <View style={{ flex: 1, minWidth: 0 }}>
@@ -2063,6 +1913,158 @@ export default function BudgetScreen() {
               </Pressable>
             </View>
           ) : null}
+        </View>
+
+        <View style={styles.incomeSection} testID="budget-category-quick-add">
+          <View style={styles.incomeHeader}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.incomeTitle, { color: colors.foreground }]}>Budget categories</Text>
+              <Text style={[styles.incomeSubtitle, { color: colors.mutedForeground }]}>Add what this budget spends on</Text>
+            </View>
+            <Feather name="pie-chart" size={19} color={colors.secondary} />
+          </View>
+          <View style={[styles.incomeAddRow, { borderColor: colors.border, backgroundColor: colors.card }]}>
+            <TextInput
+              style={[styles.incomeAddInput, { color: colors.foreground }]}
+              placeholder="Category name"
+              placeholderTextColor={colors.mutedForeground}
+              value={newCategoryName}
+              onChangeText={setNewCategoryName}
+              editable={!addingCategory}
+              returnKeyType="done"
+              onSubmitEditing={() => void handleAddCategoryInline()}
+              testID="budget-new-category-name"
+            />
+            {!newCategoryIsGroup ? (
+              <TextInput
+                style={[styles.incomeExpectedInput, { color: colors.foreground, borderColor: colors.border }]}
+                placeholder="Budget KES"
+                placeholderTextColor={colors.mutedForeground}
+                value={newCategoryAmount}
+                onChangeText={setNewCategoryAmount}
+                editable={!addingCategory}
+                keyboardType="numeric"
+                returnKeyType="done"
+                testID="budget-new-category-amount"
+              />
+            ) : null}
+          </View>
+          {/* Only offered for a new top-level category — nesting makes it a
+              leaf, and a leaf always carries its own amount, so the choice
+              would have nothing to mean. Without this, the only way to create
+              a plain group here was to type an amount and let it get zeroed
+              out later by putting something inside it. */}
+          {!chosenParent ? (
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+              {([
+                { key: false, label: 'A regular category', testID: 'budget-new-category-kind-ledger' },
+                { key: true, label: 'A group of categories', testID: 'budget-new-category-kind-group' },
+              ] as const).map((option) => (
+                <Pressable
+                  key={String(option.key)}
+                  onPress={() => setNewCategoryIsGroup(option.key)}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: newCategoryIsGroup === option.key }}
+                  testID={option.testID}
+                  style={[styles.priorityChip, {
+                    backgroundColor: newCategoryIsGroup === option.key ? colors.primary + '22' : colors.muted,
+                    borderColor: newCategoryIsGroup === option.key ? colors.primary : colors.border,
+                  }]}
+                >
+                  <Text style={[styles.priorityChipText, { color: newCategoryIsGroup === option.key ? colors.primary : colors.mutedForeground }]}>
+                    {option.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
+          {newCategoryIsGroup ? (
+            <Text style={{ color: colors.mutedForeground, fontSize: 11, marginTop: 6, lineHeight: 16 }} testID="budget-new-category-group-hint">
+              A group holds no money of its own. Add subcategories to it and its budget becomes their total.
+            </Text>
+          ) : null}
+          {/* Where it goes, asked here rather than left to be discovered:
+              creating Rent at the top level when it belonged under Housing is
+              the wrong creation this row was making easy. */}
+          <Pressable
+            onPress={() => setShowNewCategoryParent((open) => !open)}
+            testID="budget-new-category-parent"
+            style={[styles.incomeAddRow, { borderColor: colors.border, backgroundColor: colors.card, paddingVertical: 10, marginTop: 8 }]}
+          >
+            <Text style={{ flex: 1, color: chosenParent ? colors.foreground : colors.mutedForeground, fontSize: 13, fontFamily: 'Inter_400Regular' }}>
+              {chosenParent ? `Inside ${chosenParent.name}` : 'Not inside a group'}
+            </Text>
+            <Feather name={showNewCategoryParent ? 'chevron-up' : 'chevron-down'} size={16} color={colors.mutedForeground} />
+          </Pressable>
+          {showNewCategoryParent ? (
+            <View style={[styles.categoryDropdown, { borderColor: colors.border, backgroundColor: colors.card }]}>
+              <Pressable
+                onPress={() => { setNewCategoryParentId(null); setShowNewCategoryParent(false); }}
+                style={styles.categoryOption}
+                testID="budget-new-category-parent-none"
+              >
+                <Text style={{ color: colors.foreground, fontFamily: 'Inter_400Regular' }}>Not inside a group</Text>
+              </Pressable>
+              {eligibleParents.length === 0 ? (
+                <Text style={{ color: colors.mutedForeground, padding: 12, fontSize: 12 }}>
+                  Nothing to nest under yet. Add a category first, then put others inside it.
+                </Text>
+              ) : (
+                eligibleParents.map((row) => (
+                  <Pressable
+                    key={`parent-${row.id}`}
+                    onPress={() => { setNewCategoryParentId(row.id); setNewCategoryIsGroup(false); setShowNewCategoryParent(false); }}
+                    style={styles.categoryOption}
+                    testID={`budget-new-category-parent-${row.id}`}
+                  >
+                    <Text style={{ color: colors.foreground, fontFamily: 'Inter_400Regular' }}>Inside {row.name}</Text>
+                  </Pressable>
+                ))
+              )}
+              {/* Only one level deep, so a subcategory is never offered as a
+                  parent: it would make a category the app then refuses. */}
+              <Text style={{ color: colors.mutedForeground, paddingHorizontal: 12, paddingBottom: 10, fontSize: 11, lineHeight: 16 }}>
+                Only top-level categories are listed. Nesting goes one level deep.
+              </Text>
+            </View>
+          ) : null}
+          {chosenParent && chosenParent.budgetAmount > 0 ? (
+            <Text style={{ color: '#f59e0b', fontSize: 11, marginTop: 6, lineHeight: 16 }} testID="budget-parent-becomes-heading">
+              {chosenParent.name} has KES {formatKES(chosenParent.budgetAmount)} of its own. Putting a category inside
+              it makes it a heading, and its budget becomes the total of what is inside.
+            </Text>
+          ) : null}
+          {/* After every input, not above one of them. */}
+          <Pressable
+            onPress={() => void handleAddCategoryInline()}
+            disabled={addingCategory || newCategoryName.trim() === ''}
+            style={[
+              styles.quickAddAction,
+              {
+                backgroundColor: colors.primary,
+                opacity: addingCategory || newCategoryName.trim() === '' ? 0.45 : 1,
+              },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Add budget category"
+            testID="budget-new-category-add"
+          >
+            {addingCategory ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <>
+                <Feather name="plus" size={16} color="#fff" />
+                <Text style={styles.quickAddActionText}>
+                  {chosenParent ? `Add inside ${chosenParent.name}` : 'Add category'}
+                </Text>
+              </>
+            )}
+          </Pressable>
+          <Pressable onPress={() => openAdd()} testID="budget-open-full-category-form" style={{ paddingVertical: 8 }}>
+            <Text style={{ color: colors.primary, fontSize: 12, fontFamily: 'Inter_600SemiBold' }}>
+              Tier, or a one-month category? Open the full form
+            </Text>
+          </Pressable>
         </View>
 
         <View style={styles.tierSection}>

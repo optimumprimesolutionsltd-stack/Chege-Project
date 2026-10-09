@@ -8,10 +8,12 @@ const budget = readFileSync('app/(tabs)/budget.tsx', 'utf8');
 // tier is to find. Neither reads as "make a category". The one place on this
 // screen that plainly does is the income row, so this matches it.
 describe('a category can be added the way an income stream is', () => {
-  it('sits in its own section, above income streams', () => {
+  it('sits in its own section, after income streams - income comes first (9 Oct 2026)', () => {
     expect(budget).toContain('testID="budget-category-quick-add"');
     expect(budget).toContain('Budget categories');
-    expect(budget.indexOf('Budget categories')).toBeLessThan(budget.indexOf('Income streams'));
+    // Rendered order: the section titles as they appear on screen, after the header.
+    const shown = budget.slice(budget.indexOf('{/* Income first'));
+    expect(shown.indexOf('>Income streams<')).toBeLessThan(shown.indexOf('Budget categories'));
   });
 
   it('is a name, an amount and a plus — the same three controls', () => {
