@@ -2352,7 +2352,7 @@ export default function MpesaImportScreen() {
               ) : (
                 <>
                   <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0 }]}>
-                    Let Jamvi read M-Pesa's new messages each time you open it - only M-Pesa's, only new ones after your statement. Nothing is saved without you.
+                    Let Jamvi read M-Pesa's new messages each time you open it - only M-Pesa's, only new ones after your statement. They are sent to Jamvi to be read, and are not kept: only the entries you save are stored.
                   </Text>
                   <Pressable
                     onPress={() => void (async () => {
@@ -2556,7 +2556,7 @@ export default function MpesaImportScreen() {
               <View style={[styles.card, styles.leadCard, { backgroundColor: colors.card, borderColor: colors.foreground }]} testID="mpesa-sms">
                 <Text style={[styles.summaryLine, { color: colors.foreground }]}>Read my M-Pesa messages</Text>
                 <Text style={[styles.hint, { color: colors.mutedForeground }]}>
-                  Only M-Pesa's messages, only for the period you choose, only when you ask. They are read into the list below and not kept.
+                  Only M-Pesa's messages, only for the period you choose, only when you ask. They are sent to Jamvi to be read into the list below, and are not kept: only the entries you save are stored.
                 </Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 2 }} testID="mpesa-sms-periods">
                   {SMS_PERIODS.map((option) => {
