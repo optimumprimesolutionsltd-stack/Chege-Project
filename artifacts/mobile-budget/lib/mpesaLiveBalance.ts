@@ -142,6 +142,19 @@ export function spanChangeText(change: number): string {
  * A gap already there on the first day the messages cover is a starting
  * balance Jamvi was never told: the opening balance that closes it.
  */
+/**
+ * The opening balance that makes Jamvi start level with M-Pesa, for the one-tap
+ * fix ("it does not tell me a way of resolving it or ask if it can resolve it on
+ * my behalf", 9 Oct 2026). None when there is no gap, or when Jamvi was already
+ * above M-Pesa: then something before was counted twice, and no opening balance
+ * can be below nothing.
+ */
+export function openingBalanceFix(startGap: number, opening: number): number | null {
+  if (Math.abs(startGap) < 1) return null;
+  const needed = Math.round((opening + startGap) * 100) / 100;
+  return needed < 0 ? null : needed;
+}
+
 export function startingBalanceAdvice(startGap: number, opening: number, account: string, firstDay: string): string | null {
   if (Math.abs(startGap) < 1) return null;
   const needed = Math.round((opening + startGap) * 100) / 100;

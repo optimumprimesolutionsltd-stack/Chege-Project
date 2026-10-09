@@ -61,6 +61,7 @@ import {
   useCreateDisbursement,
   useUpdateJointAccountTransaction,
   useDeleteJointAccountTransaction,
+  useUnlinkReversal,
   useDeleteExpense,
   useGetBudgetCategories,
   getGetBudgetCategoriesQueryKey,
@@ -462,6 +463,7 @@ export default function BankScreen() {
   const { mutateAsync: createDeposit } = useCreateDeposit();
   const { mutateAsync: createDisbursement } = useCreateDisbursement();
   const { mutateAsync: updateTransaction } = useUpdateJointAccountTransaction();
+  const { mutateAsync: unlinkReversal } = useUnlinkReversal();
   const ownerBusiness = useOwnerBusiness();
   const editingBusinessMoney = editingTransactionId !== null && ownerBusiness.markedIds.has(editingTransactionId);
   const { mutateAsync: deleteTransaction } = useDeleteJointAccountTransaction();
@@ -2519,7 +2521,36 @@ export default function BankScreen() {
         err instanceof Error ? err.message : 'Nothing was recorded.';
       // A lapsed subscription answers 402 with a reason and a way to fix it,
       // which is more use than a box headed "Error".
-      if (!handleLapsedError(err)) {
+      const linkedReversal = /linked to (?:the payment it reversed|its money back)/i.test(message);
+      if (linkedReversal && editingTransactionId !== null) {
+        // The entry is one half of a linked reversal, which the server will not
+        // change. Asked, and done in one go, instead of "HTTP 409 ... Unlink it
+        // first" (9 Oct 2026).
+        const id = editingTransactionId;
+        const moneyBack = /money back is linked/i.test(message);
+        Alert.alert(
+          moneyBack ? 'This is money back from a reversed payment' : 'This payment was reversed',
+          moneyBack
+            ? 'Jamvi linked it to the payment M-Pesa reversed, so it does not count as income. If it is not money back, unlink it and save your change.'
+            : 'Jamvi linked it to the money back that undid it. To change it, unlink the two and save your change.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Unlink and save',
+              onPress: () => {
+                void (async () => {
+                  try {
+                    await unlinkReversal({ id });
+                    await handleSubmit({ keepOpen });
+                  } catch (unlinkError) {
+                    Alert.alert('Could not unlink it', unlinkError instanceof Error ? unlinkError.message : 'Please try again.');
+                  }
+                })();
+              },
+            },
+          ],
+        );
+      } else if (!handleLapsedError(err)) {
         Alert.alert('Could not save this bank record', message);
       }
     } finally {
