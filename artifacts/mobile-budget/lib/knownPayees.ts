@@ -244,7 +244,7 @@ const KNOWN_PAYEES: readonly KnownPayee[] = [
   },
   {
     key: 'clothes',
-    pattern: /\b(?:boutiques?|fashions?|clothing|outfitters|mr price|lc waikiki|deacons|woolworths|truworths|mitumba|tailors?|tailoring)\b/i,
+    pattern: /\b(?:boutiques?|fashions?|clothing|outfitters|mr price|lc waikiki|deacons|woolworths|truworths|mitumba|clothes|textiles?|apparr?els?|garments?|outfits|(?:kids|ladies|mens?|baby|babies|casual|official|sports?) ?wear|tailors?|tailoring)\b/i,
     names: ['Clothes', 'Clothing'],
     words: ['cloth', 'fashion'],
     standard: { name: 'Clothes', parent: 'Clothing' },

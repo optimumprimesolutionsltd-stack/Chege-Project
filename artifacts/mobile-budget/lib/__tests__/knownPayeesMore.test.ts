@@ -35,6 +35,8 @@ describe('payees Jamvi now knows', () => {
     ['Kamau Traders', 'shop'], ['Juja General Merchants', 'shop'],
     ['Kuku Chicken Spot', 'eating-out'], ['Choma Zone', 'eating-out'], ['Nyama Choma Joint', 'eating-out'], ['Mama Oliech Chicken', 'eating-out'],
     ['Kenchic Outlet', 'groceries'],
+    ['Jaffs Textiles', 'clothes'], ['Mama Boutique', 'clothes'], ['Classic Clothes', 'clothes'], ['Urban Apparel', 'clothes'], ['Nice Apparrel', 'clothes'],
+    ['Rafiki Garments', 'clothes'], ['Little Ones Kids Wear', 'clothes'], ['Smart Ladies Wear', 'clothes'],
     ['Jubilee Christian Chapel', 'giving'], ['Deliverance Worship Centre', 'giving'], ['Redeemed Gospel Tabernacle', 'giving'],
   ])('%s -> %s', (name, key) => {
     expect(kind(name)).toBe(key);
@@ -63,7 +65,7 @@ describe('fuel stations named the way statements write them', () => {
     expect(recognisedPlace(name, ['Fuel'])?.name).toBe('Fuel');
   });
 
-  it.each([['KUKU CHICKEN', 'Eating out'], ['GRACE WORSHIP CENTRE', 'Tithe'], ['WACHIRA HARDWARES', 'House repairs'], ['KAMAU TRADERS', 'Groceries'], ['ELEGANT DECOR', 'Furniture & decor']])('%s is a business, filed under %s', (name, category) => {
+  it.each([['WANJIKU TEXTILES', 'Clothes'], ['KUKU CHICKEN', 'Eating out'], ['GRACE WORSHIP CENTRE', 'Tithe'], ['WACHIRA HARDWARES', 'House repairs'], ['KAMAU TRADERS', 'Groceries'], ['ELEGANT DECOR', 'Furniture & decor']])('%s is a business, filed under %s', (name, category) => {
     expect(recognisedPlace(name, [category])?.name).toBe(category);
   });
 

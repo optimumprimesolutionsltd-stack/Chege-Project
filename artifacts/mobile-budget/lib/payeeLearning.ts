@@ -49,7 +49,7 @@ const BUSINESS = new Set([
   'sportpesa', 'betika', 'odibets', 'mozzart', 'betway', 'shabiki', 'g4s',
   'shule', 'sch', 'preparatory', 'montessori', 'books', 'bookshop', 'stationers', 'stationery', 'stationary',
   'apartments', 'court', 'properties', 'parish', 'cathedral', 'chapel', 'worship', 'tabernacle', 'gospel', 'mosque', 'masjid', 'ministries',
-  'agrovet', 'gym', 'fitness', 'tyres', 'spares', 'expressway', 'uniforms', 'shoes', 'mitumba',
+  'agrovet', 'gym', 'fitness', 'tyres', 'spares', 'expressway', 'uniforms', 'shoes', 'mitumba', 'clothes', 'clothing', 'textile', 'textiles', 'apparel', 'apparrel', 'garments', 'boutique', 'fashion', 'fashions', 'wear',
   'hardwares', 'timber', 'decor', 'interiors', 'furniture', 'curtains', 'traders', 'trader', 'merchants', 'stores',
   'enterprises', 'enterprise', 'ventures', 'investments', 'suppliers', 'supplies',
   // A company's own words: "anything with ltd, limited or traders has the logic of a business".
