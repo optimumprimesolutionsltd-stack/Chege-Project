@@ -43,27 +43,19 @@ describe('optional expense category layout', () => {
   });
 
   it('prompts the user to categorize editable uncategorized expenses from Home', () => {
+    // A row of Home's one Waiting for you card since 9 Oct 2026, opening the next one.
     expect(homeSource).toContain('isUncategorizedExpense');
-    expect(homeSource).toContain('testID="uncategorized-expense-cta"');
-    expect(homeSource).toContain('waiting for a category');
-    expect(homeSource).toContain('Categorize now');
-    expect(homeSource).toContain('router.push(getExpenseEditHref(expense)');
+    expect(homeSource).toContain("testID: 'uncategorized-expense-cta'");
+    expect(homeSource).toContain('without a category');
+    expect(homeSource).toContain('router.push(getExpenseEditHref(firstUncategorized) as never)');
   });
 
-  it('keeps full bank amounts on one line on the Home dashboard', () => {
-    const bankCard = homeSource.slice(
-      homeSource.indexOf('{/* Bank Account Balance Card */}'),
-      homeSource.indexOf('{isSharedWorkspace && (', homeSource.indexOf('{/* Bank Account Balance Card */}')),
-    );
-    const bankStats = bankCard.slice(0, bankCard.indexOf('{bankAccount && bankAccount.balance === 0'));
-
-    expect(bankStats).toContain('`KES ${formatExact(bankAccount.balance)}`');
-    expect(bankStats).toContain('`+KES ${formatExact(monthlyDeposited)}`');
-    expect(bankStats).toContain('`-KES ${formatExact(monthlyDisbursed)}`');
-    expect(bankStats).not.toContain('shortKES(');
-    expect(bankStats.match(/numberOfLines=\{1\} adjustsFontSizeToFit minimumFontScale=\{0\.65\}/g)).toHaveLength(3);
-    expect(homeSource).toContain("bankBalance: { width: '100%', flexShrink: 1, textAlign: 'center'");
-    expect(homeSource).toContain("bankStatValue: { width: '100%', flexShrink: 1, textAlign: 'center'");
+  it('keeps the full balance on one line on the Home dashboard', () => {
+    // The Bank accounts card left Home (9 Oct 2026); How much do I have? shows the balance.
+    const answers = readFileSync('components/HomeAnswersCard.tsx', 'utf8');
+    expect(answers).toContain('`KES ${formatExact(value)}`');
+    expect(answers).toContain('numberOfLines={1} adjustsFontSizeToFit');
+    expect(homeSource).not.toContain('{/* Bank Account Balance Card */}');
   });
 
   it('explains categories and offers a clearly named one-off option below them', () => {

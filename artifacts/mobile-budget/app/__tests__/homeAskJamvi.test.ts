@@ -4,10 +4,14 @@ import { describe, expect, it } from 'vitest';
 const home = readFileSync('app/(tabs)/index.tsx', 'utf8');
 
 describe('mobile Ask Jamvi entry point', () => {
-  it('explains Ask Jamvi as a read-only whole-budget assistant and exposes a CTA', () => {
-    expect(home).toContain('testID="ask-jamvi-cta"');
+  it('explains Ask Jamvi as a read-only whole-budget assistant, opened from the header', () => {
+    // The full card further down Home became a header button (9 Oct 2026 cleanup);
+    // the explanation moved into the sheet it opens.
+    expect(home).not.toContain('testID="ask-jamvi-cta"');
     expect(home).toContain('Ask about anything in this budget: spending, bank accounts, income, goals, activity, categories, or reports.');
+    expect(home).toContain('Jamvi explains your numbers but cannot change records or move money.');
     expect(home).toContain('testID="open-ask-jamvi"');
+    expect(home).toContain('onPress={openAskJamvi}');
   });
 
   it('sends the active month and year to the read-only Ask Jamvi endpoint', () => {

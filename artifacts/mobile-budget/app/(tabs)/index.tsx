@@ -13,14 +13,6 @@ import {
   ScrollView as AskScroll,
   AppState,
 } from 'react-native';
-import Animated, {
-  cancelAnimation,
-  useAnimatedStyle,
-  useSharedValue,
-  withRepeat,
-  withSequence,
-  withTiming,
-} from 'react-native-reanimated';
 import { Redirect, router, useFocusEffect, useNavigation } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
@@ -39,7 +31,6 @@ import { useQuery } from '@tanstack/react-query';
 import { canReadSms, newMpesaSms, newSmsTitle, parseSmsAuto, smsAutoKey } from '@/lib/mpesaSms';
 import { PageScrollView } from '@/components/PageScrollReset';
 import { useAuth } from '@/lib/auth';
-import BudgetRing from '@/components/BudgetRing';
 import ActivityCard from '@/components/ActivityCard';
 import { ProfileAvatar } from '@/components/ProfileAvatar';
 import { WorkspaceSetupGuide } from '@/components/WorkspaceSetupGuide';
@@ -58,7 +49,6 @@ import {
   useGetGroup,
   customFetch,
 } from '@workspace/api-client-react';
-import { formatExact } from '@/lib/formatExact';
 import { HomeAnswersCard } from '@/components/HomeAnswersCard';
 import { MpesaImportCard } from '@/components/MpesaImportCard';
 
@@ -283,14 +273,6 @@ export default function DashboardScreen() {
     setAskOpen(true);
   }, []);
 
-  // Compute this-month bank totals from transactions
-  const monthlyDeposited = bankAccount?.monthDeposits ?? 0;
-  const monthlyDisbursed = bankAccount?.monthDisbursements ?? 0;
-
-  const isOver = summary ? summary.totalSpent > summary.totalBudget : false;
-  const spentPercent = summary?.totalBudget
-    ? summary.totalSpent / summary.totalBudget
-    : 0;
   const recentActivity = useMemo(() => (activity ?? []).slice(0, 5), [activity]);
 
   const greeting = useMemo(() => {
@@ -366,6 +348,51 @@ export default function DashboardScreen() {
         (split) => split.fromBank || (split.userId && split.userId !== user.id),
       );
     });
+  // The rows of the one Waiting for you card, most urgent first: new messages
+  // are the newer news, duplicates count money twice until they are settled.
+  type WaitingRow = {
+    testID: string;
+    icon: keyof typeof Feather.glyphMap;
+    color: string;
+    title: string;
+    hint: string;
+    onPress: () => void;
+  };
+  const firstUncategorized = editableUncategorizedExpenses[0];
+  const waitingRows: WaitingRow[] = [
+    ...(newSms > 0 && canManageBudget ? [{
+      testID: 'new-mpesa-sms-cta',
+      icon: 'message-square' as const,
+      color: colors.primary,
+      title: newSmsTitle(newSms),
+      hint: 'Review them and save what is right. Nothing is saved until you do.',
+      onPress: () => router.push('/mpesa-import?fromSms=new' as never),
+    }] : []),
+    ...(duplicateCount > 0 && canManageBudget ? [{
+      testID: 'possible-duplicates-cta',
+      icon: 'copy' as const,
+      color: colors.destructive,
+      title: duplicatesTitle(duplicateCount),
+      hint: 'Say which are the same payment, so nothing counts twice.',
+      onPress: () => router.push('/possible-duplicates' as never),
+    }] : []),
+    ...(toSortCount > 0 && canManageBudget ? [{
+      testID: 'entries-to-sort-cta',
+      icon: 'help-circle' as const,
+      color: '#D97706',
+      title: toSortTitle(toSortCount),
+      hint: 'Say what each one was for, whenever you remember.',
+      onPress: () => router.push('/sort-entries' as never),
+    }] : []),
+    ...(firstUncategorized ? [{
+      testID: 'uncategorized-expense-cta',
+      icon: 'tag' as const,
+      color: '#D97706',
+      title: `${editableUncategorizedExpenses.length} expense${editableUncategorizedExpenses.length === 1 ? '' : 's'} without a category`,
+      hint: `Next: ${firstUncategorized.description} · KES ${formatKES(firstUncategorized.amount)}`,
+      onPress: () => router.push(getExpenseEditHref(firstUncategorized) as never),
+    }] : []),
+  ];
   type MemberContribution = {
     userId: string;
     name: string;
@@ -375,7 +402,6 @@ export default function DashboardScreen() {
   };
   const memberContributions = ((summary as any)?.memberContributions ?? []) as MemberContribution[];
   const contributionColors = [colors.brandTeal, colors.brandGold, colors.brandBlue, colors.brandGreen, colors.info];
-
 
   function prevMonth() {
     if (month === 1) { setMonth(12); setYear((y) => y - 1); }
@@ -447,11 +473,6 @@ export default function DashboardScreen() {
           colors={[colors.brandNavy, '#0A3833']}
           style={[styles.header, styles.headerTopPiece, { paddingTop: topPad + 12 }]}
         >
-          <View style={styles.homeStatus}>
-            <Feather name="home" size={13} color={colors.secondary} />
-            <Text style={styles.homeStatusText}>HOME · START HERE</Text>
-          </View>
-
           {/* Top row: greeting + profile */}
           <View style={styles.headerTop}>
             <View style={styles.greetingBlock}>
@@ -474,16 +495,25 @@ export default function DashboardScreen() {
             </Pressable>
           </View>
 
-          {/* Utility row: privacy, settings, and month */}
+          {/* Utility row: privacy, Ask Jamvi, and month. Settings is the avatar
+              above. Ask Jamvi was a full card further down Home (9 Oct 2026
+              cleanup): a question can come up anywhere, so it sits at the top. */}
           <View style={styles.headerUtilityRow}>
             <View style={styles.utilityControls}>
               {/* Privacy toggle */}
-              <Pressable onPress={togglePrivacy} hitSlop={10} style={styles.iconBtn}>
+              <Pressable onPress={togglePrivacy} hitSlop={10} style={styles.iconBtn} accessibilityLabel={isPrivate ? 'Show amounts' : 'Hide amounts'}>
                 <Feather name={isPrivate ? 'eye-off' : 'eye'} size={20} color="rgba(247,250,246,0.7)" />
               </Pressable>
-              {/* Settings */}
-              <Pressable onPress={() => router.push('/(tabs)/settings')} hitSlop={10} style={styles.iconBtn}>
-                <Feather name="settings" size={19} color="rgba(247,250,246,0.7)" />
+              <Pressable
+                testID="open-ask-jamvi"
+                accessibilityRole="button"
+                accessibilityLabel="Ask Jamvi about this budget"
+                onPress={openAskJamvi}
+                hitSlop={8}
+                style={({ pressed }) => [styles.askHeaderButton, { opacity: pressed ? 0.75 : 1 }]}
+              >
+                <Feather name="message-circle" size={15} color="#FBF7EC" />
+                <Text style={styles.askHeaderButtonText}>Ask Jamvi</Text>
               </Pressable>
             </View>
             {/* Month nav */}
@@ -540,83 +570,45 @@ export default function DashboardScreen() {
           colors={['#0A3833', colors.brandBlue]}
           style={styles.headerRest}
         >
-          {/* What is waiting for you leads Home: the two things most easily forgotten. */}
-          {newSms > 0 && canManageBudget ? (
-            <Pressable
-              testID="new-mpesa-sms-cta"
-              accessibilityRole="button"
-              accessibilityLabel={`${newSmsTitle(newSms)}. Open them to review`}
-              onPress={() => router.push('/mpesa-import?fromSms=new' as never)}
-              style={({ pressed }) => [styles.uncategorizedCtaCard, { backgroundColor: colors.card, borderColor: colors.primary, opacity: pressed ? 0.85 : 1 }]}
-            >
-              <View style={styles.groupCtaHeader}>
-                <View style={[styles.groupCtaIcon, { backgroundColor: `${colors.primary}22` }]}>
-                  <Feather name="message-square" size={20} color={colors.primary} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.groupCtaEyebrow, { color: colors.primary }]}>FROM YOUR MESSAGES</Text>
-                  <Text style={[styles.groupCtaTitle, { color: colors.foreground }]}>{newSmsTitle(newSms)}</Text>
-                </View>
-                <Feather name="chevron-right" size={18} color={colors.primary} />
-              </View>
-              <Text style={[styles.groupCtaText, { color: colors.mutedForeground }]}>
-                Review them and save what is right. Nothing is saved until you do.
-              </Text>
-            </Pressable>
-          ) : null}
-
-          {duplicateCount > 0 && canManageBudget ? (
-            <Pressable
-              testID="possible-duplicates-cta"
-              accessibilityRole="button"
-              accessibilityLabel={`${duplicatesTitle(duplicateCount)}. Open Possible duplicates`}
-              onPress={() => router.push('/possible-duplicates' as never)}
-              style={({ pressed }) => [styles.uncategorizedCtaCard, { backgroundColor: colors.card, borderColor: colors.destructive, opacity: pressed ? 0.85 : 1 }]}
-            >
-              <View style={styles.groupCtaHeader}>
-                <View style={[styles.groupCtaIcon, { backgroundColor: `${colors.destructive}22` }]}>
-                  <Feather name="copy" size={20} color={colors.destructive} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.groupCtaEyebrow, { color: colors.destructive }]}>POSSIBLE DUPLICATES</Text>
-                  <Text style={[styles.groupCtaTitle, { color: colors.foreground }]}>{duplicatesTitle(duplicateCount)}</Text>
-                </View>
-                <Feather name="chevron-right" size={18} color={colors.primary} />
-              </View>
-              <Text style={[styles.groupCtaText, { color: colors.mutedForeground }]}>
-                Typed by hand and also brought in from M-Pesa. Say which are the same payment, so nothing counts twice.
-              </Text>
-            </Pressable>
-          ) : null}
-
-          {toSortCount > 0 && canManageBudget ? (
-            <Pressable
-              testID="entries-to-sort-cta"
-              accessibilityRole="button"
-              accessibilityLabel={`${toSortTitle(toSortCount)}. Open Sort them out`}
-              onPress={() => router.push('/sort-entries' as never)}
-              style={({ pressed }) => [styles.uncategorizedCtaCard, { backgroundColor: colors.card, borderColor: '#F59E0B', opacity: pressed ? 0.85 : 1 }]}
-            >
-              <View style={styles.groupCtaHeader}>
-                <View style={[styles.groupCtaIcon, { backgroundColor: '#F59E0B22' }]}>
-                  <Feather name="help-circle" size={20} color="#D97706" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.groupCtaEyebrow, { color: '#D97706' }]}>SAVED AS NOT SURE</Text>
-                  <Text style={[styles.groupCtaTitle, { color: colors.foreground }]}>{toSortTitle(toSortCount)}</Text>
-                </View>
-                <Feather name="chevron-right" size={18} color={colors.primary} />
-              </View>
-              <Text style={[styles.groupCtaText, { color: colors.mutedForeground }]}>
-                Say what each one was for, or where it came from, whenever you remember.
-              </Text>
-            </Pressable>
+          {/* What is waiting for you leads Home, in one card. It was four -
+              new messages, possible duplicates, Not sure, no category - each a
+              full card stacked above the M-Pesa panel (9 Oct 2026 cleanup). */}
+          {waitingRows.length > 0 ? (
+            <View testID="home-waiting" style={[styles.waitingCard, { backgroundColor: colors.card, borderColor: '#F59E0B' }]}>
+              <Text style={[styles.groupCtaEyebrow, { color: '#D97706' }]}>WAITING FOR YOU</Text>
+              {waitingRows.map((row, index) => (
+                <Pressable
+                  key={row.testID}
+                  testID={row.testID}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${row.title}. ${row.hint}`}
+                  onPress={row.onPress}
+                  style={({ pressed }) => [
+                    styles.waitingRow,
+                    index > 0 ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border } : null,
+                    { opacity: pressed ? 0.78 : 1 },
+                  ]}
+                >
+                  <View style={[styles.waitingIcon, { backgroundColor: `${row.color}22` }]}>
+                    <Feather name={row.icon} size={17} color={row.color} />
+                  </View>
+                  <View style={styles.waitingCopy}>
+                    <Text style={[styles.waitingTitle, { color: colors.foreground }]} numberOfLines={2}>{row.title}</Text>
+                    <Text style={[styles.waitingHint, { color: colors.mutedForeground }]} numberOfLines={2}>{row.hint}</Text>
+                  </View>
+                  <Feather name="chevron-right" size={18} color={colors.primary} />
+                </Pressable>
+              ))}
+            </View>
           ) : null}
 
           <MpesaImportCard />
 
-           <WorkspaceSetupGuide />
+          <WorkspaceSetupGuide />
 
+          {/* The three answers - how much do I have, what have I spent, am I on
+              track - are the month at a glance. The ring, the Budget/Spent/Left
+              strip and the Bank accounts card each said the same again. */}
           <HomeAnswersCard
             balance={bankAccount?.balance}
             spent={summary?.totalSpent}
@@ -624,98 +616,58 @@ export default function DashboardScreen() {
             hidden={isPrivate}
           />
 
-          {/* On a Personal budget too: it was shown to groups only. */}
-          {group && (
-            <View style={[styles.overviewNavCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Text style={[styles.overviewNavEyebrow, { color: colors.primary }]}>{isSharedWorkspace ? 'GROUP OVERVIEW' : 'OVERVIEW'}</Text>
-                <Pressable onPress={() => setArrangingAreas(true)} hitSlop={8} accessibilityRole="button" accessibilityLabel={`Arrange your ${isSharedWorkspace ? 'group' : 'budget'} areas: reorder, hide or show them`} testID="overview-arrange" style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <Feather name="move" size={13} color={colors.primary} />
-                  <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>Arrange</Text>
-                </Pressable>
+          {bankAccount && bankAccount.balance < 0 && (
+            <Pressable
+              accessibilityRole="alert"
+              testID="overview-negative-bank-balance-warning"
+              onPress={() => router.push('/(tabs)/bank')}
+              style={styles.negativeBankBalanceWarning}
+            >
+              <View style={styles.negativeBankBalanceWarningTitle}>
+                <Feather name="flag" size={15} color="#b91c1c" />
+                <Text style={styles.negativeBankBalanceWarningTitleText}>Bank balance is below zero</Text>
               </View>
-              <Text style={[styles.overviewNavTitle, { color: colors.foreground }]}>{isSharedWorkspace ? 'Your group areas' : 'Your budget areas'}</Text>
-              <Text style={[styles.overviewNavSubtitle, { color: colors.mutedForeground }]}>
-                Quickly see what each part of your {isSharedWorkspace ? 'group' : 'budget'} helps you manage. Tap Arrange to put them in your order or hide the ones you don't use.
+              <Text style={styles.negativeBankBalanceWarningText}>
+                {isPrivate
+                  ? 'Jamvi kept the withdrawal recorded. Deposit money to clear the shortfall.'
+                  : `This budget is short by KES ${shortKES(Math.abs(bankAccount.balance))}. Jamvi kept the withdrawal recorded so the shortfall stays visible.`}
               </Text>
-              <View style={styles.overviewNavGrid}>
-                {overviewShortcuts.map((shortcut) => (
-                  <Pressable
-                    key={shortcut.label}
-                    testID={`overview-shortcut-${shortcut.label.toLowerCase()}`}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Open ${shortcut.label}`}
-                    style={({ pressed }) => [
-                      styles.overviewNavButton,
-                      { backgroundColor: shortcut.bg, borderColor: colors.border, opacity: pressed ? 0.78 : 1 },
-                    ]}
-                    onPress={() => router.push(shortcut.route as any)}
-                  >
-                    <Feather name={shortcut.icon} size={18} color={shortcut.color} />
-                    <Text style={[styles.overviewNavButtonText, { color: shortcut.color }]}>{shortcut.label}</Text>
-                    <Text style={[styles.overviewNavButtonDescription, { color: colors.mutedForeground }]}>{shortcut.description}</Text>
-                    <Feather name="chevron-right" size={13} color={shortcut.color} style={styles.overviewNavChevron} />
-                  </Pressable>
-                ))}
-                {/* Hidden areas are not gone: this says how many and brings them back. */}
-                {overviewShortcuts.length < allShortcuts.length ? (
-                  <Pressable
-                    testID="overview-shortcut-more"
-                    accessibilityRole="button"
-                    accessibilityLabel={`${allShortcuts.length - overviewShortcuts.length} more areas hidden. Open Arrange to show them.`}
-                    style={({ pressed }) => [
-                      styles.overviewNavButton,
-                      { backgroundColor: colors.muted, borderColor: colors.border, borderStyle: 'dashed', opacity: pressed ? 0.78 : 1 },
-                    ]}
-                    onPress={() => setArrangingAreas(true)}
-                  >
-                    <Feather name="plus" size={18} color={colors.primary} />
-                    <Text style={[styles.overviewNavButtonText, { color: colors.primary }]}>{allShortcuts.length - overviewShortcuts.length} more</Text>
-                    <Text style={[styles.overviewNavButtonDescription, { color: colors.mutedForeground }]} numberOfLines={2}>
-                      {allShortcuts.filter((shortcut) => !overviewShortcuts.some((shown) => shown.id === shortcut.id)).map((shortcut) => shortcut.label).join(', ')}
-                    </Text>
-                  </Pressable>
-                ) : null}
+            </Pressable>
+          )}
+
+          {!summaryLoading && summary && summary.totalBudget === 0 && (
+            <View style={[styles.budgetCtaCard, { backgroundColor: colors.card, borderColor: `${colors.primary}55` }]}>
+              <View style={styles.groupCtaHeader}>
+                <View style={[styles.groupCtaIcon, { backgroundColor: `${colors.primary}18` }]}>
+                  <Feather name="bar-chart-2" size={20} color={colors.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.groupCtaEyebrow, { color: colors.primary }]}>YOUR NEXT STEP</Text>
+                  <Text style={[styles.groupCtaTitle, { color: colors.foreground }]}>No budget yet</Text>
+                </View>
               </View>
-              <ArrangeSheet
-                visible={arrangingAreas}
-                title={`Arrange your ${isSharedWorkspace ? 'group' : 'budget'} areas`}
-                hint={`Put them in the order you use them, and hide any you never open. Kept on this phone, for this ${isSharedWorkspace ? 'group' : 'budget'}.`}
-                items={allShortcuts}
-                arrangement={areasArrangement}
-                onChange={setAreasArrangement}
-                onClose={() => setArrangingAreas(false)}
-                testID="overview-arrange-sheet"
-              />
+              <Text style={[styles.groupCtaText, { color: colors.mutedForeground }]}>
+                {canManageBudget
+                  ? 'Add your first budget category so you can plan spending and see what is left.'
+                  : 'An owner or admin will add the budget categories for this Shared group.'}
+              </Text>
+              {canManageBudget ? (
+                <Pressable
+                  testID="home-create-first-budget"
+                  accessibilityRole="button"
+                  accessibilityLabel="Set up your first budget"
+                  onPress={() => router.push('/(tabs)/budget')}
+                  style={({ pressed }) => [
+                    styles.groupCtaButton,
+                    { backgroundColor: colors.primary, opacity: pressed ? 0.82 : 1 },
+                  ]}
+                >
+                  <Text style={[styles.groupCtaButtonText, { color: colors.primaryForeground }]}>Set up your budget</Text>
+                  <Feather name="arrow-right" size={17} color={colors.primaryForeground} />
+                </Pressable>
+              ) : null}
             </View>
           )}
-
-          {/* Debt sits on Home with the same weight savings has. With nothing
-              tracked it offers to start — once, dismissably — because the Debt
-              tab only appears after a first debt exists. A viewer is never
-              asked: they could not act on it. */}
-          <DebtSummaryCard canTrackDebt={canManageBudget} />
-
-          {group && (
-            <View style={styles.ringWrap}>
-              <BudgetRing
-                percent={spentPercent}
-                spent={summary?.totalSpent ?? 0}
-                total={summary?.totalBudget ?? 0}
-                isOver={isOver}
-                hideValues={isPrivate}
-              />
-            </View>
-          )}
-
-          {/* Stats strip */}
-          <View style={styles.statsStrip}>
-            <StatCell label="Budget" value={isPrivate ? '••••' : shortKES(summary?.totalBudget)} />
-            <View style={styles.stripDivider} />
-            <StatCell label="Spent" value={isPrivate ? '••••' : shortKES(summary?.totalSpent)} valueColor={isOver ? colors.destructive : colors.foreground} />
-            <View style={styles.stripDivider} />
-            <StatCell label="Left" value={isPrivate ? '••••' : shortKES(summary?.remaining)} valueColor={isOver ? colors.destructive : colors.success} />
-          </View>
 
           {isSharedWorkspace && memberContributions.length > 0 && (
             <View style={styles.contribRow}>
@@ -736,127 +688,12 @@ export default function DashboardScreen() {
           )}
         </LinearGradient>
 
-        <HomeTip />
-
         <DashboardAnnouncement />
 
-        <View
-          testID="ask-jamvi-cta"
-          style={[styles.askCtaCard, { backgroundColor: colors.card, borderColor: `${colors.primary}55` }]}
-        >
-          <View style={styles.groupCtaHeader}>
-            <View style={[styles.askCtaIcon, { backgroundColor: `${colors.primary}18` }]}>
-              <Feather name="search" size={20} color={colors.primary} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.groupCtaEyebrow, { color: colors.primary }]}>QUICK ANSWERS</Text>
-              <Text style={[styles.groupCtaTitle, { color: colors.foreground }]}>Ask Jamvi</Text>
-            </View>
-          </View>
-          <Text style={[styles.groupCtaText, { color: colors.mutedForeground }]}>
-            Ask about anything in this budget: spending, bank accounts, income, goals, activity, categories, or reports. Jamvi explains your numbers but cannot change records or move money.
-          </Text>
-          <Pressable
-            testID="open-ask-jamvi"
-            accessibilityRole="button"
-            accessibilityLabel="Ask Jamvi about this budget"
-            onPress={openAskJamvi}
-            style={({ pressed }) => [
-              styles.groupCtaButton,
-              { backgroundColor: colors.primary, opacity: pressed ? 0.82 : 1 },
-            ]}
-          >
-            <Text style={[styles.groupCtaButtonText, { color: colors.primaryForeground }]}>Ask Jamvi</Text>
-            <Feather name="arrow-right" size={17} color={colors.primaryForeground} />
-          </Pressable>
-        </View>
-
-        {editableUncategorizedExpenses.length > 0 && (
-          <View
-            testID="uncategorized-expense-cta"
-            accessibilityLiveRegion="polite"
-            style={[styles.uncategorizedCtaCard, { backgroundColor: colors.card, borderColor: '#F59E0B' }]}
-          >
-            <View style={styles.groupCtaHeader}>
-              <View style={[styles.groupCtaIcon, { backgroundColor: '#F59E0B22' }]}>
-                <Feather name="bell" size={20} color="#D97706" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.groupCtaEyebrow, { color: '#D97706' }]}>NEEDS YOUR ATTENTION</Text>
-                <Text style={[styles.groupCtaTitle, { color: colors.foreground }]}>
-                  {editableUncategorizedExpenses.length} expense{editableUncategorizedExpenses.length === 1 ? '' : 's'} waiting for a category
-                </Text>
-              </View>
-            </View>
-            <Text style={[styles.groupCtaText, { color: colors.mutedForeground }]}>
-              Categorize these expenses so category budgets and reports show where the money went.
-            </Text>
-            <View style={styles.uncategorizedList}>
-              {editableUncategorizedExpenses.slice(0, 3).map((expense) => (
-                <Pressable
-                  key={expense.id}
-                  testID={`categorize-expense-${expense.id}`}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Categorize ${expense.description}`}
-                  onPress={() => router.push(getExpenseEditHref(expense) as never)}
-                  style={({ pressed }) => [
-                    styles.uncategorizedRow,
-                    { backgroundColor: colors.background, borderColor: colors.border, opacity: pressed ? 0.78 : 1 },
-                  ]}
-                >
-                  <View style={styles.uncategorizedCopy}>
-                    <Text numberOfLines={1} style={[styles.uncategorizedDescription, { color: colors.foreground }]}>{expense.description}</Text>
-                    <Text style={[styles.uncategorizedAmount, { color: colors.mutedForeground }]}>KES {formatKES(expense.amount)}</Text>
-                  </View>
-                  <Text style={[styles.uncategorizedAction, { color: colors.primary }]}>Categorize now</Text>
-                  <Feather name="chevron-right" size={16} color={colors.primary} />
-                </Pressable>
-              ))}
-            </View>
-          </View>
-        )}
-
-        {!summaryLoading && summary && summary.totalBudget === 0 && (
-          <View style={[styles.budgetCtaCard, { backgroundColor: colors.card, borderColor: `${colors.primary}55` }]}>
-            <View style={styles.groupCtaHeader}>
-              <View style={[styles.groupCtaIcon, { backgroundColor: `${colors.primary}18` }]}>
-                <Feather name="bar-chart-2" size={20} color={colors.primary} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.groupCtaEyebrow, { color: colors.primary }]}>YOUR NEXT STEP</Text>
-                <Text style={[styles.groupCtaTitle, { color: colors.foreground }]}>No budget yet</Text>
-              </View>
-            </View>
-            <Text style={[styles.groupCtaText, { color: colors.mutedForeground }]}>
-              {canManageBudget
-                ? 'Add your first budget category so you can plan spending and see what is left.'
-                : 'An owner or admin will add the budget categories for this Shared group.'}
-            </Text>
-            {canManageBudget ? (
-              <Pressable
-                testID="home-create-first-budget"
-                accessibilityRole="button"
-                accessibilityLabel="Set up your first budget"
-                onPress={() => router.push('/(tabs)/budget')}
-                style={({ pressed }) => [
-                  styles.groupCtaButton,
-                  { backgroundColor: colors.primary, opacity: pressed ? 0.82 : 1 },
-                ]}
-              >
-                <Text style={[styles.groupCtaButtonText, { color: colors.primaryForeground }]}>Set up your budget</Text>
-                <Feather name="arrow-right" size={17} color={colors.primaryForeground} />
-              </Pressable>
-            ) : null}
-          </View>
-        )}
-
-        {/* Personal budget keeps activity before the account summary. */}
-        {!isSharedWorkspace && <View style={styles.section}>
+        {/* One Recent activity, in one place, for Personal and Shared alike. */}
+        <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <View>
-              <Text style={[styles.sectionEyebrow, { color: colors.primary }]}>UPDATES</Text>
-              <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Recent activity</Text>
-            </View>
+            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Recent activity</Text>
             <Pressable onPress={() => router.push('/(tabs)/history')}>
               <Text style={[styles.seeAll, { color: colors.secondary }]}>See all</Text>
             </Pressable>
@@ -877,124 +714,81 @@ export default function DashboardScreen() {
               <ActivityCard key={item.id} item={item} colors={colors} />
             ))
           )}
-        </View>}
+        </View>
 
-        {/* Bank Account Balance Card */}
-        <Pressable
-          style={[styles.bankCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-          onPress={() => router.push('/(tabs)/bank')}
-        >
-          <View style={styles.bankCardHeader}>
-            <View style={styles.bankIconWrap}>
-              <Feather name="credit-card" size={18} color={colors.brandTeal} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.bankCardTitle, { color: colors.foreground }]}>Bank accounts</Text>
-              <Text style={[styles.bankCardSub, { color: colors.mutedForeground }]}>Your personalized accounts</Text>
-            </View>
-            <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
-          </View>
-          <View style={styles.bankStatsRow}>
-            <View style={styles.bankStat}>
-              <Text style={[styles.bankStatLabel, { color: colors.mutedForeground }]}>BALANCE</Text>
-              {bankAccountLoading ? (
-                <BankBalanceSkeleton />
-              ) : (
-                <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65} style={[styles.bankBalance, { color: colors.info }]}>
-                  {bankAccount ? (isPrivate ? '••••' : `KES ${formatExact(bankAccount.balance)}`) : '—'}
-                </Text>
-              )}
-            </View>
-            <View style={[styles.bankStatDivider, { backgroundColor: colors.border }]} />
-            <View style={styles.bankStat}>
-              <Text style={[styles.bankStatLabel, { color: colors.mutedForeground }]}>IN THIS MONTH</Text>
-              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65} style={[styles.bankStatValue, { color: colors.success }]}>
-                {isPrivate ? '••••' : `+KES ${formatExact(monthlyDeposited)}`}
-              </Text>
-            </View>
-            <View style={[styles.bankStatDivider, { backgroundColor: colors.border }]} />
-            <View style={styles.bankStat}>
-              <Text style={[styles.bankStatLabel, { color: colors.mutedForeground }]}>OUT THIS MONTH</Text>
-              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65} style={[styles.bankStatValue, { color: colors.destructive }]}>
-                {isPrivate ? '••••' : `-KES ${formatExact(monthlyDisbursed)}`}
-              </Text>
-            </View>
-          </View>
-          {bankAccount && bankAccount.balance === 0 && bankAccount.totalDeposits === 0 && bankAccount.totalDisbursements === 0 && (
-            <View style={styles.bankEmptyState}>
-              <Feather name="inbox" size={15} color={colors.brandTeal} style={{ opacity: 0.6 }} />
-              <Text style={styles.bankEmptyText}>No deposits yet — tap to add one</Text>
-            </View>
-          )}
-           {bankAccount && bankAccount.balance < 0 && (
-             <View
-               accessibilityRole="alert"
-               testID="overview-negative-bank-balance-warning"
-               style={styles.negativeBankBalanceWarning}
-             >
-               <View style={styles.negativeBankBalanceWarningTitle}>
-                 <Feather name="flag" size={15} color="#b91c1c" />
-                 <Text style={styles.negativeBankBalanceWarningTitleText}>Bank balance is below zero</Text>
-               </View>
-               <Text style={styles.negativeBankBalanceWarningText}>
-                 {isPrivate
-                   ? 'Jamvi kept the withdrawal recorded. Deposit money to clear the shortfall.'
-                   : `This budget is short by KES ${shortKES(Math.abs(bankAccount.balance))}. Jamvi kept the withdrawal recorded so the shortfall stays visible.`}
-               </Text>
-             </View>
-           )}
-        </Pressable>
+        {/* Debt sits on Home with the same weight savings has. With nothing
+            tracked it offers to start — once, dismissably — because the Debt
+            tab only appears after a first debt exists. A viewer is never
+            asked: they could not act on it. */}
+        <DebtSummaryCard canTrackDebt={canManageBudget} />
 
-        {isSharedWorkspace && (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Recent Activity</Text>
-              <Pressable onPress={() => router.push('/(tabs)/history')}>
-                <Text style={[styles.seeAll, { color: colors.secondary }]}>See all</Text>
+        <HomeTip />
+
+        {/* The way to every other area, at the foot of Home rather than in the
+            middle of it: the tabs reach most of them already. On a Personal
+            budget too: it was shown to groups only. New group is a tile here,
+            which is why the Personal budget's "Shared groups" card is gone. */}
+        {group && (
+          <View style={[styles.overviewNavCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={[styles.overviewNavTitle, { color: colors.foreground }]}>{isSharedWorkspace ? 'Your group areas' : 'Your budget areas'}</Text>
+              <Pressable onPress={() => setArrangingAreas(true)} hitSlop={8} accessibilityRole="button" accessibilityLabel={`Arrange your ${isSharedWorkspace ? 'group' : 'budget'} areas: reorder, hide or show them`} testID="overview-arrange" style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Feather name="move" size={13} color={colors.primary} />
+                <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>Arrange</Text>
               </Pressable>
             </View>
-            {activityLoading ? (
-              <ActivityIndicator color={colors.primary} style={{ marginTop: 32 }} />
-            ) : recentActivity.length === 0 ? (
-              <View style={styles.empty}>
-                <Feather name="inbox" size={32} color={colors.mutedForeground} />
-                <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>No activity yet this month</Text>
-              </View>
-            ) : (
-              recentActivity.map((item) => (
-                <ActivityCard key={item.id} item={item} colors={colors} />
-              ))
-            )}
-          </View>
-        )}
-
-        {!isSharedWorkspace && (
-          <View style={[styles.groupCtaCard, { backgroundColor: colors.card, borderColor: `${colors.primary}55` }]}>
-            <View style={styles.groupCtaHeader}>
-              <View style={[styles.groupCtaIcon, { backgroundColor: `${colors.primary}18` }]}>
-                <Feather name="users" size={20} color={colors.primary} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.groupCtaEyebrow, { color: colors.primary }]}>SHARED GROUPS</Text>
-                <Text style={[styles.groupCtaTitle, { color: colors.foreground }]}>Manage budgets with others</Text>
-              </View>
-            </View>
-            <Text style={[styles.groupCtaText, { color: colors.mutedForeground }]}>
-              Create a Shared group from Settings when you are ready to manage money with a group.
+            <Text style={[styles.overviewNavSubtitle, { color: colors.mutedForeground }]}>
+              Tap Arrange to put them in your order or hide the ones you don't use.
             </Text>
-            <Pressable
-              testID="home-create-shared-budget-cta"
-              accessibilityRole="button"
-              accessibilityLabel="Open Settings to manage Shared groups"
-              onPress={() => router.push('/(tabs)/settings')}
-              style={({ pressed }) => [
-                styles.groupCtaButton,
-                { backgroundColor: colors.primary, opacity: pressed ? 0.82 : 1 },
-              ]}
-            >
-              <Text style={[styles.groupCtaButtonText, { color: colors.primaryForeground }]}>Manage Shared groups</Text>
-              <Feather name="arrow-right" size={17} color={colors.primaryForeground} />
-            </Pressable>
+            <View style={styles.overviewNavGrid}>
+              {overviewShortcuts.map((shortcut) => (
+                <Pressable
+                  key={shortcut.label}
+                  testID={`overview-shortcut-${shortcut.label.toLowerCase()}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Open ${shortcut.label}`}
+                  style={({ pressed }) => [
+                    styles.overviewNavButton,
+                    { backgroundColor: shortcut.bg, borderColor: colors.border, opacity: pressed ? 0.78 : 1 },
+                  ]}
+                  onPress={() => router.push(shortcut.route as any)}
+                >
+                  <Feather name={shortcut.icon} size={18} color={shortcut.color} />
+                  <Text style={[styles.overviewNavButtonText, { color: shortcut.color }]}>{shortcut.label}</Text>
+                  <Text style={[styles.overviewNavButtonDescription, { color: colors.mutedForeground }]}>{shortcut.description}</Text>
+                  <Feather name="chevron-right" size={13} color={shortcut.color} style={styles.overviewNavChevron} />
+                </Pressable>
+              ))}
+              {/* Hidden areas are not gone: this says how many and brings them back. */}
+              {overviewShortcuts.length < allShortcuts.length ? (
+                <Pressable
+                  testID="overview-shortcut-more"
+                  accessibilityRole="button"
+                  accessibilityLabel={`${allShortcuts.length - overviewShortcuts.length} more areas hidden. Open Arrange to show them.`}
+                  style={({ pressed }) => [
+                    styles.overviewNavButton,
+                    { backgroundColor: colors.muted, borderColor: colors.border, borderStyle: 'dashed', opacity: pressed ? 0.78 : 1 },
+                  ]}
+                  onPress={() => setArrangingAreas(true)}
+                >
+                  <Feather name="plus" size={18} color={colors.primary} />
+                  <Text style={[styles.overviewNavButtonText, { color: colors.primary }]}>{allShortcuts.length - overviewShortcuts.length} more</Text>
+                  <Text style={[styles.overviewNavButtonDescription, { color: colors.mutedForeground }]} numberOfLines={2}>
+                    {allShortcuts.filter((shortcut) => !overviewShortcuts.some((shown) => shown.id === shortcut.id)).map((shortcut) => shortcut.label).join(', ')}
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
+            <ArrangeSheet
+              visible={arrangingAreas}
+              title={`Arrange your ${isSharedWorkspace ? 'group' : 'budget'} areas`}
+              hint={`Put them in the order you use them, and hide any you never open. Kept on this phone, for this ${isSharedWorkspace ? 'group' : 'budget'}.`}
+              items={allShortcuts}
+              arrangement={areasArrangement}
+              onChange={setAreasArrangement}
+              onClose={() => setArrangingAreas(false)}
+              testID="overview-arrange-sheet"
+            />
           </View>
         )}
       </PageScrollView>
@@ -1015,7 +809,7 @@ export default function DashboardScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.askModalTitle, { color: colors.foreground }]}>Ask Jamvi</Text>
                   <Text style={[styles.askModalSubtitle, { color: colors.mutedForeground }]}>
-                    Ask about this month or your available history across this budget. Answers stay read-only.
+                    Ask about anything in this budget: spending, bank accounts, income, goals, activity, categories, or reports. Jamvi explains your numbers but cannot change records or move money.
                   </Text>
                 </View>
               </View>
@@ -1134,40 +928,6 @@ export default function DashboardScreen() {
   );
 }
 
-function StatCell({ label, value, valueColor = '#FBF7EC' }: { label: string; value: string; valueColor?: string }) {
-  return (
-    <View style={styles.statCell}>
-      <Text style={styles.statLabel}>{label}</Text>
-      <Text style={[styles.statValue, { color: valueColor }]}>{value}</Text>
-    </View>
-  );
-}
-
-function BankBalanceSkeleton() {
-  const opacity = useSharedValue(0.45);
-  const animatedStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
-
-  useEffect(() => {
-    opacity.value = withRepeat(
-      withSequence(
-        withTiming(0.8, { duration: 650 }),
-        withTiming(0.45, { duration: 650 }),
-      ),
-      -1,
-    );
-
-    return () => cancelAnimation(opacity);
-  }, [opacity]);
-
-  return (
-    <Animated.View
-      accessible
-      accessibilityLabel="Loading bank balance"
-      style={[styles.bankBalanceSkeleton, animatedStyle]}
-    />
-  );
-}
-
 function ContribBar({ name, contributed, spent, target, color, hidden }: {
   name: string;
   contributed: number;
@@ -1236,8 +996,6 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   headerRest: { paddingHorizontal: 20, paddingBottom: 20 },
-  homeStatus: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 9 },
-  homeStatusText: { fontSize: 10, color: '#E9B949', fontFamily: 'Inter_700Bold', letterSpacing: 1.1 },
   headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   greetingBlock: { flex: 1, minWidth: 0 },
   headerUtilityRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
@@ -1248,18 +1006,14 @@ const styles = StyleSheet.create({
   workspaceIdentityEyebrow: { fontSize: 9, color: '#C2BBA8', fontFamily: 'Inter_700Bold', letterSpacing: 1 },
   workspaceIdentityName: { fontSize: 16, color: '#FBF7EC', marginTop: 2 },
   iconBtn: { padding: 4 },
+  askHeaderButton: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 999, borderWidth: 1, borderColor: 'rgba(247,250,246,0.28)', backgroundColor: 'rgba(247,250,246,0.08)', paddingHorizontal: 11, paddingVertical: 6 },
+  askHeaderButtonText: { fontSize: 12, color: '#FBF7EC', fontFamily: 'Inter_600SemiBold' },
   greeting: { fontSize: 12, color: '#C2BBA8', fontFamily: 'Inter_400Regular' },
   name: { fontSize: 20, fontWeight: '700' as const, color: '#FBF7EC', fontFamily: 'Inter_700Bold' },
   monthNav: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   navBtn: { padding: 4 },
   monthLabel: { fontSize: 13, color: '#FBF7EC', fontFamily: 'Inter_500Medium', minWidth: 56, textAlign: 'center' },
 
-  statsStrip: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.07)', borderRadius: 8, paddingVertical: 12, marginBottom: 14 },
-  statCell: { flex: 1, alignItems: 'center' },
-  statLabel: { fontSize: 10, color: '#C2BBA8', fontFamily: 'Inter_400Regular', letterSpacing: 0.5, marginBottom: 3 },
-  statValue: { fontSize: 11, fontWeight: '500' as const, fontFamily: 'Inter_500Medium', opacity: 0.75 },
-  stripDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.12)' },
-  ringWrap: { alignItems: 'center', marginBottom: 16 },
   contribRow: { flexDirection: 'row', gap: 12 },
   contribDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.1)' },
   contribItem: { flex: 1 },
@@ -1271,7 +1025,6 @@ const styles = StyleSheet.create({
   contribSubLabel: { fontSize: 9, color: 'rgba(247,250,246,0.4)', fontFamily: 'Inter_400Regular' },
 
   overviewNavCard: { marginHorizontal: 16, marginTop: 16, borderWidth: 1, borderRadius: 18, padding: 16 },
-  overviewNavEyebrow: { fontSize: 10, fontFamily: 'Inter_700Bold', letterSpacing: 1 },
   overviewNavTitle: { fontSize: 18, fontFamily: 'Inter_700Bold', marginTop: 4 },
   overviewNavSubtitle: { fontSize: 12, lineHeight: 18, fontFamily: 'Inter_400Regular', marginTop: 5 },
   overviewNavGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 14 },
@@ -1279,17 +1032,13 @@ const styles = StyleSheet.create({
   overviewNavButtonText: { width: '100%', maxWidth: '100%', flexShrink: 1, fontSize: 11, lineHeight: 15, textAlign: 'center', fontFamily: 'Inter_600SemiBold' },
   overviewNavButtonDescription: { width: '100%', maxWidth: '100%', flexShrink: 1, fontSize: 9, lineHeight: 12, textAlign: 'center', fontFamily: 'Inter_400Regular' },
   overviewNavChevron: { position: 'absolute', top: 6, right: 6 },
-  groupCtaCard: { marginHorizontal: 16, marginTop: 16, borderWidth: 1, borderRadius: 18, padding: 16 },
+  waitingCard: { marginHorizontal: 16, marginTop: 12, borderWidth: 1, borderRadius: 18, paddingHorizontal: 16, paddingTop: 14, paddingBottom: 4 },
+  waitingRow: { flexDirection: 'row', alignItems: 'center', gap: 11, paddingVertical: 11 },
+  waitingIcon: { width: 34, height: 34, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  waitingCopy: { flex: 1, minWidth: 0 },
+  waitingTitle: { fontSize: 15, fontFamily: 'Inter_700Bold' },
+  waitingHint: { fontSize: 12, lineHeight: 17, fontFamily: 'Inter_400Regular', marginTop: 2 },
   budgetCtaCard: { marginHorizontal: 16, marginTop: 12, borderWidth: 1, borderRadius: 18, padding: 16 },
-  uncategorizedCtaCard: { marginHorizontal: 16, marginTop: 12, borderWidth: 1, borderRadius: 18, padding: 16 },
-  askCtaCard: { marginHorizontal: 16, marginTop: 12, borderWidth: 1, borderRadius: 18, padding: 16 },
-  askCtaIcon: { width: 42, height: 42, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  uncategorizedList: { marginTop: 12, gap: 8 },
-  uncategorizedRow: { minHeight: 52, borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 9, flexDirection: 'row', alignItems: 'center', gap: 8 },
-  uncategorizedCopy: { minWidth: 0, flex: 1 },
-  uncategorizedDescription: { fontSize: 13, fontFamily: 'Inter_700Bold' },
-  uncategorizedAmount: { marginTop: 2, fontSize: 11, fontFamily: 'Inter_400Regular' },
-  uncategorizedAction: { fontSize: 12, fontFamily: 'Inter_700Bold' },
   groupCtaHeader: { flexDirection: 'row', alignItems: 'center', gap: 11 },
   groupCtaIcon: { width: 42, height: 42, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   groupCtaEyebrow: { fontSize: 10, fontFamily: 'Inter_700Bold', letterSpacing: 1 },
@@ -1317,7 +1066,6 @@ const styles = StyleSheet.create({
   askAnswerMeta: { fontSize: 10, marginTop: 9, fontFamily: 'Inter_400Regular' },
   section: { paddingHorizontal: 20, paddingTop: 20 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  sectionEyebrow: { fontSize: 10, fontFamily: 'Inter_700Bold', letterSpacing: 1, marginBottom: 3 },
   sectionTitle: { fontSize: 17, fontWeight: '700' as const, fontFamily: 'Inter_700Bold' },
   seeAll: { fontSize: 13, fontFamily: 'Inter_500Medium' },
 
@@ -1326,22 +1074,7 @@ const styles = StyleSheet.create({
   emptyBtn: { borderWidth: 1, borderRadius: 6, paddingHorizontal: 20, paddingVertical: 10, marginTop: 4 },
   emptyBtnText: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
 
-  bankCard: { marginHorizontal: 16, marginTop: 12, borderRadius: 10, borderWidth: 1, overflow: 'hidden' },
-  bankCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 12 },
-  bankIconWrap: { width: 36, height: 36, borderRadius: 6, backgroundColor: 'rgba(56,189,248,0.15)', alignItems: 'center', justifyContent: 'center' },
-  bankCardTitle: { fontSize: 14, fontWeight: '600' as const, fontFamily: 'Inter_600SemiBold' },
-  bankCardSub: { fontSize: 11, fontFamily: 'Inter_400Regular' },
-  bankStatsRow: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: 'rgba(128,128,128,0.15)' },
-  bankStat: { flex: 1, alignItems: 'center', paddingVertical: 12, paddingHorizontal: 4 },
-  bankStatLabel: { fontSize: 9, fontFamily: 'Inter_400Regular', letterSpacing: 0.4, marginBottom: 3 },
-  bankBalance: { width: '100%', flexShrink: 1, textAlign: 'center', fontSize: 16, fontWeight: '700' as const, fontFamily: 'Inter_700Bold' },
-  bankBalanceSkeleton: { width: 62, height: 16, borderRadius: 4, backgroundColor: 'rgba(56,189,248,0.25)' },
-  bankStatValue: { width: '100%', flexShrink: 1, textAlign: 'center', fontSize: 13, fontWeight: '600' as const, fontFamily: 'Inter_600SemiBold' },
-  bankStatDivider: { width: 1, marginVertical: 10 },
-
-  bankEmptyState: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 16, borderTopWidth: 1, borderTopColor: 'rgba(128,128,128,0.15)' },
-  bankEmptyText: { fontSize: 13, color: '#14776A', fontFamily: 'Inter_400Regular', opacity: 0.8 },
-  negativeBankBalanceWarning: { gap: 5, marginHorizontal: 12, marginBottom: 12, borderWidth: 1, borderColor: '#fca5a5', borderRadius: 6, backgroundColor: '#fef2f2', paddingHorizontal: 12, paddingVertical: 10 },
+  negativeBankBalanceWarning: { gap: 5, marginHorizontal: 16, marginTop: 12, borderWidth: 1, borderColor: '#fca5a5', borderRadius: 6, backgroundColor: '#fef2f2', paddingHorizontal: 12, paddingVertical: 10 },
   negativeBankBalanceWarningTitle: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   negativeBankBalanceWarningTitleText: { color: '#991b1b', fontSize: 13, fontFamily: 'Inter_600SemiBold' },
   negativeBankBalanceWarningText: { color: '#7f1d1d', fontSize: 12, lineHeight: 17, fontFamily: 'Inter_400Regular' },
