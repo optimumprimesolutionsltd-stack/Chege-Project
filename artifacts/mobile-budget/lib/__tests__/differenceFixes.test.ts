@@ -40,3 +40,12 @@ describe('the screen offers each fix', () => {
     expect(screen).toContain('await retrySave(what);\n      await check();');
   });
 });
+
+describe('a save refused for a linked reversal offers to unlink (9 Oct 2026)', () => {
+  const bank = readFileSync('app/(tabs)/bank.tsx', 'utf8');
+  it('asks, then unlinks and saves again, instead of "HTTP 409 ... Unlink it first"', () => {
+    expect(bank).toContain('const linkedReversal = /linked to (?:the payment it reversed|its money back)/i.test(message);');
+    expect(bank).toContain("text: 'Unlink and save',");
+    expect(bank).toContain('await unlinkReversal({ id });\n                    await handleSubmit({ keepOpen });');
+  });
+});
