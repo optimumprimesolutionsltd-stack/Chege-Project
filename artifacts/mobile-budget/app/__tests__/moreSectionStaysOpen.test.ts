@@ -33,9 +33,10 @@ describe('the "More" destination section stays open after clearing a choice', ()
     expect(source).toContain('setOpenMore((current) => new Set(current).add(debtFor.index));');
   });
 
-  it('sets openMore at exactly five call sites: the "More" toggle itself, plus one per destination that can revert a line to a plain category', () => {
+  it('sets openMore at exactly six call sites: the "More" toggle itself, the business tag, plus one per destination that can revert a line to a plain category', () => {
     // A sixth appearing (or one going missing) means a new destination was
     // added, or an old fix silently removed, without this same treatment.
-    expect(source.match(/setOpenMore\(\(current\) => new Set\(current\)\.add\(/g)?.length).toBe(5);
+    // The sixth (9 Oct 2026): "For Ujenzi · change" opens Who is this for? under More.
+    expect(source.match(/setOpenMore\(\(current\) => new Set\(current\)\.add\(/g)?.length).toBe(6);
   });
 });
