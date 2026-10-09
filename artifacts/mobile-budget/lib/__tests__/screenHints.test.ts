@@ -10,7 +10,7 @@ describe('phone screens have a one-line hint under the title', () => {
     ['app/(tabs)/debt.tsx', 'Money you owe, and how close you are to paying it off.'],
     ['app/(tabs)/budget.tsx', 'Decide how much to spend on each thing, and see how you are doing.'],
     ['app/(tabs)/settings.tsx', 'Your account, your budget and who can see it.'],
-    ['app/(tabs)/search.tsx', 'Type to find any expense, payment or goal.'],
+    ['app/(tabs)/search.tsx', 'Type a name or any words to find an expense, payment, goal or person.'],
     ['app/parties.tsx', 'Money you owe, and money other people owe you, in one list.'],
   ])('%s', (file, sentence) => {
     expect(read(file)).toContain(sentence);
@@ -26,7 +26,7 @@ describe('web pages have a one-line hint under the title', () => {
     ['parties.tsx', 'Money you owe, and money other people owe you, in one list.'],
     ['statement.tsx', "match it with your bank's own statement."],
     ['pass-through.tsx', 'Both debts get smaller and your balance stays the same.'],
-    ['search.tsx', 'Type to find any expense, payment or goal'],
+    ['search.tsx', 'Type a name or any words to find an expense, payment, goal or person'],
     ['contributions.tsx', 'Who has put money into the group, and how much.'],
   ])('%s', (file, sentence) => {
     expect(read(`../family-budget/src/pages/${file}`)).toContain(sentence);

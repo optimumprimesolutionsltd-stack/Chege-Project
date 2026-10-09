@@ -1,4 +1,5 @@
 import { mpesaNamesReady } from "../lib/mpesa-names";
+import { everyWord, searchWords } from "../lib/search-words";
 import { inMonthOf } from "../lib/month-range";
 import { monthExpected } from "../lib/income-months";
 import { monthBudgets } from "../lib/budget-months";
@@ -345,7 +346,8 @@ router.get("/search", async (req, res): Promise<void> => {
     res.status(400).json({ error: "Search using 2 to 120 characters." });
     return;
   }
-  const pattern = `%${query.replace(/[%_]/g, "\\$&")}%`;
+  // Every word typed, anywhere in the fields searched (lib/search-words).
+  const words = searchWords(query);
   const include = (kind: string) => tab === "all" || tab === kind;
 
   // Shared row shapes, reused for both the plain text match below and the
@@ -377,12 +379,12 @@ router.get("/search", async (req, res): Promise<void> => {
       .leftJoin(usersTable, eq(usersTable.id, expensesTable.paidById))
       .where(and(
         eq(expensesTable.groupId, groupId),
-        or(
+        everyWord(words, (pattern) => [
           ilike(expenseIncomeSplitsTable.label, pattern),
           ilike(usersTable.firstName, pattern),
           ilike(usersTable.preferredName, pattern),
           ilike(usersTable.lastName, pattern),
-        ),
+        ]),
       ))
       .limit(50);
     const extraIds = matches.map((row) => row.id).filter((id) => !seen.has(id));
@@ -404,12 +406,12 @@ router.get("/search", async (req, res): Promise<void> => {
       .leftJoin(usersTable, eq(usersTable.id, sql`coalesce(${jointAccountDepositSplitsTable.userId}, ${jointAccountTxTable.madeById})`))
       .where(and(
         eq(jointAccountTxTable.groupId, groupId),
-        or(
+        everyWord(words, (pattern) => [
           ilike(groupContributorsTable.name, pattern),
           ilike(usersTable.firstName, pattern),
           ilike(usersTable.preferredName, pattern),
           ilike(usersTable.lastName, pattern),
-        ),
+        ]),
       ))
       .limit(50);
     const extraIds = matches.map((row) => row.id).filter((id) => !seen.has(id));
@@ -425,11 +427,11 @@ router.get("/search", async (req, res): Promise<void> => {
           const base = await db.select(expenseRowShape).from(expensesTable)
             .where(and(
               eq(expensesTable.groupId, groupId),
-              or(
+              everyWord(words, (pattern) => [
                 ilike(expensesTable.description, pattern),
                 ilike(expensesTable.category, pattern),
                 ilike(expensesTable.notes, pattern),
-              ),
+              ]),
             ))
             .orderBy(desc(expensesTable.date), desc(expensesTable.id))
             .limit(50);
@@ -441,7 +443,7 @@ router.get("/search", async (req, res): Promise<void> => {
           const base = await db.select(bankRowShape).from(jointAccountTxTable)
             .where(and(
               eq(jointAccountTxTable.groupId, groupId),
-              or(
+              everyWord(words, (pattern) => [
                 ilike(jointAccountTxTable.description, pattern),
                 ilike(jointAccountTxTable.expenseCategory, pattern),
                 // A note, or the M-Pesa code from the message ("did I record this one?").
@@ -451,7 +453,7 @@ router.get("/search", async (req, res): Promise<void> => {
                 ...(mpesaNamesReady()
                   ? [sql`EXISTS (SELECT 1 FROM mpesa_entry_names named WHERE named.transaction_id = ${jointAccountTxTable.id} AND named.name ILIKE ${pattern})`]
                   : []),
-              ),
+              ]),
             ))
             .orderBy(desc(jointAccountTxTable.date), desc(jointAccountTxTable.id))
             .limit(50);
@@ -466,7 +468,7 @@ router.get("/search", async (req, res): Promise<void> => {
           amount: savingsGoalsTable.currentAmount,
           targetAmount: savingsGoalsTable.targetAmount,
         }).from(savingsGoalsTable)
-          .where(and(eq(savingsGoalsTable.groupId, groupId), ilike(savingsGoalsTable.name, pattern)))
+          .where(and(eq(savingsGoalsTable.groupId, groupId), everyWord(words, (pattern) => [ilike(savingsGoalsTable.name, pattern)])))
           .orderBy(desc(savingsGoalsTable.createdAt))
           .limit(50)
       : Promise.resolve([]),
@@ -477,7 +479,7 @@ router.get("/search", async (req, res): Promise<void> => {
           title: incomeSourcesTable.name,
           amount: incomeSourcesTable.expectedMonthlyAmount,
         }).from(incomeSourcesTable)
-          .where(and(eq(incomeSourcesTable.groupId, groupId), ilike(incomeSourcesTable.name, pattern)))
+          .where(and(eq(incomeSourcesTable.groupId, groupId), everyWord(words, (pattern) => [ilike(incomeSourcesTable.name, pattern)])))
           .orderBy(desc(incomeSourcesTable.createdAt))
           .limit(50)
       : Promise.resolve([]),

@@ -70,7 +70,7 @@ export default function SearchPage() {
         <p className="text-xs font-bold uppercase tracking-[0.14em] text-primary">Current budget only</p>
         <h1 className="mt-2 font-display text-3xl font-bold text-foreground">Search</h1>
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-          Type to find any expense, payment or goal in {group?.name ?? "this budget"}.
+          Type a name or any words to find an expense, payment, goal or person in {group?.name ?? "this budget"}.
         </p>
       </section>
 
@@ -81,7 +81,7 @@ export default function SearchPage() {
             <Input
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
-              placeholder='Try “Kids offering” or “rent”'
+              placeholder="Try “rent” or a name, like “William Nyoro”"
               className="h-11 pl-9"
               aria-label="Search this budget"
             />
