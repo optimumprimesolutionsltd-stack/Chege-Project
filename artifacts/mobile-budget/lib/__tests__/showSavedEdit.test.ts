@@ -41,6 +41,19 @@ describe('an edit shows at once', () => {
     const sort = readFileSync('app/sort-entries.tsx', 'utf8');
     expect(sort).toContain('await done(changed.map((one) => one.id));');
     expect(sort).toContain('await done([entry.id]);');
-    expect(sort).toContain('void queryClient.invalidateQueries({ queryKey: getGetJointAccountQueryKey() });');
+    // Marked out of date, not fetched again per entry sorted (9 Oct 2026).
+    expect(sort).toContain("void queryClient.invalidateQueries({ queryKey: getGetJointAccountQueryKey(), refetchType: 'none' });");
+    expect(sort).toContain("refetchType: isHistoryQuery(queryKey) ? 'none' : 'active'");
+  });
+
+  // "Going back in sort them out is slow" (9 Oct 2026): every tab behind it
+  // reloaded the whole year of entries after each entry sorted, and again on Back.
+  it('tab screens follow their big lists only while in view', () => {
+    const follows = (file: string, line: string) => expect(readFileSync(file, 'utf8')).toContain(line);
+    follows('app/(tabs)/index.tsx', 'useGetJointAccount(undefined, { query: { queryKey: getGetJointAccountQueryKey(), subscribed: onHomeScreen } })');
+    follows('app/(tabs)/bank.tsx', '{ query: { queryKey: getGetJointAccountQueryKey(jointAccountParams), subscribed: onBankScreen } }');
+    follows('app/(tabs)/history.tsx', 'subscribed: onHistoryScreen');
+    follows('app/(tabs)/reports.tsx', 'getGetDashboardIncomeStreamsTrendQueryKey({ months: 6 }), retry: false, subscribed: onReportsScreen');
+    follows('hooks/useOnScreen.ts', 'return () => setOnScreen(false);');
   });
 });

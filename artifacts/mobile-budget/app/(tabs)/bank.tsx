@@ -28,6 +28,7 @@ import { markReturning } from '@/lib/lastRoute';
 import { isNotSure } from '@/lib/entriesToSort';
 import { LISTS_AN_EDIT_CHANGES, withSavedRow } from '@/lib/showSavedEdit';
 import { PassThroughPair, type PairEntry } from '@/components/PassThroughPair';
+import { useOnScreen } from '@/hooks/useOnScreen';
 import { useAutoMarkBusiness, useOwnerBusiness } from '@/hooks/useOwnerBusiness';
 import { useBusinessAccounts } from '@/hooks/useBusinessAccounts';
 import { useNamedPayees } from '@/hooks/useNamedPayees';
@@ -203,8 +204,13 @@ export default function BankScreen() {
   const { data: accounts = [], refetch: refetchAccounts } = useGetJointAccounts();
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
   const accountStorageKey = group?.id && user?.id ? `bank-account:${group.id}:${user.id}` : null;
+  // Followed only while Bank is in view (hooks/useOnScreen): hidden behind
+  // Sort them out it reloaded the whole account after every entry sorted.
+  const onBankScreen = useOnScreen();
+  const jointAccountParams = selectedAccountId ? { accountId: selectedAccountId } : undefined;
   const { data, isLoading, isFetching, refetch } = useGetJointAccount(
-    selectedAccountId ? { accountId: selectedAccountId } : undefined,
+    jointAccountParams,
+    { query: { queryKey: getGetJointAccountQueryKey(jointAccountParams), subscribed: onBankScreen } },
   );
 
   const [refreshing, setRefreshing] = useState(false);
