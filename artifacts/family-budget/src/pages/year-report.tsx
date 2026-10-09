@@ -1,12 +1,6 @@
 import { Fragment, useMemo, useState } from "react";
 import { ChevronDown, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
-import { useQueries } from "@tanstack/react-query";
-import {
-  getDashboardCategoryBreakdown,
-  getDashboardIncomeStreams,
-  getGetDashboardCategoryBreakdownQueryKey,
-  getGetDashboardIncomeStreamsQueryKey,
-} from "@workspace/api-client-react";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cellText, yearGrid, yearMonths, type BreakdownRow, type GridRow, type IncomeMonth } from "@/lib/year-grid";
@@ -16,6 +10,8 @@ import { cellText, yearGrid, yearMonths, type BreakdownRow, type GridRow, type I
  * and spending category, a column a month, the whole year by default
  * (lib/year-grid). Each month comes from the reports Reports shows for it.
  */
+type YearAnswer = { year: number; months: Array<{ year: number; month: number; breakdown: BreakdownRow[]; income: IncomeMonth }> };
+
 export default function YearReportPage() {
   const now = new Date();
   const today = { year: now.getFullYear(), month: now.getMonth() + 1 };
@@ -23,32 +19,26 @@ export default function YearReportPage() {
   const [opened, setOpened] = useState<Set<string>>(new Set());
   const months = useMemo(() => yearMonths(year, today), [year, today.year, today.month]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const breakdowns = useQueries({
-    queries: months.map(({ year: y, month: m }) => ({
-      queryKey: getGetDashboardCategoryBreakdownQueryKey({ month: m, year: y }),
-      queryFn: () => getDashboardCategoryBreakdown({ month: m, year: y }),
-      staleTime: 60_000,
-    })),
+  // The whole year in one request (api-server /dashboard/year), as on the phone.
+  const yearQuery = useQuery<YearAnswer>({
+    queryKey: ["/api/dashboard/year", year],
+    queryFn: async () => {
+      const response = await fetch(`/api/dashboard/year?year=${year}`, { credentials: "include" });
+      if (!response.ok) throw new Error("The year did not load.");
+      return response.json();
+    },
+    staleTime: 60_000,
   });
-  const incomes = useQueries({
-    queries: months.map(({ year: y, month: m }) => ({
-      queryKey: getGetDashboardIncomeStreamsQueryKey({ month: m, year: y }),
-      queryFn: () => getDashboardIncomeStreams({ month: m, year: y }),
-      staleTime: 60_000,
-      retry: false,
-    })),
-  });
-  const loading = [...breakdowns, ...incomes].some((query) => query.isLoading);
-  const failed = [...breakdowns, ...incomes].some((query) => query.isError);
-  const grid = useMemo(
-    () => yearGrid(
+  const loading = yearQuery.isLoading;
+  const failed = yearQuery.isError;
+  const grid = useMemo(() => {
+    const byMonth = new Map((yearQuery.data?.months ?? []).map((one) => [one.month, one]));
+    return yearGrid(
       months,
-      breakdowns.map((query) => query.data as unknown as BreakdownRow[] | undefined),
-      incomes.map((query) => query.data as unknown as IncomeMonth | undefined),
-    ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [months, ...breakdowns.map((query) => query.data), ...incomes.map((query) => query.data)],
-  );
+      months.map(({ month }) => byMonth.get(month)?.breakdown),
+      months.map(({ month }) => byMonth.get(month)?.income),
+    );
+  }, [months, yearQuery.data]);
   const toggle = (key: string) => setOpened((current) => {
     const next = new Set(current);
     if (next.has(key)) next.delete(key);
@@ -126,7 +116,7 @@ export default function YearReportPage() {
       ) : (
         <Card>
           <CardContent className="p-0">
-            {failed ? <p className="px-3 py-2 text-sm text-destructive">Some months did not load. Refresh the page to try again.</p> : null}
+            {failed ? <p className="px-3 py-2 text-sm text-destructive">The year did not load. Refresh the page to try again.</p> : null}
             {/* Scrolls inside its own box so the month row can stay frozen at the top. */}
             <div className="max-h-[75vh] overflow-auto">
               <table className="w-full border-collapse text-sm" data-testid="year-report-grid">

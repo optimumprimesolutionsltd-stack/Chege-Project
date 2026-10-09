@@ -3,16 +3,13 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useQueries } from '@tanstack/react-query';
-import {
-  getDashboardCategoryBreakdown,
-  getDashboardIncomeStreams,
-  getGetDashboardCategoryBreakdownQueryKey,
-  getGetDashboardIncomeStreamsQueryKey,
-} from '@workspace/api-client-react';
+import { useQuery } from '@tanstack/react-query';
+import { customFetch } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
 import { monthLedgerHref } from '@/lib/monthLink';
 import { cellText, yearGrid, yearMonths, type BreakdownRow, type GridMonth, type GridRow, type IncomeMonth } from '@/lib/yearGrid';
+
+type YearAnswer = { year: number; months: Array<{ year: number; month: number; breakdown: BreakdownRow[]; income: IncomeMonth }> };
 
 const NAME_WIDTH = 132;
 const CELL_WIDTH = 78;
@@ -38,32 +35,23 @@ export default function YearReportScreen() {
   const monthRow = useRef<ScrollView>(null);
   const months = useMemo(() => yearMonths(year, today), [year, today.year, today.month]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const breakdowns = useQueries({
-    queries: months.map(({ year: y, month: m }) => ({
-      queryKey: getGetDashboardCategoryBreakdownQueryKey({ month: m, year: y }),
-      queryFn: () => getDashboardCategoryBreakdown({ month: m, year: y }),
-      staleTime: 60_000,
-    })),
+  // The whole year in one request (api-server /dashboard/year): every month from
+  // the same figures Reports shows for it - it made 24 requests (9 Oct 2026).
+  const yearQuery = useQuery<YearAnswer>({
+    queryKey: ['/api/dashboard/year', year],
+    queryFn: () => customFetch<YearAnswer>(`/api/dashboard/year?year=${year}`),
+    staleTime: 60_000,
   });
-  const incomes = useQueries({
-    queries: months.map(({ year: y, month: m }) => ({
-      queryKey: getGetDashboardIncomeStreamsQueryKey({ month: m, year: y }),
-      queryFn: () => getDashboardIncomeStreams({ month: m, year: y }),
-      staleTime: 60_000,
-      retry: false,
-    })),
-  });
-  const loading = [...breakdowns, ...incomes].some((query) => query.isLoading);
-  const failed = [...breakdowns, ...incomes].some((query) => query.isError);
-  const grid = useMemo(
-    () => yearGrid(
+  const loading = yearQuery.isLoading;
+  const failed = yearQuery.isError;
+  const grid = useMemo(() => {
+    const byMonth = new Map((yearQuery.data?.months ?? []).map((one) => [one.month, one]));
+    return yearGrid(
       months,
-      breakdowns.map((query) => query.data as unknown as BreakdownRow[] | undefined),
-      incomes.map((query) => query.data as unknown as IncomeMonth | undefined),
-    ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [months, ...breakdowns.map((query) => query.data), ...incomes.map((query) => query.data)],
-  );
+      months.map(({ month }) => byMonth.get(month)?.breakdown),
+      months.map(({ month }) => byMonth.get(month)?.income),
+    );
+  }, [months, yearQuery.data]);
 
   const toggle = (name: string) => setOpened((current) => {
     const next = new Set(current);
@@ -71,7 +59,7 @@ export default function YearReportScreen() {
     else next.add(name);
     return next;
   });
-  const retry = () => [...breakdowns, ...incomes].forEach((query) => { if (query.isError) void query.refetch(); });
+  const retry = () => void yearQuery.refetch();
 
   type Line = { key: string; name: string; amounts: number[]; total: number; peak: number; kind: 'row' | 'child' | 'heading' | 'total' | 'section'; side: 'in' | 'out' | 'net'; open?: boolean };
   const lines: Line[] = [];
@@ -137,7 +125,7 @@ export default function YearReportScreen() {
         <>
         {failed ? (
           <Pressable onPress={retry} accessibilityRole="button" style={styles.failed} testID="year-report-retry">
-            <Text style={{ color: colors.destructive, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>Some months did not load. Tap to try again.</Text>
+            <Text style={{ color: colors.destructive, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>The year did not load. Tap to try again.</Text>
           </Pressable>
         ) : null}
         {/* The month row is frozen at the top while the rows scroll down ("freeze the

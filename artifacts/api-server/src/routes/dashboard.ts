@@ -837,13 +837,23 @@ router.get("/dashboard/activity", async (req, res): Promise<void> => {
 router.get("/dashboard/category-breakdown", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
-  // Only the businesses in My businesses have costs (lib/business-streams).
-  const businessIds = new Set(await businessStreamIds(groupId));
-
   const now = nairobiNow();
   const parsed = GetDashboardCategoryBreakdownQueryParams.safeParse(req.query);
   const month = parsed.success && parsed.data.month != null ? Math.round(parsed.data.month) : now.getUTCMonth() + 1;
   const year = parsed.success && parsed.data.year != null ? Math.round(parsed.data.year) : now.getUTCFullYear();
+  const breakdown = await categoryBreakdownFor(groupId, year, month);
+  // Reports, Ask Jamvi and the like want the household's figures only.
+  res.json(req.query.scope === "household" ? householdRows(breakdown) : breakdown);
+});
+
+/**
+ * A month's spending by category, with each category's budget - the category
+ * breakdown, as a function so Year at a glance can ask for twelve months in
+ * one request (9 Oct 2026). Unchanged from the route it came out of.
+ */
+async function categoryBreakdownFor(groupId: number, year: number, month: number) {
+  // Only the businesses in My businesses have costs (lib/business-streams).
+  const businessIds = new Set(await businessStreamIds(groupId));
 
   // Each with the budget it had in this month (lib/budget-months).
   const categories = await monthBudgets(groupId, await db
@@ -967,9 +977,8 @@ router.get("/dashboard/category-breakdown", async (req, res): Promise<void> => {
     });
   }
 
-  // Reports, Ask Jamvi and the like want the household's figures only.
-  res.json(req.query.scope === "household" ? householdRows(breakdown) : breakdown);
-});
+  return breakdown;
+}
 
 router.get("/dashboard/category-ledger", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
@@ -1868,6 +1877,11 @@ router.get("/dashboard/income-streams", async (req, res): Promise<void> => {
   const parsed = GetDashboardIncomeStreamsQueryParams.safeParse(req.query);
   const month = parsed.success && parsed.data.month != null ? Math.round(parsed.data.month) : now.getUTCMonth() + 1;
   const year = parsed.success && parsed.data.year != null ? Math.round(parsed.data.year) : now.getUTCFullYear();
+  res.json(GetDashboardIncomeStreamsResponse.parse(await incomeStreamsFor(groupId, year, month)));
+});
+
+/** A month's income by stream - the income streams report, as a function for Year at a glance. Unchanged from its route. */
+async function incomeStreamsFor(groupId: number, year: number, month: number) {
 
   // An income stream is income: nothing comes off it (costs are a business's -
   // lib/business-streams), except a business its owner lives on: its profit.
@@ -2129,8 +2143,8 @@ router.get("/dashboard/income-streams", async (req, res): Promise<void> => {
     streams,
   };
 
-  res.json(GetDashboardIncomeStreamsResponse.parse(response));
-});
+  return response;
+}
 
 /**
  * Per-income-stream funding, month by month.
@@ -2141,6 +2155,39 @@ router.get("/dashboard/income-streams", async (req, res): Promise<void> => {
  * than one call per month: the funding CTE is identical, only what it is
  * grouped by changes.
  */
+/**
+ * Year at a glance in one request: each month's spending by category and income
+ * by stream, from the very functions Reports uses for one month, so every cell
+ * says what Reports says. It made 24 requests on its first open; now one, two
+ * months worked out at a time to spare the database, and kept by the report
+ * cache until something is saved (9 Oct 2026). A stream's entries are left out:
+ * the year only needs its total.
+ */
+router.get("/dashboard/year", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  const now = nairobiNow();
+  const thisYear = now.getUTCFullYear();
+  const asked = Number(req.query.year);
+  const year = Number.isInteger(asked) && asked >= 2000 && asked <= thisYear ? asked : thisYear;
+  const last = year === thisYear ? now.getUTCMonth() + 1 : 12;
+  const months = Array.from({ length: last }, (_, index) => index + 1);
+  const results: Array<{ year: number; month: number; breakdown: unknown; income: { streams: Array<{ incomeSourceId: number | null; sourceName: string; total: number }> } }> = [];
+  for (let i = 0; i < months.length; i += 2) {
+    const pair = await Promise.all(months.slice(i, i + 2).map(async (month) => {
+      const [breakdown, income] = await Promise.all([categoryBreakdownFor(groupId, year, month), incomeStreamsFor(groupId, year, month)]);
+      return {
+        year,
+        month,
+        breakdown,
+        income: { streams: income.streams.map((stream) => ({ incomeSourceId: stream.incomeSourceId ?? null, sourceName: stream.sourceName, total: stream.total })) },
+      };
+    }));
+    results.push(...pair);
+  }
+  res.json({ year, months: results });
+});
+
 router.get("/dashboard/income-streams-trend", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
