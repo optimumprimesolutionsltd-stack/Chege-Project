@@ -9,7 +9,7 @@ const fix = readFileSync('../api-server/src/lib/borrowed-not-income.ts', 'utf8')
 describe('borrowed money and repayments have no income source', () => {
   it('the form does not offer income streams for them, and saves none', () => {
     expect(bank).toContain('const notIncome = isBorrowing || repayingParty !== null;');
-    expect(bank).toContain('{isDeposit && !notIncome && (singleDepositorId || depositorIds.length === 0) && (');
+    expect(bank).toContain('{isDeposit && !notIncome && forBusinessId === null && (singleDepositorId || depositorIds.length === 0) && (');
     expect(bank).toContain('{ incomeSourceId: notIncome ? null : incomeSourceId }');
     expect(bank.match(/\.\.\.\(incomeSourceId && !notIncome \? \{ incomeSourceId \} : \{\}\),/g)).toHaveLength(2);
   });
