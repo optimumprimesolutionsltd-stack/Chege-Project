@@ -34,7 +34,7 @@ describe("search by words", () => {
   });
 
   it("is how Search looks through entries, people, goals and income streams", () => {
-    const ai = readFileSync("src/routes/ai.ts", "utf8");
+    const ai = readFileSync("src/routes/ai.ts", "utf8").replace(/\r\n/g, "\n");
     expect(ai).toContain("const words = searchWords(query);");
     expect(ai).toContain("everyWord(words, (pattern) => [\n                ilike(jointAccountTxTable.description, pattern),");
     expect(ai).toContain("everyWord(words, (pattern) => [\n                ilike(expensesTable.description, pattern),");

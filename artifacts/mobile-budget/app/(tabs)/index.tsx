@@ -30,6 +30,7 @@ import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { DebtSummaryCard } from '@/components/DebtSummaryCard';
 import { useColors } from '@/hooks/useColors';
 import { onScreenOnly, useOnScreen } from '@/hooks/useOnScreen';
+import { useSortRecognisedOnce } from '@/hooks/useCommonCategories';
 import { useEntitlements } from '@/hooks/useEntitlements';
 import { mayStartGroup } from '@/lib/groupStart';
 import { toSortTitle } from '@/lib/entriesToSort';
@@ -317,6 +318,8 @@ export default function DashboardScreen() {
   const workspaceIcon = (group?.icon ?? 'users') as keyof typeof Feather.glyphMap;
   const workspacePhotoUrl = isSharedWorkspace ? group?.photoUrl : user?.profileImageUrl;
   const canManageBudget = !isSharedWorkspace || group?.role === 'owner' || group?.role === 'admin';
+  // Entries saved as Not sure yet to payees Jamvi knows are filed once (hooks/useCommonCategories).
+  useSortRecognisedOnce(group?.id, canManageBudget);
   const canManageExpenses = !isSharedWorkspace || group?.role === 'owner' || group?.role === 'admin';
   const canManageAccess = isSharedWorkspace && (group?.role === 'owner' || group?.role === 'admin');
   // The group areas in the person's own order, per budget, hidden ones left out.

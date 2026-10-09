@@ -1,7 +1,7 @@
 import type { DebtLink } from "./mpesa-debts";
 import { fuzzyCategory, isFeePosting, looksLikePerson, ruleCategory, ruleSource, wordCategory, type PayeeRules } from "./payee-learning";
 import { loanOf, productCategory, productOf, savingsOf } from "./mpesa-products";
-import { knownPayeeCategory } from "./known-payees";
+import { knownPayeeCategory, knownPayeeOf, makesStandardCategories } from "./known-payees";
 import { tagOf, withoutPersonTag } from "./personNumber";
 
 export type AlreadyRecorded = {
@@ -377,7 +377,17 @@ export function filedByJamvi(line: PreviewLine, category: string): boolean {
   // (lib/mpesaDebts withLenderDebts, lib/mpesaProducts withSavingsAccounts).
   if (loanOf(line) || savingsOf(line)) return true;
   if (line.direction !== "out" || !category || category === NOT_SURE_CATEGORY) return false;
-  return productOf(line) !== null || line.type === "transaction_charge" || line.type === "fuliza_fee";
+  if (productOf(line) !== null || line.type === "transaction_charge" || line.type === "fuliza_fee") return true;
+  // A payee Jamvi knows - Kenya Power, a supermarket, a hospital - is filed too: "all
+  // the recognized categories should be as per the app subject to the user changing"
+  // (9 Oct 2026). Never a person or a bank, whose payments could be for anything.
+  const description = line.description ?? "";
+  return line.named !== false && knownPayeeOf(description) !== null && !isBankPayee(description) && !paidToPerson(line);
+}
+
+/** Money out to a person rather than a business: filed only by a kept rule or that person"s own history. */
+function paidToPerson(line: PreviewLine): boolean {
+  return line.type === "person_payment" || (line.type === null && looksLikePerson(line.description ?? ""));
 }
 
 /** The category money out is filed under when nobody can yet say what it was for (lib/entriesToSort). */
@@ -438,7 +448,7 @@ function suggestionFor(
   // (8 Oct 2026) - but never by a similar name or a shared word: names share
   // common words ("Mary", "Kamau"), and two Marys filed under Food say nothing
   // about a third. With neither, the person waits as Not sure.
-  const toPerson = line.type === "person_payment" || (line.type === null && looksLikePerson(description));
+  const toPerson = paidToPerson(line);
   const similar = description && line.named !== false && !toPerson ? fuzzyCategory(description, history, categoryNames) : "";
   const byWord = description && line.named !== false && !toPerson ? wordCategory(description, history, categoryNames) : "";
   return (
@@ -448,7 +458,10 @@ function suggestionFor(
     byWord ||
     // Then a payee whose category is obvious from its name (Kenya Power, a supermarket):
     // the person"s own books always come first.
-    (description ? knownPayeeCategory(description, categoryNames) : "") ||
+    // A line that named nobody says nothing about who was paid, so nothing is read from its words.
+    (description && line.named !== false ? knownPayeeCategory(description, categoryNames) : "") ||
+    // The common category for it, made before saving where that is done (lib/knownPayees).
+    (description && line.named !== false && !toPerson && makesStandardCategories() ? knownPayeeOf(description)?.standard?.name ?? "" : "") ||
     (line.type === "fuliza_fee" ? chargeCategory : "") ||
     defaultCategoryFor(line, categoryNames)
   );

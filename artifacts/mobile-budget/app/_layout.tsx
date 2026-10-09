@@ -19,6 +19,7 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useFonts } from 'expo-font';
 import { Stack, router, usePathname, useSegments } from 'expo-router';
 import { refreshAfterSave, refreshShownHistory } from '@/lib/refreshAfterSave';
+import { useStandardLinks } from '@/hooks/useCommonCategories';
 import * as SplashScreen from 'expo-splash-screen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEntitlements } from '@/hooks/useEntitlements';
@@ -271,6 +272,9 @@ function RootLayoutNav() {
       enabled: isAuthenticated && !!user?.id && !user?.needsDisplayName,
     },
   });
+
+  // The budget's common category for each kind of payee Jamvi knows (lib/commonCategories).
+  useStandardLinks(isAuthenticated && !!user?.id && !user?.needsDisplayName);
 
   const workspaces = workspaceList ?? NO_WORKSPACES;
   // Could not be fetched at all: unknown, not empty. See hasValidMobileWorkspaceSelection.

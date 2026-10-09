@@ -20,9 +20,13 @@ const create = (body: Record<string, unknown>) =>
   });
 
 export async function createInPlace(name: string, place: NewCategoryPlace): Promise<string> {
+  return (await createInPlaceWithId(name, place)).name;
+}
+
+/** The same, giving back the saved category's id as well as its name. */
+export async function createInPlaceWithId(name: string, place: NewCategoryPlace): Promise<Created> {
   const parentId = place.kind === 'existing'
     ? place.parentId
     : (await create({ name: place.parentName.trim(), priority: place.priority, parentId: null })).id;
-  const child = await create({ name: name.trim(), priority: place.priority, parentId });
-  return child.name;
+  return create({ name: name.trim(), priority: place.priority, parentId });
 }

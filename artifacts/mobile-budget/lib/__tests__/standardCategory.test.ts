@@ -11,10 +11,10 @@ import { createInPlace } from '@/lib/createStandardCategory';
 // too" (7 Oct 2026): a new category always goes under a heading, in a tier.
 describe('the standard place for a payee Jamvi knows', () => {
   it('is a subcategory under its standard heading, in that heading\'s tier', () => {
-    expect(standardTargetFor('NAIVAS WESTLANDS')).toEqual({ name: 'Groceries', parent: 'Food', priority: 1 });
-    expect(standardTargetFor('MAGUNAS SUPERMARKET')).toEqual({ name: 'Groceries', parent: 'Food', priority: 1 });
-    expect(standardTargetFor('KPLC PREPAID')).toEqual({ name: 'Electricity', parent: 'Utilities', priority: 1 });
-    expect(standardTargetFor('JAVA HOUSE')).toEqual({ name: 'Eating out', parent: 'Food', priority: 1 });
+    expect(standardTargetFor('NAIVAS WESTLANDS')).toMatchObject({ name: 'Groceries', parent: 'Food', priority: 1 });
+    expect(standardTargetFor('MAGUNAS SUPERMARKET')).toMatchObject({ name: 'Groceries', parent: 'Food', priority: 1 });
+    expect(standardTargetFor('KPLC PREPAID')).toEqual({ key: 'electricity', name: 'Electricity', parent: 'Utilities', priority: 1 });
+    expect(standardTargetFor('JAVA HOUSE')).toEqual({ key: 'eating-out', name: 'Eating out', parent: 'Food', priority: 1 });
     expect(standardTargetFor('GOODLIFE PHARMACY')?.parent).toBe('Health');
   });
 

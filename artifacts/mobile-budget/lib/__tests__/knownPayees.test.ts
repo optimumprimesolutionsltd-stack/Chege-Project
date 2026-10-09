@@ -72,11 +72,12 @@ describe('knownPayeeCategory', () => {
 });
 
 describe('a well-known payee in the import', () => {
-  it('is suggested, waiting to be confirmed', () => {
+  // "All the recognized categories should be as per the app subject to the user changing" (9 Oct 2026).
+  it('is filed by Jamvi, and can still be changed', () => {
     const choices = initialChoices([line({ description: 'Kplc Prepaid (54401234567)' })], [], household);
     expect(choices[0].category).toBe('Electricity');
     expect(choices[0].auto).toBe(true);
-    expect(choices[0].confirmed).toBeUndefined();
+    expect(choices[0].confirmed).toBe(true);
   });
 
   it("gives way to the person's own history", () => {

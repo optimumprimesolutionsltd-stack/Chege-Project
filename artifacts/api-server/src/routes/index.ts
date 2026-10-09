@@ -31,6 +31,7 @@ import mpesaNamesRouter from "./mpesa-names";
 import entriesToSortRouter from "./entries-to-sort";
 import ownerBusinessRouter from "./owner-business";
 import businessAccountsRouter from "./business-accounts";
+import standardCategoriesRouter from "./standard-categories";
 import businessesRouter from "./businesses";
 import deleteYearRouter from "./delete-year";
 import {
@@ -85,6 +86,7 @@ router.use(mpesaNamesRouter);
 router.use(entriesToSortRouter);
 router.use(ownerBusinessRouter);
 router.use(businessAccountsRouter);
+router.use(standardCategoriesRouter);
 router.use(businessesRouter);
 router.use(deleteYearRouter);
 router.use(incomeSourcesRouter);
