@@ -202,6 +202,8 @@ export async function findTwins(
  * M-Pesa codes among these that are already in another budget the person
  * belongs to: one statement imported into Personal and into a chama would
  * otherwise record a payment in both (the code is unique per budget only).
+ * Only budgets with the same owner as this one: a budget somebody else owns
+ * keeps its own record of the same payment.
  */
 export async function receiptsElsewhere(
   groupId: number,
@@ -215,6 +217,15 @@ export async function receiptsElsewhere(
     JOIN group_memberships m ON m.group_id = t.group_id AND m.user_id = ${userId}
     JOIN groups g ON g.id = t.group_id
     WHERE t.group_id <> ${groupId}
+      -- Only a budget with the same owner as this one. A budget somebody else owns
+      -- keeps its own record of the same payment: "the two workspaces do not belong
+      -- to one owner and do not share a group" (9 Oct 2026).
+      AND EXISTS (
+        SELECT 1 FROM group_memberships other_owner
+        JOIN group_memberships this_owner ON this_owner.user_id = other_owner.user_id
+        WHERE other_owner.group_id = t.group_id AND other_owner.role = 'owner'
+          AND this_owner.group_id = ${groupId} AND this_owner.role = 'owner'
+      )
       AND t.mpesa_receipt IN (${sql.join(receipts.map((code) => sql`${code}`), sql`, `)})
     ORDER BY t.mpesa_receipt, t.id`);
   return (result.rows as Row[]).map((row) => ({ receipt: String(row.receipt), budget: String(row.budget) }));
