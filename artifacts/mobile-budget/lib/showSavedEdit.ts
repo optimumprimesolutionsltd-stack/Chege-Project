@@ -36,6 +36,8 @@ export const LISTS_AN_EDIT_CHANGES: ReadonlyArray<readonly unknown[]> = [
   ['/api/dashboard/category-ledger'],
   ['/api/dashboard/activity'],
   ['/api/dashboard/category-breakdown'],
+  // Search's results, so an entry edited from there reads as saved on the way back.
+  ['workspace-search'],
 ];
 
 /** The cached Sort them out list without the entries just sorted. */

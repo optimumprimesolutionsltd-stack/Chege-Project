@@ -58,7 +58,7 @@ const WAYS: Array<{ key: MoneyWay; label: string }> = [
  */
 const destinationFor = ({ kind, id, date, accountId }: SearchResult) => {
   if (kind === 'expenses') return getExpenseEditHref({ id, date: date ?? '' });
-  if (kind === 'bank') return `/(tabs)/bank?editTx=${id}${accountId ? `&accountId=${accountId}` : ''}&returnTo=${encodeURIComponent('/(tabs)/search')}`;
+  if (kind === 'bank') return `/(tabs)/bank?editTx=${id}${accountId ? `&accountId=${accountId}` : ''}&opened=${Date.now()}&returnTo=${encodeURIComponent('/(tabs)/search')}`;
   if (kind === 'goals') return '/(tabs)/goals';
   return '/(tabs)/budget';
 };

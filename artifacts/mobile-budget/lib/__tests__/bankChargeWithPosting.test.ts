@@ -162,7 +162,7 @@ describe('a charge belongs to the posting it came with', () => {
   });
 
   it('is shown again when the posting is reopened', () => {
-    expect(bank).toContain('const chargeOnThis = data?.transactions.find((row) => row.chargeForTransactionId === tx.id) ?? null;');
+    expect(bank).toContain('const chargeOnThis = [...(data?.transactions ?? []), ...quickRows.current].find((row) => row.chargeForTransactionId === tx.id) ?? null;');
     expect(bank).toContain("setChargeAmount(chargeOnThis ? String(chargeOnThis.amount) : '');");
   });
 

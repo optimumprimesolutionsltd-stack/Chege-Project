@@ -194,7 +194,9 @@ export default function BankScreen() {
   const topPad = Platform.OS === 'web' ? 67 : insets.top;
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const { shortcut, editTx, accountId: linkedAccountId, returnTo } = useLocalSearchParams<{ shortcut?: string; editTx?: string; accountId?: string; returnTo?: string }>();
+  const { shortcut, editTx, accountId: linkedAccountId, returnTo, opened } = useLocalSearchParams<{ shortcut?: string; editTx?: string; accountId?: string; returnTo?: string; opened?: string }>();
+  // Which tap a link is: the same entry opened again from Search is a new tap, not one already handled.
+  const editLink = editTx ? `${editTx}:${opened ?? ''}` : null;
   const handledEditTx = useRef<string | null>(null);
   // Where an edit opened from elsewhere (Activity, All expenses) came from: once it is
   // saved or closed the person goes back there, with their place kept, instead of
@@ -713,13 +715,35 @@ export default function BankScreen() {
   // Edit on an M-Pesa or bank entry in Activity opens it here, on its own account,
   // where the balance follows the change (?editTx=<id>&accountId=<id>).
   useEffect(() => {
-    if (editTx && handledEditTx.current !== editTx) {
+    if (editLink && handledEditTx.current !== editLink) {
       sheetWasOpen.current = false;
       setEditFromElsewhere(true);
     }
-  }, [editTx]);
+  }, [editLink]);
+  // Opened at once from the one entry (GET /api/joint-account/entry/:id), not
+  // after the whole account has loaded: from Search that took seconds. A move
+  // between two accounts waits for the list below, as both sides are needed.
   useEffect(() => {
-    if (!editTx || handledEditTx.current === editTx) return;
+    if (!editTx || !editLink || handledEditTx.current === editLink) return;
+    let active = true;
+    void customFetch<{ transaction: Tx; charges: Tx[] }>(`/api/joint-account/entry/${Number(editTx)}`)
+      .then((found) => {
+        if (!active || handledEditTx.current === editLink || !found?.transaction || found.transaction.bankTransferId) return;
+        handledEditTx.current = editLink;
+        quickRows.current = found.charges ?? [];
+        returnAfterEdit.current = typeof returnTo === 'string' && returnTo.startsWith('/') ? returnTo : null;
+        const wanted = Number(linkedAccountId);
+        if (Number.isInteger(wanted) && wanted > 0 && accounts.some((account) => account.id === wanted) && selectedAccountId !== wanted) selectAccount(wanted);
+        openEdit(found.transaction);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editLink]);
+  useEffect(() => {
+    if (!editTx || !editLink || handledEditTx.current === editLink) return;
     const wanted = Number(linkedAccountId);
     if (Number.isInteger(wanted) && wanted > 0 && accounts.some((account) => account.id === wanted) && selectedAccountId !== wanted) {
       selectAccount(wanted);
@@ -727,11 +751,11 @@ export default function BankScreen() {
     }
     const tx = data?.transactions.find((row) => row.id === Number(editTx));
     if (!tx) return;
-    handledEditTx.current = editTx;
+    handledEditTx.current = editLink;
     returnAfterEdit.current = typeof returnTo === 'string' && returnTo.startsWith('/') ? returnTo : null;
     openEdit(tx as Tx);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editTx, linkedAccountId, accounts, selectedAccountId, data]);
+  }, [editLink, linkedAccountId, accounts, selectedAccountId, data]);
 
   // "Passed through my M-Pesa", opened from an entry's edit sheet (components/PassThroughPair).
   const [pairFor, setPairFor] = useState<PairEntry | null>(null);
@@ -1357,6 +1381,9 @@ export default function BankScreen() {
     setModalVisible(true);
   };
 
+  // An entry opened from elsewhere before its account's list has loaded
+  // (quickEdit below): its own fee, which openEdit would otherwise look up there.
+  const quickRows = useRef<Tx[]>([]);
   const openEdit = (tx: Tx) => {
     if (!canEditTransaction(tx)) {
       Alert.alert('This transaction is locked', 'Members can correct only their own deposits dated today. Ask an admin to correct an earlier or shared bank record.');
@@ -1381,7 +1408,7 @@ export default function BankScreen() {
     // import's old mistake (the 75,000 to Hermda Traders filed as Bank charges):
     // a payment cannot be its own fee. It opens with the category cleared and
     // the list open, so the one thing to do is pick what the payment was for.
-    const feeOnThis = data?.transactions.find((row) => row.chargeForTransactionId === tx.id) ?? null;
+    const feeOnThis = [...(data?.transactions ?? []), ...quickRows.current].find((row) => row.chargeForTransactionId === tx.id) ?? null;
     const filedAsItsOwnFee = !!feeOnThis?.expenseCategory && !!tx.expenseCategory &&
       feeOnThis.expenseCategory.trim().toLocaleLowerCase() === tx.expenseCategory.trim().toLocaleLowerCase();
     setExpenseCategory(filedAsItsOwnFee ? '' : tx.expenseCategory ?? '');
@@ -1389,7 +1416,7 @@ export default function BankScreen() {
     // The fee already on this posting, if it has one, so editing changes that
     // fee instead of writing another. Blank when it has none, so a fee left in
     // the field from the last posting cannot be added to this one by opening it.
-    const chargeOnThis = data?.transactions.find((row) => row.chargeForTransactionId === tx.id) ?? null;
+    const chargeOnThis = [...(data?.transactions ?? []), ...quickRows.current].find((row) => row.chargeForTransactionId === tx.id) ?? null;
     setChargeAmount(chargeOnThis ? String(chargeOnThis.amount) : '');
     setChangingChargeCategory(false);
     if (chargeOnThis?.expenseCategory) setChargeCategory(chargeOnThis.expenseCategory);
