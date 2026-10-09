@@ -2770,9 +2770,12 @@ router.get("/dashboard/trends", async (req, res): Promise<void> => {
 
   const monthsBack = Math.min(Math.max(Number(req.query.months) || 6, 1), 12);
   const now = nairobiNow();
-  const results = [];
 
-  for (let i = monthsBack - 1; i >= 0; i--) {
+  // The months side by side, not one after another: each is three round trips
+  // to the database, and twelve in turn was most of this report's 1-2 s (Render
+  // logs, 9 Oct 2026). Same figures, oldest month first as before.
+  const results = await Promise.all(Array.from({ length: monthsBack }, async (_, index) => {
+    const i = monthsBack - 1 - index;
     const d = new Date(now.getUTCFullYear(), now.getUTCMonth() - i, 1);
     const m = d.getMonth() + 1;
     const y = d.getFullYear();
@@ -2783,26 +2786,26 @@ router.get("/dashboard/trends", async (req, res): Promise<void> => {
     // "what did I spend": both kinds, less a side hustle's costs.
     const monthFrom = `${y}-${String(m).padStart(2, "0")}-01`;
     const monthTo = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
-    const [spentRow] = await db
+    const [[spentRow], [bankRow], businessCosts] = await Promise.all([db
       .select({ total: sql<number>`COALESCE(SUM(${expensesTable.amount}), 0)`, count: sql<number>`COUNT(*)` })
       .from(expensesTable)
-      .where(sql`${expensesTable.groupId} = ${groupId} AND ${expensesTable.date} >= ${monthFrom} AND ${expensesTable.date} <= ${monthTo}`);
-    const [bankRow] = await db
+      .where(sql`${expensesTable.groupId} = ${groupId} AND ${expensesTable.date} >= ${monthFrom} AND ${expensesTable.date} <= ${monthTo}`),
+    db
       .select({ total: sql<number>`COALESCE(SUM(${jointAccountTxTable.amount}), 0)`, count: sql<number>`COUNT(*)` })
       .from(jointAccountTxTable)
-      .where(sql`${jointAccountTxTable.groupId} = ${groupId} AND ${jointAccountTxTable.type} = 'disbursement' AND ${jointAccountTxTable.bankTransferId} IS NULL AND ${jointAccountTxTable.expenseCategory} IS NOT NULL AND ${jointAccountTxTable.expenseId} IS NULL${inPersonalAccount(jointAccountTxTable.accountId)} AND ${jointAccountTxTable.date} >= ${monthFrom} AND ${jointAccountTxTable.date} <= ${monthTo}`);
-    const businessCosts = await incomeStreamCostLines(groupId, monthFrom, monthTo, { personalOnly: true })
+      .where(sql`${jointAccountTxTable.groupId} = ${groupId} AND ${jointAccountTxTable.type} = 'disbursement' AND ${jointAccountTxTable.bankTransferId} IS NULL AND ${jointAccountTxTable.expenseCategory} IS NOT NULL AND ${jointAccountTxTable.expenseId} IS NULL${inPersonalAccount(jointAccountTxTable.accountId)} AND ${jointAccountTxTable.date} >= ${monthFrom} AND ${jointAccountTxTable.date} <= ${monthTo}`),
+    incomeStreamCostLines(groupId, monthFrom, monthTo, { personalOnly: true })
       .then((lines) => lines.reduce((sum, line) => sum + line.amount, 0))
-      .catch(() => 0);
+      .catch(() => 0)]);
 
-    results.push({
+    return {
       month: m,
       year: y,
       label: d.toLocaleString("default", { month: "short", year: "numeric" }),
       totalSpent: Math.max(0, Number(spentRow.total) + Number(bankRow?.total ?? 0) - businessCosts),
       expenseCount: Number(spentRow.count) + Number(bankRow?.count ?? 0),
-    });
-  }
+    };
+  }));
 
   res.json(results);
 });
