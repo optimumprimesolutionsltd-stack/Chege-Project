@@ -4432,6 +4432,12 @@ components:
     DisbursementInput:
       type: object
       properties:
+        isRefund:
+          type: boolean
+          description: >-
+            Money back into the account that reduces spending in its category
+            (a reversed or refunded payment). Sent as a positive amount; stored
+            and returned as a negative payment, so every spending total nets it.
         mpesaReceipt:
           type: string
           minLength: 6
@@ -4502,6 +4508,12 @@ components:
     UpdateJointAccountTransactionInput:
       type: object
       properties:
+        isRefund:
+          type: boolean
+          description: >-
+            Money back into the account that reduces spending in its category
+            (a reversed or refunded payment). Sent as a positive amount; omitted keeps what the entry is; stored
+            and returned as a negative payment, so every spending total nets it.
         amount:
           type: number
           minimum: 0

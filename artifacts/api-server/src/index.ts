@@ -21,6 +21,7 @@ import { ensureSubscriptionPlanCatalogue } from "./lib/subscription-catalog";
 import { runSubscriptionLifecycle } from "./lib/subscription-reminders";
 import { runAccountDeletions, sendAccountDeletionReminders } from "./lib/account-deletion";
 import { ensureReversalLinks } from "./lib/reversal-links";
+import { convertMoneyBackToRefunds } from "./lib/refunds";
 import { ensureImportTidyKept } from "./lib/import-tidy-kept";
 import { ensureBudgetMonths } from "./lib/budget-months";
 
@@ -77,7 +78,8 @@ async function startServer() {
   // useful, but it is not worth the service for.
   // After listening for the same reason: linking a reversal is worth having,
   // not worth failing a boot for. See lib/reversal-links.ts.
-  void ensureReversalLinks();
+  // Money back saved before refunds existed becomes refunds, once (lib/refunds).
+  void ensureReversalLinks().then(() => convertMoneyBackToRefunds());
   void ensureImportTidyKept();
   void ensureBudgetMonths();
   void ensureIncomeMonths();

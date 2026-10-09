@@ -71,7 +71,7 @@ describe("a missing category is allowed only because it was lent, or paid somebo
   });
 
   it("still gives the row something to be called", () => {
-    expect(bank).toContain('description: description || expenseCategory || (isLending ? "Lent out" : "Debt payment"),');
+    expect(bank).toContain('description: description || expenseCategory || (isRefund ? "Refund" : isLending ? "Lent out" : "Debt payment"),');
   });
 });
 

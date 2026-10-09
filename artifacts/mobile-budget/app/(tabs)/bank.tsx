@@ -347,6 +347,8 @@ export default function BankScreen() {
   const namedPayees = useNamedPayees();
   // "Who is this for?" on an entry: Personal (null), or one of the businesses (components/WhoIsThisFor).
   const [forBusinessId, setForBusinessId] = useState<number | null>(null);
+  // The entry being edited is a refund: said on the form, and kept one on save.
+  const [editingRefund, setEditingRefund] = useState(false);
   const businesses = useBusinesses();
   // The payee's name, typed on the card (components/WhoIsThisFor), kept in Named accounts after Save.
   const [whoForPayeeName, setWhoForPayeeName] = useState('');
@@ -678,6 +680,7 @@ export default function BankScreen() {
   const selectedGoal = savingsGoals.find(g => g.id === withdrawGoalId) ?? null;
 
   const openModal = (type: TxType) => {
+    setEditingRefund(false);
     if (!canManageAccount && type !== 'deposit') {
       Alert.alert('Admin access required', 'Ask a group owner or admin to record a shared transfer or withdrawal.');
       return;
@@ -954,6 +957,7 @@ export default function BankScreen() {
   };
 
   const closeModal = () => {
+    setEditingRefund(false);
     if (submitting) return;
     setModalVisible(false);
     setNewCategoryName('');
@@ -1419,7 +1423,10 @@ export default function BankScreen() {
       : tx.type === 'deposit' ? 'deposit' : 'disbursement';
     setTxType(type);
     setEditingTransactionId(tx.id);
-    setAmount(String(tx.amount));
+    // A refund is a negative payment; the form takes the amount as it reads, and
+    // the server keeps it a refund (api-server lib/refunds).
+    setAmount(String(Math.abs(Number(tx.amount))));
+    setEditingRefund(type === 'disbursement' && Number(tx.amount) < 0);
     setDescription(type === 'transfer'
       ? tx.description.replace(/^Transfer (?:to|from) savings —\s*/, '')
       : tx.description);
@@ -3457,6 +3464,8 @@ export default function BankScreen() {
         }
         renderItem={({ item }) => {
           const dep = item.type === 'deposit';
+          // Money back that takes spending off its category (api-server lib/refunds).
+          const refund = item.type === 'disbursement' && Number(item.amount) < 0;
           const payerLabel = txPayerLabel(item);
           // Shown by the name the person gave its account, when they gave one.
           const shownDescription = namedPayees.nameFor(item.description) ?? item.description;
@@ -3546,9 +3555,12 @@ export default function BankScreen() {
                 ) : null}
               </View>
               <View style={{ alignItems: 'flex-end', gap: 8 }}>
-                 <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72} style={[styles.txAmount, { color: dep ? '#4ade80' : '#f87171' }]}>
-                  {dep ? '+' : '-'}KES {formatKES(item.amount)}
+                 <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72} style={[styles.txAmount, { color: dep || refund ? '#4ade80' : '#f87171' }]}>
+                  {dep || refund ? '+' : '-'}KES {formatKES(Math.abs(Number(item.amount)))}
                 </Text>
+                {refund ? (
+                  <Text style={{ color: '#4ade80', fontSize: 11, fontFamily: 'Inter_600SemiBold' }} testID={`bank-refund-${item.id}`}>Refund</Text>
+                ) : null}
                 <Text
                   style={[styles.txDate, { color: colors.mutedForeground }]}
                   testID={`transaction-date-${item.id}`}
@@ -5087,6 +5099,14 @@ export default function BankScreen() {
               {/* ── Withdrawal destination ────────────────────────────────────── */}
               {isWithdrawal && (
                 <>
+                  {editingRefund ? (
+                    <View style={{ borderWidth: 1, borderColor: '#4ade80', borderRadius: 8, padding: 10, marginBottom: 10 }} testID="bank-refund-note">
+                      <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>A refund</Text>
+                      <Text style={{ color: colors.mutedForeground, fontSize: 12, lineHeight: 17 }}>
+                        Money that came back. It takes the amount off the category below, and adds it to the balance. Change the category if it came back to a different one.
+                      </Text>
+                    </View>
+                  ) : null}
                   {/* Asked exactly as the deposit side asks it, because it
                       is the same question: ordinary spending, paying somebody
                       you owe, or lending. Borrowing and lending are the two

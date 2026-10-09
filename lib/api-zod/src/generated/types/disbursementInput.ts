@@ -8,6 +8,8 @@
 import type { DisbursementInputDestinationKind } from './disbursementInputDestinationKind';
 
 export interface DisbursementInput {
+  /** Money back into the account that reduces spending in its category (a reversed or refunded payment). Sent as a positive amount; stored and returned as a negative payment, so every spending total nets it. */
+  isRefund?: boolean;
   /**
      * The M-Pesa receipt code this posting came from. Unique per budget: recording the same code twice is refused with 409, so a message pasted again cannot be counted again.
      * @minLength 6

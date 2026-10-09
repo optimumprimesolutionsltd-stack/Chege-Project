@@ -22,7 +22,7 @@ describe('the starting balance, set in one tap', () => {
 });
 
 describe('the screen offers each fix', () => {
-  const screen = readFileSync('app/mpesa-difference.tsx', 'utf8');
+  const screen = readFileSync('app/mpesa-difference.tsx', 'utf8').replace(/\r\n/g, '\n');
   it('sets the starting balance after asking, dated the day before the messages begin', () => {
     expect(screen).toContain('testID="mpesa-difference-set-opening"');
     expect(screen).toContain("customFetch('/api/joint-account/opening-balance', {");

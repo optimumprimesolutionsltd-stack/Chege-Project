@@ -1373,6 +1373,7 @@ export const createDisbursementBodyNotesMax = 1000;
 
 
 export const CreateDisbursementBody = zod.object({
+  "isRefund": zod.boolean().optional().describe('Money back into the account that reduces spending in its category (a reversed or refunded payment). Sent as a positive amount; stored and returned as a negative payment, so every spending total nets it.'),
   "mpesaReceipt": zod.string().min(createDisbursementBodyMpesaReceiptMin).max(createDisbursementBodyMpesaReceiptMax).optional().describe('The M-Pesa receipt code this posting came from. Unique per budget: recording the same code twice is refused with 409, so a message pasted again cannot be counted again.'),
   "amount": zod.number().min(createDisbursementBodyAmountMin).multipleOf(createDisbursementBodyAmountMultipleOf).describe('KES amount with up to two decimal places. Zero is allowed, so an existing posting can be cleared to nothing rather than deleted.'),
   "description": zod.string().optional(),
@@ -1722,6 +1723,7 @@ export const updateJointAccountTransactionBodyNarrationMax = 200;
 
 
 export const UpdateJointAccountTransactionBody = zod.object({
+  "isRefund": zod.boolean().optional().describe('Money back into the account that reduces spending in its category (a reversed or refunded payment). Sent as a positive amount; omitted keeps what the entry is; stored and returned as a negative payment, so every spending total nets it.'),
   "amount": zod.number().min(updateJointAccountTransactionBodyAmountMin).multipleOf(updateJointAccountTransactionBodyAmountMultipleOf),
   "description": zod.string().optional().describe('Optional supporting detail; withdrawals fall back to their category'),
   "notes": zod.string().max(updateJointAccountTransactionBodyNotesMax).nullish().describe('A plain note against the entry. Omit to leave it unchanged; null or empty clears it.'),

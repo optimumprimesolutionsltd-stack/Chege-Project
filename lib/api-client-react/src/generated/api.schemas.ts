@@ -1742,6 +1742,8 @@ export const DisbursementInputDestinationKind = {
 } as const;
 
 export interface DisbursementInput {
+  /** Money back into the account that reduces spending in its category (a reversed or refunded payment). Sent as a positive amount; stored and returned as a negative payment, so every spending total nets it. */
+  isRefund?: boolean;
   /**
      * The M-Pesa receipt code this posting came from. Unique per budget: recording the same code twice is refused with 409, so a message pasted again cannot be counted again.
      * @minLength 6
@@ -1813,6 +1815,8 @@ export const UpdateJointAccountTransactionInputTransferDirection = {
 } as const;
 
 export interface UpdateJointAccountTransactionInput {
+  /** Money back into the account that reduces spending in its category (a reversed or refunded payment). Sent as a positive amount; omitted keeps what the entry is; stored and returned as a negative payment, so every spending total nets it. */
+  isRefund?: boolean;
   /** @minimum 0 */
   amount: number;
   /** Optional supporting detail; withdrawals fall back to their category */

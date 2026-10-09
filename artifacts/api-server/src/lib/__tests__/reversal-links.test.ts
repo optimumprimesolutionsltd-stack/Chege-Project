@@ -23,8 +23,8 @@ describe("before the table exists", () => {
   });
 
   it("is made by the server itself, after it is listening, and never stops a boot", () => {
-    expect(index).toContain("void ensureReversalLinks();");
-    expect(index.indexOf("void ensureReversalLinks();")).toBeGreaterThan(index.indexOf("app.listen("));
+    expect(index).toContain("void ensureReversalLinks().then(() => convertMoneyBackToRefunds());");
+    expect(index.indexOf("void ensureReversalLinks().then(() => convertMoneyBackToRefunds());")).toBeGreaterThan(index.indexOf("app.listen("));
   });
 });
 
