@@ -242,7 +242,7 @@ export default function ExpenseLedgerScreen() {
     const href = entry.source === 'expense'
       ? getExpenseEditHref({ id: Number(entry.id.replace('expense-', '')), date: entry.date })
       : entry.source === 'bank_disbursement'
-        ? `/(tabs)/bank?editTx=${entry.id.replace('bank-disbursement-', '')}${accountId ? `&accountId=${accountId}` : ''}&returnTo=${encodeURIComponent(`/expense-ledger?from=${rangeFrom}&to=${rangeTo}`)}`
+        ? `/(tabs)/bank?editTx=${entry.id.replace('bank-disbursement-', '')}${accountId ? `&accountId=${accountId}` : ''}&opened=${Date.now()}&returnTo=${encodeURIComponent(`/expense-ledger?from=${rangeFrom}&to=${rangeTo}`)}`
         : null;
     return (
       <Pressable

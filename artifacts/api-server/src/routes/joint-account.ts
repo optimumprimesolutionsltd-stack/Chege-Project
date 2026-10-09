@@ -2008,6 +2008,27 @@ async function loadTx(id: number, groupId: number): Promise<TxRow | null> {
 }
 
 // GET /joint-account/:id/reversal — what this deposit reverses, or could.
+/**
+ * One entry, with its own fee, described as the account list describes it -
+ * without loading the whole account. Search opens an entry on Bank to edit
+ * ("works but is slow to open", 9 Oct 2026): the form opens on this while the
+ * account's full list is still loading.
+ */
+router.get("/joint-account/entry/:id", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) { res.status(400).json({ error: "Invalid entry id." }); return; }
+  const rows = await db
+    .select()
+    .from(jointAccountTxTable)
+    .where(and(eq(jointAccountTxTable.groupId, groupId), or(eq(jointAccountTxTable.id, id), eq(jointAccountTxTable.chargeForTransactionId, id))));
+  const entry = rows.find((row) => row.id === id);
+  if (!entry) { res.status(404).json({ error: "Entry not found." }); return; }
+  const [transaction, ...charges] = await enrichTransactions([entry, ...rows.filter((row) => row.id !== id)], groupId);
+  res.json({ transaction: { ...transaction, runningBalance: null }, charges: charges.map((charge) => ({ ...charge, runningBalance: null })) });
+});
+
 router.get("/joint-account/:id/reversal", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;

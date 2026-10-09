@@ -8,7 +8,7 @@ const route = readFileSync('../api-server/src/routes/dashboard.ts', 'utf8');
 // where i can edit it" (8 Oct 2026).
 describe('All expenses: a wrong entry opens to be corrected', () => {
   it('opens an M-Pesa or bank entry on Bank, on its own account', () => {
-    expect(screen).toContain("? `/(tabs)/bank?editTx=${entry.id.replace('bank-disbursement-', '')}${accountId ? `&accountId=${accountId}` : ''}&returnTo=${encodeURIComponent(`/expense-ledger?from=${rangeFrom}&to=${rangeTo}`)}`");
+    expect(screen).toContain("? `/(tabs)/bank?editTx=${entry.id.replace('bank-disbursement-', '')}${accountId ? `&accountId=${accountId}` : ''}&opened=${Date.now()}&returnTo=${encodeURIComponent(`/expense-ledger?from=${rangeFrom}&to=${rangeTo}`)}`");
     expect(route).toContain('accountId: disbursement.accountId ?? null,');
   });
 
