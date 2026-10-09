@@ -28,6 +28,7 @@ import { CategorySearchBox } from '@/components/CategorySearchBox';
 import { onScreenOnly, useOnScreen } from '@/hooks/useOnScreen';
 import { useBusinesses } from '@/hooks/useBusinesses';
 import { useColors } from '@/hooks/useColors';
+import { isRefund, spentText } from '@/lib/refundLabel';
 import { UndoDeleteBar, useUndoableDelete } from '@/components/UndoDeleteBar';
 import { deletedLabel } from '@/lib/undoDelete';
 import { useCollapsed } from '@/hooks/useCollapsed';
@@ -1626,7 +1627,7 @@ export default function BudgetScreen() {
                         </Text>
                         {editHref ? <Text style={[styles.ledgerMeta, { color: colors.primary, marginTop: 3 }]}>Tap to edit expense</Text> : null}
                       </View>
-                      <Text style={[styles.ledgerAmount, { color: colors.foreground }]}>KES {formatKES(entry.amount)}</Text>
+                      <Text style={[styles.ledgerAmount, { color: isRefund(entry.amount) ? colors.success : colors.foreground }]}>{spentText(entry.amount, 'KES ')}</Text>
                       {editHref ? <Feather name="edit-2" size={14} color={colors.primary} /> : null}
                     </Pressable>
                   )})}

@@ -34,6 +34,6 @@ describe('bank figures on the phone are not rounded', () => {
   });
 
   it('Activity rows show the exact amount', () => {
-    expect(read('components/ActivityCard.tsx')).toContain('{formatExact(item.amount)}');
+    expect(read('components/ActivityCard.tsx')).toContain('{formatExact(Math.abs(Number(item.amount)))}');
   });
 });

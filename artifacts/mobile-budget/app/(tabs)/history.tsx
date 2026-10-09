@@ -21,6 +21,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
+import { isRefund, spentText } from '@/lib/refundLabel';
 import { onScreenOnly, useOnScreen } from '@/hooks/useOnScreen';
 import { UndoDeleteBar, useUndoableDelete } from '@/components/UndoDeleteBar';
 import { deletedLabel } from '@/lib/undoDelete';
@@ -1639,8 +1640,8 @@ function ExpenseRow({
         {expense.notes ? <Text selectable={false} style={[styles.rowNotes, { color: colors.mutedForeground }]}>{expense.notes}</Text> : null}
       </View>
       <View style={styles.rowRight}>
-        <Text selectable={false} style={[styles.rowAmount, { color: colors.foreground }]}>
-          −{expense.amount.toLocaleString('en-KE', { maximumFractionDigits: 0 })}
+        <Text selectable={false} style={[styles.rowAmount, { color: isRefund(expense.amount) ? colors.success : colors.foreground }]}>
+          {isRefund(expense.amount) ? spentText(expense.amount) : `−${spentText(expense.amount)}`}
         </Text>
         <View style={styles.rowActions}>
           {onEdit ? <Pressable onPress={onEdit} hitSlop={6} style={styles.actionBtn} accessibilityRole="button" accessibilityLabel={`Edit ${expense.description}`}>

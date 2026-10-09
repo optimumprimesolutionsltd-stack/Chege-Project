@@ -7,6 +7,7 @@ import { getExpenseActivityEditHref } from '@/lib/expenseEditLink';
 import { formatDisplayDate } from '@/lib/displayFormat';
 import { GROUP_ATTRIBUTION } from "@/lib/attribution";
 import { formatExact } from '@/lib/formatExact';
+import { isRefund } from '@/lib/refundLabel';
 
 export interface ActivityItem {
   id: string;
@@ -59,7 +60,9 @@ export default function ActivityCard({ item, colors }: Props) {
   const isTransfer = item.type === ACTIVITY_TYPE.TRANSFER;
   const isDebt = item.type === ACTIVITY_TYPE.DEBT;
   const isNeutral = isTransfer || isDebt;
-  const goesOut = isNeutral ? item.direction === 'out' : isExpense;
+  // A refund is money back (lib/refundLabel): in, not out, though filed as spending.
+  const refund = isExpense && isRefund(item.amount);
+  const goesOut = refund ? false : isNeutral ? item.direction === 'out' : isExpense;
   const expenseEditHref = getExpenseActivityEditHref(item);
 
   const iconName: keyof typeof Feather.glyphMap =
@@ -98,8 +101,8 @@ export default function ActivityCard({ item, colors }: Props) {
       </View>
 
       <Text style={[styles.amount, { color: amountColor }]}>
-        {goesOut ? '−' : '+'}
-        {formatExact(item.amount)}
+        {refund ? 'Refund +' : goesOut ? '−' : '+'}
+        {formatExact(Math.abs(Number(item.amount)))}
       </Text>
       {expenseEditHref ? <Feather name="edit-2" size={15} color={colors.primary} /> : null}
     </>

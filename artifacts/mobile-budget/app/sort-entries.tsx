@@ -16,6 +16,7 @@ import {
   useUpdateJointAccountTransaction,
 } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
+import { isRefund, spentText } from '@/lib/refundLabel';
 import { isNotSure, isToCheck, NOT_SURE_CATEGORY, sameParty, type EntryToSort } from '@/lib/entriesToSort';
 import { AddIncomeSourceChip } from '@/components/AddIncomeSourceChip';
 import { SortAsDebt } from '@/components/SortAsDebt';
@@ -464,8 +465,8 @@ export default function SortEntriesScreen() {
                   <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold' }} numberOfLines={1}>{entry.description}</Text>
                   <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>{formatDisplayDate(entry.date)} · {entry.direction === 'out' ? 'Money out' : 'Money in'}</Text>
                 </View>
-                <Text style={{ color: entry.direction === 'out' ? colors.destructive : colors.success, fontFamily: 'Inter_700Bold' }}>
-                  {entry.direction === 'out' ? '−' : '+'}{kes(entry.amount)}
+                <Text style={{ color: entry.direction === 'out' && !isRefund(entry.amount) ? colors.destructive : colors.success, fontFamily: 'Inter_700Bold' }}>
+                  {isRefund(entry.amount) ? `Refund +${kes(Math.abs(Number(entry.amount)))}` : `${entry.direction === 'out' ? '−' : '+'}${kes(entry.amount)}`}
                 </Text>
               </View>
               <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>{entry.direction === 'out' ? 'What was it for?' : isToCheck(entry) ? `Saved under ${sourceName(entry.incomeSourceId)}. Is that right?` : 'Where did it come from?'}</Text>

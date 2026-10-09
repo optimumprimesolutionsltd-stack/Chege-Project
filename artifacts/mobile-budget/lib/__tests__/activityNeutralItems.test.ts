@@ -11,7 +11,7 @@ describe('transfers and debt events are neither spending nor money in', () => {
   });
   it('signs them by direction and keeps them out of the day\'s deposits total', () => {
     const card = read('components/ActivityCard.tsx');
-    expect(card).toContain("const goesOut = isNeutral ? item.direction === 'out' : isExpense;");
+    expect(card).toContain("const goesOut = refund ? false : isNeutral ? item.direction === 'out' : isExpense;");
     const history = read('app/(tabs)/history.tsx');
     expect(history).toContain('i.type !== ACTIVITY_TYPE.EXPENSE && i.type !== ACTIVITY_TYPE.TRANSFER && i.type !== ACTIVITY_TYPE.DEBT');
   });
