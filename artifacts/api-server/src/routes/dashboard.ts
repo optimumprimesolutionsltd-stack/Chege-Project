@@ -395,6 +395,9 @@ router.get("/dashboard/activity", async (req, res): Promise<void> => {
       createdAt: jointAccountTxTable.createdAt,
       savingsGoalId: jointAccountTxTable.savingsGoalId,
       bankTransferId: jointAccountTxTable.bankTransferId,
+      // Where the money came from, so the feed says "Generator income", not
+      // "Bank deposit", once the person has said (9 Oct 2026).
+      incomeSourceName: sql<string | null>`(SELECT s.name FROM income_sources s WHERE s.id = ${jointAccountTxTable.incomeSourceId} AND s.group_id = ${groupId})`,
       hasContributorSplits: sql<boolean>`EXISTS (
         SELECT 1
         FROM ${jointAccountDepositSplitsTable}
@@ -745,10 +748,10 @@ router.get("/dashboard/activity", async (req, res): Promise<void> => {
         : {}),
       type: "contribution",
       amount: d.amount,
-      description: `Bank deposit: ${d.description}`,
+      description: `${d.incomeSourceName ?? "Bank deposit"}: ${d.description}`,
       // null madeById = Joint bank (shared deposit with no individual attribution)
       userName: d.madeById === null ? GROUP_ATTRIBUTION : (d.madeByName ?? "Unknown"),
-      category: null,
+      category: d.incomeSourceName ?? null,
       // Deposits are reported in the month of their banking transaction, not entry time.
       date: String(d.date),
     })),

@@ -45,3 +45,11 @@ describe('money in says where it came from', () => {
     expect(route).toContain('item.type === "deposit" && item.incomeSourceId != null && sourceNames.has(item.incomeSourceId) ? sourceNames.get(item.incomeSourceId)!');
   });
 });
+
+describe('Activity says where money in came from too', () => {
+  const dashboard = readFileSync('../api-server/src/routes/dashboard.ts', 'utf8');
+  it('a deposit reads as its income source once it has one', () => {
+    expect(dashboard).toContain('description: `${d.incomeSourceName ?? "Bank deposit"}: ${d.description}`,');
+    expect(dashboard).toContain('category: d.incomeSourceName ?? null,');
+  });
+});
