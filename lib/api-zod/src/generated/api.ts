@@ -1152,10 +1152,19 @@ export const CreateSavingsGoalResponse = zod.object({
  * @summary Get one account when accountId is supplied, or aggregate all workspace accounts when omitted
  */
 
+export const getJointAccountQueryLimitMin = 0;
+export const getJointAccountQueryLimitMax = 1000;
+
+export const getJointAccountQueryMonthMax = 12;
+
 
 
 export const GetJointAccountQueryParams = zod.object({
-  "accountId": zod.coerce.number().min(1).optional().describe('Optional account selection. When omitted, accountId is null and accountName is All accounts.')
+  "accountId": zod.coerce.number().min(1).optional().describe('Optional account selection. When omitted, accountId is null and accountName is All accounts.'),
+  "limit": zod.coerce.number().int().min(getJointAccountQueryLimitMin).max(getJointAccountQueryLimitMax).optional().describe('At most this many entries, newest first (0 for the totals alone). Omitted, every entry.'),
+  "before": zod.coerce.string().optional().describe('The nextCursor of the previous page.'),
+  "month": zod.coerce.number().int().min(1).max(getJointAccountQueryMonthMax).optional().describe('With year, only that month\'s entries, and monthDeposits\/monthDisbursements.'),
+  "year": zod.coerce.number().int().optional()
 })
 
 
@@ -1215,7 +1224,10 @@ export const GetJointAccountResponse = zod.object({
 }).describe('One person\'s share of a deposit. Give either userId, for somebody with a Jamvi account, or contributorId, for somebody recorded by name who does not use the app - a church member, or a chama member without a smartphone. Exactly one of the two.\n')).optional(),
   "date": zod.coerce.date(),
   "createdAt": zod.string()
-}))
+})),
+  "nextCursor": zod.string().nullish().describe('Only on a page (limit, before or month asked for) - where the next page starts; null on the last.'),
+  "monthDeposits": zod.number().optional().describe('Only with month and year - that month\'s money in.'),
+  "monthDisbursements": zod.number().optional().describe('Only with month and year - that month\'s money out.')
 })
 
 

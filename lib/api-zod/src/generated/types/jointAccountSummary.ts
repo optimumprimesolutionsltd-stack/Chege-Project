@@ -26,4 +26,13 @@ export interface JointAccountSummary {
   totalDeposits: number;
   totalDisbursements: number;
   transactions: JointAccountTransaction[];
+  /**
+     * Only on a page (limit, before or month asked for) - where the next page starts; null on the last.
+     * @nullable
+     */
+  nextCursor?: string | null;
+  /** Only with month and year - that month's money in. */
+  monthDeposits?: number;
+  /** Only with month and year - that month's money out. */
+  monthDisbursements?: number;
 }

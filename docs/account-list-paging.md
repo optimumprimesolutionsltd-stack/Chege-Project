@@ -1,6 +1,17 @@
 # Loading an account's history a page at a time
 
-Status: **step 1 done (5 Oct 2026). Steps 2 and 3 are planned, not started.**
+Status: **step 1 done (5 Oct 2026). Step 2's server side done, and Home and
+Activity moved off the full list (9 Oct 2026). Bank's own list, Bank-day and
+the rest of step 3 still to do.**
+
+9 Oct 2026: Render's logs had the account at 1.1-1.5 s - under the trigger -
+but Home, Activity and Sort them out each asked for *every* account's whole
+history. `GET /api/joint-account` now takes `limit`, `before` and
+`month`+`year` (lib/account-page), describes only the rows it sends, and
+answers exactly as before without them. Home asks for `month, year, limit=0`
+(balance + `monthDeposits`/`monthDisbursements`, no entries); Activity for its
+month only. The cursor is `id|date|createdAt`, so a row deleted since does not
+lose the place.
 
 ## Why
 

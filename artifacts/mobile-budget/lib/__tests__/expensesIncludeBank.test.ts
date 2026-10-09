@@ -10,7 +10,8 @@ const history = readFileSync('app/(tabs)/history.tsx', 'utf8');
 // all month through the bank.
 describe('the Expenses tab shows spending that went through a bank account', () => {
   it('reads the account as well as the expenses table', () => {
-    expect(history).toContain('const { data: bankAccount } = useGetJointAccount(undefined, { query: { queryKey: getGetJointAccountQueryKey(), subscribed: onScreen } });');
+    // Only the month on screen since 9 Oct 2026 (docs/account-list-paging.md).
+    expect(history).toContain('const { data: bankAccount } = useGetJointAccount(bankMonthParams, { query: { queryKey: getGetJointAccountQueryKey(bankMonthParams), subscribed: onScreen } });');
     expect(history).toContain('const bankSpending = useMemo(');
   });
 
