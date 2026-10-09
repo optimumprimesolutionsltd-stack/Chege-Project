@@ -42,7 +42,7 @@ const KNOWN_PAYEES: readonly KnownPayee[] = [
   },
   {
     key: 'water',
-    pattern: /\b(?:nairobi city water|ncwsc|water (?:and|&) sewerage|water (?:company|services|vendors?)|mawasco|nawassco|eldowas|kiwasco|mowasco|nyewasco|borehole)\b/i,
+    pattern: /\b(?:nairobi city water|ncwsc|water (?:and|&) sewerage|water (?:company|services|vendors?|refill|bowser)|[a-z]*wass?co|eldowas|borehole|maji)\b/i,
     names: ['Water'],
     words: ['water'],
     standard: { name: 'Water', parent: 'Utilities' },
@@ -57,14 +57,14 @@ const KNOWN_PAYEES: readonly KnownPayee[] = [
   {
     key: 'eating-out',
     // Before groceries: a butchery that grills, and a supermarket's own cafe, are eating out.
-    pattern: /\b(?:kfc|java house|artcaffe|pizza inn|chicken inn|dominos?|galitos|simbisa|bolt food|uber eats|glovo|jumia food|restaurants?|eatery|eateries|bistro|hotels?|kitchens?|foods?|fast ?foods?|cafeteria|canteen|grill|nyama choma|choma|kibanda|kibandaski|pizza|burgers?|chips|bakery|bakers|bakeries|dishes)\b|\bcaf[eé](?![a-z])/i,
+    pattern: /\b(?:kfc|java house|artcaffe|pizza inn|chicken inn|dominos?|galitos|simbisa|bolt food|uber eats|glovo|jumia food|restaurants?|eatery|eateries|bistro|hotels?|hoteli|kitchens?|foods?|fast ?foods?|cafeteria|canteen|grill|nyama choma|choma|kibanda|kibandaski|pizza|burgers?|chips|bakery|bakers|bakeries|dishes)\b|\bcaf[eé](?![a-z])/i,
     names: ['Eating out', 'Meals', 'Lunch', 'Food & drinks'],
     words: ['eating out', 'restaurant', 'meal', 'lunch'],
     standard: { name: 'Eating out', parent: 'Food' },
   },
   {
     key: 'groceries',
-    pattern: /\b(?:naivas|carrefour|majid al futtaim|quick ?mart|chandarana|cleanshelf|mulleys|eastmatt|magunas?|tuskys|khetias?|jumbo junction|powerstar|supermarkets?|hypermarkets?|mini ?mart|minimarket|wholesalers?|wholesale|cash (?:and|&) carry|mama mboga|greengrocers?|butcher(?:y|ies))\b/i,
+    pattern: /\b(?:naivas|carrefour|majid al futtaim|quick ?mart|chandarana|cleanshelf|mulleys|eastmatt|magunas?|tuskys|khetias?|jumbo junction|powerstar|uchumi|gilanis|zucchini|greenspoon|kwik ?basket|dairy|dairies|maziwa|posho mill|cereals? (?:shop|store)|grocers?|supermarkets?|hypermarkets?|mini ?mart|minimarket|wholesalers?|wholesale|cash (?:and|&) carry|mama mboga|greengrocers?|butcher(?:y|ies))\b/i,
     names: ['Supermarket', 'Groceries', 'Market shopping', 'Shopping share'],
     words: ['supermarket', 'grocer', 'shopping'],
     standard: { name: 'Groceries', parent: 'Food' },
@@ -79,7 +79,7 @@ const KNOWN_PAYEES: readonly KnownPayee[] = [
   },
   {
     key: 'fuel',
-    pattern: /\b(?:total ?energies|total (?:kenya|service|petrol|filling)|rubis|shell|vivo energy|ola energy|kenol|kobil|astrol|gulf energy|hass petroleum|petroleum|petrol station|service station|filling station|gas station|fuel)\b/i,
+    pattern: /\b(?:total ?energies|total (?:kenya|service|petrol|filling)|rubis|shell|vivo energy|ola|ola energy|kenol|kobil|astrol|gulf energy|hass petroleum|galana|lake oil|national oil|nock|engen|oryx|stabex|gapco|petrocity|moil|petroleum|petrol station|service station|filling station|gas station|fuel)\b/i,
     names: ['Fuel'],
     words: ['fuel', 'petrol', 'diesel'],
     standard: { name: 'Fuel', parent: 'Transport' },
@@ -129,8 +129,23 @@ const KNOWN_PAYEES: readonly KnownPayee[] = [
     standard: { name: 'Medical cover', parent: 'Insurance' },
   },
   {
+    key: 'farm-inputs',
+    // Before the hospital rule: a "vet clinic" is the farm's, not the family's doctor.
+    pattern: /\b(?:agro ?vets?|agrovets?|veterinary|vet (?:clinic|centre|center|services)|agro ?chemicals?|agro ?dealers?|animal feeds?|feeds|seeds?|fertili[sz]ers?)\b/i,
+    names: ['Farm inputs', 'Farming', 'Farm'],
+    words: ['farm', 'agro', 'vet'],
+    standard: { name: 'Farm inputs', parent: 'Farm' },
+  },
+  {
+    key: 'gym',
+    pattern: /\b(?:gym|gyms|gymnasium|fitness|health club|yoga|crossfit)\b/i,
+    names: ['Gym', 'Fitness'],
+    words: ['gym', 'fitness'],
+    standard: { name: 'Gym', parent: 'Personal care' },
+  },
+  {
     key: 'medicine',
-    pattern: /\b(?:pharmacy|pharmacies|pharma|pharmaceuticals?|chemists?|drug ?stores?|goodlife|haltons)\b/i,
+    pattern: /\b(?:pharmacy|pharmacies|pharma|pharmaceuticals?|chemists?|drug ?stores?|goodlife|haltons|pharmaplus|mydawa|dawa)\b/i,
     names: ['Medicine'],
     words: ['medicine', 'pharmacy', 'drug'],
     standard: { name: 'Medicine', parent: 'Health' },
@@ -141,6 +156,20 @@ const KNOWN_PAYEES: readonly KnownPayee[] = [
     names: ['Hospital & clinic'],
     words: ['hospital', 'clinic', 'doctor'],
     standard: { name: 'Hospital & clinic', parent: 'Health' },
+  },
+  {
+    key: 'car-costs',
+    pattern: /\b(?:car ?wash|auto ?spares|spare ?parts|motor ?spares|tyres?|tires|garage|auto ?(?:services|repairs|centre|center)|motors|panel beaters?|car (?:repairs?|services?))\b/i,
+    names: ['Car maintenance', 'Car repairs', 'Car'],
+    words: ['car ', 'vehicle', 'motor'],
+    standard: { name: 'Car maintenance', parent: 'Transport' },
+  },
+  {
+    key: 'tolls',
+    pattern: /\b(?:expressway|moja expressway|toll|tolls)\b/i,
+    names: ['Tolls', 'Expressway'],
+    words: ['toll', 'expressway'],
+    standard: { name: 'Tolls', parent: 'Transport' },
   },
   {
     key: 'taxi',
@@ -158,10 +187,32 @@ const KNOWN_PAYEES: readonly KnownPayee[] = [
   },
   {
     key: 'school-fees',
-    pattern: /\b(?:school|schools|sch|academy|academies|preparatory|prep school|montessori|nursery school|secondary|university|college|polytechnic|institute|kindergarten|day ?care|pre-?school)\b/i,
+    pattern: /\b(?:school|schools|sch|shule|academy|academies|preparatory|prep school|montessori|nursery school|secondary|university|college|polytechnic|institute|kindergarten|day ?care|pre-?school|tuition|tvet|strathmore|usiu|jkuat|kenyatta university|mount kenya university|mku|daystar|kca|kemu|egerton|maseno)\b/i,
     names: ['School fees', 'Tuition', 'Class fees', 'School fees & classes'],
     words: ['school', 'tuition'],
     standard: { name: 'School fees', parent: 'Education' },
+  },
+  {
+    key: 'giving',
+    // After schools: "St Mary's Catholic Academy" is the school's fees.
+    pattern: /\b(?:church|churches|kanisa|parish|cathedral|chapel|pcea|ack|aic|sda|catholic|ministries|ministry of god|fellowship|mosque|masjid|tithes?|offerings?)\b/i,
+    names: ['Tithe', 'Offerings', 'Church', 'Donations', 'Giving'],
+    words: ['tithe', 'offering', 'church', 'giving'],
+    standard: { name: 'Tithe', parent: 'Tithe & giving' },
+  },
+  {
+    key: 'funerals',
+    pattern: /\b(?:funerals?|burial|funeral home|mortuary|harambees?)\b/i,
+    names: ['Funerals', 'Harambees', 'Contributions'],
+    words: ['funeral', 'harambee', 'contribution'],
+    standard: { name: 'Funerals', parent: 'Events' },
+  },
+  {
+    key: 'betting',
+    pattern: /\b(?:sportpesa|sport pesa|betika|odibets?|mozzart(?: ?bet)?|betway|shabiki|betin|bet ?pawa|1xbet|22bet|helabet|betlion|kwikbet|gal sport|mcheza|betting)\b/i,
+    names: ['Betting', 'Gambling'],
+    words: ['bet', 'gambl'],
+    standard: { name: 'Betting', parent: 'Entertainment' },
   },
   {
     key: 'books',
@@ -178,18 +229,67 @@ const KNOWN_PAYEES: readonly KnownPayee[] = [
     standard: { name: 'Salon & barber', parent: 'Personal care' },
   },
   {
+    key: 'uniform',
+    pattern: /\b(?:uniforms?)\b/i,
+    names: ['Uniform', 'Uniforms'],
+    words: ['uniform'],
+    standard: { name: 'Uniform', parent: 'Education' },
+  },
+  {
+    key: 'shoes',
+    pattern: /\b(?:shoes?|footwear|bata|sneakers?)\b/i,
+    names: ['Shoes', 'Footwear'],
+    words: ['shoe', 'footwear'],
+    standard: { name: 'Shoes', parent: 'Clothing' },
+  },
+  {
     key: 'clothes',
-    pattern: /\b(?:boutiques?|fashions?|clothing|outfitters|mr price|lc waikiki|tailors?|tailoring|bata)\b/i,
+    pattern: /\b(?:boutiques?|fashions?|clothing|outfitters|mr price|lc waikiki|deacons|woolworths|truworths|mitumba|tailors?|tailoring)\b/i,
     names: ['Clothes', 'Clothing'],
     words: ['cloth', 'fashion'],
     standard: { name: 'Clothes', parent: 'Clothing' },
   },
   {
     key: 'house-repairs',
-    pattern: /\b(?:hardwares?|plumbers?|plumbing|electricals)\b/i,
+    pattern: /\b(?:hardwares?|building materials|timber|cement|paints?|plumbers?|plumbing|electricals)\b/i,
     names: ['House repairs', 'Repairs'],
     words: ['repair', 'hardware'],
     standard: { name: 'House repairs', parent: 'Household' },
+  },
+  {
+    key: 'decor',
+    pattern: /\b(?:d[eé]cor|interiors?|furniture|furnitures|curtains?|carpets?|upholstery|home ?(?:d[eé]cor|furnishings?))\b/i,
+    names: ['Furniture & decor', 'Decor', 'Furniture', 'Decorations'],
+    words: ['decor', 'furniture', 'furnish'],
+    standard: { name: 'Furniture & decor', parent: 'Household' },
+  },
+  {
+    key: 'electronics',
+    pattern: /\b(?:electronics|hotpoint|avechi|phone ?(?:shop|world|centre|center|accessories)|phones|mobile (?:accessories|phones)|computers?|laptops?)\b/i,
+    names: ['Electronics', 'Phones & electronics'],
+    words: ['electronic', 'phone', 'gadget'],
+    standard: { name: 'Electronics', parent: 'Household' },
+  },
+  {
+    key: 'security',
+    pattern: /\b(?:security (?:services|company|guards?|systems|ltd|limited)|g4s|kk security|sga security|securex|bob morgan|alarm)\b/i,
+    names: ['Security', 'Service charge'],
+    words: ['security', 'guard'],
+    standard: { name: 'Security', parent: 'Household' },
+  },
+  {
+    key: 'rent',
+    pattern: /\b(?:rent|rentals?|apartments?|apartment|flats|court|estates?|properties|property (?:management|managers?|agents?)|letting|realtors?|landlord|nyumba)\b/i,
+    names: ['Rent', 'Rent share', 'Housing'],
+    words: ['rent', 'housing'],
+    standard: { name: 'Rent', parent: 'Housing' },
+  },
+  {
+    key: 'online-shopping',
+    pattern: /\b(?:jumia|kilimall|masoko|amazon|aliexpress|alibaba|temu|shein)\b/i,
+    names: ['Online shopping', 'Shopping'],
+    words: ['online', 'shopping'],
+    standard: { name: 'Online shopping', parent: 'Shopping' },
   },
   {
     key: 'tax',
@@ -207,12 +307,24 @@ const KNOWN_PAYEES: readonly KnownPayee[] = [
     key: 'shop',
     // Last of all: a plain duka or shop is nearly always household shopping
     // ("Wanjiru Shop"), but anything above that names what it sells comes first.
-    pattern: /\b(?:shops?|duka|kiosk)\b/i,
+    // "Traders" and "general merchants" sell a bit of everything, like a duka.
+    pattern: /\b(?:shops?|duka|kiosk|traders?|general (?:merchants?|stores?|shop)|stores)\b/i,
     names: ['Groceries', 'Supermarket', 'Market shopping', 'Shopping share'],
     words: ['grocer', 'supermarket', 'shopping'],
     standard: { name: 'Groceries', parent: 'Food' },
   },
 ];
+
+/**
+ * Changes whenever a rule above does. Home files entries already saved as Not
+ * sure yet once per budget for each version of the rules ("implement backwards
+ * too", 9 Oct 2026), so a payee Jamvi learns later reaches old entries as well.
+ */
+export const KNOWN_PAYEES_VERSION: string = (() => {
+  let hash = 5381;
+  for (const char of KNOWN_PAYEES.map((known) => `${known.key}:${known.pattern.source}`).join('|')) hash = ((hash * 33) ^ char.charCodeAt(0)) >>> 0;
+  return hash.toString(36);
+})();
 
 /**
  * A budget's own category for each kind of payee, by key, as it is named now
