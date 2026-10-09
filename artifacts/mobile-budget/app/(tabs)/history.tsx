@@ -21,6 +21,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
+import { useOnScreen } from '@/hooks/useOnScreen';
 import { UndoDeleteBar, useUndoableDelete } from '@/components/UndoDeleteBar';
 import { deletedLabel } from '@/lib/undoDelete';
 import { useListEditor } from '@/hooks/useListEditor';
@@ -187,7 +188,9 @@ export default function HistoryScreen() {
    * money moved in an account, and correcting it means correcting the posting
    * on the Banking tab, where the balance follows.
    */
-  const { data: bankAccount } = useGetJointAccount();
+  // Followed only while this screen is in view (hooks/useOnScreen).
+  const onHistoryScreen = useOnScreen();
+  const { data: bankAccount } = useGetJointAccount(undefined, { query: { queryKey: getGetJointAccountQueryKey(), subscribed: onHistoryScreen } });
   const bankSpending = useMemo(() => {
     const rows = (bankAccount?.transactions ?? []) as Array<{
       id: number;

@@ -29,6 +29,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { DebtSummaryCard } from '@/components/DebtSummaryCard';
 import { useColors } from '@/hooks/useColors';
+import { useOnScreen } from '@/hooks/useOnScreen';
 import { useEntitlements } from '@/hooks/useEntitlements';
 import { mayStartGroup } from '@/lib/groupStart';
 import { toSortTitle } from '@/lib/entriesToSort';
@@ -47,6 +48,7 @@ import { workspaceNameTextStyle } from '@/lib/workspaceIdentity';
 import { noAnswerFromServer } from '@/lib/workspace';
 import { getExpenseEditHref } from '@/lib/expenseEditLink';
 import {
+  getGetJointAccountQueryKey,
   ApiError,
   useGetDashboardSummary,
   useGetDashboardActivity,
@@ -180,6 +182,8 @@ export default function DashboardScreen() {
 
   const fmt = useCallback((n?: number | null) => isPrivate ? '••••' : formatKES(n), [isPrivate]);
 
+  // The whole account is followed only while Home is in view (hooks/useOnScreen).
+  const onHomeScreen = useOnScreen();
   const {
     data: summary,
     isLoading: summaryLoading,
@@ -202,7 +206,7 @@ export default function DashboardScreen() {
     data: bankAccount,
     isLoading: bankAccountLoading,
     refetch: refetchBank,
-  } = useGetJointAccount();
+  } = useGetJointAccount(undefined, { query: { queryKey: getGetJointAccountQueryKey(), subscribed: onHomeScreen } });
   const { data: group } = useGetGroup();
   const isSharedWorkspace = group?.isPrivate === false;
 

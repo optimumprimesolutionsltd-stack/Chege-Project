@@ -21,6 +21,7 @@ import { AddIncomeSourceChip } from '@/components/AddIncomeSourceChip';
 import { SortAsDebt } from '@/components/SortAsDebt';
 import { PassThroughPair } from '@/components/PassThroughPair';
 import { useAutoMarkBusiness, useOwnerBusiness } from '@/hooks/useOwnerBusiness';
+import { isHistoryQuery } from '@/lib/refreshAfterSave';
 import { LISTS_AN_EDIT_CHANGES, withoutSorted } from '@/lib/showSavedEdit';
 import { NewCategoryOffer } from '@/components/NewCategoryOffer';
 import { CreateCategorySheet } from '@/components/CreateCategorySheet';
@@ -100,8 +101,14 @@ export default function SortEntriesScreen() {
     if (sortedIds.length > 0) {
       queryClient.setQueryData<{ entries: EntryToSort[] }>(['entries-to-sort'], (cached) => withoutSorted(cached, sortedIds));
     }
-    void queryClient.invalidateQueries({ queryKey: getGetJointAccountQueryKey() });
-    for (const queryKey of LISTS_AN_EDIT_CHANGES) void queryClient.invalidateQueries({ queryKey });
+    // The whole account and the ledgers built from it are only marked out of
+    // date: fetched again after every entry, each one reloaded a year of entries
+    // and restarted the suggestions. The screen in view fetches them when it is
+    // shown (lib/refreshAfterSave); this list already dropped what was sorted.
+    void queryClient.invalidateQueries({ queryKey: getGetJointAccountQueryKey(), refetchType: 'none' });
+    for (const queryKey of LISTS_AN_EDIT_CHANGES) {
+      void queryClient.invalidateQueries({ queryKey, refetchType: isHistoryQuery(queryKey) ? 'none' : 'active' });
+    }
   };
   // The last change, kept so it can be undone: "there is no undo button in
   // Sort them out" (4 Oct 2026) - and "All 12" is a lot to take back by hand.

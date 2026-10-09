@@ -10,7 +10,7 @@ const history = readFileSync('app/(tabs)/history.tsx', 'utf8');
 // all month through the bank.
 describe('the Expenses tab shows spending that went through a bank account', () => {
   it('reads the account as well as the expenses table', () => {
-    expect(history).toContain('const { data: bankAccount } = useGetJointAccount();');
+    expect(history).toContain('const { data: bankAccount } = useGetJointAccount(undefined, { query: { queryKey: getGetJointAccountQueryKey(), subscribed: onHistoryScreen } });');
     expect(history).toContain('const bankSpending = useMemo(');
   });
 

@@ -25,6 +25,7 @@ import { writePdf } from '@/lib/savePdf';
 import { budgetReport, householdRows } from '@/lib/budgetReport';
 import { PDF_SECTIONS, DEFAULT_PDF_SECTIONS, parsePdfSections, pdfSectionParams, type PdfSectionKey } from '@/lib/reportPdfSections';
 import { useColors } from '@/hooks/useColors';
+import { useOnScreen } from '@/hooks/useOnScreen';
 import { monthLedgerHref } from '@/lib/monthLink';
 import { reportInsights } from '@/lib/reportInsights';
 import { InsightsCard } from '@/components/InsightsCard';
@@ -257,6 +258,10 @@ export default function ReportsScreen() {
   }, []);
 
   const queryParams = { month, year };
+  // The slow reports are followed only while Reports is in view (hooks/useOnScreen):
+  // the six-month trend takes the server up to 5 s, and a hidden Reports tab
+  // asked for it again after every save made anywhere.
+  const onReportsScreen = useOnScreen();
 
   const { data: expenses    = [], isLoading: loadingExp,     isError: expensesError, refetch: refetchExp     } = useGetExpenses(queryParams);
   const { data: catBreakdown = [], isLoading: loadingCat,    isError: categoryError, refetch: refetchCat     } = useGetDashboardCategoryBreakdown(queryParams);
@@ -270,7 +275,7 @@ export default function ReportsScreen() {
     isError: incomeStreamsError,
     refetch: refetchIncomeStreams,
   } = useGetDashboardIncomeStreams(queryParams, {
-    query: { queryKey: getGetDashboardIncomeStreamsQueryKey(queryParams), retry: false },
+    query: { queryKey: getGetDashboardIncomeStreamsQueryKey(queryParams), retry: false, subscribed: onReportsScreen },
   });
   const {
     data: incomeTrend,
@@ -279,7 +284,7 @@ export default function ReportsScreen() {
     refetch: refetchIncomeTrend,
   } = useGetDashboardIncomeStreamsTrend(
     { months: 6 },
-    { query: { queryKey: getGetDashboardIncomeStreamsTrendQueryKey({ months: 6 }), retry: false } },
+    { query: { queryKey: getGetDashboardIncomeStreamsTrendQueryKey({ months: 6 }), retry: false, subscribed: onReportsScreen } },
   );
   const { data: members = [] } = useGetMembers();
 
@@ -309,7 +314,7 @@ export default function ReportsScreen() {
   // The entries come from All income's own list, and are only asked for while shown.
   const showingStreamDetails = streamKeys.some((key) => detailedStreams.has(key));
   const { data: incomeLedger, isLoading: loadingIncomeLedger } = useGetDashboardIncomeLedger(queryParams, {
-    query: { queryKey: getGetDashboardIncomeLedgerQueryKey(queryParams), enabled: showingStreamDetails, retry: false },
+    query: { queryKey: getGetDashboardIncomeLedgerQueryKey(queryParams), enabled: showingStreamDetails, retry: false, subscribed: onReportsScreen },
   });
   const streamEntries = (incomeSourceId: number | null | undefined) =>
     (incomeLedger?.entries ?? []).flatMap((entry) => {
