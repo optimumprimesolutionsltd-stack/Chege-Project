@@ -24,12 +24,13 @@
 import { chooseTransfer, isBankPayee, NOT_SURE_CATEGORY, type Choice, type PreviewLine } from './mpesaImport';
 import { knownPayeeOf } from './knownPayees';
 import { loanOf, productOf, savingsOf } from './mpesaProducts';
+import type { EntryToSort } from './entriesToSort';
 import { looksLikePerson, payeeKey, payeeName, referenceOf, ruleCategory, ruleSource, sourceRuleKey, type PayeeRules } from './payeeLearning';
 
 export type TeachKind = 'person' | 'bank' | 'business';
 
-/** One regular: every line to or from the same payee, asked about once. */
-export type TeachGroup = {
+/** A regular as the card shows it, whichever list it came from. */
+export type TeachRegular = {
   /** '#ref:<account>' for a bank account paid through a paybill, else the payee's key. */
   key: string;
   label: string;
@@ -39,6 +40,10 @@ export type TeachGroup = {
   reference: string;
   count: number;
   total: number;
+};
+
+/** One regular in a review: every line to or from the same payee, asked about once. */
+export type TeachGroup = TeachRegular & {
   indexes: number[];
   /** A line to stand for the group, for the rules kept from an answer. */
   sample: PreviewLine;
@@ -163,7 +168,7 @@ export function teachableGroups(
 }
 
 /** Can this regular be one of the person's own accounts? Only a bank account it named by number. */
-export const mayBeOwnAccount = (group: TeachGroup): boolean => group.kind === 'bank' && group.reference.length >= ACCOUNT_DIGITS;
+export const mayBeOwnAccount = (group: TeachRegular): boolean => group.kind === 'bank' && group.reference.length >= ACCOUNT_DIGITS;
 
 /** Every line of the regular under this category, checked and remembered. */
 export function teachCategory(choices: Record<number, Choice>, group: TeachGroup, category: string): Record<number, Choice> {
@@ -199,7 +204,7 @@ export function teachOwnAccount(choices: Record<number, Choice>, group: TeachGro
 /** Categories that suit a regular of this kind, from the budget's own: offered first. */
 const PERSON_WORDS = /\b(family|support|parents?|mum|mom|dad|children|kids|rent|house ?help|wages|salary|gifts?|school|fees|allowance|pocket)\b/i;
 
-export function suggestedCategories(group: TeachGroup, categoryNames: readonly string[], current: string | undefined, max = 4): string[] {
+export function suggestedCategories(group: Pick<TeachRegular, 'kind'>, categoryNames: readonly string[], current: string | undefined, max = 4): string[] {
   const picks: string[] = [];
   if (current && current !== NOT_SURE_CATEGORY) picks.push(current);
   if (group.kind === 'person') {
@@ -238,4 +243,60 @@ export function alreadyKnown(
     of,
     parts: [...counts.entries()].map(([label, count]) => ({ label, count })).sort((a, b) => b.count - a.count),
   };
+}
+
+/**
+ * The same questions for somebody who has used Jamvi for a while: "even a
+ * current user should be vetted again" (9 Oct 2026). Their saved entries Jamvi
+ * could not place - money out under Not sure yet, money in with no source -
+ * grouped by payee, so one answer sorts all of them and teaches the payee for
+ * every statement and message after.
+ */
+export type SavedGroup = TeachRegular & { entries: EntryToSort[] };
+
+/** Whether this budget's regulars have been gone through, or put off, on this phone. */
+export const teachDoneKey = (groupId: number | string | undefined): string => `jamvi:teach-jamvi:v1:${groupId ?? 'none'}`;
+
+function savedKey(entry: EntryToSort): string {
+  const reference = referenceOf(entry.description);
+  if (isBankPayee(entry.description) && reference.length >= 4) return `#ref:${reference}`;
+  return `${entry.direction}:${entry.direction === 'in' ? sourceRuleKey(entry.description) : payeeKey(entry.description)}`;
+}
+
+export function savedGroups(
+  entries: readonly EntryToSort[],
+  rules: PayeeRules = {},
+  { limit = 12, minCount = 2, skipped = new Set<string>() }: { limit?: number; minCount?: number; skipped?: ReadonlySet<string> } = {},
+): SavedGroup[] {
+  const groups = new Map<string, SavedGroup>();
+  for (const entry of entries) {
+    // Money in that already has a source is only listed to check it: not asked here.
+    if (!entry.description?.trim() || (entry.direction === 'in' && entry.incomeSourceId != null)) continue;
+    // Already taught: Sort them out offers the kept answer on its own.
+    if (entry.direction === 'out' ? ruleCategory(entry.description, rules) : ruleSource(entry.description, rules) !== null) continue;
+    const key = savedKey(entry);
+    if (skipped.has(key)) continue;
+    const found = groups.get(key);
+    if (found) {
+      found.count += 1;
+      found.total += Math.abs(entry.amount);
+      found.entries.push(entry);
+      continue;
+    }
+    const line = { type: null, description: entry.description } as unknown as PreviewLine;
+    groups.set(key, {
+      key,
+      label: payeeName(entry.description.replace(/^Received from\s+/i, '')) || entry.description,
+      kind: kindOf(line),
+      direction: entry.direction,
+      reference: isBankPayee(entry.description) ? referenceOf(entry.description) : '',
+      count: 1,
+      total: Math.abs(entry.amount),
+      entries: [entry],
+    });
+  }
+  return [...groups.values()]
+    .filter((group) => group.count >= minCount)
+    .sort((a, b) => b.count - a.count || b.total - a.total)
+    .slice(0, limit);
 }
