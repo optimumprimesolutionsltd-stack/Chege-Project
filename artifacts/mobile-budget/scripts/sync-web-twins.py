@@ -39,6 +39,7 @@ TWINS = {
     'personNumber.ts': ('personNumber.ts', {}),
     'payeeNicknames.ts': ('payee-nicknames.ts', {}),
     'importBusiness.ts': ('import-business.ts', {'./mpesaImport': './mpesa-import'}),
+    'yearGrid.ts': ('year-grid.ts', {}),
 }
 
 

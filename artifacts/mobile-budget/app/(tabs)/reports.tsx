@@ -731,6 +731,29 @@ export default function ReportsScreen() {
             <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
           </Pressable>
 
+          {/* Every income and expense side by side, a column a month, the
+              whole year: which months did what. */}
+          <Pressable
+            onPress={() => router.push('/year-report')}
+            accessibilityRole="button"
+            accessibilityLabel="See every income and expense month by month for the year"
+            testID="open-year-report"
+            style={({ pressed }) => [
+              styles.spendOnCard,
+              { backgroundColor: colors.card, borderColor: colors.border },
+              pressed && { opacity: 0.85 },
+            ]}
+          >
+            <Feather name="grid" size={18} color={colors.primary} />
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={[styles.spendOnTitle, { color: colors.foreground }]}>Year at a glance</Text>
+              <Text style={[styles.spendOnSub, { color: colors.mutedForeground }]} numberOfLines={2}>
+                Every income and expense side by side, month by month, for the whole year.
+              </Text>
+            </View>
+            <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+          </Pressable>
+
           {/* Whether the month kept to its budget: planned against spent,
               category by category, overspends first. */}
           <Pressable

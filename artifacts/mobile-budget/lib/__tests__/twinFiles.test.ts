@@ -30,6 +30,7 @@ const PAIRS: Array<[string, string]> = [
   ['lib/personNumber.ts', '../family-budget/src/lib/personNumber.ts'],
   ['lib/payeeNicknames.ts', '../family-budget/src/lib/payee-nicknames.ts'],
   ['lib/importBusiness.ts', '../family-budget/src/lib/import-business.ts'],
+  ['lib/yearGrid.ts', '../family-budget/src/lib/year-grid.ts'],
 ];
 
 describe('the phone and the web share one copy of the logic', () => {

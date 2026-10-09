@@ -204,6 +204,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
     ...(uses('bank') ? [{ href: '/bank-day', label: 'Enter a whole day', icon: ListChecks }] : []),
     ...(uses('bank') ? [{ href: '/mpesa-import', label: 'Import M-Pesa', icon: MessageSquare }] : []),
     ...(uses('reports') ? [{ href: '/reports', label: isSharedWorkspace ? 'Group Reports' : 'My Reports', icon: BarChart3 }] : []),
+    // Every income and expense, a column a month, as the phone's Year at a glance.
+    ...(uses('reports') ? [{ href: '/year-report', label: 'Year at a glance', icon: BarChart3 }] : []),
     // What each named thing has cost, as the phone's Spending by item.
     ...(uses('expenses') ? [{ href: '/spending-by-item', label: 'Spending by item', icon: Receipt }] : []),
     ...(hasBusiness ? [{ href: '/business', label: 'Business', icon: BarChart3 }] : []),
