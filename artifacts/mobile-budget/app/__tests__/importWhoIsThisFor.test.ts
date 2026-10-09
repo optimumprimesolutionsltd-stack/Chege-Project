@@ -62,3 +62,10 @@ describe('import lines stay short (9 Oct 2026)', () => {
     expect(phone.indexOf('Add a note (optional)')).toBeGreaterThan(more);
   });
 });
+
+describe('import lines stay quiet (9 Oct 2026, "complications in onboarding, not usage")', () => {
+  it('Who is this for? opens only with More, or from the tag on a line Jamvi knows is a business\'s', () => {
+    expect(phone).toContain('testID={`mpesa-line-business-tag-${item.index}`}');
+    expect(phone).toContain("destinationOf(choice) === 'category' && openMore.has(item.index) && (whoForBusinesses.length > 0 || businessFor(item) !== null)");
+  });
+});

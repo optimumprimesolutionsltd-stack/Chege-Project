@@ -3370,7 +3370,25 @@ export default function MpesaImportScreen() {
                       <Feather name="chevron-down" size={16} color={colors.mutedForeground} />
                     </Pressable>
                   ) : null}
-                  {canManageBudget && choice?.include && destinationOf(choice) === 'category' && (whoForBusinesses.length > 0 || businessFor(item) !== null)
+                  {/* Quiet unless asked: a line Jamvi knows is a business's says so in a tag,
+                      and the question itself only opens with More or the tag ("simplicity...
+                      complications in onboarding, not usage", 9 Oct 2026). */}
+                  {canManageBudget && choice?.include && destinationOf(choice) === 'category' && businessFor(item) !== null && !openMore.has(item.index) ? (
+                    <Pressable
+                      onPress={() => setOpenMore((current) => new Set(current).add(item.index))}
+                      accessibilityRole="button"
+                      accessibilityLabel={`For ${whoForBusinesses.find((one) => one.id === businessFor(item))?.name ?? 'a business'}. Tap to change`}
+                      testID={`mpesa-line-business-tag-${item.index}`}
+                      hitSlop={6}
+                      style={{ alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, backgroundColor: `${colors.primary}1a` }}
+                    >
+                      <Feather name="briefcase" size={11} color={colors.primary} />
+                      <Text style={{ color: colors.primary, fontSize: 12, fontFamily: 'Inter_600SemiBold' }}>
+                        For {whoForBusinesses.find((one) => one.id === businessFor(item))?.name ?? 'a business'} · change
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                  {canManageBudget && choice?.include && destinationOf(choice) === 'category' && openMore.has(item.index) && (whoForBusinesses.length > 0 || businessFor(item) !== null)
                     && (out || (!item.type?.startsWith('fuliza_') && item.type !== 'reversal' && loanOf(item)?.kind !== 'borrowed' && !savingsOf(item))) ? (
                     // A business's payment or sales, filed as the business's here rather than under Not sure and moved on Bank later.
                     <WhoIsThisFor
@@ -3794,7 +3812,7 @@ export default function MpesaImportScreen() {
                       testID={`mpesa-line-more-${item.index}`}
                     >
                       <Text style={[styles.hint, { color: colors.primary, marginTop: 0, fontFamily: 'Inter_600SemiBold' }]}>
-                        More: debt or loan, between my accounts, savings, another budget
+                        More: a business's, debt or loan, between my accounts, savings, another budget
                       </Text>
                     </Pressable>
                   ) : null}
