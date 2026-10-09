@@ -27,6 +27,23 @@ export function mobileBudgetEntryRedirect({
   return null;
 }
 
+/**
+ * True when a request failed without the server answering it: no connection,
+ * or the server restarting (a 5xx from Render's proxy mid-deploy). Only a 4xx
+ * answer (an ApiError carries the status) can say a person has no budget or
+ * may not open one.
+ * Going offline used to land people who were fully set up on onboarding, ready
+ * to create a second budget ("when there is no internet, the app takes me to
+ * onboarding and create a new budget", 9 Oct 2026).
+ */
+export function noAnswerFromServer(error: unknown): boolean {
+  if (error == null) return false;
+  // Not Jamvi's JSON at all - a Wi-Fi sign-in page, or a proxy's error page.
+  if ((error as { name?: unknown }).name === "ResponseParseError") return true;
+  const status = typeof error === "object" ? (error as { status?: unknown }).status : undefined;
+  return typeof status !== "number" || status >= 500;
+}
+
 /** Storage trouble must never let a person bypass their first workspace choice. */
 export async function isMobileBudgetChooserComplete({
   userId,
