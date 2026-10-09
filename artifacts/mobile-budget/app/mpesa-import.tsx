@@ -3785,6 +3785,20 @@ export default function MpesaImportScreen() {
                       );
                     })()
                   ) : null}
+                    </>
+                  ) : choice?.include ? (
+                    <Pressable
+                      onPress={() => setOpenMore((current) => new Set(current).add(item.index))}
+                      accessibilityRole="button"
+                      hitSlop={6}
+                      testID={`mpesa-line-more-${item.index}`}
+                    >
+                      <Text style={[styles.hint, { color: colors.primary, marginTop: 0, fontFamily: 'Inter_600SemiBold' }]}>
+                        More: debt or loan, between my accounts, savings, another budget
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                  {/* On the line itself, not under More: "how can we add notes?" (9 Oct 2026). */}
                   {canAddNote(choice) ? (
                     noteOpen.has(item.index) || choice?.notes ? (
                       <TextInput
@@ -3809,19 +3823,6 @@ export default function MpesaImportScreen() {
                         <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>Add a note (optional)</Text>
                       </Pressable>
                     )
-                  ) : null}
-                    </>
-                  ) : choice?.include ? (
-                    <Pressable
-                      onPress={() => setOpenMore((current) => new Set(current).add(item.index))}
-                      accessibilityRole="button"
-                      hitSlop={6}
-                      testID={`mpesa-line-more-${item.index}`}
-                    >
-                      <Text style={[styles.hint, { color: colors.primary, marginTop: 0, fontFamily: 'Inter_600SemiBold' }]}>
-                        More: debt or loan, between my accounts, savings, another budget
-                      </Text>
-                    </Pressable>
                   ) : null}
                   {out && item.fee ? (
                     <Text style={[styles.hint, { color: colors.mutedForeground }]}>+ KES {formatExact(item.fee)} M-Pesa charge, saved on its own</Text>

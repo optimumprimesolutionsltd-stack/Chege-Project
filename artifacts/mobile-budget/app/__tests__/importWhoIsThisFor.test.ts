@@ -49,3 +49,16 @@ describe('Who is this for? on M-Pesa import lines', () => {
     expect(web.split('data-testid={`mpesa-line-remember-${item.index}`}').length - 1).toBe(1);
   });
 });
+
+describe('import lines stay short (9 Oct 2026)', () => {
+  const card = readFileSync('components/WhoIsThisFor.tsx', 'utf8');
+  it('Who is this for? is one sideways row of chips on the import, the chosen business first', () => {
+    expect(card).toContain('<ChipRow compact={compact}>');
+    expect(card).toContain('compact && chosen ? [chosen, ...businesses.filter((one) => one.id !== chosen.id)] : businesses');
+  });
+
+  it('a note is added on the line itself, not under More', () => {
+    const more = phone.indexOf('More: debt or loan, between my accounts, savings, another budget');
+    expect(phone.indexOf('Add a note (optional)')).toBeGreaterThan(more);
+  });
+});

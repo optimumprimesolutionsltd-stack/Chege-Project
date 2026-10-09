@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -34,6 +34,8 @@ export default function YearReportScreen() {
   const today = { year: now.getFullYear(), month: now.getMonth() + 1 };
   const [year, setYear] = useState(today.year);
   const [opened, setOpened] = useState<Set<string>>(new Set());
+  // The frozen month row follows the figures sideways (see the grid below).
+  const monthRow = useRef<ScrollView>(null);
   const months = useMemo(() => yearMonths(year, today), [year, today.year, today.month]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const breakdowns = useQueries({
@@ -132,16 +134,37 @@ export default function YearReportScreen() {
       {loading ? (
         <ActivityIndicator style={{ marginTop: 40 }} color={colors.primary} />
       ) : (
-        <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 32 }} testID="year-report-grid">
-          {failed ? (
-            <Pressable onPress={retry} accessibilityRole="button" style={styles.failed} testID="year-report-retry">
-              <Text style={{ color: colors.destructive, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>Some months did not load. Tap to try again.</Text>
-            </Pressable>
-          ) : null}
+        <>
+        {failed ? (
+          <Pressable onPress={retry} accessibilityRole="button" style={styles.failed} testID="year-report-retry">
+            <Text style={{ color: colors.destructive, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>Some months did not load. Tap to try again.</Text>
+          </Pressable>
+        ) : null}
+        {/* The month row is frozen at the top while the rows scroll down ("freeze the
+            months so scrolling we know which month we are on", 9 Oct 2026), and moves
+            sideways with the figures. */}
+        <ScrollView stickyHeaderIndices={[0]} contentContainerStyle={{ paddingBottom: insets.bottom + 32 }} testID="year-report-grid">
+          <View style={{ flexDirection: 'row', backgroundColor: colors.background }} testID="year-report-months">
+            <View style={[styles.cell, styles.headCell, { width: NAME_WIDTH, alignItems: 'flex-start', paddingLeft: 16, borderColor: colors.border }]}>
+              <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold', fontSize: 12 }}>{year}</Text>
+            </View>
+            <ScrollView ref={monthRow} horizontal scrollEnabled={false} showsHorizontalScrollIndicator={false}>
+              <View style={{ flexDirection: 'row' }}>
+                {grid.months.map((month) => (
+                  <View key={month.month} style={[styles.cell, styles.headCell, { borderColor: colors.border }]}>
+                    <Text style={{ color: colors.foreground, fontFamily: 'Inter_700Bold', fontSize: 13 }}>{month.label}</Text>
+                    {month.soFar ? <Text style={{ color: colors.mutedForeground, fontSize: 10 }}>so far</Text> : null}
+                  </View>
+                ))}
+                <View style={[styles.cell, styles.headCell, { borderColor: colors.border, width: CELL_WIDTH + 12 }]}>
+                  <Text style={{ color: colors.foreground, fontFamily: 'Inter_700Bold', fontSize: 13 }}>Year</Text>
+                </View>
+              </View>
+            </ScrollView>
+          </View>
           <View style={{ flexDirection: 'row' }}>
             {/* Names stay put while the months scroll. */}
             <View style={{ width: NAME_WIDTH }}>
-              <View style={[styles.cell, styles.headCell, { width: NAME_WIDTH, borderColor: colors.border }]} />
               {lines.map((line) => (
                 <Pressable
                   key={line.key}
@@ -169,19 +192,13 @@ export default function YearReportScreen() {
                 </Pressable>
               ))}
             </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator
+              scrollEventThrottle={16}
+              onScroll={(event) => monthRow.current?.scrollTo({ x: event.nativeEvent.contentOffset.x, animated: false })}
+            >
               <View>
-                <View style={{ flexDirection: 'row' }}>
-                  {grid.months.map((month) => (
-                    <View key={month.month} style={[styles.cell, styles.headCell, { borderColor: colors.border }]}>
-                      <Text style={{ color: colors.foreground, fontFamily: 'Inter_700Bold', fontSize: 13 }}>{month.label}</Text>
-                      {month.soFar ? <Text style={{ color: colors.mutedForeground, fontSize: 10 }}>so far</Text> : null}
-                    </View>
-                  ))}
-                  <View style={[styles.cell, styles.headCell, { borderColor: colors.border, width: CELL_WIDTH + 12 }]}>
-                    <Text style={{ color: colors.foreground, fontFamily: 'Inter_700Bold', fontSize: 13 }}>Year</Text>
-                  </View>
-                </View>
                 {lines.map((line) => (
                   <View key={line.key} style={{ flexDirection: 'row', backgroundColor: line.kind === 'section' ? colors.muted : line.kind === 'total' ? colors.card : 'transparent' }}>
                     {grid.months.map((month, index) => {
@@ -225,6 +242,7 @@ export default function YearReportScreen() {
             <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 20 }]}>Nothing recorded in {year} yet.</Text>
           ) : null}
         </ScrollView>
+        </>
       )}
     </View>
   );
