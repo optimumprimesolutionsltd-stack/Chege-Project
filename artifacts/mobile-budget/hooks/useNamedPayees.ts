@@ -44,5 +44,11 @@ export function useNamedPayees() {
 
   const nameFor = useCallback((description: string | null | undefined) => namedFor(description, named)?.name ?? null, [named]);
 
-  return { named, add, remove, nameFor };
+  /**
+   * Keeps the whole list as given, names only: for a screen that writes the
+   * payee rules itself in one go (the M-Pesa import), so neither write loses the other's.
+   */
+  const replaceAll = store;
+
+  return { named, add, remove, nameFor, replaceAll };
 }

@@ -109,6 +109,14 @@ export type Choice = {
    * "No") themselves, so a remembered budget is never put back over their answer.
    */
   otherBudgetAuto?: boolean;
+  /**
+   * "Who is this for?" answered on the line (lib/importBusiness): one of My
+   * businesses, or null for Personal. Left out, the line's business is read
+   * from its category or income source.
+   */
+  businessId?: number | null;
+  /** What to call the payee of a business's payment, kept in Named accounts after Save. */
+  payeeName?: string;
 };
 
 /**
