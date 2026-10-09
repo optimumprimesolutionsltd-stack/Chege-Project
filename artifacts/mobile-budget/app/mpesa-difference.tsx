@@ -6,10 +6,11 @@ import { router, useFocusEffect } from 'expo-router';
 import { customFetch } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
 import { formatDisplayDate } from '@/lib/displayFormat';
+import { dayBefore } from '@/lib/bankPeriod';
 import { readMpesaRows, smsRefusal } from '@/lib/mpesaSms';
 import { retrySave } from '@/lib/saveRetry';
 import { differenceError } from '@/lib/differenceError';
-import { differenceMessages, fixConfirmation, fixPlan, hasFixes, inWorkingYear, kes, missingCharge, statedCharge, receiptOf, spanChangeText, startingBalanceAdvice, workingYear, type DifferenceSpan } from '@/lib/mpesaLiveBalance';
+import { differenceMessages, fixConfirmation, fixPlan, hasFixes, inWorkingYear, kes, missingCharge, openingBalanceFix, statedCharge, receiptOf, spanChangeText, startingBalanceAdvice, workingYear, type DifferenceSpan } from '@/lib/mpesaLiveBalance';
 
 
 type Span = DifferenceSpan;
@@ -139,6 +140,59 @@ export default function MpesaDifferenceScreen() {
     ]);
   };
 
+  // The fixes "Fix all" leaves to judgement, each offered where it is shown.
+  const [busyFix, setBusyFix] = useState<string | null>(null);
+  const runFix = async (key: string, what: () => Promise<unknown>, failed: string) => {
+    setBusyFix(key);
+    try {
+      await retrySave(what);
+      await check();
+    } catch (reason) {
+      Alert.alert(failed, differenceError(reason));
+    } finally {
+      setBusyFix(null);
+    }
+  };
+  /** The starting balance set to what closes the gap, dated the day before the messages begin. */
+  const setOpening = (amount: number) => {
+    if (!answer?.result) return;
+    const { account: target, result: checked } = answer;
+    Alert.alert(
+      `Set the starting balance to ${kes(amount)}?`,
+      `${target.name} held ${kes(amount)} before ${formatDisplayDate(checked.from)}, when your messages begin. Jamvi then starts level with M-Pesa. You can change it later in Bank.`,
+      [
+        { text: 'Not now', style: 'cancel' },
+        {
+          text: 'Set it',
+          onPress: () => void runFix('opening', () => customFetch('/api/joint-account/opening-balance', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ accountId: target.id, openingBalance: amount, openingBalanceDate: dayBefore(checked.from) }),
+          }), 'Could not set the starting balance'),
+        },
+      ],
+    );
+  };
+  /** An entry no message has: removed once the person says so. */
+  const removeExtra = (item: { id: number; amount: number; description: string; date: string }) => {
+    Alert.alert(
+      'Remove this entry?',
+      `${item.description}, ${item.amount < 0 ? '−' : '+'}${kes(Math.abs(item.amount))} on ${formatDisplayDate(item.date)}. No M-Pesa message has it, so it is most likely saved twice or not M-Pesa at all. Remove it only if so.`,
+      [
+        { text: 'Keep it', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () => void runFix(`extra-${item.id}`, () => customFetch(`/api/joint-account/${item.id}`, { method: 'DELETE' }), 'Could not remove it'),
+        },
+      ],
+    );
+  };
+  const openOnBank = (id: number) => {
+    if (!answer) return;
+    router.push(`/(tabs)/bank?editTx=${id}&accountId=${answer.account.id}&opened=${Date.now()}&returnTo=${encodeURIComponent('/mpesa-difference')}` as never);
+  };
+
   const result = answer?.result ?? null;
   const account = answer?.account.name ?? 'M-Pesa';
   const advice = result && answer ? startingBalanceAdvice(result.startGap, answer.account.openingBalance, account, formatDisplayDate(result.from)) : null;
@@ -220,9 +274,24 @@ export default function MpesaDifferenceScreen() {
               <View style={[styles.card, { backgroundColor: colors.card, borderColor: '#F59E0B' }]} testID="mpesa-difference-start">
                 <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>Before your messages begin</Text>
                 <Text style={{ color: colors.mutedForeground, fontSize: 13 }}>{advice}</Text>
-                <Pressable onPress={() => router.push('/(tabs)/bank' as never)} accessibilityRole="button" style={[styles.action, { borderColor: colors.primary }]}>
-                  <Text style={[styles.actionText, { color: colors.primary }]}>Open Bank</Text>
-                </Pressable>
+                {(() => {
+                  const amount = answer ? openingBalanceFix(result.startGap, answer.account.openingBalance) : null;
+                  return amount !== null ? (
+                    <Pressable
+                      onPress={() => setOpening(amount)}
+                      disabled={busyFix !== null || rechecking}
+                      accessibilityRole="button"
+                      testID="mpesa-difference-set-opening"
+                      style={{ backgroundColor: colors.primary, borderRadius: 8, padding: 12, alignItems: 'center', opacity: busyFix === 'opening' ? 0.6 : 1 }}
+                    >
+                      <Text style={{ color: '#fff', fontFamily: 'Inter_700Bold' }}>{busyFix === 'opening' ? 'Setting…' : `Set it to ${kes(amount)}`}</Text>
+                    </Pressable>
+                  ) : (
+                    <Pressable onPress={() => router.push('/(tabs)/bank' as never)} accessibilityRole="button" style={[styles.action, { borderColor: colors.primary }]}>
+                      <Text style={[styles.actionText, { color: colors.primary }]}>Open Bank</Text>
+                    </Pressable>
+                  );
+                })()}
               </View>
             ) : null}
 
@@ -271,8 +340,16 @@ export default function MpesaDifferenceScreen() {
                           </Text>
                         </View>
                         <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>
-                          {formatDisplayDate(item.date)} · {item.receipt ? `code ${item.receipt}, not among your messages` : 'typed by hand'}: saved twice, or not M-Pesa? Check it in Bank.
+                          {formatDisplayDate(item.date)} · {item.receipt ? `code ${item.receipt}, not among your messages` : 'typed by hand'}: saved twice, or not M-Pesa?
                         </Text>
+                        <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
+                          <Pressable onPress={() => openOnBank(item.id)} accessibilityRole="button" testID={`mpesa-difference-open-${item.id}`} style={[styles.action, { borderColor: colors.border, flex: 1 }]}>
+                            <Text style={[styles.actionText, { color: colors.foreground }]}>Open</Text>
+                          </Pressable>
+                          <Pressable onPress={() => removeExtra(item)} disabled={busyFix !== null || rechecking} accessibilityRole="button" testID={`mpesa-difference-remove-${item.id}`} style={[styles.action, { borderColor: colors.destructive, flex: 1, opacity: busyFix === `extra-${item.id}` ? 0.6 : 1 }]}>
+                            <Text style={[styles.actionText, { color: colors.destructive }]}>{busyFix === `extra-${item.id}` ? 'Removing…' : 'Remove'}</Text>
+                          </Pressable>
+                        </View>
                       </View>
                     ))}
                   </View>

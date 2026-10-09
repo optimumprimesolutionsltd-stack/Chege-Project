@@ -69,7 +69,14 @@ describe('Find the difference, on the phone', () => {
     const screen = read('app/mpesa-difference.tsx');
     expect(screen).toContain("customFetch<Answer>('/api/mpesa/difference', {");
     expect(screen).toContain('body: JSON.stringify({ messages }),');
-    expect(screen).not.toMatch(/method: 'PATCH'|method: 'DELETE'/);
+    // Since 9 Oct 2026 it can set the starting balance and remove an entry - each
+    // only from the Set it / Remove button of a confirmation, never by itself.
+    for (const method of ["method: 'PATCH'", "method: 'DELETE'"]) {
+      const at = screen.indexOf(method);
+      expect(at).toBeGreaterThan(-1);
+      const before = screen.slice(0, at);
+      expect(before.lastIndexOf('Alert.alert(')).toBeGreaterThan(before.lastIndexOf('const '));
+    }
     expect(read('app/_layout.tsx')).toContain('<Stack.Screen name="mpesa-difference" options={{ headerShown: false }} />');
   });
 
