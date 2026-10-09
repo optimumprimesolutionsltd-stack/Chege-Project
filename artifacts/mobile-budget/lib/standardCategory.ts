@@ -1,4 +1,4 @@
-import { knownPayeeNames } from './knownPayees';
+import { knownPayeeNames, knownPayeeOf } from './knownPayees';
 import { categoryPriority, ONBOARDING_SUBCATEGORIES } from './onboarding';
 
 /**
@@ -8,19 +8,28 @@ import { categoryPriority, ONBOARDING_SUBCATEGORIES } from './onboarding';
  * Food > Groceries in Essentials, never a lone category with no parent or tier
  * (7 Oct 2026).
  */
-export type StandardTarget = { name: string; parent: string; priority: number };
+export type StandardTarget = { key: string; name: string; parent: string; priority: number };
 
 const PARENT_OF = new Map<string, string>(
   Object.entries(ONBOARDING_SUBCATEGORIES).flatMap(([parent, children]) => children.map((child) => [child.toLocaleLowerCase('en-KE'), parent] as [string, string])),
 );
 const lower = (name: string) => name.trim().toLocaleLowerCase('en-KE');
 
+/**
+ * The common category for a payee Jamvi knows (lib/knownPayees): the one it
+ * names, under its heading, in that heading's standard tier.
+ */
 export function standardTargetFor(description: string): StandardTarget | null {
+  const known = knownPayeeOf(description);
+  if (known?.standard) {
+    const { name, parent } = known.standard;
+    return { key: known.key, name, parent, priority: categoryPriority(parent) };
+  }
   for (const name of knownPayeeNames(description)) {
     const parent = PARENT_OF.get(lower(name));
     if (parent) {
       const child = ONBOARDING_SUBCATEGORIES[parent].find((entry) => lower(entry) === lower(name)) ?? name;
-      return { name: child, parent, priority: categoryPriority(parent) };
+      return { key: known?.key ?? lower(child), name: child, parent, priority: categoryPriority(parent) };
     }
   }
   return null;

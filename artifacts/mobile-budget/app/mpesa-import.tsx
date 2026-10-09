@@ -49,7 +49,9 @@ import { buildCategoryTree, filterCategoryTree, type CategoryRow } from '@worksp
 
 import { BankAccountPicker } from '@/components/BankAccountPicker';
 import { NewCategoryOffer } from '@/components/NewCategoryOffer';
-import { standardTargetFor, type CategoryLite } from '@/lib/standardCategory';
+import { standardTargetFor, type CategoryLite, type StandardTarget } from '@/lib/standardCategory';
+import { setMakesStandardCategories } from '@/lib/knownPayees';
+import { ensureCommonCategories } from '@/lib/commonCategories';
 import { CategorySearchBox } from '@/components/CategorySearchBox';
 import { PageScrollView } from '@/components/PageScrollReset';
 import { ScreenHint } from '@/components/ScreenHint';
@@ -480,6 +482,10 @@ const RECEIPT_BATCH = 1_000;
  */
 
 export default function MpesaImportScreen() {
+  // Payees Jamvi knows may go under a common category the budget does not have
+  // yet: it is made just before saving (lib/commonCategories).
+  useState(() => { setMakesStandardCategories(true); return null; });
+  useEffect(() => () => setMakesStandardCategories(false), []);
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
@@ -2015,6 +2021,29 @@ export default function MpesaImportScreen() {
     // debt to that lender in Who owes who: found there, or added once, and its lines linked to it.
     let saveChoices = choices;
     let saveParties = parties;
+    // Payees Jamvi knows filed under a common category the budget has not got yet -
+    // Food > Eating out, Utilities > Electricity - have it made first, or found
+    // under the name the person gave it, and are saved under that (lib/commonCategories).
+    if (!resumeJob) {
+      const names = new Set(categories.map((row) => row.name));
+      const needed = new Map<number, StandardTarget>();
+      for (const line of lines) {
+        const choice = saveChoices[line.index];
+        if (line.direction !== 'out' || !choice?.include || !choice.category || names.has(choice.category)) continue;
+        const target = standardTargetFor(line.description ?? '');
+        if (target && target.name === choice.category) needed.set(line.index, target);
+      }
+      if (needed.size > 0) {
+        const made = await ensureCommonCategories([...needed.values()]);
+        const next = { ...saveChoices };
+        for (const [index, target] of needed) {
+          next[index] = { ...next[index], category: made.get(target.key) ?? NOT_SURE_CATEGORY };
+        }
+        saveChoices = next;
+        setChoices(saveChoices);
+        void queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
+      }
+    }
     if (!resumeJob) {
       const partyIds: Partial<Record<LenderId, number>> = {};
       for (const lender of lendersNeeded(lines, choices)) {

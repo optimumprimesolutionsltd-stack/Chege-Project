@@ -52,9 +52,9 @@ describe('automatic suggestions', () => {
 
 describe('choosing by hand', () => {
   const lines = [
-    line({ index: 0, description: 'Mama Mboga — Gikomba' }),
-    line({ index: 1, description: 'mama mboga — gikomba' }),
-    line({ index: 2, description: 'Mama Mboga — Gikomba' }),
+    line({ index: 0, description: 'Kamukunji Traders — Gikomba' }),
+    line({ index: 1, description: 'kamukunji traders — gikomba' }),
+    line({ index: 2, description: 'Kamukunji Traders — Gikomba' }),
     line({ index: 3, description: 'Other Shop' }),
   ];
 
