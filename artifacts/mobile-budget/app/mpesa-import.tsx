@@ -40,6 +40,9 @@ import {
   useGetGroup,
   useGetJointAccount,
   useGetJointAccounts,
+  useCreateJointAccount,
+  useUpdateJointAccount,
+  getGetJointAccountsQueryKey,
   useGetMembers,
   useGetWorkspaces,
   useSelectWorkspace,
@@ -119,6 +122,9 @@ import type { ReaderMessage } from '@/lib/statementReaderHtml';
 import { fetchOtherBudgetOptions, type OtherBudgetOptions } from '@/lib/otherBudgetOptions';
 import { WhoIsThisFor } from '@/components/WhoIsThisFor';
 import { useBusinesses } from '@/hooks/useBusinesses';
+import { useBusinessAccounts } from '@/hooks/useBusinessAccounts';
+import { TeachJamviCard, type OwnAccountAnswer } from '@/components/TeachJamviCard';
+import { alreadyKnown, suggestedCategories, teachableGroups, teachCategory, teachOwnAccount, teachSource, withOwnAccounts, type TeachGroup } from '@/lib/teachJamvi';
 import { useNamedPayees } from '@/hooks/useNamedPayees';
 import { namedKeyFor, ruleKeysFor, withNamed } from '@/lib/namedPayees';
 import { businessOfLine, businessPayees, chooseBusiness, chooseNewCost, costOwners, costsOf } from '@/lib/importBusiness';
@@ -502,7 +508,7 @@ export default function MpesaImportScreen() {
   const canManageBudget = !isShared || group?.role === 'owner' || group?.role === 'admin';
 
   const { data: accountList = [] } = useGetJointAccounts();
-  const accounts = accountList as unknown as Array<{ id: number; name: string }>;
+  const accounts = accountList as unknown as Array<{ id: number; name: string; accountNumber?: string | null }>;
   const { data: categoryList = [] } = useGetBudgetCategories();
   const categories = categoryList as unknown as CategoryRow[];
   const { mutateAsync: createNotSureCategory } = useCreateBudgetCategory();
@@ -532,6 +538,10 @@ export default function MpesaImportScreen() {
   // M-Pesa is usually its own account: start on one that says so.
   const guessedAccount = accounts.find((account) => /m-?pesa/i.test(account.name))?.id ?? accounts[0]?.id ?? null;
   const accountId = selectedAccountId ?? guessedAccount;
+  // The person's other accounts, known by number: lines to or from them start as
+  // moves, not spending (lib/teachJamvi). Never the account being imported into.
+  const ownAccounts = useMemo(() => accounts.filter((account) => account.id !== accountId), [accounts, accountId]);
+  const startChoices = (shown: readonly PreviewLine[], fresh: Record<number, Choice>) => withOwnAccounts(shown, fresh, ownAccounts);
   const { data: account } = useGetJointAccount(accountId ? { accountId } : undefined);
   const history = useMemo(
     () => ((account?.transactions ?? []) as Array<{ type: string; description: string; expenseCategory?: string | null; incomeSourceId?: number | null; chargeForTransactionId?: number | null }>),
@@ -635,7 +645,7 @@ export default function MpesaImportScreen() {
   const [otherBudgetOpen, setOtherBudgetOpen] = useState<Set<number>>(new Set());
   const [chargeCategory, setChargeCategory] = useState('');
   // A number is a line being categorised; 'charge' is the M-Pesa charges; 'recat:N' is an already-recorded entry whose category is being changed.
-  const [picking, setPicking] = useState<number | 'charge' | 'bulk' | `recat:${number}` | null>(null);
+  const [picking, setPicking] = useState<number | 'charge' | 'bulk' | `recat:${number}` | `teach:${string}` | null>(null);
   // Search over the review ("bundle", "KPLC", a till): what is found can be
   // confirmed, or given one category, all together.
   const [find, setFind] = useState('');
@@ -864,7 +874,7 @@ export default function MpesaImportScreen() {
       .then((checked) => {
         setLines(checked);
         setStatementReading({ ...kept, lines: checked });
-        setChoices(initialChoices(checked, [], [], effectiveChargeCategory, {}, canManageBudget));
+        setChoices(startChoices(checked, initialChoices(checked, [], [], effectiveChargeCategory, {}, canManageBudget)));
       });
     // Runs when the budget changes, not on every keystroke.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1041,7 +1051,7 @@ export default function MpesaImportScreen() {
       setNicknames(known);
       const shown = applyNicknames(response.lines, known);
       setLines(shown);
-      setChoices(initialChoices(shown, history, categories.map((row) => row.name), effectiveChargeCategory, rules, canManageBudget));
+      setChoices(startChoices(shown, initialChoices(shown, history, categories.map((row) => row.name), effectiveChargeCategory, rules, canManageBudget)));
       // Then: another of the person's budgets that has these codes, and entries typed by hand that look the same.
       void markRecorded(shown)
         .then((checked) => {
@@ -1143,7 +1153,7 @@ export default function MpesaImportScreen() {
       setText('');
       setSmsMessages(messages);
       setLines(shown);
-      setChoices(initialChoices(shown, history, categories.map((row) => row.name), effectiveChargeCategory, rules, canManageBudget));
+      setChoices(startChoices(shown, initialChoices(shown, history, categories.map((row) => row.name), effectiveChargeCategory, rules, canManageBudget)));
       // Then: another of the person's budgets that has these codes, and entries typed by hand that look the same.
       void markRecorded(shown)
         .then((checked) => {
@@ -1352,7 +1362,7 @@ export default function MpesaImportScreen() {
       );
       setLines(shown);
       setStatementReading({ ...reading, lines: shown });
-      const fresh = initialChoices(shown, history, categories.map((row) => row.name), effectiveChargeCategory, rules, canManageBudget);
+      const fresh = startChoices(shown, initialChoices(shown, history, categories.map((row) => row.name), effectiveChargeCategory, rules, canManageBudget));
       // Reading the same statement again keeps what was already worked through.
       const built = lines ? carryChoices(lines, choices, shown, fresh) : fresh;
       setChoices(built);
@@ -1395,7 +1405,10 @@ export default function MpesaImportScreen() {
     setChoices((current) => ({ ...current, [index]: { ...current[index], confirmed, ...(confirmed ? { remember: current[index]?.remember ?? true } : {}) } }));
 
   const chooseCategory = (name: string) => {
-    if (typeof picking === 'string' && picking.startsWith('recat:')) {
+    if (typeof picking === 'string' && picking.startsWith('teach:')) {
+      const taught = teachGroups.find((one) => one.key === picking.slice(6));
+      if (taught) teachAsCategory(taught, name);
+    } else if (typeof picking === 'string' && picking.startsWith('recat:')) {
       setRecat((current) => ({ ...current, [Number(picking.slice(6))]: name }));
     } else if (picking === 'charge') {
       setChargeCategory(name);
@@ -1689,6 +1702,63 @@ export default function MpesaImportScreen() {
     setTimeout(() => scrollRef.current?.scrollTo({ y: Math.max(0, (lineTops.current[firstProblemIndex] ?? 0) - 12), animated: true }), drawing ? 400 : 80);
   };
   const review = useMemo(() => (lines ? reviewCounts(lines, choices) : null), [lines, choices]);
+
+  // Teach Jamvi your M-Pesa (lib/teachJamvi): the regulars only the person can
+  // name, asked once at the top of the review. Each answer files every line of
+  // that payee now, and is kept where the next statement and the daily SMS
+  // reading look: a payee rule, a source rule, or the account's own number.
+  const [teachSkipped, setTeachSkipped] = useState<ReadonlySet<string>>(new Set());
+  const [teachAnswered, setTeachAnswered] = useState(0);
+  const [teachClosed, setTeachClosed] = useState(false);
+  const teachGroups = useMemo(
+    () => (lines && canManageBudget ? teachableGroups(lines, choices, rules, { skipped: teachSkipped }) : []),
+    [lines, choices, rules, teachSkipped, canManageBudget],
+  );
+  const known = useMemo(() => (lines ? alreadyKnown(lines, choices, rules) : null), [lines, choices, rules]);
+  const categoryNames = useMemo(() => categories.map((row) => row.name), [categories]);
+  const { mutateAsync: createAccount } = useCreateJointAccount();
+  const { mutateAsync: updateAccount } = useUpdateJointAccount();
+  const businessAccounts = useBusinessAccounts();
+  const teachAsCategory = (taught: TeachGroup, category: string) => {
+    setChoices((current) => teachCategory(current, taught, category));
+    // A bank account paid through a paybill is remembered by its account number,
+    // never by the bank's paybill, which every customer of that bank shares.
+    keepRules(taught.key.startsWith('#ref:')
+      ? { ...rules, [taught.key]: category }
+      : withRule(rules, taught.sample.description ?? '', category, taught.sample.payeeNumber));
+    setTeachAnswered((count) => count + 1);
+  };
+  const teachAsSource = (taught: TeachGroup, incomeSourceId: number) => {
+    setChoices((current) => teachSource(current, taught, incomeSourceId));
+    keepRules(withSourceRule(rules, taught.sample.description ?? '', incomeSourceId));
+    setTeachAnswered((count) => count + 1);
+  };
+  const teachAsOwnAccount = async (taught: TeachGroup, answer: OwnAccountAnswer) => {
+    // The number lives on the account itself, on the server: every phone, the
+    // web and the next reinstall all know payments to it are the person's own.
+    let targetId: number;
+    if ('accountId' in answer) {
+      const existing = accounts.find((account) => account.id === answer.accountId);
+      await updateAccount({ id: answer.accountId, data: { name: existing?.name ?? taught.label, accountNumber: taught.reference } });
+      targetId = answer.accountId;
+    } else {
+      const created = await createAccount({ data: { name: answer.name, accountNumber: taught.reference } });
+      targetId = created.id;
+      let businessId = answer.businessId;
+      if (answer.newBusinessName) {
+        const made = await businesses.create(answer.newBusinessName).catch(() => null);
+        businessId = made?.id ?? null;
+        if (made?.id) setAddedBusinesses((current) => [...current, { id: made.id, name: answer.newBusinessName ?? '' }]);
+      }
+      if (businessId !== null) {
+        await businessAccounts.setBusiness(targetId, true, businessId).catch(() =>
+          Alert.alert('Account added', "It could not be set as the business's yet. Open it on Bank and choose Business."));
+      }
+    }
+    await queryClient.invalidateQueries({ queryKey: getGetJointAccountsQueryKey() });
+    setChoices((current) => teachOwnAccount(current, taught, targetId));
+    setTeachAnswered((count) => count + 1);
+  };
   const firstProblem = useMemo(() => {
     if (!lines) return null;
     for (const item of lines) {
@@ -2803,7 +2873,7 @@ export default function MpesaImportScreen() {
               onSelect={(id) => {
                 setSelectedAccountId(id);
                 // The suggestions come from this account's history, so start them again.
-                setChoices(initialChoices(lines, [], categories.map((row) => row.name), effectiveChargeCategory, rules, canManageBudget));
+                setChoices(startChoices(lines, initialChoices(lines, [], categories.map((row) => row.name), effectiveChargeCategory, rules, canManageBudget)));
               }}
               testIDPrefix="mpesa-import-account"
             />
@@ -3041,6 +3111,23 @@ export default function MpesaImportScreen() {
                   What Jamvi remembers ({Object.keys(rules).length + Object.keys(otherRules).length})
                 </Text>
               </Pressable>
+            ) : null}
+            {known && !teachClosed && (teachGroups.length > 0 || teachAnswered > 0) ? (
+              <TeachJamviCard
+                groups={teachGroups}
+                known={known}
+                answered={teachAnswered}
+                suggestions={(taught) => suggestedCategories(taught, categoryNames, choices[taught.indexes[0]]?.category)}
+                incomeSources={incomeSources}
+                accounts={ownAccounts}
+                businesses={whoForBusinesses}
+                onCategory={teachAsCategory}
+                onPickCategory={(taught) => setPicking(`teach:${taught.key}`)}
+                onSource={teachAsSource}
+                onOwnAccount={teachAsOwnAccount}
+                onSkip={(taught) => setTeachSkipped((current) => new Set([...current, taught.key]))}
+                onClose={() => setTeachClosed(true)}
+              />
             ) : null}
             {review && review.all > 0 ? (
               <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]} testID="mpesa-review">
