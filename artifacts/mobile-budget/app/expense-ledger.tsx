@@ -27,6 +27,7 @@ import {
 import { isoDay, longDay, monthStartIso, orderedRange, stepMonth } from '@/lib/dayRange';
 import { useBusinesses } from '@/hooks/useBusinesses';
 import { useColors } from '@/hooks/useColors';
+import { isRefund, spentText } from '@/lib/refundLabel';
 import { useProgressiveDays } from '@/lib/progressiveDays';
 import { accountsOf, groupRowsShown } from '@/lib/openGroup';
 import { ScrollerScrollView } from '@/components/PageScrollReset';
@@ -263,7 +264,7 @@ export default function ExpenseLedgerScreen() {
             {entry.categories.join(' + ')} · {entry.payerName}
           </Text>
         </View>
-        <Text style={[styles.rowAmount, { color: colors.foreground }]}>{formatKES(entry.amount)}</Text>
+        <Text style={[styles.rowAmount, { color: isRefund(entry.amount) ? colors.success : colors.foreground }]}>{spentText(entry.amount)}</Text>
         {href ? <Feather name="edit-2" size={12} color={colors.mutedForeground} style={{ marginLeft: 6 }} /> : null}
       </Pressable>
     );
