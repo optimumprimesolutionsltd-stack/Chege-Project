@@ -25,7 +25,7 @@ import { writePdf } from '@/lib/savePdf';
 import { budgetReport, householdRows } from '@/lib/budgetReport';
 import { PDF_SECTIONS, DEFAULT_PDF_SECTIONS, parsePdfSections, pdfSectionParams, type PdfSectionKey } from '@/lib/reportPdfSections';
 import { useColors } from '@/hooks/useColors';
-import { useOnScreen } from '@/hooks/useOnScreen';
+import { onScreenOnly, useOnScreen } from '@/hooks/useOnScreen';
 import { monthLedgerHref } from '@/lib/monthLink';
 import { reportInsights } from '@/lib/reportInsights';
 import { InsightsCard } from '@/components/InsightsCard';
@@ -197,13 +197,15 @@ const STREAM_DETAIL_ROWS = 10;
 const PDF_SECTIONS_KEY = 'jamvi:report-pdf-sections';
 
 export default function ReportsScreen() {
+  const onScreen = useOnScreen();
+  const live = onScreenOnly(onScreen);
   const colors = useColors();
-  const { data: group } = useGetGroup();
+  const { data: group } = useGetGroup(live);
   // A PDF is a copy that can be forwarded, so only an owner or admin makes one
   // (the server refuses everybody else). A Personal budget is its owner's.
   const canDownloadPdf = group?.isPrivate !== false || group?.role === 'owner' || group?.role === 'admin';
   const queryClient = useQueryClient();
-  const { data: categories = [] } = useGetBudgetCategories();
+  const { data: categories = [] } = useGetBudgetCategories(live);
   const insets = useSafeAreaInsets();
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
@@ -261,21 +263,20 @@ export default function ReportsScreen() {
   // The slow reports are followed only while Reports is in view (hooks/useOnScreen):
   // the six-month trend takes the server up to 5 s, and a hidden Reports tab
   // asked for it again after every save made anywhere.
-  const onReportsScreen = useOnScreen();
 
-  const { data: expenses    = [], isLoading: loadingExp,     isError: expensesError, refetch: refetchExp     } = useGetExpenses(queryParams);
-  const { data: catBreakdown = [], isLoading: loadingCat,    isError: categoryError, refetch: refetchCat     } = useGetDashboardCategoryBreakdown(queryParams);
+  const { data: expenses    = [], isLoading: loadingExp,     isError: expensesError, refetch: refetchExp     } = useGetExpenses(queryParams, live);
+  const { data: catBreakdown = [], isLoading: loadingCat,    isError: categoryError, refetch: refetchCat     } = useGetDashboardCategoryBreakdown(queryParams, live);
   // Last month by category, for What stands out (lib/reportInsights) to compare with.
   const previousParams = month === 1 ? { month: 12, year: year - 1 } : { month: month - 1, year };
-  const { data: previousBreakdown = [] } = useGetDashboardCategoryBreakdown(previousParams);
-  const { data: summary,          isLoading: loadingSummary, isError: summaryError, refetch: refetchSummary } = useGetDashboardSummary(queryParams);
+  const { data: previousBreakdown = [] } = useGetDashboardCategoryBreakdown(previousParams, live);
+  const { data: summary,          isLoading: loadingSummary, isError: summaryError, refetch: refetchSummary } = useGetDashboardSummary(queryParams, live);
   const {
     data: incomeStreamReport,
     isLoading: loadingIncomeStreams,
     isError: incomeStreamsError,
     refetch: refetchIncomeStreams,
   } = useGetDashboardIncomeStreams(queryParams, {
-    query: { queryKey: getGetDashboardIncomeStreamsQueryKey(queryParams), retry: false, subscribed: onReportsScreen },
+    query: { queryKey: getGetDashboardIncomeStreamsQueryKey(queryParams), retry: false, subscribed: onScreen },
   });
   const {
     data: incomeTrend,
@@ -284,9 +285,9 @@ export default function ReportsScreen() {
     refetch: refetchIncomeTrend,
   } = useGetDashboardIncomeStreamsTrend(
     { months: 6 },
-    { query: { queryKey: getGetDashboardIncomeStreamsTrendQueryKey({ months: 6 }), retry: false, subscribed: onReportsScreen } },
+    { query: { queryKey: getGetDashboardIncomeStreamsTrendQueryKey({ months: 6 }), retry: false, subscribed: onScreen } },
   );
-  const { data: members = [] } = useGetMembers();
+  const { data: members = [] } = useGetMembers(live);
 
   // Each income stream's details - its entries this month and each cost linked
   // to it - open one at a time or all at once, as on Business. Off until asked
@@ -314,7 +315,7 @@ export default function ReportsScreen() {
   // The entries come from All income's own list, and are only asked for while shown.
   const showingStreamDetails = streamKeys.some((key) => detailedStreams.has(key));
   const { data: incomeLedger, isLoading: loadingIncomeLedger } = useGetDashboardIncomeLedger(queryParams, {
-    query: { queryKey: getGetDashboardIncomeLedgerQueryKey(queryParams), enabled: showingStreamDetails, retry: false, subscribed: onReportsScreen },
+    query: { queryKey: getGetDashboardIncomeLedgerQueryKey(queryParams), enabled: showingStreamDetails, retry: false, subscribed: onScreen },
   });
   const streamEntries = (incomeSourceId: number | null | undefined) =>
     (incomeLedger?.entries ?? []).flatMap((entry) => {
@@ -491,7 +492,7 @@ export default function ReportsScreen() {
   );
 
   // Savings goals
-  const { data: goalsRaw = [] } = useGetSavingsGoals();
+  const { data: goalsRaw = [] } = useGetSavingsGoals(live);
   // Goals with a target only: M-Shwari and the other savings accounts have none to report progress on (lib/mpesaProducts).
   const goals = useMemo(() =>
     [...(goalsRaw as any[])].filter((goal) => goal.targetAmount > 0).sort((a, b) => {

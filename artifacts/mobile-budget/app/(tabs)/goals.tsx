@@ -25,6 +25,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import { onScreenOnly, useOnScreen } from '@/hooks/useOnScreen';
 import { useColors } from '@/hooks/useColors';
 import { PageScrollView } from '@/components/PageScrollReset';
 import { useAuth } from '@/lib/auth';
@@ -279,6 +280,8 @@ type SavingsGoal = {
 };
 
 export default function GoalsScreen() {
+  const onScreen = useOnScreen();
+  const live = onScreenOnly(onScreen);
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const topPad = Platform.OS === 'web' ? 67 : insets.top;
@@ -287,10 +290,11 @@ export default function GoalsScreen() {
   const { shortcut } = useLocalSearchParams<{ shortcut?: string }>();
   const handledShortcut = useRef<string | null>(null);
 
-  const { data: goals = [], isLoading, refetch } = useGetSavingsGoals();
+  const { data: goals = [], isLoading, refetch } = useGetSavingsGoals(live);
   // A goal whose saved amount no longer matches the contributions behind it -
   // the web's "Balance mismatch" warning, which the phone did not show.
   const { data: consistency } = useQuery<{ ok: boolean; inconsistentGoals: Array<{ id: number; name: string; currentAmount: number; contributionTotal: number; discrepancy: number }> }>({
+    subscribed: onScreen,
     queryKey: ['savings-goals-consistency'],
     queryFn: () => customFetch('/api/savings-goals/consistency-check'),
     staleTime: 60_000,
@@ -606,7 +610,7 @@ export default function GoalsScreen() {
   const { data: contributions = [], isLoading: historyLoading, refetch: refetchHistory } = useGetSavingsGoalContributions(
     historyGoal?.id ?? 0,
     {
-      query: {
+      query: { subscribed: onScreen,
         queryKey: getGetSavingsGoalContributionsQueryKey(historyGoal?.id ?? 0),
         enabled: historyVisible && !!historyGoal,
       },
@@ -767,8 +771,8 @@ export default function GoalsScreen() {
   const [cascadePayerAmounts, setCascadePayerAmounts] = useState<Record<string, string>>({});
 
   const { mutateAsync: cascadeContribute } = useCascadeContribute();
-  const { data: members = [] } = useGetMembers();
-  const { data: group } = useGetGroup();
+  const { data: members = [] } = useGetMembers(live);
+  const { data: group } = useGetGroup(live);
   const isSharedWorkspace = group?.isPrivate === false;
   const canManageShared = members.some(
     (member) =>

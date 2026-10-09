@@ -4,6 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery } from '@tanstack/react-query';
 import { customFetch } from '@workspace/api-client-react';
+import { useOnScreen } from '@/hooks/useOnScreen';
 import { useColors } from '@/hooks/useColors';
 import { PageScrollView } from '@/components/PageScrollReset';
 import { DebtPayoffCard } from '@/components/DebtPayoffCard';
@@ -36,11 +37,13 @@ function kes(value: number): string {
  * going.
  */
 export default function DebtScreen() {
+  const onScreen = useOnScreen();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const [strategy, setStrategy] = useState<PayoffStrategy>('snowball');
 
   const { data: categories = [], isLoading, refetch, isRefetching } = useQuery<CategoryRow[]>({
+    subscribed: onScreen,
     queryKey: ['budget-categories-full'],
     queryFn: () => customFetch<CategoryRow[]>('/api/budget-categories'),
     staleTime: 30_000,
@@ -73,6 +76,7 @@ export default function DebtScreen() {
    * figure this screen exists to show.
    */
   const { data: parties = [] } = useQuery<Party[]>({
+    subscribed: onScreen,
     queryKey: ['parties'],
     queryFn: () => customFetch<Party[]>('/api/contributors'),
     staleTime: 30_000,

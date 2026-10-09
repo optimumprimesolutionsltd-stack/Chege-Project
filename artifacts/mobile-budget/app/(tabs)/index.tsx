@@ -29,7 +29,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { DebtSummaryCard } from '@/components/DebtSummaryCard';
 import { useColors } from '@/hooks/useColors';
-import { useOnScreen } from '@/hooks/useOnScreen';
+import { onScreenOnly, useOnScreen } from '@/hooks/useOnScreen';
 import { useEntitlements } from '@/hooks/useEntitlements';
 import { mayStartGroup } from '@/lib/groupStart';
 import { toSortTitle } from '@/lib/entriesToSort';
@@ -156,6 +156,8 @@ import { arrange, homeAreasKey, useArrangement } from '@/lib/layoutPrefs';
 import { duplicatesTitle } from '@/lib/possibleDuplicates';
 
 export default function DashboardScreen() {
+  const onScreen = useOnScreen();
+  const live = onScreenOnly(onScreen);
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
@@ -183,31 +185,30 @@ export default function DashboardScreen() {
   const fmt = useCallback((n?: number | null) => isPrivate ? '••••' : formatKES(n), [isPrivate]);
 
   // The whole account is followed only while Home is in view (hooks/useOnScreen).
-  const onHomeScreen = useOnScreen();
   const {
     data: summary,
     isLoading: summaryLoading,
     isError: summaryError,
     error: summaryFailure,
     refetch: refetchSummary,
-  } = useGetDashboardSummary({ month, year });
+  } = useGetDashboardSummary({ month, year }, live);
 
   const {
     data: activity,
     isLoading: activityLoading,
     refetch: refetchActivity,
-  } = useGetDashboardActivity();
+  } = useGetDashboardActivity(undefined, live);
   const {
     data: expenses = [],
     refetch: refetchExpenses,
-  } = useGetExpenses({ month, year });
+  } = useGetExpenses({ month, year }, live);
 
   const {
     data: bankAccount,
     isLoading: bankAccountLoading,
     refetch: refetchBank,
-  } = useGetJointAccount(undefined, { query: { queryKey: getGetJointAccountQueryKey(), subscribed: onHomeScreen } });
-  const { data: group } = useGetGroup();
+  } = useGetJointAccount(undefined, { query: { queryKey: getGetJointAccountQueryKey(), subscribed: onScreen } });
+  const { data: group } = useGetGroup(live);
   const isSharedWorkspace = group?.isPrivate === false;
 
   const [refreshing, setRefreshing] = useState(false);
@@ -330,6 +331,7 @@ export default function DashboardScreen() {
   const { toSortCount, newSmsCount: newSms, recheckSms } = useWaitingForYou();
   // One payment typed by hand and brought in from M-Pesa (lib/possibleDuplicates).
   const { data: duplicates } = useQuery<{ count: number }>({
+    subscribed: onScreen,
     queryKey: ['possible-duplicates'],
     queryFn: () => customFetch('/api/possible-duplicates'),
     retry: false,

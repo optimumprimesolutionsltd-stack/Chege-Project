@@ -25,6 +25,7 @@ import { isoDay, longDay, monthStartIso, orderedRange } from '@/lib/dayRange';
 import { incomeTotal, leftToPlan, planWith } from '@/lib/budgetTotals';
 import { effectiveBudgets } from '@workspace/category-tree';
 import { CategorySearchBox } from '@/components/CategorySearchBox';
+import { onScreenOnly, useOnScreen } from '@/hooks/useOnScreen';
 import { useBusinesses } from '@/hooks/useBusinesses';
 import { useColors } from '@/hooks/useColors';
 import { UndoDeleteBar, useUndoableDelete } from '@/components/UndoDeleteBar';
@@ -98,6 +99,8 @@ function formatKES(n?: number | null): string {
 }
 
 export default function BudgetScreen() {
+  const onScreen = useOnScreen();
+  const live = onScreenOnly(onScreen);
   const colors = useColors();
   const tierPanel = useCollapsed('budget-tiers');
   const categoryPanel = useCollapsed('budget-categories');
@@ -123,16 +126,18 @@ export default function BudgetScreen() {
     isFetching: breakdownFetching,
     refetch: refetchBreakdown,
   } =
-    useGetDashboardCategoryBreakdown({ month, year });
+    useGetDashboardCategoryBreakdown({ month, year }, live);
   // A category waiting for Undo is already out of every list and total.
   const breakdown = useMemo(() => rawBreakdown.filter((row) => !undoable.isHidden(`cat:${row.category}`)), [rawBreakdown, undoable.isHidden]);
   const { data: allCategories = [], isLoading: categoriesLoading, refetch: refetchCats } = useQuery<BudgetCategory[]>({
+    subscribed: onScreen,
     queryKey: ['budget-categories-full'],
     queryFn: () => customFetch<BudgetCategory[]>('/api/budget-categories'),
     staleTime: 30_000,
   });
   const businesses = useBusinesses();
   const { data: incomeSources = [], refetch: refetchIncomeSources } = useQuery<IncomeSource[]>({
+    subscribed: onScreen,
     // What each source was expected to bring in, in the month on screen.
     queryKey: ['income-sources', 'budget-report', year, month],
     // Your income streams, without businesses: a business is never one (api-server lib/business-streams).
@@ -140,12 +145,14 @@ export default function BudgetScreen() {
     staleTime: 30_000,
   });
   const { data: members = [], refetch: refetchMembers } = useQuery<Member[]>({
+    subscribed: onScreen,
     queryKey: ['members', 'budget-report'],
     queryFn: () => customFetch<Member[]>('/api/members'),
     staleTime: 30_000,
   });
-  const { data: group } = useGetGroup();
+  const { data: group } = useGetGroup(live);
   const { data: tierConfig, refetch: refetchTierConfig } = useQuery<{ tiers: PriorityTier[] }>({
+    subscribed: onScreen,
     queryKey: ['budget-priority-tiers', group?.id],
     queryFn: () => customFetch<{ tiers: PriorityTier[] }>('/api/budget-priority-tiers'),
     enabled: Boolean(group?.id),
@@ -225,6 +232,7 @@ export default function BudgetScreen() {
     },
     {
       query: {
+        subscribed: onScreen,
         // The range belongs in the key, or changing the dates would show the
         // previous range's entries from cache.
         queryKey: getGetDashboardCategoryLedgerQueryKey({

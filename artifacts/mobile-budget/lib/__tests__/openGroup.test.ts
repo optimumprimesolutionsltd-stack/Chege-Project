@@ -33,7 +33,7 @@ describe('an open group on All expenses', () => {
 describe('Search', () => {
   const screen = readFileSync('app/(tabs)/search.tsx', 'utf8');
   it('runs again only while in view, and keeps results on screen while it refreshes', () => {
-    expect(screen).toContain('subscribed: onSearchScreen,');
+    expect(screen).toContain('subscribed: onScreen,');
     expect(screen).toContain('const searching = search.isFetching && !search.data;');
     expect(screen).not.toContain('{search.isFetching ? (');
   });

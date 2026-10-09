@@ -73,7 +73,7 @@ describe('What stands out on Reports', () => {
     const reports = readFileSync('app/(tabs)/reports.tsx', 'utf8');
     const card = readFileSync('components/InsightsCard.tsx', 'utf8');
     expect(reports.indexOf('<InsightsCard')).toBeGreaterThan(reports.indexOf('testID="monthly-progress-summary"'));
-    expect(reports).toContain('const { data: previousBreakdown = [] } = useGetDashboardCategoryBreakdown(previousParams);');
+    expect(reports).toContain('const { data: previousBreakdown = [] } = useGetDashboardCategoryBreakdown(previousParams, live);');
     expect(card).toContain("if (insight.action.kind === 'sort') router.push('/sort-entries' as never);");
   });
 });
