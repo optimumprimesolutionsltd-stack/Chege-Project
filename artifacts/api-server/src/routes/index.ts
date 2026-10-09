@@ -41,6 +41,7 @@ import {
 import { paymentsRouter, publicPaymentsRouter } from "./payments";
 import { crmSyncRouter } from "./crm-sync";
 import { requireMember } from "../middlewares/requireMember";
+import { reportCache } from "../lib/report-cache";
 import { requireWriteAccess } from "../middlewares/requireWriteAccess";
 
 const router: IRouter = Router();
@@ -65,6 +66,9 @@ router.use(requireMember);
 // Then the write gate. A viewer reaches every read below and no write, and a
 // route added later is covered without anybody remembering to guard it.
 router.use(requireWriteAccess);
+// Reports remembered until their budget changes (lib/report-cache): the database
+// has a tenth of a CPU, and most Reports requests found nothing had changed.
+router.use(reportCache);
 
 router.use(expensesRouter);
 router.use(contributionsRouter);
