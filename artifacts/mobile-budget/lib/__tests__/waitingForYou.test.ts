@@ -22,8 +22,10 @@ describe('what is waiting for you', () => {
 
   it('leads Home, above Your M-Pesa', () => {
     const home = readFileSync('app/(tabs)/index.tsx', 'utf8');
-    const sms = home.indexOf('testID="new-mpesa-sms-cta"');
-    const sort = home.indexOf('testID="entries-to-sort-cta"');
+    // One Waiting for you card, its rows listed in order (9 Oct 2026 cleanup).
+    const sms = home.indexOf("testID: 'new-mpesa-sms-cta'");
+    const sort = home.indexOf("testID: 'entries-to-sort-cta'");
+    expect(home).toContain('testID="home-waiting"');
     const mpesa = home.indexOf('<MpesaImportCard />');
     expect(sms).toBeGreaterThan(0);
     expect(sort).toBeGreaterThan(sms);

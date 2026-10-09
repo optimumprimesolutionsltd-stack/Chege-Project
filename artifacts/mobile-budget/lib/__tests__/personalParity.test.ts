@@ -15,7 +15,9 @@ describe('a Personal budget has what a shared group has on Home', () => {
     expect(home).toContain("label: 'M-Pesa',        color: '#3CDD62', bg: '#0D3428', route: '/mpesa-import'");
   });
 
-  it('shows the budget ring for any workspace', () => {
-    expect(home).toContain('{group && (\n            <View style={styles.ringWrap}>'.replace(/\n/g, home.includes('\r\n') ? '\r\n' : '\n'));
+  it('shows the month at a glance for any workspace', () => {
+    // The three answers took the budget ring's place on 9 Oct 2026, for both.
+    expect(home).toContain('<HomeAnswersCard');
+    expect(home).not.toContain('styles.ringWrap');
   });
 });

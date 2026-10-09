@@ -26,11 +26,9 @@ describe('bank figures on the phone are not rounded', () => {
     expect(bank).not.toMatch(/function formatKES[\s\S]{0,140}maximumFractionDigits: 0/);
   });
 
-  it('the Home bank card uses it for the balance and the month\'s movements', () => {
-    const home = read('app/(tabs)/index.tsx');
-    expect(home).toContain('formatExact(bankAccount.balance)');
-    expect(home).toContain('formatExact(monthlyDeposited)');
-    expect(home).toContain('formatExact(monthlyDisbursed)');
+  it('Home shows the balance exactly', () => {
+    // The Home bank card left on 9 Oct 2026; How much do I have? carries the balance.
+    expect(read('components/HomeAnswersCard.tsx')).toContain('`KES ${formatExact(value)}`');
   });
 
   it('Activity rows show the exact amount', () => {
