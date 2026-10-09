@@ -13,7 +13,8 @@ router.get("/businesses", async (req, res): Promise<void> => {
   res.json({ ready: businessStreamsReady(), incomeSourceIds: businesses.map((business) => business.id), businesses });
 });
 
-const flagSchema = z.object({ business: z.boolean(), countsProfit: z.boolean().optional() });
+// paysSalary: "Do you pay yourself a salary from it?" - null puts it back to not asked.
+const flagSchema = z.object({ business: z.boolean(), countsProfit: z.boolean().optional(), paysSalary: z.boolean().nullable().optional() });
 
 /** A business, or back to an ordinary income stream. */
 router.put("/businesses/:incomeSourceId", async (req, res): Promise<void> => {
@@ -30,11 +31,16 @@ router.put("/businesses/:incomeSourceId", async (req, res): Promise<void> => {
     res.status(400).json({ error: "Say whether it is a business." });
     return;
   }
-  if (!(await setBusinessStream(groupId, incomeSourceId, parsed.data.business, parsed.data.countsProfit))) {
+  if (!(await setBusinessStream(groupId, incomeSourceId, parsed.data.business, parsed.data.countsProfit, parsed.data.paysSalary))) {
     res.status(404).json({ error: "Income stream not found" });
     return;
   }
-  res.json({ incomeSourceId, business: parsed.data.business, ...(parsed.data.countsProfit === undefined ? {} : { countsProfit: parsed.data.countsProfit }) });
+  res.json({
+    incomeSourceId,
+    business: parsed.data.business,
+    ...(parsed.data.countsProfit === undefined ? {} : { countsProfit: parsed.data.countsProfit }),
+    ...(parsed.data.paysSalary === undefined ? {} : { paysSalary: parsed.data.paysSalary }),
+  });
 });
 
 export default router;

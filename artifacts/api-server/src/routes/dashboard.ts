@@ -2,7 +2,7 @@ import { Router } from "express";
 import { inMonthOf } from "../lib/month-range";
 import { db } from "@workspace/db";
 import { inPersonalAccount, isInBusinessAccount, businessAccountIds } from "../lib/business-accounts";
-import { businessCostLink, businessStreamIds, isBusinessSale, profitBusinessIds } from "../lib/business-streams";
+import { businessCostLink, businessStreamIds, isBusinessSale, ownerIncomeBusinessIds, profitBusinessIds } from "../lib/business-streams";
 import { isOwnerBusinessMoneySql } from "../lib/owner-business-money";
 import {
   expensesTable,
@@ -1324,8 +1324,10 @@ async function loadIncomeLedger(groupId: number, from: string, to: string, searc
     db.execute(sql`SELECT id, name FROM income_sources WHERE group_id = ${groupId}`),
   ]);
   // An income stream is income, nothing taken off it: costs are a business's,
-  // in the Business report (lib/business-streams).
-  const costsByStream = new Map<number, number>();
+  // in the Business report (lib/business-streams) - except a business its owner
+  // lives on, whose sales are income here and whose costs come off them, so
+  // the stream reads as its profit. A search lists receipts only.
+  const costsByStream = personal && !search ? await ownerIncomeCosts(groupId, from, to) : new Map<number, number>();
 
   return buildIncomeLedger({
     from,
@@ -1692,6 +1694,26 @@ async function businessAccountSummary(groupId: number, from: string, to: string)
  * `personalOnly` leaves out spending from the businesses' own accounts, which
  * personal figures never counted in the first place (lib/business-accounts).
  */
+/**
+ * What each business its owner lives on (lib/business-streams
+ * ownerIncomeBusinessIds) cost to run between two days, inclusive. Their sales
+ * count as the owner's income, and these come off them, so every income figure
+ * carries the business's profit: "if a business's profit is tracked, its profit
+ * counts as an income stream" (9 Oct 2026). Costs paid from the business's own
+ * accounts stay out, as its sales there do (lib/business-accounts).
+ */
+export async function ownerIncomeCosts(groupId: number, from: string, to: string): Promise<Map<number, number>> {
+  const costs = new Map<number, number>();
+  const ids = new Set(await ownerIncomeBusinessIds(groupId));
+  if (ids.size === 0) return costs;
+  for (const line of await incomeStreamCostLines(groupId, from, to, { personalOnly: true })) {
+    if (ids.has(line.incomeSourceId)) costs.set(line.incomeSourceId, (costs.get(line.incomeSourceId) ?? 0) + line.amount);
+  }
+  return costs;
+}
+
+export const totalCosts = (costs: ReadonlyMap<number, number>): number => [...costs.values()].reduce((sum, amount) => sum + amount, 0);
+
 async function incomeStreamCostLines(groupId: number, from: string, to: string, { personalOnly = false }: { personalOnly?: boolean } = {}): Promise<BusinessCostRow[]> {
   const result = await db.execute(sql`
     WITH cost_categories AS (
@@ -1847,8 +1869,13 @@ router.get("/dashboard/income-streams", async (req, res): Promise<void> => {
   const month = parsed.success && parsed.data.month != null ? Math.round(parsed.data.month) : now.getUTCMonth() + 1;
   const year = parsed.success && parsed.data.year != null ? Math.round(parsed.data.year) : now.getUTCFullYear();
 
-  // An income stream is income: nothing comes off it (costs are a business's - lib/business-streams).
-  const costsByIncomeSourceId = new Map<number, number>();
+  // An income stream is income: nothing comes off it (costs are a business's -
+  // lib/business-streams), except a business its owner lives on: its profit.
+  const costsByIncomeSourceId = await ownerIncomeCosts(
+    groupId,
+    `${year}-${String(month).padStart(2, "0")}-01`,
+    new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10),
+  );
 
   const result = await db.execute(sql`
     WITH funding AS (
@@ -2218,6 +2245,21 @@ router.get("/dashboard/income-streams-trend", async (req, res): Promise<void> =>
     .from(incomeSourcesTable)
     .where(eq(incomeSourcesTable.groupId, groupId));
 
+  // A business its owner lives on reads as its profit each month, as on All income.
+  if ((await ownerIncomeBusinessIds(groupId)).length > 0) {
+    const names = new Map<number, string>(sources.map((source: { id: number; name: string }) => [source.id, source.name]));
+    const monthly = await Promise.all(months.map(async ({ year, month }) => ({
+      year,
+      month,
+      costs: await ownerIncomeCosts(groupId, `${year}-${String(month).padStart(2, "0")}-01`, new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10)),
+    })));
+    for (const { year, month, costs } of monthly) {
+      for (const [incomeSourceId, amount] of costs) {
+        rows.push({ incomeSourceId, sourceName: names.get(incomeSourceId) ?? "Business", year, month, amount: -amount });
+      }
+    }
+  }
+
   res.json(
     GetDashboardIncomeStreamsTrendResponse.parse(
       buildIncomeStreamTrend({ months, rows, sources }),
@@ -2383,7 +2425,8 @@ router.get("/dashboard/period-totals", async (req, res): Promise<void> => {
     .then((lines) => lines.reduce((sum, line) => sum + line.amount, 0))
     .catch(() => 0);
   const spendingTotal = Math.max(0, numberValue("spendingTotal") - businessCosts);
-  const contributionTotal = numberValue("contributionTotal");
+  // A business its owner lives on: its sales are in what came in, its costs come off it.
+  const contributionTotal = numberValue("contributionTotal") - totalCosts(await ownerIncomeCosts(groupId, start.raw, end.raw));
   const response = {
     startDate: start.raw,
     endDate: end.raw,
@@ -2630,6 +2673,18 @@ router.get("/dashboard/monthly-report.pdf", async (req, res): Promise<void> => {
     total: string | number;
     transactionCount: string | number;
   }>;
+  // A business its owner lives on is its profit, as on All income.
+  const pdfOwnerCosts = await ownerIncomeCosts(groupId, rangeFrom, rangeTo);
+  if (pdfOwnerCosts.size > 0) {
+    const names = await db.select({ id: incomeSourcesTable.id, name: incomeSourcesTable.name }).from(incomeSourcesTable).where(eq(incomeSourcesTable.groupId, groupId));
+    for (const [incomeSourceId, cost] of pdfOwnerCosts) {
+      const name = (names as Array<{ id: number; name: string }>).find((source) => source.id === incomeSourceId)?.name;
+      if (!name) continue;
+      const row = rawIncomeRows.find((one) => one.sourceName === name);
+      if (row) row.total = Number(row.total) - cost;
+      else rawIncomeRows.push({ sourceName: name, ownerName: "", total: -cost, transactionCount: 0 });
+    }
+  }
   const totalFunding = rawIncomeRows.reduce((sum, row) => sum + Number(row.total), 0);
   // The label has to say what the report actually covers. A whole month keeps
   // reading "September 2026"; a day range names its own ends, so a handed-out

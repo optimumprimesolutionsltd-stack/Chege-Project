@@ -124,6 +124,7 @@ import { WhoIsThisFor } from '@/components/WhoIsThisFor';
 import { useBusinesses } from '@/hooks/useBusinesses';
 import { useBusinessAccounts } from '@/hooks/useBusinessAccounts';
 import { TeachJamviCard, type OwnAccountAnswer } from '@/components/TeachJamviCard';
+import { BusinessSalaryQuestion } from '@/components/BusinessSalaryQuestion';
 import { alreadyKnown, suggestedCategories, teachableGroups, teachCategory, teachOwnAccount, teachSource, withOwnAccounts, type TeachGroup } from '@/lib/teachJamvi';
 import { useNamedPayees } from '@/hooks/useNamedPayees';
 import { namedKeyFor, ruleKeysFor, withNamed } from '@/lib/namedPayees';
@@ -3112,6 +3113,8 @@ export default function MpesaImportScreen() {
                 </Text>
               </Pressable>
             ) : null}
+            {/* Each business asked once: a salary from it, or its profit is your income (lib/businessSalary). */}
+            {lines && canManageBudget ? <BusinessSalaryQuestion /> : null}
             {known && !teachClosed && (teachGroups.length > 0 || teachAnswered > 0) ? (
               <TeachJamviCard
                 groups={teachGroups}
