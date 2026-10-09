@@ -7,6 +7,7 @@ import {
   isMobileBudgetChooserComplete,
   leaveMobileSharedWorkspace,
   mobileBudgetEntryRedirect,
+  noAnswerFromServer,
   switchMobileWorkspace,
 } from "../workspace";
 
@@ -105,7 +106,20 @@ describe("mobile workspace transitions", () => {
     const { readFileSync } = await import("node:fs");
     const layout = readFileSync("app/_layout.tsx", "utf8");
     expect(layout).toContain("workspaces: workspacesUnknown ? null : workspaces");
-    expect(layout).toContain("const workspacesUnknown = workspaceList === undefined && workspacesFailed;");
+    // Offline, React Query pauses the request instead of failing it: unknown too.
+    expect(layout).toContain("const workspacesUnknown = workspaceList === undefined && (workspacesFailed || workspacesPaused);");
+  });
+
+  it("offline, Home and the chooser never send a set-up person to make a new budget", async () => {
+    const { readFileSync } = await import("node:fs");
+    const home = readFileSync("app/(tabs)/index.tsx", "utf8");
+    expect(home).toContain("if ((!group && !noAnswerFromServer(summaryFailure)) || refused) {");
+    const chooser = readFileSync("app/budget-chooser.tsx", "utf8");
+    expect(chooser).toContain("const workspacesUnreachable = workspaceList === undefined && (workspacesPaused || noAnswerFromServer(workspaceError));");
+    expect(chooser).toContain("preferencesUnreachable = noAnswerFromServer(reason);");
+    // The can't-connect screen comes before onboarding.
+    expect(chooser.indexOf("if (unreachable) {")).toBeGreaterThan(-1);
+    expect(chooser.indexOf("if (unreachable) {")).toBeLessThan(chooser.indexOf("if (!onboardingComplete) {"));
   });
 
   it("clears the workspace selection after leaving so the chooser can resolve what remains", async () => {
@@ -130,5 +144,19 @@ describe("mobile workspace transitions", () => {
       `remove:${ACTIVE_WORKSPACE_STORAGE_KEY}`,
       "reset",
     ]);
+  });
+
+  it("tells no connection apart from the server saying there is no budget", () => {
+    // fetch failing offline, and anything else without a status.
+    expect(noAnswerFromServer(new TypeError("Network request failed"))).toBe(true);
+    expect(noAnswerFromServer("timeout")).toBe(true);
+    // The server restarting behind Render's proxy, or a Wi-Fi sign-in page.
+    expect(noAnswerFromServer({ name: "ApiError", status: 502 })).toBe(true);
+    expect(noAnswerFromServer({ name: "ResponseParseError", status: 200 })).toBe(true);
+    // A real answer: no budget, or not this person's.
+    expect(noAnswerFromServer({ name: "ApiError", status: 404 })).toBe(false);
+    expect(noAnswerFromServer({ name: "ApiError", status: 403 })).toBe(false);
+    expect(noAnswerFromServer(null)).toBe(false);
+    expect(noAnswerFromServer(undefined)).toBe(false);
   });
 });

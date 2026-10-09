@@ -264,6 +264,7 @@ function RootLayoutNav() {
     data: workspaceList,
     isLoading: loadingWorkspaces,
     isError: workspacesFailed,
+    isPaused: workspacesPaused,
   } = useGetWorkspaces({
     query: {
       queryKey: getGetWorkspacesQueryKey(),
@@ -273,7 +274,9 @@ function RootLayoutNav() {
 
   const workspaces = workspaceList ?? NO_WORKSPACES;
   // Could not be fetched at all: unknown, not empty. See hasValidMobileWorkspaceSelection.
-  const workspacesUnknown = workspaceList === undefined && workspacesFailed;
+  // Paused is the same thing: offline, React Query holds the request back
+  // without failing it, and the list was read as empty.
+  const workspacesUnknown = workspaceList === undefined && (workspacesFailed || workspacesPaused);
 
   // An update restarts the app on Home. If somebody accepted it from another
   // screen, that screen was noted just before the restart: go back to it once

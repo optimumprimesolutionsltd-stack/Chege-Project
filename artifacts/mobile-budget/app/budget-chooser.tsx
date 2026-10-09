@@ -42,6 +42,7 @@ import { BackToSignIn, SwitchAccountLink } from '@/components/SwitchAccountLink'
 import {
   activateMobileWorkspace,
   completeMobileBudgetChooser,
+  noAnswerFromServer,
   switchMobileWorkspace,
 } from '@/lib/workspace';
 import {
@@ -96,7 +97,14 @@ export default function BudgetChooserScreen() {
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const { data: workspaces = [], isLoading: loadingWorkspaces, error: workspaceError, refetch: refetchWorkspaces } = useGetWorkspaces();
+  const { data: workspaceList, isLoading: loadingWorkspaces, isPaused: workspacesPaused, error: workspaceError, refetch: refetchWorkspaces } = useGetWorkspaces();
+  const workspaces = workspaceList ?? [];
+  // Offline, or the server restarting: the list is unknown, not empty, and
+  // nobody is sent through onboarding to make a second budget because of it
+  // (9 Oct 2026). React Query pauses rather than fails a request made offline.
+  const workspacesUnreachable = workspaceList === undefined && (workspacesPaused || noAnswerFromServer(workspaceError));
+  const [unreachable, setUnreachable] = useState(false);
+  const [recheck, setRecheck] = useState(0);
   const selectWorkspace = useSelectWorkspace();
   const createSharedGroup = useCreateSharedGroup();
   const [error, setError] = useState<string | null>(null);
@@ -146,13 +154,25 @@ export default function BudgetChooserScreen() {
   useEffect(() => {
     let active = true;
     if (!user?.id || loadingWorkspaces) return () => { active = false; };
+    if (workspacesUnreachable) {
+      setUnreachable(true);
+      setCheckingOnboarding(false);
+      return () => { active = false; };
+    }
     setCheckingOnboarding(true);
+    let preferencesUnreachable = false;
     void Promise.all([
-      customFetch<{ completed?: boolean } | null>('/api/onboarding/preferences', { responseType: 'json' }).catch(() => null),
+      customFetch<{ completed?: boolean } | null>('/api/onboarding/preferences', { responseType: 'json' }).catch((reason: unknown) => {
+        preferencesUnreachable = noAnswerFromServer(reason);
+        return null;
+      }),
       readOnboardingDraft({ userId: user.id, storage: AsyncStorage }),
     ])
       .then(([preferences, savedDraft]) => {
         if (!active) return;
+        // Whether onboarding was finished is unknown, not "no".
+        setUnreachable(preferencesUnreachable);
+        if (preferencesUnreachable) return;
         // Carry what onboarding already established, so creating a group does
         // not ask the same question a second time.
         setNewGroupPurpose(savedDraft?.budgetGoal ?? null);
@@ -173,7 +193,7 @@ export default function BudgetChooserScreen() {
         if (active) setCheckingOnboarding(false);
       });
     return () => { active = false; };
-  }, [loadingWorkspaces, user?.id, workspaces.length]);
+  }, [loadingWorkspaces, user?.id, workspaces.length, workspacesUnreachable, recheck]);
 
   const privateWorkspace = workspaces.find((workspace) => workspace.isPrivate);
   const sharedWorkspaces = workspaces.filter((workspace) => !workspace.isPrivate);
@@ -391,6 +411,30 @@ export default function BudgetChooserScreen() {
 
   if (checkingOnboarding || loadingWorkspaces) {
     return <View style={[styles.page, { backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }]}><ActivityIndicator color={colors.primary} /></View>;
+  }
+
+  if (unreachable) {
+    return (
+      <View style={[styles.page, { backgroundColor: colors.background, paddingTop: insets.top + 20 }]}>
+        <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 28 }]} showsVerticalScrollIndicator={false}>
+          <View style={[styles.mark, { backgroundColor: colors.primary }]}><Feather name="wifi-off" size={22} color={colors.primaryForeground} /></View>
+          <Text style={[styles.title, { color: colors.foreground }]}>Jamvi can't connect.</Text>
+          <Text style={[styles.intro, { color: colors.mutedForeground }]}>
+            Check your internet, then try again. Your budgets are safe - they open as soon as Jamvi is back online.
+          </Text>
+          <Pressable
+            testID="budget-chooser-try-again"
+            accessibilityRole="button"
+            accessibilityLabel="Try again"
+            onPress={() => { void refetchWorkspaces(); setRecheck((count) => count + 1); }}
+            style={({ pressed }) => [styles.createButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}
+          >
+            <Feather name="refresh-cw" size={18} color={colors.primaryForeground} />
+            <Text style={[styles.createButtonText, { color: colors.primaryForeground }]}>Try again</Text>
+          </Pressable>
+        </ScrollView>
+      </View>
+    );
   }
 
   // Someone invited to their first group should land on the invitation, not a

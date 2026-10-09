@@ -44,6 +44,7 @@ import { WorkspaceSetupGuide } from '@/components/WorkspaceSetupGuide';
 import { DashboardAnnouncement } from '@/components/DashboardAnnouncement';
 import { HomeTip } from '@/components/HomeTip';
 import { workspaceNameTextStyle } from '@/lib/workspaceIdentity';
+import { noAnswerFromServer } from '@/lib/workspace';
 import { getExpenseEditHref } from '@/lib/expenseEditLink';
 import {
   ApiError,
@@ -395,7 +396,10 @@ export default function DashboardScreen() {
     // by another account signed in before ("why does it take someone here for
     // a new account", 5 Oct 2026): choosing one is the way on, not "try again".
     const refused = summaryFailure instanceof ApiError && (summaryFailure.status === 403 || summaryFailure.status === 404);
-    if (!group || refused) {
+    // No group only means no budget when the server said so. Offline the group
+    // fails to load too, and that sent people to create a new budget (9 Oct
+    // 2026): they get "could not load" and Try again instead.
+    if ((!group && !noAnswerFromServer(summaryFailure)) || refused) {
       return <Redirect href="/budget-chooser" />;
     }
     return (
