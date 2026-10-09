@@ -71,3 +71,11 @@ describe("a savings account's opening correction", () => {
     expect(transfers).toContain("const nextAmount = goal.currentAmount + opening + delta - absorbed;");
   });
 });
+
+describe("an M-Pesa code already in another budget", () => {
+  it("is only pointed out when that budget has the same owner (9 Oct 2026)", () => {
+    const lib = readFileSync(new URL("../possible-duplicates.ts", import.meta.url), "utf8");
+    expect(lib).toContain("WHERE other_owner.group_id = t.group_id AND other_owner.role = 'owner'");
+    expect(lib).toContain("AND this_owner.group_id = ${groupId} AND this_owner.role = 'owner'");
+  });
+});
