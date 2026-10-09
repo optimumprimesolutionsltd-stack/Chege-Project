@@ -1633,6 +1633,15 @@ export interface JointAccountSummary {
   totalDeposits: number;
   totalDisbursements: number;
   transactions: JointAccountTransaction[];
+  /**
+     * Only on a page (limit, before or month asked for) - where the next page starts; null on the last.
+     * @nullable
+     */
+  nextCursor?: string | null;
+  /** Only with month and year - that month's money in. */
+  monthDeposits?: number;
+  /** Only with month and year - that month's money out. */
+  monthDisbursements?: number;
 }
 
 export interface OpeningBalance {
@@ -2352,6 +2361,23 @@ export type GetJointAccountParams = {
  * @minimum 1
  */
 accountId?: number;
+/**
+ * At most this many entries, newest first (0 for the totals alone). Omitted, every entry.
+ * @minimum 0
+ * @maximum 1000
+ */
+limit?: number;
+/**
+ * The nextCursor of the previous page.
+ */
+before?: string;
+/**
+ * With year, only that month's entries, and monthDeposits/monthDisbursements.
+ * @minimum 1
+ * @maximum 12
+ */
+month?: number;
+year?: number;
 };
 
 export type GetIncomeSourcesParams = {

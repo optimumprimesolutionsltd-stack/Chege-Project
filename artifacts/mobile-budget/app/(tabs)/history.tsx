@@ -191,7 +191,10 @@ export default function HistoryScreen() {
    * on the Banking tab, where the balance follows.
    */
   // Followed only while this screen is in view (hooks/useOnScreen).
-  const { data: bankAccount } = useGetJointAccount(undefined, { query: { queryKey: getGetJointAccountQueryKey(), subscribed: onScreen } });
+  // Only the month on screen (docs/account-list-paging.md): every account's whole
+  // history came down to show one month's bank payments.
+  const bankMonthParams = { month, year };
+  const { data: bankAccount } = useGetJointAccount(bankMonthParams, { query: { queryKey: getGetJointAccountQueryKey(bankMonthParams), subscribed: onScreen } });
   const bankSpending = useMemo(() => {
     const rows = (bankAccount?.transactions ?? []) as Array<{
       id: number;

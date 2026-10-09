@@ -204,11 +204,15 @@ export default function DashboardScreen() {
     refetch: refetchExpenses,
   } = useGetExpenses({ month, year }, live);
 
+  // The balance and this month's money in and out, worked out by the server - no
+  // entries at all (limit 0). Home used to download every entry of every account
+  // to add up one month (docs/account-list-paging.md, step 3).
+  const homeAccountParams = { month, year, limit: 0 };
   const {
     data: bankAccount,
     isLoading: bankAccountLoading,
     refetch: refetchBank,
-  } = useGetJointAccount(undefined, { query: { queryKey: getGetJointAccountQueryKey(), subscribed: onScreen } });
+  } = useGetJointAccount(homeAccountParams, { query: { queryKey: getGetJointAccountQueryKey(homeAccountParams), subscribed: onScreen } });
   const { data: group } = useGetGroup(live);
   const isSharedWorkspace = group?.isPrivate === false;
 
@@ -280,23 +284,8 @@ export default function DashboardScreen() {
   }, []);
 
   // Compute this-month bank totals from transactions
-  const monthlyDeposited = useMemo(() => {
-    return (bankAccount?.transactions ?? [])
-      .filter(t => {
-        const d = new Date(t.date);
-        return t.type === 'deposit' && d.getFullYear() === year && d.getMonth() + 1 === month;
-      })
-      .reduce((s, t) => s + t.amount, 0);
-  }, [bankAccount, month, year]);
-
-  const monthlyDisbursed = useMemo(() => {
-    return (bankAccount?.transactions ?? [])
-      .filter(t => {
-        const d = new Date(t.date);
-        return t.type === 'disbursement' && d.getFullYear() === year && d.getMonth() + 1 === month;
-      })
-      .reduce((s, t) => s + t.amount, 0);
-  }, [bankAccount, month, year]);
+  const monthlyDeposited = bankAccount?.monthDeposits ?? 0;
+  const monthlyDisbursed = bankAccount?.monthDisbursements ?? 0;
 
   const isOver = summary ? summary.totalSpent > summary.totalBudget : false;
   const spentPercent = summary?.totalBudget
@@ -931,7 +920,7 @@ export default function DashboardScreen() {
               </Text>
             </View>
           </View>
-          {bankAccount && bankAccount.balance === 0 && (!bankAccount.transactions || bankAccount.transactions.length === 0) && (
+          {bankAccount && bankAccount.balance === 0 && bankAccount.totalDeposits === 0 && bankAccount.totalDisbursements === 0 && (
             <View style={styles.bankEmptyState}>
               <Feather name="inbox" size={15} color={colors.brandTeal} style={{ opacity: 0.6 }} />
               <Text style={styles.bankEmptyText}>No deposits yet — tap to add one</Text>

@@ -34,6 +34,7 @@ import { reversalLinksReady, soleReversalCandidate, takenBackReceipt } from "../
 import { isOwnerBusinessMoney } from "../lib/owner-business-money";
 import { enrichTransactions } from "../lib/transaction-details";
 import { ledgerEntries, ledgerTotals } from "../lib/account-ledger";
+import { pageOf } from "../lib/account-page";
 import { importTidyKeptReady } from "../lib/import-tidy-kept";
 import { createBankStatementPdf } from "../lib/bank-statement-pdf";
 import { absorbedByOpening, alreadyThere, completeAt, isSavingsAccount, OPENING_NOTE_PATTERN, openingNote, roomIn } from "../lib/savings-accounts";
@@ -307,7 +308,14 @@ const AccountUpdateInput = z.object({
 }).refine((value) => value.name !== undefined || value.accountNumber !== undefined || value.openingBalance !== undefined || value.openingBalanceDate !== undefined, {
   message: "Provide a name, account number, opening balance, or opening balance date.",
 });
-const AccountQuery = z.object({ accountId: z.coerce.number().int().positive().optional() });
+const AccountQuery = z.object({
+  accountId: z.coerce.number().int().positive().optional(),
+  // A page of the history (lib/account-page); without these, everything as before.
+  limit: z.coerce.number().int().min(0).max(1000).optional(),
+  before: z.string().max(80).optional(),
+  month: z.coerce.number().int().min(1).max(12).optional(),
+  year: z.coerce.number().int().min(2000).max(2100).optional(),
+});
 
 const accountColumns = {
   id: bankAccountsTable.id,
@@ -776,8 +784,13 @@ router.get("/joint-account", async (req, res): Promise<void> => {
     ledgerTotals(db, groupId, ledgerAccountId, today),
   ]);
 
-  // The whole list in a handful of queries, never several per entry (lib/describe-transaction).
-  const enriched = await enrichTransactions(entries.map(({ entry }) => entry), groupId);
+  // Only the page asked for is described and sent (lib/account-page); the whole
+  // list when no page is asked for. In a handful of queries, never several per
+  // entry (lib/describe-transaction).
+  const { limit, before, month, year } = query.data;
+  const paged = limit != null || before != null || (month != null && year != null);
+  const page = pageOf(entries, { limit, before, month, year });
+  const enriched = await enrichTransactions(page.rows.map(({ entry }) => entry), groupId);
 
   const openingBalance = isAggregate
     ? accounts.reduce((sum, account) => sum + account.openingBalance, 0)
@@ -791,7 +804,7 @@ router.get("/joint-account", async (req, res): Promise<void> => {
   // newest entry dated today or earlier lands exactly on the balance above.
   const transactions = enriched.map((transaction, index) => ({
     ...transaction,
-    runningBalance: isAggregate ? null : openingBalance + entries[index].sumThroughThis,
+    runningBalance: isAggregate ? null : openingBalance + page.rows[index].sumThroughThis,
   }));
 
   res.json({
@@ -805,6 +818,10 @@ router.get("/joint-account", async (req, res): Promise<void> => {
     totalDeposits,
     totalDisbursements,
     transactions,
+    ...(paged ? {
+      nextCursor: page.nextCursor,
+      ...(page.month ? { monthDeposits: page.month.deposits, monthDisbursements: page.month.disbursements } : {}),
+    } : {}),
   });
 });
 

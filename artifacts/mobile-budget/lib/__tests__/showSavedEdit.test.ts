@@ -50,7 +50,7 @@ describe('an edit shows at once', () => {
   // reloaded the whole year of entries after each entry sorted, and again on Back.
   it('tab screens follow their big lists only while in view', () => {
     const follows = (file: string, line: string) => expect(readFileSync(file, 'utf8')).toContain(line);
-    follows('app/(tabs)/index.tsx', 'useGetJointAccount(undefined, { query: { queryKey: getGetJointAccountQueryKey(), subscribed: onScreen } })');
+    follows('app/(tabs)/index.tsx', 'useGetJointAccount(homeAccountParams, { query: { queryKey: getGetJointAccountQueryKey(homeAccountParams), subscribed: onScreen } })');
     follows('app/(tabs)/bank.tsx', '{ query: { queryKey: getGetJointAccountQueryKey(jointAccountParams), subscribed: onScreen } }');
     follows('app/(tabs)/history.tsx', 'subscribed: onScreen');
     follows('app/(tabs)/reports.tsx', 'getGetDashboardIncomeStreamsTrendQueryKey({ months: 6 }), retry: false, subscribed: onScreen');

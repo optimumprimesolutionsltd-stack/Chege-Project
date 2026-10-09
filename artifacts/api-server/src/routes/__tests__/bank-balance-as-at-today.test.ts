@@ -18,6 +18,6 @@ describe("the bank balance is as at today", () => {
   });
   it("keeps the per-row running balance on the whole ledger so the rows still add up", () => {
     // Each row: opening balance plus every entry up to and including it, future ones included.
-    expect(handler).toContain("runningBalance: isAggregate ? null : openingBalance + entries[index].sumThroughThis,");
+    expect(handler).toContain("runningBalance: isAggregate ? null : openingBalance + page.rows[index].sumThroughThis,");
   });
 });

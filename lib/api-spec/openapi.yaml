@@ -1150,6 +1150,29 @@ paths:
           schema:
             type: number
             minimum: 1
+        - name: limit
+          in: query
+          description: At most this many entries, newest first (0 for the totals alone). Omitted, every entry.
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 1000
+        - name: before
+          in: query
+          description: The nextCursor of the previous page.
+          schema:
+            type: string
+        - name: month
+          in: query
+          description: With year, only that month's entries, and monthDeposits/monthDisbursements.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 12
+        - name: year
+          in: query
+          schema:
+            type: integer
       responses:
         "200":
           description: Account summary
@@ -4248,6 +4271,15 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/JointAccountTransaction"
+        nextCursor:
+          type: ["string", "null"]
+          description: Only on a page (limit, before or month asked for) - where the next page starts; null on the last.
+        monthDeposits:
+          type: number
+          description: Only with month and year - that month's money in.
+        monthDisbursements:
+          type: number
+          description: Only with month and year - that month's money out.
       required:
         - openingBalance
         - accountId
