@@ -15,7 +15,8 @@ describe('money in always asks where it came from', () => {
     const more = importScreen.indexOf("{openMore.has(item.index) || destinationOf(choice) !== 'category' || transferHints.has(item.index) ? (");
     expect(row).toBeGreaterThan(0);
     expect(row).toBeLessThan(more);
-    expect(importScreen).toContain("{item.direction === 'in' && choice?.include && !choice.debt && !isMove(choice) && !choice.contributorId && destinationOf(choice) === 'category' && !item.type?.startsWith('fuliza_') && item.type !== 'reversal' ? (");
+    expect(importScreen).toContain("{item.direction === 'in' && choice?.include && !choice.debt && !isMove(choice) && !choice.contributorId && destinationOf(choice) === 'category' && !item.type?.startsWith('fuliza_') && item.type !== 'reversal' && businessFor(item) === null ? (");
+    // A business's line is that business's sales, so it is not asked (9 Oct 2026).
     expect(importScreen).not.toContain('!choice.contributorId && incomeSources.length > 0 ? (');
   });
 

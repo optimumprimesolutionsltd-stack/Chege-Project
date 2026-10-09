@@ -2191,7 +2191,8 @@ export default function MpesaImportPage() {
                       {productOf(item) ? `${productNote(productOf(item)!, choice.category)} Change it if it is wrong.` : "Suggested by Jamvi. Change it if it is wrong."}
                     </p>
                   ) : null}
-                  {item.direction === "in" && choice?.include && !choice.debt && !isMove(choice) && !choice.contributorId && incomeSources.length > 0 ? (
+                  {/* Not asked once Who is this for? names a business: it is that business's sales. */}
+                  {item.direction === "in" && choice?.include && !choice.debt && !isMove(choice) && !choice.contributorId && incomeSources.length > 0 && businessFor(item) === null ? (
                     <div className="space-y-1" data-testid={`mpesa-line-source-${item.index}`}>
                       <select
                         className={SELECT_CLASS}

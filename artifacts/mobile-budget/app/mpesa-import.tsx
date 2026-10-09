@@ -3450,7 +3450,8 @@ export default function MpesaImportScreen() {
                       {productOf(item) ? `${productNote(productOf(item)!, choice.category)} Tap to choose a different one.` : 'Suggested by Jamvi. Tap to choose a different one.'}
                     </Text>
                   ) : null}
-                  {item.direction === 'in' && choice?.include && !choice.debt && !isMove(choice) && !choice.contributorId && destinationOf(choice) === 'category' && !item.type?.startsWith('fuliza_') && item.type !== 'reversal' ? (
+                  {/* Not asked once Who is this for? names a business: it is that business's sales. */}
+                  {item.direction === 'in' && choice?.include && !choice.debt && !isMove(choice) && !choice.contributorId && destinationOf(choice) === 'category' && !item.type?.startsWith('fuliza_') && item.type !== 'reversal' && businessFor(item) === null ? (
                     <View style={{ gap: 6 }} testID={`mpesa-line-source-${item.index}`}>
                       <Text style={[styles.hint, { color: colors.foreground, marginTop: 0, fontFamily: 'Inter_600SemiBold' }]}>Where did this come from?</Text>
                       <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>

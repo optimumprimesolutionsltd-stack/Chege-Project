@@ -846,7 +846,11 @@ export default function BankScreen() {
 
   const chooseWhoFor = (id: number | null) => {
     setForBusinessId(id);
-    if (id === null) return;
+    if (id === null) {
+      // Back to Personal: a business left as the source would quietly keep it the business's.
+      if (txType === 'deposit' && incomeSourceId !== null && whoForBusinesses.some((one) => one.id === incomeSourceId)) setIncomeSourceId(null);
+      return;
+    }
     if (txType === 'deposit') {
       setIncomeSourceId(id);
       return;
@@ -4885,8 +4889,10 @@ export default function BankScreen() {
                 </>
               )}
 
-              {/* Saved income sources are for one named depositor; the group can choose Other. */}
-              {isDeposit && !notIncome && (singleDepositorId || depositorIds.length === 0) && (
+              {/* Saved income sources are for one named depositor; the group can choose Other.
+                  Not asked once Who is this for? names a business: the business is where
+                  it came from ("the income streams should not be there", 9 Oct 2026). */}
+              {isDeposit && !notIncome && forBusinessId === null && (singleDepositorId || depositorIds.length === 0) && (
                 <>
                   <Text style={[styles.label, { color: colors.mutedForeground }]}>
                     {singleDepositorId ? 'Which of their income streams?' : 'Where did this money come from?'}{' '}
@@ -5769,8 +5775,10 @@ export default function BankScreen() {
                 </Text>
               ) : null}
 
-              {/* Money between you and your own business (lib/ownerBusiness). */}
-              {editingTransactionId !== null && !editingTransfer && (txType === 'deposit' || txType === 'disbursement') ? (
+              {/* Money between you and your own business (lib/ownerBusiness). Not offered once
+                  Who is this for? names a business - that already says it is the business's
+                  ("why do I need to choose this is for my business", 9 Oct 2026). */}
+              {editingTransactionId !== null && !editingTransfer && (txType === 'deposit' || txType === 'disbursement') && (editingBusinessMoney || forBusinessId === null) ? (
                 editingBusinessMoney ? (
                   <View style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 8, padding: 12, gap: 6 }} testID="bank-business-money">
                     <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>
