@@ -38,3 +38,10 @@ describe('opening from Search is quick, works twice, and shows the edit', () => 
     expect(saved).toContain("['workspace-search'],");
   });
 });
+
+describe('money in says where it came from', () => {
+  it('a deposit shows its income source, not just "Bank deposit"', () => {
+    expect(route).toContain('incomeSourceId: jointAccountTxTable.incomeSourceId,');
+    expect(route).toContain('item.type === "deposit" && item.incomeSourceId != null && sourceNames.has(item.incomeSourceId) ? sourceNames.get(item.incomeSourceId)!');
+  });
+});

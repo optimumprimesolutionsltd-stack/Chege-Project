@@ -368,6 +368,9 @@ router.get("/search", async (req, res): Promise<void> => {
     type: jointAccountTxTable.type,
     // So a result opens that entry on its own account to edit (phone Search).
     accountId: jointAccountTxTable.accountId,
+    // Money in says where it came from: an entry changed to "Generator income"
+    // still read "Bank deposit" here (9 Oct 2026).
+    incomeSourceId: jointAccountTxTable.incomeSourceId,
   };
   // A person's name never appears in an expense's own text fields, only in
   // who paid — the legacy single-payer column, or a funding-split label
@@ -486,6 +489,11 @@ router.get("/search", async (req, res): Promise<void> => {
           .limit(50)
       : Promise.resolve([]),
   ]);
+  const sourceIds = [...new Set(bank.map((item) => item.incomeSourceId).filter((id): id is number => id != null))];
+  const sourceNames = new Map(sourceIds.length === 0 ? [] : (await db
+    .select({ id: incomeSourcesTable.id, name: incomeSourcesTable.name })
+    .from(incomeSourcesTable)
+    .where(and(eq(incomeSourcesTable.groupId, groupId), inArray(incomeSourcesTable.id, sourceIds)))).map((row) => [row.id, row.name]));
   res.json({
     query,
     tab,
@@ -494,7 +502,9 @@ router.get("/search", async (req, res): Promise<void> => {
       ...bank.map((item) => ({
         ...item,
         kind: "bank",
-        subtitle: item.subtitle || (item.type === "deposit" ? "Bank deposit" : "Bank payment"),
+        subtitle: item.subtitle
+          || (item.type === "deposit" && item.incomeSourceId != null && sourceNames.has(item.incomeSourceId) ? sourceNames.get(item.incomeSourceId)! : "")
+          || (item.type === "deposit" ? "Bank deposit" : "Bank payment"),
         direction: item.type === "deposit" ? "in" : "out",
       })),
       ...goals.map((item) => ({
