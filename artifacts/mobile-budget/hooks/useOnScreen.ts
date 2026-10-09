@@ -19,3 +19,18 @@ export function useOnScreen(): boolean {
   }, []));
   return onScreen;
 }
+
+/**
+ * Options for a generated query hook (useGetX) on a tab screen: follow the
+ * server only while the screen is in view. Tab screens stay mounted, and every
+ * save anywhere refreshed every query on every tab visited - Home, Bank,
+ * History, Reports, Budget, Goals, Settings - at once, behind whatever was open
+ * ("looks like this problem is common anywhere there is recalling", 9 Oct 2026).
+ * A hidden tab keeps showing what it had, and catches up when shown.
+ *
+ * The generated hooks work out their own key; their option type only insists
+ * on one, so this is passed through untyped.
+ */
+export function onScreenOnly(onScreen: boolean): { query: never } {
+  return { query: { subscribed: onScreen } } as unknown as { query: never };
+}

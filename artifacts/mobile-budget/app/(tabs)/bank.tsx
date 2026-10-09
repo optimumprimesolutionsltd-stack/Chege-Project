@@ -28,7 +28,7 @@ import { markReturning } from '@/lib/lastRoute';
 import { isNotSure } from '@/lib/entriesToSort';
 import { LISTS_AN_EDIT_CHANGES, withSavedRow } from '@/lib/showSavedEdit';
 import { PassThroughPair, type PairEntry } from '@/components/PassThroughPair';
-import { useOnScreen } from '@/hooks/useOnScreen';
+import { onScreenOnly, useOnScreen } from '@/hooks/useOnScreen';
 import { useAutoMarkBusiness, useOwnerBusiness } from '@/hooks/useOwnerBusiness';
 import { useBusinessAccounts } from '@/hooks/useBusinessAccounts';
 import { useNamedPayees } from '@/hooks/useNamedPayees';
@@ -187,6 +187,8 @@ function todayIso(): string {
 const NEW_GROUP = -1;
 
 export default function BankScreen() {
+  const onScreen = useOnScreen();
+  const live = onScreenOnly(onScreen);
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const topPad = Platform.OS === 'web' ? 67 : insets.top;
@@ -200,17 +202,16 @@ export default function BankScreen() {
   const returnAfterEdit = useRef<string | null>(null);
   const handledShortcut = useRef<string | null>(null);
 
-  const { data: group } = useGetGroup();
-  const { data: accounts = [], refetch: refetchAccounts } = useGetJointAccounts();
+  const { data: group } = useGetGroup(live);
+  const { data: accounts = [], refetch: refetchAccounts } = useGetJointAccounts(live);
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
   const accountStorageKey = group?.id && user?.id ? `bank-account:${group.id}:${user.id}` : null;
   // Followed only while Bank is in view (hooks/useOnScreen): hidden behind
   // Sort them out it reloaded the whole account after every entry sorted.
-  const onBankScreen = useOnScreen();
   const jointAccountParams = selectedAccountId ? { accountId: selectedAccountId } : undefined;
   const { data, isLoading, isFetching, refetch } = useGetJointAccount(
     jointAccountParams,
-    { query: { queryKey: getGetJointAccountQueryKey(jointAccountParams), subscribed: onBankScreen } },
+    { query: { queryKey: getGetJointAccountQueryKey(jointAccountParams), subscribed: onScreen } },
   );
 
   const [refreshing, setRefreshing] = useState(false);
@@ -458,8 +459,8 @@ export default function BankScreen() {
   const { mutateAsync: createSavingsGoal } = useCreateSavingsGoal();
   const { mutateAsync: updateAccount } = useUpdateJointAccount();
   const { mutateAsync: deleteAccount } = useDeleteJointAccount();
-  const { data: categories = [] } = useGetBudgetCategories();
-  const { data: members = [] } = useGetMembers();
+  const { data: categories = [] } = useGetBudgetCategories(live);
+  const { data: members = [] } = useGetMembers(live);
   const isSharedWorkspace = group?.isPrivate === false;
   const budgetName = workspaceBudgetName(group);
   const canManageAccount = canManageBankAccount(group);
@@ -547,6 +548,7 @@ export default function BankScreen() {
   // has always answered both; the client simply never asked in the second
   // case, so choosing The group left "Other" as the only thing on offer.
   const { data: depositSources = [] } = useQuery<MemberIncomeSource[]>({
+    subscribed: onScreen,
     queryKey: ['income-sources', singleDepositorId ?? '__group__'],
     queryFn: () => customFetch<MemberIncomeSource[]>(
       singleDepositorId ? `/api/income-sources?userId=${singleDepositorId}` : '/api/income-sources',
@@ -557,6 +559,7 @@ export default function BankScreen() {
   // Every stream in the budget, so money in can be titled by where it came from,
   // the way spending is titled by its category.
   const { data: allIncomeSources = [] } = useQuery<MemberIncomeSource[]>({
+    subscribed: onScreen,
     queryKey: ['income-sources', '__group__'],
     queryFn: () => customFetch<MemberIncomeSource[]>('/api/income-sources'),
     staleTime: 30_000,
@@ -586,6 +589,7 @@ export default function BankScreen() {
 
   // Fetch income sources for the selected withdrawer (withdrawal destination chips)
   const { data: withdrawSources = [] } = useQuery<MemberIncomeSource[]>({
+    subscribed: onScreen,
     queryKey: ['income-sources', withdrawerId],
     queryFn: async () => {
       if (!withdrawerId) return [];
@@ -596,7 +600,7 @@ export default function BankScreen() {
   });
 
   // Savings goals for the "Savings" destination option
-  const { data: savingsGoals = [] } = useGetSavingsGoals();
+  const { data: savingsGoals = [] } = useGetSavingsGoals(live);
 
   /**
    * Everybody money passes between you and: people and institutions alike.
@@ -611,6 +615,7 @@ export default function BankScreen() {
     owedByUs?: number | null;
   };
   const { data: parties = [] } = useQuery<Party[]>({
+    subscribed: onScreen,
     queryKey: ['parties'],
     queryFn: () => customFetch<Party[]>('/api/contributors'),
     staleTime: 30_000,
@@ -2685,6 +2690,7 @@ export default function BankScreen() {
   // Shown, then fixed in one tap by whoever may manage the account.
   const tidyAccountId = selectedAccountId ?? accounts[0]?.id ?? null;
   const { data: importTidyFound, refetch: refetchImportTidy } = useQuery<{ chargeCategory: string | null; charges: number; chargesAmount: number; payer: number; chargeRows?: Array<{ id: number; amount: number; description: string; date: string }>; payerIds?: number[] }>({
+    subscribed: onScreen,
     queryKey: ['import-tidy', tidyAccountId],
     queryFn: () => customFetch(`/api/joint-account/import-tidy?accountId=${tidyAccountId}`),
     enabled: canManageAccount && tidyAccountId !== null,

@@ -16,7 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery } from '@tanstack/react-query';
 import { customFetch, useGetGroup } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
-import { useOnScreen } from '@/hooks/useOnScreen';
+import { onScreenOnly, useOnScreen } from '@/hooks/useOnScreen';
 import { WorkspaceIdentityRow } from '@/components/WorkspaceIdentityRow';
 import { formatDisplayDate } from '@/lib/displayFormat';
 import { byWay, reachedCap, totalsOf, type MoneyWay } from '@/lib/searchDirection';
@@ -56,16 +56,17 @@ const destinationFor = (kind: SearchResult['kind']) => {
 };
 
 export default function SearchScreen() {
+  const onScreen = useOnScreen();
+  const live = onScreenOnly(onScreen);
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { data: group } = useGetGroup();
+  const { data: group } = useGetGroup(live);
   const [draft, setDraft] = useState('');
   const [query, setQuery] = useState('');
   const [tab, setTab] = useState<SearchTab>('all');
   // Which way the money moved, on top of where to look (lib/searchDirection).
   const [way, setWay] = useState<MoneyWay>('all');
   const normalizedQuery = query.trim();
-  const onSearchScreen = useOnScreen();
   const search = useQuery<SearchResponse>({
     queryKey: ['workspace-search', group?.id, normalizedQuery, tab],
     queryFn: () => customFetch<SearchResponse>(`/api/search?q=${encodeURIComponent(normalizedQuery)}&tab=${tab}`),
@@ -73,7 +74,7 @@ export default function SearchScreen() {
     // Followed only while Search is in view (hooks/useOnScreen): the tab stays
     // mounted, and every save anywhere ran the last search again - up to 2.7 s
     // on the server, behind a spinner ("the search button is also lagging", 9 Oct 2026).
-    subscribed: onSearchScreen,
+    subscribed: onScreen,
     staleTime: 60_000,
   });
   // A spinner only while there is nothing yet to show: a refresh of results

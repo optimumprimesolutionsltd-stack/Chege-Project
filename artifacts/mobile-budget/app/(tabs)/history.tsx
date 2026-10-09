@@ -21,7 +21,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
-import { useOnScreen } from '@/hooks/useOnScreen';
+import { onScreenOnly, useOnScreen } from '@/hooks/useOnScreen';
 import { UndoDeleteBar, useUndoableDelete } from '@/components/UndoDeleteBar';
 import { deletedLabel } from '@/lib/undoDelete';
 import { useListEditor } from '@/hooks/useListEditor';
@@ -122,6 +122,8 @@ type Contribution = { id: number; userId: string; userName: string; amount: numb
 type ContributionEditForm = { amount: string; note: string; month: number; year: number; forUserId: string };
 
 export default function HistoryScreen() {
+  const onScreen = useOnScreen();
+  const live = onScreenOnly(onScreen);
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
@@ -173,7 +175,7 @@ export default function HistoryScreen() {
     setPickerVisible(false);
   }
 
-  const { data: handEntered = [], isLoading, refetch } = useGetExpenses({ month, year });
+  const { data: handEntered = [], isLoading, refetch } = useGetExpenses({ month, year }, live);
 
   /**
    * Spending that went through a bank account, shown on the tab named for it.
@@ -189,8 +191,7 @@ export default function HistoryScreen() {
    * on the Banking tab, where the balance follows.
    */
   // Followed only while this screen is in view (hooks/useOnScreen).
-  const onHistoryScreen = useOnScreen();
-  const { data: bankAccount } = useGetJointAccount(undefined, { query: { queryKey: getGetJointAccountQueryKey(), subscribed: onHistoryScreen } });
+  const { data: bankAccount } = useGetJointAccount(undefined, { query: { queryKey: getGetJointAccountQueryKey(), subscribed: onScreen } });
   const bankSpending = useMemo(() => {
     const rows = (bankAccount?.transactions ?? []) as Array<{
       id: number;
@@ -245,16 +246,16 @@ export default function HistoryScreen() {
   );
   const prevMonthNum = month === 1 ? 12 : month - 1;
   const prevYearNum = month === 1 ? year - 1 : year;
-  const { data: prevExpenses = [] } = useGetExpenses({ month: prevMonthNum, year: prevYearNum });
+  const { data: prevExpenses = [] } = useGetExpenses({ month: prevMonthNum, year: prevYearNum }, live);
   const recurringFromPrev = prevExpenses.filter((e: Expense) => e.isRecurring);
   const alreadyApplied = expenses.some((e: Expense) => e.isRecurring);
   const showRecurringBanner = recurringFromPrev.length > 0 && !alreadyApplied &&
     month === now.getMonth() + 1 && year === now.getFullYear();
   const applyRecurring = useApplyRecurringExpenses();
   const [applyingRecurring, setApplyingRecurring] = useState(false);
-  const { data: categories = [] } = useGetBudgetCategories();
-  const { data: members = [] } = useGetMembers();
-  const { data: group } = useGetGroup();
+  const { data: categories = [] } = useGetBudgetCategories(live);
+  const { data: members = [] } = useGetMembers(live);
+  const { data: group } = useGetGroup(live);
   const updateExpense = useUpdateExpense();
   const deleteExpense = useDeleteExpense();
   const deleteTransaction = useDeleteJointAccountTransaction();
@@ -279,28 +280,28 @@ export default function HistoryScreen() {
   // The general Activity feed is intentionally recent rather than month-scoped.
   const recentActivity = useGetDashboardActivity(
     undefined,
-    { query: { queryKey: getGetDashboardActivityQueryKey(), retry: false, enabled: activeTab === 'activity' } },
+    { query: { subscribed: onScreen, queryKey: getGetDashboardActivityQueryKey(), retry: false, enabled: activeTab === 'activity' } },
   );
   const contributionsQuery = useGetContributions(
     { month, year },
-    { query: { queryKey: getGetContributionsQueryKey({ month, year }), retry: false, enabled: activeTab === 'contributions' } },
+    { query: { subscribed: onScreen, queryKey: getGetContributionsQueryKey({ month, year }), retry: false, enabled: activeTab === 'contributions' } },
   );
   // Shared-budget funding remains a summary card; standalone records below
   // deliberately come only from GET /contributions.
   const monthlyActivity = useGetDashboardActivity(
     { month, year },
-    { query: { queryKey: getGetDashboardActivityQueryKey({ month, year }), retry: false, enabled: activeTab === 'contributions' } },
+    { query: { subscribed: onScreen, queryKey: getGetDashboardActivityQueryKey({ month, year }), retry: false, enabled: activeTab === 'contributions' } },
   );
   const { data: summary, isLoading: summaryLoading, isError: summaryError, refetch: refetchSummary } = useGetDashboardSummary(
     { month, year },
-    { query: { queryKey: getGetDashboardSummaryQueryKey({ month, year }), retry: false, enabled: activeTab === 'contributions' } },
+    { query: { subscribed: onScreen, queryKey: getGetDashboardSummaryQueryKey({ month, year }), retry: false, enabled: activeTab === 'contributions' } },
   );
   const contributionMembers = ((summary as { memberContributions?: ContributionMember[] } | undefined)?.memberContributions ?? []);
   const previousMonth = month === 1 ? 12 : month - 1;
   const previousYear = month === 1 ? year - 1 : year;
   const { data: previousSummary } = useGetDashboardSummary(
     { month: previousMonth, year: previousYear },
-    { query: { queryKey: getGetDashboardSummaryQueryKey({ month: previousMonth, year: previousYear }), retry: false, enabled: activeTab === 'contributions' } },
+    { query: { subscribed: onScreen, queryKey: getGetDashboardSummaryQueryKey({ month: previousMonth, year: previousYear }), retry: false, enabled: activeTab === 'contributions' } },
   );
   const previousMembers = (previousSummary as { memberContributions?: ContributionMember[] } | undefined)?.memberContributions;
   const activityFeed = recentActivity.data ?? [];
@@ -489,6 +490,7 @@ export default function HistoryScreen() {
 
   // Load income sources for whoever paid the expense being edited
   const { data: editSources = [], isLoading: editSourcesLoading } = useQuery<IncomeSource[]>({
+    subscribed: onScreen,
     queryKey: ['income-sources', 'streams', editForm.paidById],
     queryFn: async () => {
       if (!editForm.paidById) return [];

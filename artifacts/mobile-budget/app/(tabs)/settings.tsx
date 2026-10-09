@@ -39,6 +39,7 @@ import {
   getGetBudgetCategoryRecommendationsQueryKey,
   type WorkspaceNameStyle,
 } from '@workspace/api-client-react';
+import { onScreenOnly, useOnScreen } from '@/hooks/useOnScreen';
 import { useColors } from '@/hooks/useColors';
 import { SubcategorySuggestions } from '@/components/SubcategorySuggestions';
 import { useAppearance, type Appearance } from '@/hooks/useAppearance';
@@ -149,6 +150,8 @@ const APPEARANCE_OPTIONS: { value: Appearance; label: string; sub: string; icon:
 ];
 
 export default function SettingsScreen() {
+  const onScreen = useOnScreen();
+  const live = onScreenOnly(onScreen);
   const colors = useColors();
   const { appearance, setAppearance } = useAppearance();
   const { data: entitlements } = useEntitlements();
@@ -207,21 +210,24 @@ export default function SettingsScreen() {
   const topPad = Platform.OS === 'web' ? 67 : insets.top;
 
   const { data: members = [] } = useQuery<GroupMember[]>({
+    subscribed: onScreen,
     queryKey: ['members'],
     queryFn: () => customFetch<GroupMember[]>('/api/members'),
     enabled: !!user?.id,
   });
   const { data: personalStatus } = useQuery<PersonalBudgetStatus>({
+    subscribed: onScreen,
     queryKey: PERSONAL_STATUS_QUERY_KEY,
     queryFn: () => customFetch<PersonalBudgetStatus>('/api/workspaces/personal/status'),
     enabled: !!user?.id,
   });
   const { data: budgetPlan } = useQuery<BudgetPlanSummary | null>({
+    subscribed: onScreen,
     queryKey: ['budget-plan-current'],
     queryFn: () => customFetch<BudgetPlanSummary | null>('/api/budget-plans/current'),
     enabled: !!user?.id,
   });
-  const { data: group } = useGetGroup();
+  const { data: group } = useGetGroup(live);
 
   // A plain useEffect here only fires when params.openInvite's VALUE changes.
   // Expo Router keeps this screen mounted across tab switches, so tapping
@@ -270,13 +276,13 @@ export default function SettingsScreen() {
     refetch: refetchWorkspaces,
     isRefetching: workspacesRefetching,
   } = useGetWorkspaces({
-    query: { queryKey: getGetWorkspacesQueryKey(), refetchOnMount: 'always' },
+    query: { subscribed: onScreen, queryKey: getGetWorkspacesQueryKey(), refetchOnMount: 'always' },
   });
   const selectWorkspace = useSelectWorkspace();
   const createSharedGroup = useCreateSharedGroup();
   const updateGroup = useUpdateGroup();
   const recommendations = useGetBudgetCategoryRecommendations({
-    query: {
+    query: { subscribed: onScreen,
       queryKey: getGetBudgetCategoryRecommendationsQueryKey(),
       enabled: !!group && !group.isPrivate,
     },
@@ -313,11 +319,13 @@ export default function SettingsScreen() {
   const myMembership = members.find((member) => member.userId === user?.id);
   const canLeaveGroup = Boolean(myMembership && myMembership.role !== 'owner');
   const { data: invitations = [] } = useQuery<GroupInvitation[]>({
+    subscribed: onScreen,
     queryKey: ['group-invitations'],
     queryFn: () => customFetch<GroupInvitation[]>('/api/group-invitations'),
     enabled: !!user?.id && canManageShared,
   });
   const { data: inviteContacts = [] } = useQuery<InviteContact[]>({
+    subscribed: onScreen,
     queryKey: ['group-invitation-contacts'],
     queryFn: () => customFetch<InviteContact[]>('/api/group-invitation-contacts'),
     enabled: !!user?.id && canManageShared,

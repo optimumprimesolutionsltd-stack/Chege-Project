@@ -16,6 +16,7 @@ import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery } from '@tanstack/react-query';
+import { onScreenOnly, useOnScreen } from '@/hooks/useOnScreen';
 import { useColors } from '@/hooks/useColors';
 import { formatDisplayDate as formatDate } from '@/lib/displayFormat';
 import { PageScrollView } from '@/components/PageScrollReset';
@@ -219,6 +220,7 @@ function BreakdownModal({
   onClose: () => void;
   colors: ReturnType<typeof useColors>;
 }) {
+  const onScreen = useOnScreen();
   const [pickerVisible, setPickerVisible] = useState(false);
   const now = new Date();
 
@@ -233,6 +235,7 @@ function BreakdownModal({
   }, []);
 
   const { data: breakdown, isLoading } = useQuery<Breakdown>({
+    subscribed: onScreen,
     queryKey: ['member-breakdown', member?.userId, member?.month, member?.year],
     queryFn: () => customFetch(`/api/dashboard/member-breakdown?userId=${member!.userId}&month=${member!.month}&year=${member!.year}`),
     enabled: !!member && visible,
@@ -435,7 +438,9 @@ function Section({ title, total, accentColor, rows }: {
 // ── Main screen ──────────────────────────────────────────────────────────────
 
 export default function ContributionsScreen() {
-  const { data: group } = useGetGroup();
+  const onScreen = useOnScreen();
+  const live = onScreenOnly(onScreen);
+  const { data: group } = useGetGroup(live);
   const isSharedWorkspace = group?.isPrivate === false;
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -476,13 +481,13 @@ export default function ContributionsScreen() {
   }
   function jumpToMonth(m: number, y: number) { setMonth(m); setYear(y); setPickerVisible(false); }
 
-  const { data: summary, isLoading, refetch } = useGetDashboardSummary({ month, year });
+  const { data: summary, isLoading, refetch } = useGetDashboardSummary({ month, year }, live);
   const {
     data: incomeStreamReport,
     isLoading: isIncomeStreamsLoading,
     isError: incomeStreamsError,
     refetch: refetchIncomeStreams,
-  } = useGetDashboardIncomeStreams({ month, year });
+  } = useGetDashboardIncomeStreams({ month, year }, live);
 
   type MemberContrib = { userId: string; name: string; contributed: number; spent: number; net: number; target: number | null };
   const memberContribs = ((summary as any)?.memberContributions ?? []) as MemberContrib[];
