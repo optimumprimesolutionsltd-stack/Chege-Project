@@ -12,7 +12,7 @@
  * Money in for a business is that business's sales: its income stream.
  */
 import React, { useState } from 'react';
-import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 
@@ -85,11 +85,13 @@ export function WhoIsThisFor({
   return (
     <View style={compact ? { gap: 6 } : { borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 12, gap: 8, marginBottom: 12 }} testID={id('who-is-this-for')}>
       <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>Who is this for?</Text>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+      {/* One row that scrolls sideways on the import, where it shows on every line: five
+          businesses took four rows of chips a line (9 Oct 2026). Wrapped elsewhere. */}
+      <ChipRow compact={compact}>
         <Pressable onPress={() => onBusiness(null)} accessibilityRole="radio" accessibilityState={{ selected: businessId === null }} testID={id('who-for-personal')} style={chip(businessId === null)}>
           <Text style={{ color: businessId === null ? colors.primary : colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>Personal</Text>
         </Pressable>
-        {businesses.map((one) => (
+        {(compact && chosen ? [chosen, ...businesses.filter((one) => one.id !== chosen.id)] : businesses).map((one) => (
           <Pressable key={one.id} onPress={() => onBusiness(one.id)} accessibilityRole="radio" accessibilityState={{ selected: businessId === one.id }} testID={id(`who-for-business-${one.id}`)} style={[chip(businessId === one.id), { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
             <Feather name="briefcase" size={12} color={businessId === one.id ? colors.primary : colors.mutedForeground} />
             <Text style={{ color: businessId === one.id ? colors.primary : colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>{one.name}</Text>
@@ -100,7 +102,7 @@ export function WhoIsThisFor({
             <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>+ A business</Text>
           </Pressable>
         ) : null}
-      </View>
+      </ChipRow>
       {namingBusiness ? (
       <View style={{ flexDirection: 'row', gap: 8 }}>
         <TextInput value={newBusiness} onChangeText={setNewBusiness} placeholder="Or a business not listed" placeholderTextColor={colors.mutedForeground} style={input} testID={id('who-for-new-business')} />
@@ -152,5 +154,15 @@ export function WhoIsThisFor({
         <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>{afterSaveNote ? afterSaveNote(chosen.name) : `After Save, Jamvi remembers this payee for ${chosen.name} and offers to do the same for their other entries.`}</Text>
       ) : null}
     </View>
+  );
+}
+
+/** The chips in one sideways row (compact), or wrapped onto as many rows as they need. */
+function ChipRow({ compact, children }: { compact: boolean; children: React.ReactNode }) {
+  if (!compact) return <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{children}</View>;
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
+      {children}
+    </ScrollView>
   );
 }

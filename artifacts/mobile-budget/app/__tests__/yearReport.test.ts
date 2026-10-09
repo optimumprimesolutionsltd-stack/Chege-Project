@@ -27,4 +27,10 @@ describe('Year at a glance', () => {
   it('a month on the phone opens that month\'s entries', () => {
     expect(phone).toContain("monthLedgerHref(line.side === 'in' ? '/income-ledger' : '/expense-ledger', month.year, month.month)");
   });
+
+  it('the month row stays frozen at the top while the rows scroll (9 Oct 2026)', () => {
+    expect(phone).toContain('stickyHeaderIndices={[0]}');
+    expect(phone).toContain('monthRow.current?.scrollTo({ x: event.nativeEvent.contentOffset.x, animated: false })');
+    expect(web).toContain('<thead className="sticky top-0 z-20 bg-card">');
+  });
 });

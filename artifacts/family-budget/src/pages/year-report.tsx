@@ -127,9 +127,10 @@ export default function YearReportPage() {
         <Card>
           <CardContent className="p-0">
             {failed ? <p className="px-3 py-2 text-sm text-destructive">Some months did not load. Refresh the page to try again.</p> : null}
-            <div className="overflow-x-auto">
+            {/* Scrolls inside its own box so the month row can stay frozen at the top. */}
+            <div className="max-h-[75vh] overflow-auto">
               <table className="w-full border-collapse text-sm" data-testid="year-report-grid">
-                <thead>
+                <thead className="sticky top-0 z-20 bg-card">
                   <tr className="border-b border-border">
                     <th className={`${nameCell} font-semibold`}>{year}</th>
                     {grid.months.map((month) => (
