@@ -33,6 +33,9 @@ describe('payees Jamvi now knows', () => {
     ['Wachira Hardwares', 'house-repairs'], ['Ruiru Timber Yard', 'house-repairs'],
     ['Elegant Decor', 'decor'], ['Royal Interiors', 'decor'], ['Kamukunji Furniture', 'decor'],
     ['Kamau Traders', 'shop'], ['Juja General Merchants', 'shop'],
+    ['Kuku Chicken Spot', 'eating-out'], ['Choma Zone', 'eating-out'], ['Nyama Choma Joint', 'eating-out'], ['Mama Oliech Chicken', 'eating-out'],
+    ['Kenchic Outlet', 'groceries'],
+    ['Jubilee Christian Chapel', 'giving'], ['Deliverance Worship Centre', 'giving'], ['Redeemed Gospel Tabernacle', 'giving'],
   ])('%s -> %s', (name, key) => {
     expect(kind(name)).toBe(key);
   });
@@ -60,7 +63,7 @@ describe('fuel stations named the way statements write them', () => {
     expect(recognisedPlace(name, ['Fuel'])?.name).toBe('Fuel');
   });
 
-  it.each([['WACHIRA HARDWARES', 'House repairs'], ['KAMAU TRADERS', 'Groceries'], ['ELEGANT DECOR', 'Furniture & decor']])('%s is a business, filed under %s', (name, category) => {
+  it.each([['KUKU CHICKEN', 'Eating out'], ['GRACE WORSHIP CENTRE', 'Tithe'], ['WACHIRA HARDWARES', 'House repairs'], ['KAMAU TRADERS', 'Groceries'], ['ELEGANT DECOR', 'Furniture & decor']])('%s is a business, filed under %s', (name, category) => {
     expect(recognisedPlace(name, [category])?.name).toBe(category);
   });
 

@@ -48,11 +48,12 @@ const BUSINESS = new Set([
   'goodlife', 'pharmaplus', 'mydawa', 'dstv', 'gotv', 'zuku', 'startimes', 'faiba', 'kfc', 'jumia', 'kilimall',
   'sportpesa', 'betika', 'odibets', 'mozzart', 'betway', 'shabiki', 'g4s',
   'shule', 'sch', 'preparatory', 'montessori', 'books', 'bookshop', 'stationers', 'stationery', 'stationary',
-  'apartments', 'court', 'properties', 'parish', 'cathedral', 'mosque', 'masjid', 'ministries',
+  'apartments', 'court', 'properties', 'parish', 'cathedral', 'chapel', 'worship', 'tabernacle', 'gospel', 'mosque', 'masjid', 'ministries',
   'agrovet', 'gym', 'fitness', 'tyres', 'spares', 'expressway', 'uniforms', 'shoes', 'mitumba',
   'hardwares', 'timber', 'decor', 'interiors', 'furniture', 'curtains', 'traders', 'trader', 'merchants', 'stores',
   'enterprises', 'enterprise', 'ventures', 'investments', 'suppliers', 'supplies',
   // A company's own words: "anything with ltd, limited or traders has the logic of a business".
+  'chicken', 'kuku', 'choma', 'grill', 'kenchic',
   'plc', 'inc', 'llp', 'llc', 'cooperative', 'association', 'foundation', 'society', 'trust',
 ]);
 

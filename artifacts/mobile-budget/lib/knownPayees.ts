@@ -57,14 +57,14 @@ const KNOWN_PAYEES: readonly KnownPayee[] = [
   {
     key: 'eating-out',
     // Before groceries: a butchery that grills, and a supermarket's own cafe, are eating out.
-    pattern: /\b(?:kfc|java house|artcaffe|pizza inn|chicken inn|dominos?|galitos|simbisa|bolt food|uber eats|glovo|jumia food|restaurants?|eatery|eateries|bistro|hotels?|hoteli|kitchens?|foods?|fast ?foods?|cafeteria|canteen|grill|nyama choma|choma|kibanda|kibandaski|pizza|burgers?|chips|bakery|bakers|bakeries|dishes)\b|\bcaf[eé](?![a-z])/i,
+    pattern: /\b(?:kfc|java house|artcaffe|pizza inn|chicken inn|dominos?|galitos|simbisa|bolt food|uber eats|glovo|jumia food|restaurants?|eatery|eateries|bistro|hotels?|hoteli|kitchens?|foods?|fast ?foods?|cafeteria|canteen|grill|nyama choma|choma|chicken|kuku|wings|kibanda|kibandaski|pizza|burgers?|chips|bakery|bakers|bakeries|dishes)\b|\bcaf[eé](?![a-z])/i,
     names: ['Eating out', 'Meals', 'Lunch', 'Food & drinks'],
     words: ['eating out', 'restaurant', 'meal', 'lunch'],
     standard: { name: 'Eating out', parent: 'Food' },
   },
   {
     key: 'groceries',
-    pattern: /\b(?:naivas|carrefour|majid al futtaim|quick ?mart|chandarana|cleanshelf|mulleys|eastmatt|magunas?|tuskys|khetias?|jumbo junction|powerstar|uchumi|gilanis|zucchini|greenspoon|kwik ?basket|dairy|dairies|maziwa|posho mill|cereals? (?:shop|store)|grocers?|supermarkets?|hypermarkets?|mini ?mart|minimarket|wholesalers?|wholesale|cash (?:and|&) carry|mama mboga|greengrocers?|butcher(?:y|ies))\b/i,
+    pattern: /\b(?:kenchic|naivas|carrefour|majid al futtaim|quick ?mart|chandarana|cleanshelf|mulleys|eastmatt|magunas?|tuskys|khetias?|jumbo junction|powerstar|uchumi|gilanis|zucchini|greenspoon|kwik ?basket|dairy|dairies|maziwa|posho mill|cereals? (?:shop|store)|grocers?|supermarkets?|hypermarkets?|mini ?mart|minimarket|wholesalers?|wholesale|cash (?:and|&) carry|mama mboga|greengrocers?|butcher(?:y|ies))\b/i,
     names: ['Supermarket', 'Groceries', 'Market shopping', 'Shopping share'],
     words: ['supermarket', 'grocer', 'shopping'],
     standard: { name: 'Groceries', parent: 'Food' },
@@ -195,7 +195,7 @@ const KNOWN_PAYEES: readonly KnownPayee[] = [
   {
     key: 'giving',
     // After schools: "St Mary's Catholic Academy" is the school's fees.
-    pattern: /\b(?:church|churches|kanisa|parish|cathedral|chapel|pcea|ack|aic|sda|catholic|ministries|ministry of god|fellowship|mosque|masjid|tithes?|offerings?)\b/i,
+    pattern: /\b(?:church|churches|kanisa|parish|cathedral|chapel|chapels|worship|tabernacle|sanctuary|gospel|pcea|ack|aic|sda|catholic|ministries|ministry of god|fellowship|mosque|masjid|tithes?|offerings?)\b/i,
     names: ['Tithe', 'Offerings', 'Church', 'Donations', 'Giving'],
     words: ['tithe', 'offering', 'church', 'giving'],
     standard: { name: 'Tithe', parent: 'Tithe & giving' },
