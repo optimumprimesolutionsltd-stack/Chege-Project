@@ -64,6 +64,6 @@ describe('the All expenses screen', () => {
     expect(screen).toContain("['item', 'By item']");
     expect(screen).toContain('scopedCategoryGroups.map(renderGroup)');
     expect(screen).toContain('itemGroups.map(renderGroup)');
-    expect(screen).toContain('group.rows.map(renderEntry)');
+    expect(screen).toContain('group.rows.slice(0, groupRowsShown(group.rows.length, groupMore[group.key] ?? 0)).map(renderEntry)');
   });
 });

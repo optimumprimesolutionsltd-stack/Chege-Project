@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery } from '@tanstack/react-query';
 import { customFetch, useGetGroup } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
+import { useOnScreen } from '@/hooks/useOnScreen';
 import { WorkspaceIdentityRow } from '@/components/WorkspaceIdentityRow';
 import { formatDisplayDate } from '@/lib/displayFormat';
 import { byWay, reachedCap, totalsOf, type MoneyWay } from '@/lib/searchDirection';
@@ -64,11 +65,20 @@ export default function SearchScreen() {
   // Which way the money moved, on top of where to look (lib/searchDirection).
   const [way, setWay] = useState<MoneyWay>('all');
   const normalizedQuery = query.trim();
+  const onSearchScreen = useOnScreen();
   const search = useQuery<SearchResponse>({
     queryKey: ['workspace-search', group?.id, normalizedQuery, tab],
     queryFn: () => customFetch<SearchResponse>(`/api/search?q=${encodeURIComponent(normalizedQuery)}&tab=${tab}`),
     enabled: normalizedQuery.length >= 2 && Boolean(group?.id),
+    // Followed only while Search is in view (hooks/useOnScreen): the tab stays
+    // mounted, and every save anywhere ran the last search again - up to 2.7 s
+    // on the server, behind a spinner ("the search button is also lagging", 9 Oct 2026).
+    subscribed: onSearchScreen,
+    staleTime: 60_000,
   });
+  // A spinner only while there is nothing yet to show: a refresh of results
+  // already on screen keeps them there.
+  const searching = search.isFetching && !search.data;
   // And which month (lib/searchMonths): 'all', or "2026-10".
   const [month, setMonth] = useState<string>('all');
   const byWayResults = useMemo(() => byWay(search.data?.results ?? [], way), [search.data, way]);
@@ -141,7 +151,7 @@ export default function SearchScreen() {
             );
           })}
         </View>
-        {normalizedQuery.length >= 2 && months.length > 1 && !search.isFetching ? (
+        {normalizedQuery.length >= 2 && months.length > 1 && !searching ? (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.months} testID="search-month">
             {['all', ...months].map((key) => {
               const selected = key === activeMonth;
@@ -162,7 +172,7 @@ export default function SearchScreen() {
             })}
           </ScrollView>
         ) : null}
-        {normalizedQuery.length >= 2 && results.length > 0 && !search.isFetching ? (
+        {normalizedQuery.length >= 2 && results.length > 0 && !searching ? (
           <Text style={[styles.subtitle, { color: colors.foreground, fontFamily: 'Inter_600SemiBold' }]} testID="search-totals">
             {totals.count} found
             {totals.in > 0 ? ` · KES ${totals.in.toLocaleString('en-KE')} in` : ''}
@@ -172,7 +182,7 @@ export default function SearchScreen() {
         ) : null}
       </View>
 
-      {search.isFetching ? (
+      {searching ? (
         <ActivityIndicator color={colors.primary} size="large" style={styles.loading} />
       ) : search.isError ? (
         <View style={styles.empty}>

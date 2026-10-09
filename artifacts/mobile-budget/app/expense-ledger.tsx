@@ -19,6 +19,8 @@ import DateTimePicker, { type DateTimePickerEvent } from '@react-native-communit
 import {
   getDashboardExpenseLedger,
   getGetDashboardExpenseLedgerQueryKey,
+  getGetJointAccountQueryKey,
+  getJointAccount,
   useGetBudgetCategories,
   useGetDashboardExpenseLedger,
 } from '@workspace/api-client-react';
@@ -26,6 +28,7 @@ import { isoDay, longDay, monthStartIso, orderedRange, stepMonth } from '@/lib/d
 import { useBusinesses } from '@/hooks/useBusinesses';
 import { useColors } from '@/hooks/useColors';
 import { useProgressiveDays } from '@/lib/progressiveDays';
+import { accountsOf, groupRowsShown } from '@/lib/openGroup';
 import { ScrollerScrollView } from '@/components/PageScrollReset';
 import { CategorySearchBox } from '@/components/CategorySearchBox';
 import { getExpenseEditHref } from '@/lib/expenseEditLink';
@@ -77,13 +80,27 @@ export default function ExpenseLedgerScreen() {
   // follows a moment later. Rebuilding it first made every tap feel hesitant.
   const shownView = useDeferredValue(view);
   const [opened, setOpened] = useState<Set<string>>(new Set());
-  const toggleGroup = (key: string) =>
+  // "Show more" taps per open group: a group draws its rows a page at a time (lib/openGroup).
+  const [groupMore, setGroupMore] = useState<Record<string, number>>({});
+  const toggleGroup = (key: string, rows?: ReadonlyArray<{ source?: string; accountId?: number | null }>) => {
+    // Opening: the accounts its entries sit in start loading now, so tapping
+    // one to edit does not wait for a whole account (lib/openGroup).
+    if (rows && !opened.has(key)) {
+      for (const accountId of accountsOf(rows)) {
+        void queryClient.prefetchQuery({
+          queryKey: getGetJointAccountQueryKey({ accountId }),
+          queryFn: () => getJointAccount({ accountId }),
+          staleTime: 60_000,
+        });
+      }
+    }
     setOpened((current) => {
       const next = new Set(current);
       if (next.has(key)) next.delete(key);
       else next.add(key);
       return next;
     });
+  };
 
   const [rangeFrom, rangeTo] = orderedRange(from, to);
 
@@ -257,7 +274,7 @@ export default function ExpenseLedgerScreen() {
     return (
       <View key={group.key} style={[styles.groupCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <Pressable
-          onPress={() => toggleGroup(group.key)}
+          onPress={() => toggleGroup(group.key, group.rows as ReadonlyArray<{ source?: string; accountId?: number | null }>)}
           accessibilityRole="button"
           accessibilityState={{ expanded: isOpen }}
           accessibilityLabel={`${group.label}, ${group.count} ${group.count === 1 ? 'entry' : 'entries'}, ${formatKES(group.total)} shillings`}
@@ -288,7 +305,19 @@ export default function ExpenseLedgerScreen() {
                 <Text style={{ color: '#d97706', fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>Sort them out</Text>
               </Pressable>
             ) : null}
-            {group.rows.map(renderEntry)}
+            {group.rows.slice(0, groupRowsShown(group.rows.length, groupMore[group.key] ?? 0)).map(renderEntry)}
+            {groupRowsShown(group.rows.length, groupMore[group.key] ?? 0) < group.rows.length ? (
+              <Pressable
+                onPress={() => setGroupMore((current) => ({ ...current, [group.key]: (current[group.key] ?? 0) + 1 }))}
+                accessibilityRole="button"
+                testID={`expense-ledger-group-${group.key}-more`}
+                style={{ alignItems: 'center', paddingVertical: 12 }}
+              >
+                <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>
+                  Showing {groupRowsShown(group.rows.length, groupMore[group.key] ?? 0).toLocaleString('en-KE')} of {group.rows.length.toLocaleString('en-KE')} - show more
+                </Text>
+              </Pressable>
+            ) : null}
           </View>
         ) : null}
       </View>
