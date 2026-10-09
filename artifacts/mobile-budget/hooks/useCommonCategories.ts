@@ -6,6 +6,7 @@ import { applyLinksForMatching, ensureCommonCategories, fetchStandardLinks, reco
 import type { EntryToSort } from '@/lib/entriesToSort';
 import { getImportProgress } from '@/lib/importProgress';
 import type { StandardTarget } from '@/lib/standardCategory';
+import { KNOWN_PAYEES_VERSION } from '@/lib/knownPayees';
 
 /**
  * This budget's common category for each kind of payee (lib/commonCategories),
@@ -25,12 +26,15 @@ export function useStandardLinks(enabled: boolean): void {
   }, [data]);
 }
 
-const sortedOnceKey = (groupId: number) => `jamvi:recognised-sorted:v1:${groupId}`;
+// Once per budget for each version of the payee rules: new rules reach entries saved before them.
+const sortedOnceKey = (groupId: number) => `jamvi:recognised-sorted:${KNOWN_PAYEES_VERSION}:${groupId}`;
 
 /**
- * Once per budget: entries already saved as Not sure yet to a payee Jamvi knows
- * are filed where they belong, making the common category where needed. "Sort
- * them once" (9 Oct 2026). Only for somebody who may change the budget; quietly,
+ * Once per budget, and again whenever the payee rules change (lib/knownPayees
+ * KNOWN_PAYEES_VERSION): entries already saved as Not sure yet to a payee Jamvi
+ * knows are filed where they belong, making the common category where needed.
+ * "Sort them once", "implement backwards too" (9 Oct 2026). What the person
+ * filed themselves is never touched - only Not sure yet. Only for somebody who may change the budget; quietly,
  * a while after Home opens, and never during an import's save.
  */
 export function useSortRecognisedOnce(groupId: number | undefined, canManage: boolean): void {

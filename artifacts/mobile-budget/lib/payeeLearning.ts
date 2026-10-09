@@ -41,6 +41,20 @@ const BUSINESS = new Set([
   'school', 'academy', 'church', 'hospital', 'clinic', 'motors', 'garage', 'petrol', 'station', 'fuel', 'wholesale',
   'wholesalers', 'distributors', 'electronics', 'salon', 'barber', 'butchery', 'bakery', 'boutique', 'kiosk', 'market',
   'centre', 'center', 'foods', 'farm', 'water', 'power', 'gas', 'insurance', 'agent', 'paystack', 'pesapal', 'kplc',
+  // Brands and kinds of place lib/knownPayees files, as a statement writes them:
+  // "OLA KAHAWA", "SHELL JUJA" and "RUBIS RUIRU" are stations, not people (9 Oct 2026).
+  'ola', 'shell', 'rubis', 'total', 'totalenergies', 'kenol', 'kobil', 'galana', 'stabex', 'engen', 'oryx', 'astrol', 'gapco',
+  'naivas', 'quickmart', 'carrefour', 'chandarana', 'cleanshelf', 'magunas', 'uchumi', 'gilanis', 'khetias', 'eastmatt',
+  'goodlife', 'pharmaplus', 'mydawa', 'dstv', 'gotv', 'zuku', 'startimes', 'faiba', 'kfc', 'jumia', 'kilimall',
+  'sportpesa', 'betika', 'odibets', 'mozzart', 'betway', 'shabiki', 'g4s',
+  'shule', 'sch', 'preparatory', 'montessori', 'books', 'bookshop', 'stationers', 'stationery', 'stationary',
+  'apartments', 'court', 'properties', 'parish', 'cathedral', 'chapel', 'worship', 'tabernacle', 'gospel', 'mosque', 'masjid', 'ministries',
+  'agrovet', 'gym', 'fitness', 'tyres', 'spares', 'expressway', 'uniforms', 'shoes', 'mitumba',
+  'hardwares', 'timber', 'decor', 'interiors', 'furniture', 'curtains', 'traders', 'trader', 'merchants', 'stores',
+  'enterprises', 'enterprise', 'ventures', 'investments', 'suppliers', 'supplies',
+  // A company's own words: "anything with ltd, limited or traders has the logic of a business".
+  'chicken', 'kuku', 'choma', 'grill', 'kenchic',
+  'plc', 'inc', 'llp', 'llc', 'cooperative', 'association', 'foundation', 'society', 'trust',
 ]);
 
 /**

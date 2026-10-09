@@ -198,7 +198,7 @@ describe('where it is wired in', () => {
 
   it('sorts old entries once per budget, only for somebody who may change it', () => {
     const hook = read('hooks/useCommonCategories.ts');
-    expect(hook).toContain('`jamvi:recognised-sorted:v1:${groupId}`');
+    expect(hook).toContain('`jamvi:recognised-sorted:${KNOWN_PAYEES_VERSION}:${groupId}`');
     expect(hook).toContain("if (!groupId || !canManage || running.current) return;");
     expect(hook).toContain("getImportProgress()?.stage === 'saving'");
   });
