@@ -5,6 +5,7 @@ import { ensureOwnerBusiness } from "./lib/owner-business-money";
 import { ensureTransactionSplits } from "./lib/transaction-splits";
 import { ensureBusinessAccounts } from "./lib/business-accounts";
 import { ensureBusinessStreams } from "./lib/business-streams";
+import { ensureCategoryPlaces } from "./lib/category-places";
 import { ensurePayeeRules } from "./lib/payee-rules";
 import { ensureBudgetKnowledge } from "./lib/budget-knowledge";
 import { ensureStandardCategories } from "./lib/standard-categories";
@@ -95,6 +96,7 @@ async function startServer() {
   void ensureTransactionSplits();
   void ensureBusinessAccounts();
   void ensureBusinessStreams();
+  void ensureCategoryPlaces();
   void ensurePayeeRules();
   void ensureBudgetKnowledge();
   void ensureStandardCategories();
