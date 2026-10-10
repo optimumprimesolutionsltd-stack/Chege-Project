@@ -41,6 +41,7 @@ import { businessTitle } from '@/lib/ownerBusiness';
 import { categoryChanged, moveSummary, parseRememberAsked, rememberAskedKey, rememberStep, samePayeeToMove } from '@/lib/samePayee';
 import { parseStoredRules, payeeKey, payeeName, referenceOf, ruleCategory, rulesStorageKey, withRule, withSourceRule } from '@/lib/payeeLearning';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useSourceCorrection } from '@/hooks/useSourceCorrection';
 import { useColors } from '@/hooks/useColors';
 import { UndoDeleteBar, useUndoableDelete } from '@/components/UndoDeleteBar';
 import { deletedLabel } from '@/lib/undoDelete';
@@ -912,12 +913,14 @@ export default function BankScreen() {
    * money in as that business's sales - and money in from the same payer with
    * no source yet is offered to follow.
    */
-  const rememberWhoFor = async (entry: { id: number; description: string; direction: 'in' | 'out'; business: number; category: string; name?: string }) => {
+  /** Whether it asked about the payer's other money in (then nothing else is asked over it). */
+  const correctSource = useSourceCorrection();
+  const rememberWhoFor = async (entry: { id: number; description: string; direction: 'in' | 'out'; business: number; category: string; name?: string }): Promise<boolean> => {
     const label = payeeName(entry.description).replace(/^Received from\s+/i, '') || entry.description;
     if (entry.direction === 'out') {
-      if (!entry.category) return;
+      if (!entry.category) return false;
       await namedPayees.add({ key: namedKeyFor(referenceOf(entry.description) || label), name: entry.name?.trim() || namedPayees.nameFor(entry.description) || label, category: entry.category, incomeSourceId: entry.business });
-      return;
+      return false;
     }
     const key = rulesStorageKey(group?.id);
     const rules = parseStoredRules(await AsyncStorage.getItem(key).catch(() => null));
@@ -926,7 +929,7 @@ export default function BankScreen() {
     const others = (data?.transactions ?? []).filter((row) =>
       row.id !== entry.id && row.type === 'deposit' && row.incomeSourceId == null && !row.isBorrowing && row.settlesContributorId == null &&
       row.bankTransferId == null && row.savingsGoalId == null && !!who && samePayeeName(row.description) === who);
-    if (others.length === 0) return;
+    if (others.length === 0) return false;
     const business = incomeSourceNames.get(entry.business) ?? 'the business';
     Alert.alert(
       `More from ${label}`,
@@ -955,6 +958,7 @@ export default function BankScreen() {
         },
       ],
     );
+    return true;
   };
 
   const closeModal = () => {
@@ -2285,6 +2289,14 @@ export default function BankScreen() {
         const editing = data?.transactions.find((transaction) => transaction.id === editingTransactionId);
         if (editing) whoFor = { id: editing.id, description: editing.description, direction: txType === 'deposit' ? 'in' : 'out', business: forBusinessId, category: expenseCategory.trim(), name: whoForPayeeName };
       }
+      let sourceCorrection: { entry: { id: number; description: string; amount: number }; chosen: number } | null = null;
+      if (editingTransactionId !== null && txType === 'deposit' && !notIncome && validDepositorIds.length <= 1) {
+        const editingTransaction = data?.transactions.find((transaction) => transaction.id === editingTransactionId);
+        const chosen = forBusinessId ?? incomeSourceId;
+        if (editingTransaction && chosen != null && chosen !== (editingTransaction.incomeSourceId ?? null)) {
+          sourceCorrection = { entry: { id: editingTransaction.id, description: editingTransaction.description, amount: parsed }, chosen };
+        }
+      }
       if (editingTransactionId !== null) {
         const editingTransaction = data?.transactions.find((transaction) => transaction.id === editingTransactionId);
         if (editingTransaction && txType === 'disbursement' && withdrawDest !== 'party' && withdrawDest !== 'lend' && withdrawDest !== 'savings' && !editingBusinessMoney) {
@@ -2505,7 +2517,10 @@ export default function BankScreen() {
       await invalidateBalance();
       // The named account goes in first, so the payee's other payments are offered
       // with the remembered category already in place.
-      if (whoFor) await rememberWhoFor(whoFor).catch(() => {});
+      const askedAboutPayer = whoFor ? await rememberWhoFor(whoFor).catch(() => false) : false;
+      // Money in moved to another source than it had: if Jamvi had this payer down as
+      // something else, it asks once whether that changes from now on (lib/sourceClash).
+      if (sourceCorrection && !askedAboutPayer) void correctSource(sourceCorrection.entry, sourceCorrection.chosen);
       if (samePayeeOffer) {
         offerSamePayee(samePayeeOffer);
       } else if (repaidBy) {

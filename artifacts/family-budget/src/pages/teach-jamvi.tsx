@@ -228,10 +228,11 @@ export default function TeachJamviPage() {
             </>
           ) : answers ? (
             <>
-              <p className="font-semibold">What is the money from {regular.label}?</p>
+              <p className="font-semibold">Who paid you, and what for?</p>
               {answers.income.length > 0 ? (
                 <div className="space-y-1">
-                  <p className="text-xs font-bold tracking-wide text-muted-foreground">YOUR INCOME</p>
+                  <p className="text-xs font-bold tracking-wide text-muted-foreground">PAID TO YOU</p>
+                  <p className="text-xs text-muted-foreground">Your salary, your own work, rent you collect - or your business paying you.</p>
                   <div className="flex flex-wrap gap-2">
                     {(moreOf ? answers.income : answers.income.slice(0, 3)).map((source) => chip(source.name, () => void answerSource(regular, source.id), `teach-source-${source.id}`))}
                   </div>
@@ -239,7 +240,8 @@ export default function TeachJamviPage() {
               ) : null}
               {answers.sales.length > 0 ? (
                 <div className="space-y-1">
-                  <p className="text-xs font-bold tracking-wide text-muted-foreground">A BUSINESS'S SALES</p>
+                  <p className="text-xs font-bold tracking-wide text-muted-foreground">A CUSTOMER PAYING YOUR BUSINESS</p>
+                  <p className="text-xs text-muted-foreground">Its sales: kept in the business's own report, apart from your income.</p>
                   <div className="flex flex-wrap gap-2">
                     {(moreOf ? answers.sales : answers.sales.slice(0, 3)).map((business) => chip(business.name, () => void answerSource(regular, business.id), `teach-sales-${business.id}`, <BriefcaseBusiness className="mr-1 h-3 w-3" />))}
                   </div>

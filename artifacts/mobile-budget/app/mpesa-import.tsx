@@ -3193,6 +3193,13 @@ export default function MpesaImportScreen() {
                 onCategory={teachAsCategory}
                 onPickCategory={(taught) => setPicking(`teach:${taught.key}`)}
                 onSource={teachAsSource}
+                onNewBusiness={async (taught, name) => {
+                  // A customer of a business not set up yet: added here, and these lines are its sales.
+                  const made = await businesses.create(name);
+                  if (!made?.id) throw new Error('Could not add the business. Try again.');
+                  setAddedBusinesses((current) => [...current, { id: made.id, name }]);
+                  teachAsSource(taught, made.id);
+                }}
                 onOwnAccount={teachAsOwnAccount}
                 onDebt={teachAsDebt}
                 guess={(taught) => {
