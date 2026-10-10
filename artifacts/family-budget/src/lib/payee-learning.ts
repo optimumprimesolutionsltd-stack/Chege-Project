@@ -71,8 +71,25 @@ export function looksLikePerson(description: string): boolean {
 /** The payee without its account reference: "Sample Utility (42)" is "Sample Utility". */
 export const payeeName = (description: string): string => description.replace(/\s*\([^)]*\)\s*$/, "").trim();
 
+/**
+ * Remembered per description: worked out for every line of an import, several
+ * times over, on every tap - a 2,300-line review spent most of each tap here
+ * (10 Oct 2026). Cleared when it grows past a few statements" worth.
+ */
+function remembered(work: (description: string) => string): (description: string) => string {
+  const seen = new Map<string, string>();
+  return (description) => {
+    const known = seen.get(description);
+    if (known !== undefined) return known;
+    if (seen.size > 20_000) seen.clear();
+    const value = work(description);
+    seen.set(description, value);
+    return value;
+  };
+}
+
 /** What a rule is filed under: the payee"s name, tidied, without any account reference. */
-export const payeeKey = (description: string): string => clean(payeeName(description));
+export const payeeKey = remembered((description: string): string => clean(payeeName(description)));
 
 /** The words that tell one payee from another. */
 export function distinctiveWords(description: string): string[] {
@@ -108,6 +125,10 @@ const spending = (history: readonly Past[]) =>
 type Prepared = {
   spend: Array<{ category: string; words: string[] }>;
   byWord: Map<string, Map<string, Set<string>>>;
+  /** Each word, and the postings (by place in `spend`) whose name has it. */
+  postingsWith: Map<string, number[]>;
+  /** fuzzyCategory"s scores, by description. */
+  fuzzy: Map<string, Map<string, number>>;
 };
 const preparedFor = new WeakMap<readonly Past[], Prepared>();
 function prepare(history: readonly Past[]): Prepared {
@@ -115,10 +136,16 @@ function prepare(history: readonly Past[]): Prepared {
   if (cached) return cached;
   const spend: Prepared["spend"] = [];
   const byWord: Prepared["byWord"] = new Map();
+  const postingsWith: Prepared["postingsWith"] = new Map();
   for (const posting of spending(history)) {
     const words = distinctiveWords(posting.description);
     const category = posting.expenseCategory as string;
     spend.push({ category, words });
+    for (const word of new Set(words)) {
+      const list = postingsWith.get(word) ?? [];
+      list.push(spend.length - 1);
+      postingsWith.set(word, list);
+    }
     const payee = payeeKey(posting.description);
     for (const word of words) {
       const categories = byWord.get(word) ?? new Map<string, Set<string>>();
@@ -128,7 +155,7 @@ function prepare(history: readonly Past[]): Prepared {
       byWord.set(word, categories);
     }
   }
-  const prepared = { spend, byWord };
+  const prepared = { spend, byWord, postingsWith, fuzzy: new Map() };
   preparedFor.set(history, prepared);
   return prepared;
 }
@@ -178,10 +205,19 @@ export function ruleCategory(description: string, rules: PayeeRules, number?: st
  * wrong one is worse than offering none.
  */
 export function fuzzyCategory(description: string, history: readonly Past[], categoryNames: readonly string[] = []): string {
+  const prepared = prepare(history);
+  // The same payee is many lines of one statement: scored once.
+  const kept = prepared.fuzzy.get(description);
+  if (kept) return winner(kept, categoryNames);
   const mine = distinctiveWords(description);
   if (mine.length === 0) return "";
   const score = new Map<string, number>();
-  for (const posting of prepare(history).spend) {
+  // Only the postings that share a word: every posting against every line froze
+  // opening a year"s statement (10 Oct 2026).
+  const sharing = new Set<number>();
+  for (const word of mine) for (const at of prepared.postingsWith.get(word) ?? []) sharing.add(at);
+  for (const at of [...sharing].sort((a, b) => a - b)) {
+    const posting = prepared.spend[at];
     const theirs = posting.words;
     if (theirs.length === 0) continue;
     const shared = mine.filter((word) => theirs.includes(word)).length;
@@ -192,6 +228,8 @@ export function fuzzyCategory(description: string, history: readonly Past[], cat
     const category = posting.category;
     score.set(category, (score.get(category) ?? 0) + shared / smaller);
   }
+  if (prepared.fuzzy.size > 20_000) prepared.fuzzy.clear();
+  prepared.fuzzy.set(description, score);
   return winner(score, categoryNames);
 }
 
@@ -250,12 +288,12 @@ export function withRule(rules: PayeeRules, description: string, category: strin
  * rules under "src:" - by the account in brackets when there is one, else by
  * the payer"s name.
  */
-export const sourceRuleKey = (description: string): string => {
+export const sourceRuleKey = remembered((description: string): string => {
   const reference = referenceOf(description);
   if (reference.length >= 4) return `src:#ref:${reference}`;
   const key = payeeKey(description.replace(/^Received from\s+/i, ""));
   return key ? `src:${key}` : "";
-};
+});
 
 /** The income source kept for money in from this payer, or null. */
 export function ruleSource(description: string, rules: PayeeRules): number | null {
@@ -320,18 +358,44 @@ export function withBandRule(rules: PayeeRules, band: Band, value: string): Paye
   return band.base && value ? { ...rules, [bandKey(band)]: value } : rules;
 }
 
+type BandEntry = { lo: number; hi: number; value: string };
+
+/**
+ * Every band in a set of rules, by payee: read once per set. Looked up for every
+ * line of an import on every tap, scanning all the rules each time froze a
+ * 2,300-line review ("the tabs are not working", 10 Oct 2026).
+ */
+const bandIndex = new WeakMap<PayeeRules, Map<string, BandEntry[]>>();
+function bandsOf(rules: PayeeRules): Map<string, BandEntry[]> {
+  const known = bandIndex.get(rules);
+  if (known) return known;
+  const found = new Map<string, BandEntry[]>();
+  for (const [key, value] of Object.entries(rules)) {
+    if (!key.startsWith(BAND_PREFIX)) continue;
+    const match = key.slice(BAND_PREFIX.length).match(/^(.*):(\d+)-(\d+)$/);
+    if (!match) continue;
+    const list = found.get(match[1]) ?? [];
+    list.push({ lo: Number(match[2]), hi: Number(match[3]), value });
+    found.set(match[1], list);
+  }
+  bandIndex.set(rules, found);
+  return found;
+}
+
+function bandEntry(description: string, direction: "in" | "out", amount: number | null | undefined, rules: PayeeRules): { base: string; band: BandEntry } | null {
+  if (amount == null) return null;
+  const bands = bandsOf(rules);
+  // Most budgets keep no bands: nothing to work out for any line.
+  if (bands.size === 0) return null;
+  const base = bandBase(description, direction);
+  const size = Math.abs(amount);
+  const band = base ? bands.get(base)?.find((one) => size >= one.lo && size <= one.hi) : undefined;
+  return band ? { base, band } : null;
+}
+
 /** What a band kept for this payee says about a payment of this amount, or "". */
 export function bandRule(description: string, direction: "in" | "out", amount: number | null | undefined, rules: PayeeRules): string {
-  const base = bandBase(description, direction);
-  if (!base || amount == null) return "";
-  const size = Math.abs(amount);
-  const prefix = `${BAND_PREFIX}${base}:`;
-  for (const [key, value] of Object.entries(rules)) {
-    if (!key.startsWith(prefix)) continue;
-    const range = key.slice(prefix.length).match(/^(\d+)-(\d+)$/);
-    if (range && size >= Number(range[1]) && size <= Number(range[2])) return value;
-  }
-  return "";
+  return bandEntry(description, direction, amount, rules)?.band.value ?? "";
 }
 
 /** The category kept for this payment: its band"s first, then the payee"s. */
@@ -364,14 +428,6 @@ export const bandAnswers = (description: string, direction: "in" | "out", amount
 
 /** The band kept for this payee that covers this amount, or null. */
 export function bandFor(description: string, direction: "in" | "out", amount: number | null | undefined, rules: PayeeRules): Band | null {
-  const base = bandBase(description, direction);
-  if (!base || amount == null) return null;
-  const size = Math.abs(amount);
-  const prefix = `${BAND_PREFIX}${base}:`;
-  for (const key of Object.keys(rules)) {
-    if (!key.startsWith(prefix)) continue;
-    const range = key.slice(prefix.length).match(/^(\d+)-(\d+)$/);
-    if (range && size >= Number(range[1]) && size <= Number(range[2])) return { base, lo: Number(range[1]), hi: Number(range[2]) };
-  }
-  return null;
+  const found = bandEntry(description, direction, amount, rules);
+  return found ? { base: found.base, lo: found.band.lo, hi: found.band.hi } : null;
 }
