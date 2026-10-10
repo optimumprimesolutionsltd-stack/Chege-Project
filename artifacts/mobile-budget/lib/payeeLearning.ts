@@ -139,8 +139,12 @@ const exists = (category: string, categoryNames: readonly string[]) => categoryN
 const numberKey = (number: string | null | undefined): string => (number ? `#${number}` : '');
 
 /** A rule's key in words a person can read. */
-export const ruleLabel = (key: string): string =>
-  key.startsWith('#ref:') ? `Account ${key.slice(5)}` : key.startsWith('#') ? `Till or paybill ${key.slice(1)}` : key;
+export const ruleLabel = (key: string): string => {
+  // A band (lib/paymentPatterns): the payee, then the amounts it covers.
+  const band = key.match(/^band:(?:src:)?(.*):(\d+)-(\d+)$/);
+  if (band) return `${ruleLabel(band[1])}, KES ${Number(band[2]).toLocaleString('en-KE')} to ${Number(band[3]).toLocaleString('en-KE')}`;
+  return key.startsWith('#ref:') ? `Account ${key.slice(5)}` : key.startsWith('#') ? `Till or paybill ${key.slice(1)}` : key;
+};
 
 /**
  * The account a paybill payment was made to, as the import writes it: the
@@ -286,3 +290,72 @@ export function parseStoredRules(raw: string | null | undefined): PayeeRules {
     return {};
   }
 }
+
+/**
+ * A rule for some of a payee's payments only, by their amounts (lib/paymentPatterns):
+ * "Equity Bulk Account" paying about KES 52,000 a month is pay, the rest of what it
+ * pays in is the person's own money. Kept under "band:<payee>:<lo>-<hi>"; the value
+ * is what a payee rule holds - a category, an income source's id - or "own:<account
+ * id>" for a move from one of the person's own accounts. A band wins over the
+ * payee's own rule, for the amounts it covers.
+ */
+export const BAND_PREFIX = 'band:';
+export const OWN_VALUE = 'own:';
+
+/** The payee a band belongs to: money in as its source rule keys it, money out as its category rule does. */
+export function bandBase(description: string, direction: 'in' | 'out'): string {
+  if (direction === 'in') return sourceRuleKey(description);
+  const reference = referenceOf(description);
+  return reference.length >= 4 ? `#ref:${reference}` : payeeKey(description);
+}
+
+export type Band = { base: string; lo: number; hi: number };
+
+export const bandKey = (band: Band): string => `${BAND_PREFIX}${band.base}:${band.lo}-${band.hi}`;
+
+/** Keeps an answer for a band of a payee's payments. */
+export function withBandRule(rules: PayeeRules, band: Band, value: string): PayeeRules {
+  return band.base && value ? { ...rules, [bandKey(band)]: value } : rules;
+}
+
+/** What a band kept for this payee says about a payment of this amount, or ''. */
+export function bandRule(description: string, direction: 'in' | 'out', amount: number | null | undefined, rules: PayeeRules): string {
+  const base = bandBase(description, direction);
+  if (!base || amount == null) return '';
+  const size = Math.abs(amount);
+  const prefix = `${BAND_PREFIX}${base}:`;
+  for (const [key, value] of Object.entries(rules)) {
+    if (!key.startsWith(prefix)) continue;
+    const range = key.slice(prefix.length).match(/^(\d+)-(\d+)$/);
+    if (range && size >= Number(range[1]) && size <= Number(range[2])) return value;
+  }
+  return '';
+}
+
+/** The category kept for this payment: its band's first, then the payee's. */
+export function ruleCategoryFor(description: string, amount: number | null | undefined, rules: PayeeRules, number?: string | null): string {
+  const band = bandRule(description, 'out', amount, rules);
+  if (band) return band.startsWith(OWN_VALUE) ? '' : band;
+  return ruleCategory(description, rules, number);
+}
+
+/** The income source kept for this payment: its band's first, then the payer's. */
+export function ruleSourceFor(description: string, amount: number | null | undefined, rules: PayeeRules): number | null {
+  const band = bandRule(description, 'in', amount, rules);
+  if (band) {
+    const kept = Number(band);
+    return Number.isInteger(kept) && kept > 0 ? kept : null;
+  }
+  return ruleSource(description, rules);
+}
+
+/** The person's own account a band says this payment came from or went to, or null. */
+export function bandOwnAccount(description: string, direction: 'in' | 'out', amount: number | null | undefined, rules: PayeeRules): number | null {
+  const band = bandRule(description, direction, amount, rules);
+  const id = band.startsWith(OWN_VALUE) ? Number(band.slice(OWN_VALUE.length)) : NaN;
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
+
+/** Whether a band answers this payment at all: a category, a source or an own account. */
+export const bandAnswers = (description: string, direction: 'in' | 'out', amount: number | null | undefined, rules: PayeeRules): boolean =>
+  bandRule(description, direction, amount, rules) !== '';

@@ -19,7 +19,7 @@ import { useToast } from "@/hooks/use-toast";
 import { isNotSure, type EntryToSort } from "@/lib/entries-to-sort";
 import { payeeKey, withRule, withSourceRule, type PayeeRules } from "@/lib/payee-learning";
 import { readCachedRules, saveRules, syncRules } from "@/lib/rules-store";
-import { incomeAnswers, savedGroups, suggestedCategories, type SavedGroup } from "@/lib/teach-jamvi";
+import { incomeAnswers, keepAnswer, savedGroups, suggestedCategories, type SavedGroup } from "@/lib/teach-jamvi";
 import { displayName, FAMILY_CATEGORY, familyCategories, familyNames, relativesBySurname, withFamily, withoutFamily } from "@/lib/family";
 import { SALARY_ANSWERS, salaryAnswerHint, unansweredBusinesses, type SalaryBusiness } from "@/lib/business-salary";
 import { plainSaveError } from "@/lib/save-retry";
@@ -111,11 +111,12 @@ export default function TeachJamviPage() {
 
   const answerCategory = (taught: SavedGroup, category: string) => run(async () => {
     await ensureCategory(category);
-    keepRules(taught.key.startsWith("#ref:") ? { ...rules, [taught.key]: category } : withRule(rules, taught.entries[0].description, category));
+    // One kind of the payee's payments only (lib/paymentPatterns): kept by its amounts.
+    keepRules(keepAnswer(rules, taught, category, (kept) => taught.key.startsWith("#ref:") ? { ...kept, [taught.key]: category } : withRule(kept, taught.entries[0].description, category)));
     await fileEntries(taught.entries, { expenseCategory: category });
   });
   const answerSource = (taught: SavedGroup, incomeSourceId: number) => run(async () => {
-    keepRules(withSourceRule(rules, taught.entries[0].description, incomeSourceId));
+    keepRules(keepAnswer(rules, taught, String(incomeSourceId), (kept) => withSourceRule(kept, taught.entries[0].description, incomeSourceId)));
     const owner = (incomeSources as Array<{ id: number; userId?: string | null }>).find((source) => source.id === incomeSourceId)?.userId;
     await fileEntries(taught.entries, { incomeSourceId, ...(owner ? { madeById: owner } : {}) });
   });
@@ -204,6 +205,15 @@ export default function TeachJamviPage() {
           <p className="text-xs font-bold tracking-wide text-primary">YOUR REGULARS · {groups.length} TO GO</p>
           <p className="text-lg font-bold">{regular.label}{regular.reference ? ` · ${regular.reference}` : ""}</p>
           <p className="text-sm text-muted-foreground">{regular.direction === "in" ? "Received" : "Paid"} {regular.count} times · KES {Math.round(regular.total).toLocaleString("en-KE")}</p>
+          {regular.pattern ? (
+            // What these payments have in common (lib/paymentPatterns), so they are known at a glance.
+            <div className="rounded-md bg-primary/5 p-3 space-y-1" data-testid="teach-jamvi-pattern">
+              <p className="text-[10px] font-bold tracking-wider text-primary">{regular.pattern.band ? "ONE KIND OF THESE PAYMENTS" : "WHAT JAMVI SEES"}</p>
+              <p className="text-sm font-semibold">{regular.pattern.text}</p>
+              {regular.pattern.recent ? <p className="text-xs text-muted-foreground">{regular.pattern.recent}</p> : null}
+              {regular.pattern.hint ? <p className="text-xs">{regular.pattern.hint}</p> : null}
+            </div>
+          ) : null}
           {regular.direction === "out" ? (
             <>
               <p className="font-semibold">{regular.kind === "person" ? `Who is ${regular.label} to you?` : `What do you pay ${regular.label} for?`}</p>

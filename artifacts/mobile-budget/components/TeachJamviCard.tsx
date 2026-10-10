@@ -133,8 +133,10 @@ export function TeachJamviCard<G extends TeachRegular>({
   }) : [];
   // Money in: the person's own streams apart from their businesses' sales,
   // best guess first (lib/teachJamvi incomeAnswers).
+  // Money that comes every month, about the same, is most likely pay: streams named for it first.
+  const monthly = group?.pattern?.kind === 'monthly';
   const answers = group && group.direction === 'in'
-    ? incomeAnswers(group.label, incomeSources, businesses, guess?.(group) ?? null)
+    ? incomeAnswers(monthly ? `${group.label} salary pay wages` : group.label, incomeSources, businesses, guess?.(group) ?? null)
     : { income: [], sales: [] };
   const section = (title: string, children: React.ReactNode, testID: string, hint?: string) => (
     <View style={styles.section} testID={testID}>
@@ -149,6 +151,14 @@ export function TeachJamviCard<G extends TeachRegular>({
       ? [chip(`Other… (${list.length - SHOWN})`, () => setMoreOf((current) => ({ ...current, [which]: true })), `teach-jamvi-more-${which}`, 'chevron-down')]
       : []),
   ];
+
+  const notIncomeSection = group && group.direction === 'in' ? (mayBeOwnAccount(group) || onDebt ? section('NOT INCOME', [
+                  ...(mayBeOwnAccount(group) ? [chip('From my own account', () => setOwnOpen((open) => !open), 'teach-jamvi-own', 'credit-card')] : []),
+                  ...(onDebt ? [
+                    chip('A loan to me', () => void onDebt(group, 'borrowed'), 'teach-jamvi-debt-borrowed', 'arrow-down-left'),
+                    chip('Someone paying me back', () => void onDebt(group, 'repaid'), 'teach-jamvi-debt-repaid', 'corner-down-left'),
+                  ] : []),
+                ], 'teach-jamvi-not-income') : null) : null;
 
   return (
     <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.primary }]} testID="teach-jamvi">
@@ -182,6 +192,15 @@ export function TeachJamviCard<G extends TeachRegular>({
             <Text style={[styles.payeeMeta, { color: colors.mutedForeground }]}>
               {group.direction === 'in' ? 'Received' : 'Paid'} {group.count} times · {kes(group.total)}
             </Text>
+            {group.pattern ? (
+              // What these payments have in common (lib/paymentPatterns), so the person knows them at a glance.
+              <View style={[styles.seen, { backgroundColor: `${colors.primary}10` }]} testID="teach-jamvi-pattern">
+                <Text style={[styles.sectionTitle, { color: colors.primary }]}>{group.pattern.band ? 'ONE KIND OF THESE PAYMENTS' : 'WHAT JAMVI SEES'}</Text>
+                <Text style={[styles.seenText, { color: colors.foreground }]}>{group.pattern.text}</Text>
+                {group.pattern.recent ? <Text style={[styles.payeeMeta, { color: colors.mutedForeground }]}>{group.pattern.recent}</Text> : null}
+                {group.pattern.hint ? <Text style={[styles.payeeMeta, { color: colors.foreground }]} testID="teach-jamvi-hint">{group.pattern.hint}</Text> : null}
+              </View>
+            ) : null}
             <Text style={[styles.question, { color: colors.foreground }]}>{question(group)}</Text>
 
             {group.direction === 'out' ? (
@@ -192,19 +211,15 @@ export function TeachJamviCard<G extends TeachRegular>({
               </View>
             ) : (
               <View style={{ gap: 10 }}>
-                {/* Not income first: money moving between your own places, or borrowed, or paid back. */}
-                {mayBeOwnAccount(group) || onDebt ? section('NOT INCOME', [
-                  ...(mayBeOwnAccount(group) ? [chip('From my own account', () => setOwnOpen((open) => !open), 'teach-jamvi-own', 'credit-card')] : []),
-                  ...(onDebt ? [
-                    chip('A loan to me', () => void onDebt(group, 'borrowed'), 'teach-jamvi-debt-borrowed', 'arrow-down-left'),
-                    chip('Someone paying me back', () => void onDebt(group, 'repaid'), 'teach-jamvi-debt-repaid', 'corner-down-left'),
-                  ] : []),
-                ], 'teach-jamvi-not-income') : null}
+                {/* Not income first: money moving between your own places, or borrowed, or paid back.
+                    Pay that comes every month is asked the other way round: your income first. */}
+                {monthly ? null : notIncomeSection}
                 {answers.income.length > 0 ? section('YOUR INCOME', listOf(answers.income, moreOf.income, 'income',
                   (source) => chip(source.name, () => onSource(group, source.id), `teach-jamvi-source-${source.id}`)), 'teach-jamvi-income') : null}
                 {answers.sales.length > 0 ? section("A BUSINESS'S SALES", listOf(answers.sales, moreOf.sales, 'sales',
                   (business) => chip(business.name, () => onSource(group, business.id), `teach-jamvi-sales-${business.id}`, 'briefcase')),
                   'teach-jamvi-sales', 'A customer paying one of your businesses. Your pay from a business is under Your income.') : null}
+                {monthly ? notIncomeSection : null}
               </View>
             )}
 
@@ -297,6 +312,8 @@ const styles = StyleSheet.create({
   payeeMeta: { fontSize: 12, lineHeight: 17, fontFamily: 'Inter_400Regular' },
   question: { fontSize: 14, fontFamily: 'Inter_600SemiBold', marginTop: 4 },
   section: { gap: 6 },
+  seen: { borderRadius: 8, padding: 10, gap: 4 },
+  seenText: { fontSize: 13, lineHeight: 18, fontFamily: 'Inter_600SemiBold' },
   sectionTitle: { fontSize: 10, letterSpacing: 1, fontFamily: 'Inter_700Bold' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },

@@ -25,7 +25,8 @@ import { chooseTransfer, isBankPayee, NOT_SURE_CATEGORY, type Choice, type Previ
 import { knownPayeeOf } from "./known-payees";
 import { loanOf, productOf, savingsOf } from "./mpesa-products";
 import type { EntryToSort } from "./entries-to-sort";
-import { distinctiveWords, looksLikePerson, payeeKey, payeeName, referenceOf, ruleCategory, ruleSource, sourceRuleKey, type PayeeRules } from "./payee-learning";
+import { bandAnswers, bandBase, bandOwnAccount, distinctiveWords, looksLikePerson, payeeKey, payeeName, referenceOf, ruleCategoryFor, ruleSourceFor, sourceRuleKey, withBandRule, type Band, type PayeeRules } from "./payee-learning";
+import { describePattern, patternHint, patternsOf, recentOf, type Paid, type PatternKind } from "./paymentPatterns";
 
 export type TeachKind = "person" | "bank" | "business";
 
@@ -40,7 +41,16 @@ export type TeachRegular = {
   reference: string;
   count: number;
   total: number;
+  /** What its payments have in common, to jog the memory (lib/paymentPatterns). */
+  pattern?: PatternView;
 };
+
+/**
+ * One kind of a payee"s payments, as the card shows it. `band` is set when the
+ * payee"s payments were split into kinds and this one is kept by its amounts: the
+ * answer goes in a band rule, so the payee"s other kinds are still asked.
+ */
+export type PatternView = { kind: PatternKind; text: string; recent: string; hint: string | null; band: Band | null };
 
 /** One regular in a review: every line to or from the same payee, asked about once. */
 export type TeachGroup = TeachRegular & {
@@ -111,12 +121,14 @@ function unanswered(line: PreviewLine, choice: Choice | undefined, rules: PayeeR
   if (line.direction === "out") {
     // Checked already (a payee Jamvi knows), or chosen by the person.
     if (choice.confirmed || choice.auto === false) return false;
-    return !ruleCategory(line.description, rules, line.payeeNumber);
+    if (bandOwnAccount(line.description, "out", line.amount, rules) !== null) return false;
+    return !ruleCategoryFor(line.description, line.amount, rules, line.payeeNumber);
   }
   // Money in from people and banks starts checked as Not sure (no source):
   // that is exactly what to ask about.
   if (choice.incomeSourceId) return false;
-  return ruleSource(line.description, rules) === null;
+  if (bandOwnAccount(line.description, "in", line.amount, rules) !== null) return false;
+  return ruleSourceFor(line.description, line.amount, rules) === null;
 }
 
 /**
@@ -129,7 +141,9 @@ export const OWN_PREFIX = "own:";
 export const ownRuleKey = (groupKeyOf: string): string => `${OWN_PREFIX}${groupKeyOf}`;
 
 function ownAccountByRule(line: PreviewLine, accounts: readonly Account[], rules: PayeeRules): Account | null {
-  const id = Number(rules[ownRuleKey(groupKey(line))]);
+  // Some of a payee"s payments only, by their amounts, first (payeeLearning band rules).
+  const banded = line.description && line.direction ? bandOwnAccount(line.description, line.direction, line.amount, rules) : null;
+  const id = banded ?? Number(rules[ownRuleKey(groupKey(line))]);
   return Number.isInteger(id) ? accounts.find((account) => account.id === id) ?? null : null;
 }
 
@@ -177,10 +191,53 @@ export function teachableGroups(
       sample: line,
     });
   }
+  const byIndex = new Map(lines.map((line) => [line.index, line]));
   return [...groups.values()]
     .filter((group) => group.count >= minCount)
     .sort((a, b) => b.count - a.count || b.total - a.total)
-    .slice(0, limit);
+    .slice(0, limit)
+    .flatMap((group) => {
+      const own = group.indexes.map((index) => byIndex.get(index)!);
+      return byPattern(group, own.map((line) => ({ amount: line.amount ?? 0, date: line.date })), bandBase(group.sample.description ?? "", group.direction),
+        (positions) => ({ indexes: positions.map((at) => group.indexes[at]), sample: own[positions[0]] }));
+    })
+    .filter((group) => !skipped.has(group.key));
+}
+
+/**
+ * A regular split into the kinds of payment it makes (lib/paymentPatterns), each
+ * asked about on its own: "Equity Bulk Account" paying about KES 52,000 each
+ * month is not the same question as its other 56 payments. Kinds kept by their
+ * amounts come first, the rest last; one kind is left whole, with what it has in
+ * common said on the card.
+ */
+function byPattern<G extends TeachRegular>(group: G, paid: Paid[], base: string, subset: (positions: number[]) => Partial<G>): G[] {
+  const patterns = patternsOf(paid);
+  const view = (pattern: (typeof patterns)[number], band: Band | null): PatternView => ({
+    kind: pattern.kind,
+    text: describePattern(pattern, paid),
+    recent: recentOf(pattern, paid),
+    hint: patternHint(pattern, group.direction, group.kind === "bank"),
+    band,
+  });
+  if (patterns.length < 2 || !base) return [{ ...group, ...(patterns[0] ? { pattern: view(patterns[0], null) } : {}) }];
+  return patterns.map((pattern) => ({
+    ...group,
+    ...subset(pattern.positions),
+    key: `${group.key}~${pattern.kind === "varied" ? "rest" : `${pattern.lo}-${pattern.hi}`}`,
+    count: pattern.positions.length,
+    total: pattern.positions.reduce((sum, at) => sum + Math.abs(paid[at].amount), 0),
+    pattern: view(pattern, pattern.kind === "varied" ? null : { base, lo: pattern.lo, hi: pattern.hi }),
+  }));
+}
+
+/**
+ * Where an answer is kept: for one kind of a payee"s payments, a band rule on its
+ * amounts; otherwise the payee"s own rule, as `payeeWide` keeps it.
+ */
+export function keepAnswer(rules: PayeeRules, group: TeachRegular, value: string, payeeWide: (rules: PayeeRules) => PayeeRules): PayeeRules {
+  const band = group.pattern?.band;
+  return band ? withBandRule(rules, band, value) : payeeWide(rules);
 }
 
 /** Can this regular be one of the person"s own accounts? Only a bank account it named by number. */
@@ -194,7 +251,8 @@ export function teachCategory(choices: Record<number, Choice>, group: TeachGroup
   const next = { ...choices };
   for (const index of group.indexes) {
     if (!next[index]) continue;
-    next[index] = { ...next[index], category, auto: false, confirmed: true, remember: true };
+    // One kind of the payee"s payments is kept by a band rule, not as the payee"s own.
+    next[index] = { ...next[index], category, auto: false, confirmed: true, remember: !group.pattern?.band };
   }
   return next;
 }
@@ -204,7 +262,7 @@ export function teachSource(choices: Record<number, Choice>, group: TeachGroup, 
   const next = { ...choices };
   for (const index of group.indexes) {
     if (!next[index]) continue;
-    next[index] = { ...next[index], incomeSourceId, sourceAuto: false, confirmed: true, remember: true };
+    next[index] = { ...next[index], incomeSourceId, sourceAuto: false, confirmed: true, remember: !group.pattern?.band };
   }
   return next;
 }
@@ -253,8 +311,8 @@ export function alreadyKnown(
     else if (productOf(line)) add("Airtime & bundles");
     else if (line.type === "transaction_charge" || line.type === "fuliza_fee") add("M-Pesa charges");
     else if (choice.transferTo) add("Your own accounts");
-    else if (line.description && line.direction === "out" && ruleCategory(line.description, rules, line.payeeNumber)) add("Payees you taught it");
-    else if (line.description && line.direction === "in" && ruleSource(line.description, rules) !== null) add("Payees you taught it");
+    else if (line.description && line.direction === "out" && ruleCategoryFor(line.description, line.amount, rules, line.payeeNumber)) add("Payees you taught it");
+    else if (line.description && line.direction === "in" && ruleSourceFor(line.description, line.amount, rules) !== null) add("Payees you taught it");
     else if (choice.confirmed && line.description && knownPayeeOf(line.description)) add("Shops & bills it knows");
   }
   return {
@@ -292,7 +350,8 @@ export function savedGroups(
     // Money in that already has a source is only listed to check it: not asked here.
     if (!entry.description?.trim() || (entry.direction === "in" && entry.incomeSourceId != null)) continue;
     // Already taught: Sort them out offers the kept answer on its own.
-    if (entry.direction === "out" ? ruleCategory(entry.description, rules) : ruleSource(entry.description, rules) !== null) continue;
+    if (bandAnswers(entry.description, entry.direction, entry.amount, rules)) continue;
+    if (entry.direction === "out" ? ruleCategoryFor(entry.description, entry.amount, rules) : ruleSourceFor(entry.description, entry.amount, rules) !== null) continue;
     const key = savedKey(entry);
     if (skipped.has(key)) continue;
     const found = groups.get(key);
@@ -317,7 +376,10 @@ export function savedGroups(
   return [...groups.values()]
     .filter((group) => group.count >= minCount)
     .sort((a, b) => b.count - a.count || b.total - a.total)
-    .slice(0, limit);
+    .slice(0, limit)
+    .flatMap((group) => byPattern(group, group.entries.map((entry) => ({ amount: entry.amount, date: entry.date })), bandBase(group.entries[0].description, group.direction),
+      (positions) => ({ entries: positions.map((at) => group.entries[at]) })))
+    .filter((group) => !skipped.has(group.key));
 }
 
 /**

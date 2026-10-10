@@ -35,6 +35,7 @@ const PAIRS: Array<[string, string]> = [
   ['lib/teachJamvi.ts', '../family-budget/src/lib/teach-jamvi.ts'],
   ['lib/family.ts', '../family-budget/src/lib/family.ts'],
   ['lib/businessSalary.ts', '../family-budget/src/lib/business-salary.ts'],
+  ['lib/paymentPatterns.ts', '../family-budget/src/lib/paymentPatterns.ts'],
 ];
 
 describe('the phone and the web share one copy of the logic', () => {
