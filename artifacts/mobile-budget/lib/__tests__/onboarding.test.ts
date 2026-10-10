@@ -110,6 +110,8 @@ describe('mobile onboarding', () => {
       customSubcategories: {},
       runsBusiness: null,
       businessName: '',
+      moreBusinessNames: [],
+      businessPay: [],
     });
     await expect(readOnboardingDraft({ userId: 'person/b', storage })).resolves.toBeNull();
   });
