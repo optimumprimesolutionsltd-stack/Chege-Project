@@ -34,6 +34,7 @@ import businessAccountsRouter from "./business-accounts";
 import standardCategoriesRouter from "./standard-categories";
 import businessesRouter from "./businesses";
 import payeeRulesRouter from "./payee-rules";
+import transactionSplitsRouter from "./transaction-splits";
 import budgetKnowledgeRouter from "./budget-knowledge";
 import deleteYearRouter from "./delete-year";
 import {
@@ -95,6 +96,7 @@ router.use(businessAccountsRouter);
 router.use(standardCategoriesRouter);
 router.use(businessesRouter);
 router.use(payeeRulesRouter);
+router.use(transactionSplitsRouter);
 router.use(budgetKnowledgeRouter);
 router.use(deleteYearRouter);
 router.use(incomeSourcesRouter);

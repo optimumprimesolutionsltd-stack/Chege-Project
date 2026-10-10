@@ -2,6 +2,7 @@ import { ensureMpesaNames } from "./lib/mpesa-names";
 import { ensureEntriesToSort } from "./lib/entries-to-sort";
 import { fixBorrowedNotIncome } from "./lib/borrowed-not-income";
 import { ensureOwnerBusiness } from "./lib/owner-business-money";
+import { ensureTransactionSplits } from "./lib/transaction-splits";
 import { ensureBusinessAccounts } from "./lib/business-accounts";
 import { ensureBusinessStreams } from "./lib/business-streams";
 import { ensurePayeeRules } from "./lib/payee-rules";
@@ -91,6 +92,7 @@ async function startServer() {
   void ensurePossibleDuplicates();
   void ensureImportSaveJobs();
   void ensureOwnerBusiness();
+  void ensureTransactionSplits();
   void ensureBusinessAccounts();
   void ensureBusinessStreams();
   void ensurePayeeRules();

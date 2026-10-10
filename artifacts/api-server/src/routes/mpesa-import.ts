@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import { splitRoots } from "../lib/transaction-splits";
 import { and, desc, eq, gte, inArray, isNotNull, isNull, lte, ne, sql } from "drizzle-orm";
 import { bankAccountsTable, db, jointAccountTxTable } from "@workspace/db";
 import { getActiveGroupId, requireGroupManager } from "../lib/activeGroup";
@@ -440,6 +441,8 @@ router.post("/mpesa/difference", async (req, res): Promise<void> => {
   // A charge carries no code of its own, and a Fuliza fee carries its
   // payment's with "FEE" on the end: both belong to that payment's message.
   const receiptOfId = new Map(rows.map((row) => [row.id, row.receipt]));
+  // A part of a split payment belongs to its payment's message too (lib/transaction-splits).
+  const rootOf = await splitRoots(groupId);
   const ledger = rows.map((row) => ({
     id: row.id,
     date: String(row.date).slice(0, 10),
@@ -448,6 +451,7 @@ router.post("/mpesa/difference", async (req, res): Promise<void> => {
     description: row.description,
     covers: row.chargeFor !== null
       ? receiptOfId.get(row.chargeFor) ?? null
+      : rootOf.has(row.id) ? receiptOfId.get(rootOf.get(row.id)!) ?? null
       : row.receipt?.endsWith("FEE") ? row.receipt.slice(0, -3) : null,
   }));
 
