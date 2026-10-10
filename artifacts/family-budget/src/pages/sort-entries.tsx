@@ -81,11 +81,6 @@ export default function SortEntries() {
       });
       if (!response.ok) throw new Error("Could not change it.");
     });
-  const leave = (entry: EntryToSort) =>
-    run(entry, async () => {
-      const response = await fetch(`/api/entries-to-sort/${entry.id}`, { method: "DELETE", credentials: "include" });
-      if (!response.ok) throw new Error("Could not change it.");
-    });
 
   return (
     <div className="space-y-5 pb-12" data-testid="sort-entries-page">
@@ -148,9 +143,6 @@ export default function SortEntries() {
                     ? categories.map((name) => <option key={name} value={name}>{name}</option>)
                     : incomeSources.filter((source) => source.id !== entry.incomeSourceId).map((source) => <option key={source.id} value={source.id}>{source.name}</option>)}
                 </select>
-                {entry.direction === "in" && !isToCheck(entry) ? (
-                  <Button variant="ghost" disabled={busy !== null} onClick={() => void leave(entry)} data-testid={`sort-entry-${entry.id}-leave`}>Leave it with no source</Button>
-                ) : null}
               </div>
             </CardContent>
           </Card>

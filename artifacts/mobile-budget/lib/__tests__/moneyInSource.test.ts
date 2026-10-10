@@ -77,9 +77,8 @@ describe('Sort them out can be undone', () => {
     expect(screen).toContain("...(one.direction === 'out' ? { expenseCategory: NOT_SURE_CATEGORY } : { incomeSourceId: one.incomeSourceId ?? null, ...(one.madeById !== undefined ? { madeById: one.madeById } : {}) })");
     expect(screen).toContain('undo: async () => { for (const one of changed) await putBack(one); },');
   });
-  it('undoes "Leave it with no source" by putting it back on the list', () => {
-    const leave = screen.slice(screen.indexOf('const leave = async'));
-    expect(leave).toContain("await customFetch('/api/entries-to-sort', {");
-    expect(leave).toContain('body: JSON.stringify({ transactionIds: [entry.id] }),');
+  it('has no "Leave it with no source": an entry nobody can place stays Not sure', () => {
+    expect(screen).not.toContain('const leave = async');
+    expect(screen).not.toContain('Leave it with no source');
   });
 });

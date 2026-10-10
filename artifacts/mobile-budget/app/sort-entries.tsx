@@ -23,6 +23,8 @@ import { isNotSure, isToCheck, NOT_SURE_CATEGORY, sameParty, type EntryToSort } 
 import { AddIncomeSourceChip } from '@/components/AddIncomeSourceChip';
 import { SortAsDebt } from '@/components/SortAsDebt';
 import { PassThroughPair } from '@/components/PassThroughPair';
+import type { PassThroughMode } from '@/lib/passThrough';
+import { useBusinesses } from '@/hooks/useBusinesses';
 import { useAutoMarkBusiness, useOwnerBusiness } from '@/hooks/useOwnerBusiness';
 import { isHistoryQuery } from '@/lib/refreshAfterSave';
 import { LISTS_AN_EDIT_CHANGES, withoutSorted } from '@/lib/showSavedEdit';
@@ -305,28 +307,6 @@ export default function SortEntriesScreen() {
   };
   // Money in with no source is gathered onto this list by the server whenever it
   // is read - every year, minus what was left with no source (7 Oct 2026).
-  const leave = async (entry: EntryToSort) => {
-    setBusy(entry.id);
-    try {
-      if (notes[entry.id] !== undefined) await updateTransaction({ id: entry.id, data: { amount: entry.amount, date: entry.date, ...noteChange(entry.id) } as never });
-      await customFetch(`/api/entries-to-sort/${entry.id}`, { method: 'DELETE' });
-      setLastChange({
-        text: `${entry.description} left with no source`,
-        undo: async () => {
-          await customFetch('/api/entries-to-sort', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ transactionIds: [entry.id] }),
-          });
-        },
-      });
-      await done([entry.id]);
-    } catch (error) {
-      Alert.alert('Could not change it', plainSaveError(error));
-    } finally {
-      setBusy(null);
-    }
-  };
 
   // Money in saved earlier with a source Jamvi may have guessed, listed to check:
   // "Keep" leaves it as it is and takes it off the list ("ensure to sort what is
@@ -374,8 +354,91 @@ export default function SortEntriesScreen() {
   const [debtFor, setDebtFor] = useState<EntryToSort | null>(null);
   // "Passed through my M-Pesa": this entry and its other half, together (components/PassThroughPair).
   const [pairFor, setPairFor] = useState<EntryToSort | null>(null);
+  const [pairMode, setPairMode] = useState<PassThroughMode>('held');
 
   const chip = { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.muted } as const;
+
+  // Money in, grouped by what it is ("can source of income [be] in two or
+  // more categories ... salary, business income and passed through - inside
+  // passed through you can list the businesses", 10 Oct 2026). A business
+  // falls in its group by how it pays the person (My businesses): one they
+  // live on or that pays them a salary is their business's sales; one whose
+  // money is not theirs is money passing through. The old "leave it without a
+  // source" button is gone: it counted the money as income while sounding like skipping it.
+  const businesses = useBusinesses();
+  const businessOf = useMemo(() => new Map(businesses.list.map((one) => [one.id, one])), [businesses.list]);
+  const markOwnerBusiness = (entry: EntryToSort) => Alert.alert(
+    'Money between you and your business?',
+    `Not income or spending. Jamvi will also mark other entries naming ${entry.description} the same way.`,
+    [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'It is my business',
+        onPress: () => {
+          setBusy(entry.id);
+          void ownerBusiness.markFromEntry(entry)
+            .then((name) => {
+              setLastChange({ text: `${name}: your business`, undo: () => ownerBusiness.unmark(entry.id) });
+              return done([entry.id]);
+            })
+            .catch((error) => Alert.alert('Could not mark it', plainSaveError(error)))
+            .finally(() => setBusy(null));
+        },
+      },
+    ],
+  );
+  const moneyInGroups = (entry: EntryToSort) => {
+    const sourceChip = (source: { id: number; name: string; userId?: string | null }) => (
+      isToCheck(entry) && source.id === entry.incomeSourceId ? (
+        <Pressable key={source.id} disabled={busy !== null} onPress={() => keep(entry)} accessibilityRole="button" accessibilityLabel={`Keep ${source.name}`} testID={`sort-entry-${entry.id}-keep`}
+          style={{ ...chip, flexDirection: 'row', alignItems: 'center', gap: 4, borderColor: colors.success, backgroundColor: `${colors.success}22` }}>
+          <Feather name="check" size={13} color={colors.success} />
+          <Text style={{ color: colors.success, fontFamily: 'Inter_700Bold', fontSize: 13 }}>Keep {source.name}</Text>
+        </Pressable>
+      ) : (
+        <Pressable key={source.id} disabled={busy !== null} onPress={() => sort(entry, sourceChange(source), source.name)} accessibilityRole="button" testID={`sort-entry-${entry.id}-source-${source.id}`} style={chip}>
+          <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>{source.name}</Text>
+        </Pressable>
+      )
+    );
+    const action = (label: string, icon: keyof typeof Feather.glyphMap, onPress: () => void, testID: string) => (
+      <Pressable key={testID} disabled={busy !== null} onPress={onPress} accessibilityRole="button" testID={testID}
+        style={{ ...chip, flexDirection: 'row', alignItems: 'center', gap: 4, borderColor: colors.primary, backgroundColor: `${colors.primary}14` }}>
+        <Feather name={icon} size={13} color={colors.primary} />
+        <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>{label}</Text>
+      </Pressable>
+    );
+    const group = (title: string, testID: string, chips: React.ReactNode[]) => (
+      <View key={testID} style={{ gap: 6 }} testID={`sort-entry-${entry.id}-${testID}`}>
+        <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_700Bold', fontSize: 11, letterSpacing: 0.8 }}>{title}</Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{chips}</View>
+      </View>
+    );
+    const pay = incomeSources.filter((source) => !businessOf.has(source.id));
+    const sales = incomeSources.filter((source) => businessOf.get(source.id)?.countsProfit === true);
+    const notMine = incomeSources.filter((source) => businessOf.get(source.id)?.countsProfit === false);
+    const passThrough = (mode: PassThroughMode) => { setPairMode(mode); setPairFor(entry); };
+    return (
+      <View style={{ gap: 12 }}>
+        {group('PAY / INCOME', 'group-pay', [
+          ...pay.map(sourceChip),
+          <AddIncomeSourceChip key="add" testID={`sort-entry-${entry.id}-add-source`} onCreated={(created) => sort(entry, sourceChange(created), created.name)} />,
+        ])}
+        {group('MY BUSINESS (SALES)', 'group-business', [
+          ...sales.map(sourceChip),
+          action("From my business's own account (not a sale)", 'briefcase', () => markOwnerBusiness(entry), `sort-entry-${entry.id}-my-business`),
+        ])}
+        {group('PASSED THROUGH (NOT MINE)', 'group-pass-through', [
+          ...notMine.map(sourceChip),
+          action('I was holding it for someone', 'repeat', () => passThrough('held'), `sort-entry-${entry.id}-pass-through`),
+          action('Someone who owed me paid someone I owe', 'repeat', () => passThrough('settle'), `sort-entry-${entry.id}-pass-through-settle`),
+        ])}
+        {group('BORROWED / PAID BACK', 'group-debt', [
+          action('Borrowed / paid back', 'users', () => setDebtFor(entry), `sort-entry-${entry.id}-debt`),
+        ])}
+      </View>
+    );
+  };
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background, paddingTop: insets.top }]}>
@@ -518,6 +581,7 @@ export default function SortEntriesScreen() {
                     <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>Family</Text>
                   </Pressable>
                 ) : null}
+                {entry.direction === 'out' ? (<>
                 <Pressable disabled={busy !== null} onPress={() => setDebtFor(entry)} accessibilityRole="button" testID={`sort-entry-${entry.id}-debt`}
                   style={{ ...chip, flexDirection: 'row', alignItems: 'center', gap: 4, borderColor: colors.primary, backgroundColor: `${colors.primary}14` }}>
                   <Feather name="users" size={13} color={colors.primary} />
@@ -553,6 +617,7 @@ export default function SortEntriesScreen() {
                   <Feather name="briefcase" size={13} color={colors.primary} />
                   <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>My business</Text>
                 </Pressable>
+                </>) : null}
                 {entry.direction === 'out' ? (
                   <Pressable disabled={busy !== null} onPress={() => setNewCategoryFor(entry)} accessibilityRole="button" testID={`sort-entry-${entry.id}-new-category-sheet`}
                     style={{ ...chip, flexDirection: 'row', alignItems: 'center', gap: 4, borderColor: colors.primary, backgroundColor: `${colors.primary}14` }}>
@@ -594,26 +659,9 @@ export default function SortEntriesScreen() {
                         <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>{name}</Text>
                       </Pressable>
                     ))
-                  : [
-                      ...(isToCheck(entry) ? [
-                        <Pressable key="keep" disabled={busy !== null} onPress={() => keep(entry)} accessibilityRole="button" accessibilityLabel={`Keep ${sourceName(entry.incomeSourceId)}`} testID={`sort-entry-${entry.id}-keep`}
-                          style={{ ...chip, flexDirection: 'row', alignItems: 'center', gap: 4, borderColor: colors.success, backgroundColor: `${colors.success}22` }}>
-                          <Feather name="check" size={13} color={colors.success} />
-                          <Text style={{ color: colors.success, fontFamily: 'Inter_700Bold', fontSize: 13 }}>Keep {sourceName(entry.incomeSourceId)}</Text>
-                        </Pressable>,
-                      ] : []),
-                      ...incomeSources.filter((source) => source.id !== entry.incomeSourceId).map((source) => (
-                        <Pressable key={source.id} disabled={busy !== null} onPress={() => sort(entry, sourceChange(source), source.name)} accessibilityRole="button" testID={`sort-entry-${entry.id}-source-${source.id}`} style={chip}>
-                          <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>{source.name}</Text>
-                        </Pressable>
-                      )),
-                      <AddIncomeSourceChip
-                        key="add"
-                        testID={`sort-entry-${entry.id}-add-source`}
-                        onCreated={(created) => sort(entry, sourceChange(created), created.name)}
-                      />,
-                    ]}
+                  : null}
               </ScrollView>
+              {entry.direction === 'in' ? moneyInGroups(entry) : null}
               {entry.direction === 'out' && !suggestions.has(entry.id) ? (
                 <NewCategoryOffer
                   description={entry.description}
@@ -624,11 +672,6 @@ export default function SortEntriesScreen() {
                     sort(entry, { expenseCategory: name }, name);
                   }}
                 />
-              ) : null}
-              {entry.direction === 'in' && !isToCheck(entry) ? (
-                <Pressable disabled={busy !== null} onPress={() => void leave(entry)} accessibilityRole="button" testID={`sort-entry-${entry.id}-leave`} style={{ alignSelf: 'flex-start', paddingVertical: 4 }}>
-                  <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>Leave it with no source</Text>
-                </Pressable>
               ) : null}
             </View>
           )}
@@ -650,6 +693,7 @@ export default function SortEntriesScreen() {
       {pairFor ? (
         <PassThroughPair
           entry={pairFor}
+          mode={pairMode}
           onClose={() => setPairFor(null)}
           onDone={(change) => {
             setPairFor(null);

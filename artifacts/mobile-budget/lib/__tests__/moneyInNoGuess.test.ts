@@ -66,6 +66,7 @@ describe('money in listed to check its source', () => {
     const web = readFileSync('../family-budget/src/pages/sort-entries.tsx', 'utf8');
     expect(phone).toContain('testID={`sort-entry-${entry.id}-keep`}');
     expect(web).toContain('data-testid={`sort-entry-${entry.id}-keep`}');
-    for (const screen of [phone, web]) expect(screen).toContain("&& !isToCheck(entry) ? (");
+    // Gone from both: it counted the money as income while sounding like skipping it (10 Oct 2026).
+    for (const screen of [phone, web]) expect(screen).not.toContain('Leave it with no source');
   });
 });

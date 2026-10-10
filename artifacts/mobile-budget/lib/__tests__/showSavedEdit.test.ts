@@ -40,7 +40,7 @@ describe('an edit shows at once', () => {
     expect(withoutSorted(undefined, [1])).toBeUndefined();
     const sort = readFileSync('app/sort-entries.tsx', 'utf8');
     expect(sort).toContain('await done(changed.map((one) => one.id));');
-    expect(sort).toContain('await done([entry.id]);');
+    expect(sort).toContain('return done([entry.id]);');
     // Marked out of date, not fetched again per entry sorted (9 Oct 2026).
     expect(sort).toContain("void queryClient.invalidateQueries({ queryKey: getGetJointAccountQueryKey(), refetchType: 'none' });");
     expect(sort).toContain("refetchType: isHistoryQuery(queryKey) ? 'none' : 'active'");
