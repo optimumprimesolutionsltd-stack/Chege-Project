@@ -126,6 +126,8 @@ import { useBusinessAccounts } from '@/hooks/useBusinessAccounts';
 import { saveRules } from '@/lib/rulesStore';
 import { TeachJamviCard, type OwnAccountAnswer } from '@/components/TeachJamviCard';
 import { BusinessSalaryQuestion } from '@/components/BusinessSalaryQuestion';
+import { FamilyNamesCard } from '@/components/FamilyNamesCard';
+import { FAMILY_CATEGORY, familyCategories, familyNames, fileFamilyLines, relativesBySurname, withFamily, withoutFamily } from '@/lib/family';
 import { alreadyKnown, suggestedCategories, teachableGroups, teachCategory, teachOwnAccount, teachSource, withOwnAccounts, type TeachGroup } from '@/lib/teachJamvi';
 import { useNamedPayees } from '@/hooks/useNamedPayees';
 import { namedKeyFor, ruleKeysFor, withNamed } from '@/lib/namedPayees';
@@ -1722,7 +1724,30 @@ export default function MpesaImportScreen() {
   const { mutateAsync: createAccount } = useCreateJointAccount();
   const { mutateAsync: updateAccount } = useUpdateJointAccount();
   const businessAccounts = useBusinessAccounts();
+  // Your family, once (lib/family): their payments are family support, never a shop.
+  const familyLeaves = useMemo(() => familyCategories(categories as unknown as Array<{ id: number; name: string; parentId?: number | null }>), [categories]);
+  const leafNames = useMemo(() => {
+    const parents = new Set(categories.map((row) => row.parentId).filter((id): id is number => id != null));
+    return categories.filter((row) => !parents.has(row.id)).map((row) => row.name);
+  }, [categories]);
+  const keptFamily = useMemo(() => familyNames(rules, familyLeaves.length > 0 ? familyLeaves : [FAMILY_CATEGORY]), [rules, familyLeaves]);
+  const familySuggestions = useMemo(
+    () => relativesBySurname((lines ?? []).filter((line) => line.direction === 'out').map((line) => line.description ?? ''), user?.lastName, keptFamily.map((one) => one.key)),
+    [lines, user?.lastName, keptFamily],
+  );
+  // A family category the budget lacks is made first, as onboarding names it.
+  const ensureCategory = async (name: string) => {
+    if (categories.some((row) => row.name === name)) return;
+    await createNotSureCategory({ data: { name, budgetAmount: 0, priority: 3, isRecurring: true, activeMonth: null, activeYear: null } });
+    await queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
+  };
+  const addFamily = async (name: string, category: string) => {
+    await ensureCategory(category);
+    keepRules(withFamily(rules, name, category));
+    setChoices((current) => fileFamilyLines(lines ?? [], current, name, category));
+  };
   const teachAsCategory = (taught: TeachGroup, category: string) => {
+    if (category === FAMILY_CATEGORY) void ensureCategory(category);
     setChoices((current) => teachCategory(current, taught, category));
     // A bank account paid through a paybill is remembered by its account number,
     // never by the bank's paybill, which every customer of that bank shares.
@@ -3117,12 +3142,21 @@ export default function MpesaImportScreen() {
             ) : null}
             {/* Each business asked once: a salary from it, or its profit is your income (lib/businessSalary). */}
             {lines && canManageBudget ? <BusinessSalaryQuestion /> : null}
+            {lines && canManageBudget && !teachClosed ? (
+              <FamilyNamesCard
+                kept={keptFamily}
+                categories={familyLeaves}
+                suggestions={familySuggestions}
+                onAdd={addFamily}
+                onRemove={(key) => keepRules(withoutFamily(rules, key))}
+              />
+            ) : null}
             {known && !teachClosed && (teachGroups.length > 0 || teachAnswered > 0) ? (
               <TeachJamviCard
                 groups={teachGroups}
                 known={known}
                 answered={teachAnswered}
-                suggestions={(taught) => suggestedCategories(taught, categoryNames, choices[taught.indexes[0]]?.category)}
+                suggestions={(taught) => suggestedCategories(taught, [...(familyLeaves.length > 0 ? familyLeaves : [FAMILY_CATEGORY]), ...leafNames], choices[taught.indexes[0]]?.category)}
                 incomeSources={incomeSources}
                 accounts={ownAccounts}
                 businesses={whoForBusinesses}

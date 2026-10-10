@@ -202,7 +202,7 @@ export function teachOwnAccount(choices: Record<number, Choice>, group: TeachGro
 }
 
 /** Categories that suit a regular of this kind, from the budget's own: offered first. */
-const PERSON_WORDS = /\b(family|support|parents?|mum|mom|dad|children|kids|rent|house ?help|wages|salary|gifts?|school|fees|allowance|pocket)\b/i;
+const PERSON_WORDS = /\b(family|support|parents?|siblings?|relatives?|spouse|wife|husband|mum|mom|dad|children|kids|rent|house ?help|wages|salary|gifts?|school|fees|allowance|pocket)\b/i;
 
 export function suggestedCategories(group: Pick<TeachRegular, 'kind'>, categoryNames: readonly string[], current: string | undefined, max = 4): string[] {
   const picks: string[] = [];

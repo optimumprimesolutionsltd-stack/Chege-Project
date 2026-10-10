@@ -16,6 +16,8 @@ import {
   useGetJointAccounts,
   useUpdateJointAccount,
   useUpdateJointAccountTransaction,
+  useCreateBudgetCategory,
+  getGetBudgetCategoriesQueryKey,
 } from '@workspace/api-client-react';
 
 import { useColors } from '@/hooks/useColors';
@@ -25,6 +27,10 @@ import { PageScrollView } from '@/components/PageScrollReset';
 import { CategorySearchBox } from '@/components/CategorySearchBox';
 import { TeachJamviCard, type OwnAccountAnswer } from '@/components/TeachJamviCard';
 import { BusinessSalaryQuestion } from '@/components/BusinessSalaryQuestion';
+import { FamilyNamesCard } from '@/components/FamilyNamesCard';
+import { FAMILY_CATEGORY, familyCategories, familyNames, relativesBySurname, withFamily, withoutFamily } from '@/lib/family';
+import { useAuth } from '@/lib/auth';
+import { payeeKey } from '@/lib/payeeLearning';
 import { isNotSure, type EntryToSort } from '@/lib/entriesToSort';
 import { parseStoredRules, rulesStorageKey, withRule, withSourceRule, type PayeeRules } from '@/lib/payeeLearning';
 import { savedGroups, suggestedCategories, teachDoneKey, type SavedGroup } from '@/lib/teachJamvi';
@@ -119,6 +125,7 @@ export default function TeachJamviScreen() {
   };
 
   const onCategory = (taught: SavedGroup, category: string) => {
+    if (category === FAMILY_CATEGORY) void ensureCategory(category);
     // A bank account is remembered by its account number, never the bank's shared paybill.
     keepRules(taught.key.startsWith('#ref:') ? { ...rules, [taught.key]: category } : withRule(rules, taught.entries[0].description, category));
     void saveAll(taught, { expenseCategory: category });
@@ -156,6 +163,37 @@ export default function TeachJamviScreen() {
       `${targetName} linked`,
       `From now on, money to and from account ${taught.reference} counts as moving your own money. The ${taught.count} entries already saved stay under Not sure yet: sort them on Bank if they were moves too.`,
     );
+  };
+
+  // Your family, once (lib/family): their payments are family support, never a shop.
+  const { user } = useAuth();
+  const { mutateAsync: createCategory } = useCreateBudgetCategory();
+  const familyLeaves = useMemo(() => familyCategories(categoryList as unknown as Array<{ id: number; name: string; parentId?: number | null }>), [categoryList]);
+  const familyChoices = familyLeaves.length > 0 ? familyLeaves : [FAMILY_CATEGORY];
+  const keptFamily = useMemo(() => familyNames(rules, familyChoices), [rules, familyChoices]);
+  const familySuggestions = useMemo(
+    () => relativesBySurname(entries.filter((entry) => entry.direction === 'out').map((entry) => entry.description), user?.lastName, keptFamily.map((one) => one.key)),
+    [entries, user?.lastName, keptFamily],
+  );
+  const ensureCategory = async (name: string) => {
+    if (categoryList.some((row) => row.name === name)) return;
+    await createCategory({ data: { name, budgetAmount: 0, priority: 3, isRecurring: true, activeMonth: null, activeYear: null } });
+    await queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
+  };
+  // Kept for every message after, and their saved Not sure entries filed now.
+  const addFamily = async (name: string, category: string) => {
+    await ensureCategory(category);
+    keepRules(withFamily(rules, name, category));
+    const key = payeeKey(name);
+    const theirs = entries.filter((entry) => entry.direction === 'out' && payeeKey(entry.description) === key);
+    if (theirs.length > 0) {
+      const done: number[] = [];
+      for (const one of theirs) {
+        await updateTransaction({ id: one.id, data: { amount: one.amount, date: one.date, expenseCategory: category } as never });
+        done.push(one.id);
+      }
+      await sorted(done);
+    }
   };
 
   const [picking, setPicking] = useState<SavedGroup | null>(null);
@@ -202,11 +240,12 @@ export default function TeachJamviScreen() {
         <View style={{ opacity: working ? 0.6 : 1 }} pointerEvents={working ? 'none' : 'auto'}>
           {/* Each business asked once too, before the regulars (lib/businessSalary). */}
           <BusinessSalaryQuestion />
+          <FamilyNamesCard kept={keptFamily} categories={familyLeaves} suggestions={familySuggestions} onAdd={addFamily} onRemove={(key) => keepRules(withoutFamily(rules, key))} />
           <TeachJamviCard
             groups={groups}
             intro={groups.length > 0 ? `${waiting} saved ${waiting === 1 ? 'entry is' : 'entries are'} Not sure yet. ${behind} of them are your ${groups.length === 1 ? 'one regular' : `${groups.length} regulars`} below.` : undefined}
             answered={answered}
-            suggestions={(taught) => suggestedCategories(taught, categoryNames, undefined)}
+            suggestions={(taught) => suggestedCategories(taught, [...familyChoices, ...categoryNames], undefined)}
             incomeSources={incomeSources as Array<{ id: number; name: string }>}
             accounts={accounts}
             businesses={businesses.list}
