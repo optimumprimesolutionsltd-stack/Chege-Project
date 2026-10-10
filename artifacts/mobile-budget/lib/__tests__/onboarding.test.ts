@@ -203,6 +203,7 @@ describe('budgetDurationLabels', () => {
 describe('onboarding subcategories', () => {
   it('opens every category onboarding offers into subcategories, so none needs an amount of its own', () => {
     expect(onboardingSubcategoriesFor('Food')).toEqual(['Groceries', 'Market shopping', 'Eating out']);
+    expect(onboardingSubcategoriesFor('Education')).toContain('Clubs');
     const offered = dedupeCategoryNames([
       ...ALL_ONBOARDING_CATEGORIES,
       ...['student', 'working', 'business', 'couple', 'friends', 'family', 'chama', 'church', 'club', 'student_group'].flatMap((persona) => recommendedCategoriesForPurpose(persona)),
