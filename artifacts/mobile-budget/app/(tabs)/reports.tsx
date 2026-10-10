@@ -28,6 +28,8 @@ import { useColors } from '@/hooks/useColors';
 import { onScreenOnly, useOnScreen } from '@/hooks/useOnScreen';
 import { monthLedgerHref } from '@/lib/monthLink';
 import { reportInsights } from '@/lib/reportInsights';
+import { HomeSpendingCard } from '@/components/HomeSpendingCard';
+import type { BreakdownRow } from '@/lib/homeSpending';
 import { InsightsCard } from '@/components/InsightsCard';
 import { PageScrollView } from '@/components/PageScrollReset';
 import { useQueryClient } from '@tanstack/react-query';
@@ -970,6 +972,13 @@ export default function ReportsScreen() {
                   monthEndLabel: `${new Date(Date.UTC(year, month, 0)).getUTCDate()} ${MONTHS_SHORT[month - 1]}`,
                 })}
               />
+            </View>
+          ) : null}
+
+          {/* ── At home vs outside: Household upkeep against the rest (Reports only) ── */}
+          {!loadingCat && !categoryError ? (
+            <View style={styles.section}>
+              <HomeSpendingCard breakdown={catBreakdown as unknown as BreakdownRow[]} categories={categories as unknown as Array<{ id: number; name: string }>} onScreen={onScreen} />
             </View>
           ) : null}
 
