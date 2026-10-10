@@ -50,9 +50,13 @@ describe('Sort them out, for a year already saved', () => {
   });
 
   const screen = read('app/sort-entries.tsx');
-  it('asks before doing all of them, and offers just this one', () => {
-    expect(screen).toContain("{ text: 'Just this one', onPress: () => void sortEach([entry], change, label) },");
-    expect(screen).toContain('onPress: () => void sortEach([entry, ...others], change, label) },');
+  // "I want to be able to save one entry at a time immediately" (10 Oct 2026).
+  it("saves just the one tapped at once, and offers the payer's others after, never unasked", () => {
+    expect(screen).toContain('void sortEach([entry], change, label, sameParty(entries, entry));');
+    expect(screen).toContain('label: `Same for ${others.length} more`,');
+    expect(screen).toContain('testID="sort-entries-same-for-more"');
+    expect(screen).not.toContain("{ text: 'Just this one'");
+    expect(screen).toContain('Tap what each one was - it saves at once.');
   });
   it('gathers money in with no source by itself, every year - in a Shared group only what was imported', () => {
     // "Want to fix old entries too - ship all to sort them out" (7 Oct 2026): no Find button,

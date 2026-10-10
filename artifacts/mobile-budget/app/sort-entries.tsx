@@ -119,7 +119,9 @@ export default function SortEntriesScreen() {
   };
   // The last change, kept so it can be undone: "there is no undo button in
   // Sort them out" (4 Oct 2026) - and "All 12" is a lot to take back by hand.
-  const [lastChange, setLastChange] = useState<{ text: string; undo: () => Promise<void> } | null>(null);
+  // After a save: what was done, its Undo, and - for a payer with other entries
+  // here - the same for those too, offered after rather than asked before.
+  const [lastChange, setLastChange] = useState<{ text: string; undo: () => Promise<void>; more?: { label: string; run: () => void } } | null>(null);
   const [undoing, setUndoing] = useState(false);
   const undoLast = async () => {
     if (!lastChange || undoing) return;
@@ -149,7 +151,7 @@ export default function SortEntriesScreen() {
   const rowState = useMemo(() => ({ notes, noteOpen }), [notes, noteOpen]);
   const noteChange = (id: number) => (notes[id] === undefined ? {} : { notes: notes[id].trim() || null });
   const correctSource = useSourceCorrection();
-  const sortEach = async (list: readonly EntryToSort[], change: { expenseCategory: string } | { incomeSourceId: number; madeById?: string }, label: string) => {
+  const sortEach = async (list: readonly EntryToSort[], change: { expenseCategory: string } | { incomeSourceId: number; madeById?: string }, label: string, others: readonly EntryToSort[] = []) => {
     setBusy(list[0]?.id ?? null);
     const changed: EntryToSort[] = [];
     try {
@@ -164,6 +166,10 @@ export default function SortEntriesScreen() {
         setLastChange({
           text: `${changed.length === 1 ? changed[0].description : `${changed.length} entries`} put under ${label}`,
           undo: async () => { for (const one of changed) await putBack(one); },
+          ...(others.length > 0 ? { more: {
+            label: `Same for ${others.length} more`,
+            run: () => { setLastChange(null); void sortEach(others, change, label); },
+          } } : {}),
         });
       }
       await done(changed.map((one) => one.id));
@@ -176,21 +182,11 @@ export default function SortEntriesScreen() {
   // may be the group's or another member's, and the server only takes a stream
   // that belongs to the depositor ("should also apply to shared budget too", 8 Oct 2026).
   const sourceChange = (source: { id: number; userId?: string | null }) => ({ incomeSourceId: source.id, ...(source.userId ? { madeById: source.userId } : {}) });
-  // The same payer, many times over: offered all at once, never done without asking.
+  // One tap saves that one entry, at once ("i want to be able to save one entry
+  // at a time immediately", 10 Oct 2026). The payer's other entries here are
+  // offered on the bar afterwards - never asked about first, never done unasked.
   const sort = (entry: EntryToSort, change: { expenseCategory: string } | { incomeSourceId: number; madeById?: string }, label: string) => {
-    const others = sameParty(entries, entry);
-    if (others.length === 0) {
-      void sortEach([entry], change, label);
-      return;
-    }
-    Alert.alert(
-      `${others.length + 1} entries from ${entry.description}`,
-      `Put all ${others.length + 1} under ${label}, or just this one?`,
-      [
-        { text: 'Just this one', onPress: () => void sortEach([entry], change, label) },
-        { text: `All ${others.length + 1}`, onPress: () => void sortEach([entry, ...others], change, label) },
-      ],
-    );
+    void sortEach([entry], change, label, sameParty(entries, entry));
   };
 
   // "Judy is family" (10 Oct 2026): one tap files the entry under the family
@@ -317,7 +313,7 @@ export default function SortEntriesScreen() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ transactionIds: ids, ...(again ? { again: true } : {}) }),
   });
-  const keepEach = async (list: readonly EntryToSort[]) => {
+  const keepEach = async (list: readonly EntryToSort[], others: readonly EntryToSort[] = []) => {
     setBusy(list[0]?.id ?? null);
     try {
       for (const one of list) if (notes[one.id] !== undefined) await updateTransaction({ id: one.id, data: { amount: one.amount, date: one.date, ...noteChange(one.id) } as never });
@@ -326,6 +322,10 @@ export default function SortEntriesScreen() {
       setLastChange({
         text: `${list.length === 1 ? list[0].description : `${list.length} entries`} kept under ${sourceName(list[0].incomeSourceId)}`,
         undo: async () => { await markChecked(ids, true); },
+        ...(others.length > 0 ? { more: {
+          label: `Same for ${others.length} more`,
+          run: () => { setLastChange(null); void keepEach(others); },
+        } } : {}),
       });
     } catch (error) {
       Alert.alert('Could not change it', plainSaveError(error));
@@ -335,19 +335,8 @@ export default function SortEntriesScreen() {
     }
   };
   const keep = (entry: EntryToSort) => {
-    const others = sameParty(entries, entry).filter((other) => isToCheck(other) && other.incomeSourceId === entry.incomeSourceId);
-    if (others.length === 0) {
-      void keepEach([entry]);
-      return;
-    }
-    Alert.alert(
-      `${others.length + 1} entries from ${entry.description}`,
-      `Keep all ${others.length + 1} under ${sourceName(entry.incomeSourceId)}, or just this one?`,
-      [
-        { text: 'Just this one', onPress: () => void keepEach([entry]) },
-        { text: `All ${others.length + 1}`, onPress: () => void keepEach([entry, ...others]) },
-      ],
-    );
+    // Kept at once; the payer's other entries under the same source are offered after.
+    void keepEach([entry], sameParty(entries, entry).filter((other) => isToCheck(other) && other.incomeSourceId === entry.incomeSourceId));
   };
 
   // "Debt" on an entry: lent, borrowed or paid back, and who with (components/SortAsDebt).
@@ -448,7 +437,7 @@ export default function SortEntriesScreen() {
         </Pressable>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={[styles.title, { color: colors.foreground }]}>Sort them out</Text>
-          <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>Entries you saved as Not sure, and money in to check</Text>
+          <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>Entries you saved as Not sure, and money in to check. Tap what each one was - it saves at once.</Text>
         </View>
       </View>
       {isLoading ? (
@@ -720,6 +709,11 @@ export default function SortEntriesScreen() {
           style={{ position: 'absolute', left: 16, right: 16, bottom: insets.bottom + 16, flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.foreground, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12 }}
         >
           <Text style={{ flex: 1, color: colors.background, fontSize: 13 }} numberOfLines={2}>{lastChange.text}</Text>
+          {lastChange.more ? (
+            <Pressable onPress={lastChange.more.run} disabled={undoing || busy !== null} accessibilityRole="button" testID="sort-entries-same-for-more" hitSlop={8}>
+              <Text style={{ color: colors.background, fontFamily: 'Inter_700Bold', fontSize: 14 }}>{lastChange.more.label}</Text>
+            </Pressable>
+          ) : null}
           <Pressable onPress={() => void undoLast()} disabled={undoing} accessibilityRole="button" testID="sort-entries-undo" hitSlop={8}>
             <Text style={{ color: colors.background, fontFamily: 'Inter_700Bold', fontSize: 14, opacity: undoing ? 0.6 : 1 }}>{undoing ? 'Undoing…' : 'Undo'}</Text>
           </Pressable>
