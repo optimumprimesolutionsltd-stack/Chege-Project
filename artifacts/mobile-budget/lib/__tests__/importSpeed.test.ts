@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { initialChoices, type Choice, type PastPosting, type PreviewLine } from '@/lib/mpesaImport';
+import { initialChoices, type Choice, type PreviewLine } from '@/lib/mpesaImport';
+
+type PastPosting = Parameters<typeof initialChoices>[1][number];
 import { withBandRule, withRule, withSourceRule, type PayeeRules } from '@/lib/payeeLearning';
 import { alreadyKnown, teachableGroups } from '@/lib/teachJamvi';
 
