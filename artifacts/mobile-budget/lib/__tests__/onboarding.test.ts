@@ -106,13 +106,10 @@ describe('mobile onboarding', () => {
       ...draft,
       budgetGoal: null,
       debtBalances: {},
-<<<<<<< HEAD
       subcategoryBudgets: {},
       customSubcategories: {},
-=======
       runsBusiness: null,
       businessName: '',
->>>>>>> 52e6571e (Onboarding asks whether you run a business, and sets it up)
     });
     await expect(readOnboardingDraft({ userId: 'person/b', storage })).resolves.toBeNull();
   });

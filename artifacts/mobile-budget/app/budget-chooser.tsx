@@ -541,11 +541,7 @@ export default function BudgetChooserScreen() {
                 <View style={[styles.createCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                   <View style={styles.createCardCopy}>
                     <Text style={[styles.createTitle, { color: colors.foreground }]}>Add a Personal budget</Text>
-<<<<<<< HEAD
                     <Text style={[styles.createText, { color: colors.mutedForeground }]}>A private budget for your own money, covered by your Jamvi subscription. Optional — you can run Shared groups without one.</Text>
-=======
-                    <Text style={[styles.createText, { color: colors.mutedForeground }]}>A private budget for your own money. Optional — you can run Shared groups without one.</Text>
->>>>>>> 52e6571e (Onboarding asks whether you run a business, and sets it up)
                   </View>
                   <Pressable
                     testID="create-personal-budget"
@@ -1058,11 +1054,7 @@ function MobileOnboardingFlow({
         <Text style={[styles.onboardingIntro, { color: colors.mutedForeground }]}>
           {isShared
             ? "You're setting up a group you'll run as its treasurer. Answer a few questions so it's ready — you can change everything later."
-<<<<<<< HEAD
             : 'Your Jamvi subscription covers a private Personal budget and every group you’re in. Answer a few questions so the budget you use first is ready.'}
-=======
-            : 'Every Jamvi account includes a private Personal budget. Answer a few questions so the budget you use first is ready.'}
->>>>>>> 52e6571e (Onboarding asks whether you run a business, and sets it up)
         </Text>
         <View style={[styles.benefitsCard, { backgroundColor: colors.accent, borderColor: colors.primary + '45' }]}>
           <Text style={[styles.choiceTitle, { color: colors.foreground }]}>
@@ -1199,11 +1191,7 @@ function MobileOnboardingFlow({
 
         {step === 3 ? <>
           <Text style={[styles.onboardingQuestion, { color: colors.foreground }]}>{headingName}{isShared ? 'what does the group spend money on?' : 'what should we help you track?'}</Text>
-<<<<<<< HEAD
-          <Text style={[styles.onboardingHint, { color: colors.mutedForeground }]}>{isShared ? "Every category is here, with a star on the ones that usually suit a group like this. Tap what it spends on — you can change them later." : 'Every category is here, with a star on the ones that suit you. Tap the ones you use, or select them all - you can remove any later.'}</Text>
-=======
-          <Text style={[styles.onboardingHint, { color: colors.mutedForeground }]}>{isShared ? "Nothing is preselected. Choose what the group actually spends on — you can add more later." : businessName ? `Your business costs are ticked so ${businessName}'s profit adds up. Choose what else belongs in this budget, or select all recommended categories.` : 'Nothing is preselected. Choose only what belongs in this budget, or select all recommended categories.'}</Text>
->>>>>>> 52e6571e (Onboarding asks whether you run a business, and sets it up)
+          <Text style={[styles.onboardingHint, { color: colors.mutedForeground }]}>{isShared ? "Every category is here, with a star on the ones that usually suit a group like this. Tap what it spends on — you can change them later." : businessName ? `Your business costs are ticked so ${businessName}'s profit adds up. Tap the other categories you use - you can remove any later.` : 'Every category is here, with a star on the ones that suit you. Tap the ones you use, or select them all - you can remove any later.'}</Text>
           <Pressable testID="onboarding-select-all" accessibilityRole="button" accessibilityLabel="Select all recommended categories" onPress={() => setDraftValue('selectedCategories', draft.selectedCategories.length === recommendedCategories.length ? [] : recommendedCategories)} style={[styles.selectAll, { backgroundColor: colors.accent, borderColor: colors.primary }]}><View style={styles.choiceCopy}><Text style={[styles.choiceTitle, { color: colors.foreground }]}>{draft.selectedCategories.length === recommendedCategories.length ? 'Clear all categories' : 'Select all recommended categories'}</Text><Text style={[styles.choiceDescription, { color: colors.mutedForeground }]}>Start quickly, then refine your list later.</Text></View><Feather name="check-square" size={20} color={colors.primary} /></Pressable>
           <Pressable testID="onboarding-select-every" accessibilityRole="button" onPress={() => setDraftValue('selectedCategories', dedupeCategoryNames(visibleTiers.flatMap((tier) => tier.categories)))} hitSlop={8} style={{ alignSelf: 'center', paddingVertical: 6 }}>
             <Text style={[styles.choiceTitle, { color: colors.primary }]}>Select every category</Text>

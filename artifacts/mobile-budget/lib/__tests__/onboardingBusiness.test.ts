@@ -93,6 +93,8 @@ describe('the business question in onboarding', () => {
 
     const created = callsTo('POST', '/api/income-sources').map(([, init]) => JSON.parse(init.body));
     expect(created).toEqual([expect.objectContaining({ userId: 'u1', name: "Wanjiru's Duka", expectedMonthlyAmount: 30000 })]);
+    // Named in My businesses, so its costs are business costs and the salary question is asked.
+    expect(callsTo('PUT', '/api/businesses/').map(([url, init]) => [url, JSON.parse(init.body)])).toEqual([['/api/businesses/55', { business: true }]]);
 
     const links = callsTo('PUT', '/api/budget-categories/').map(([url, init]) => [url, JSON.parse(init.body)]);
     expect(links).toEqual([

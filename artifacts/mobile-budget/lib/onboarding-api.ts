@@ -7,13 +7,10 @@ import {
   BUSINESS_COST_CATEGORIES,
   businessNameFromDraft,
   categoryPriority,
-<<<<<<< HEAD
   onboardingSubcategoriesFor,
   plannedCategoryAmount,
-=======
   normalizeCategoryName,
   normalizeIncomeStreamName,
->>>>>>> 52e6571e (Onboarding asks whether you run a business, and sets it up)
   type MobileOnboardingDraft,
 } from "@/lib/onboarding";
 
@@ -190,6 +187,14 @@ export async function setUpBusiness({
     incomeSourceId = (sources ?? []).find((source) => normalizeIncomeStreamName(source.name) === normalizeIncomeStreamName(name))?.id ?? null;
   }
   if (incomeSourceId == null) return;
+
+  // Named in My businesses: only a business has costs and a Business report,
+  // and is asked once whether you pay yourself a salary from it (8-9 Oct 2026).
+  await customFetch(`/api/businesses/${incomeSourceId}`, {
+    method: "PUT",
+    responseType: "json",
+    body: JSON.stringify({ business: true }),
+  });
 
   const categories = await customFetch<Array<{ id: number; name: string; reducesIncomeSourceId?: number | null }>>("/api/budget-categories", {
     method: "GET",
