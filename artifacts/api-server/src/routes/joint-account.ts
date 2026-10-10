@@ -32,6 +32,7 @@ import { memberLedgerName } from "../lib/contributor-name";
 import { GROUP_ATTRIBUTION } from "../lib/attribution";
 import { reversalLinksReady, soleReversalCandidate, takenBackReceipt } from "../lib/reversal-links";
 import { isOwnerBusinessMoney } from "../lib/owner-business-money";
+import { moveSavedToOwnAccount } from "../lib/own-account-moves";
 import { enrichTransactions } from "../lib/transaction-details";
 import { ledgerEntries, ledgerTotals } from "../lib/account-ledger";
 import { pageOf } from "../lib/account-page";
@@ -449,7 +450,8 @@ router.post("/joint-accounts", async (req, res): Promise<void> => {
       openingBalanceDate: parsed.data.openingBalanceDate ?? currentBusinessDate(),
     }).onConflictDoNothing().returning(accountColumns);
     if (!account) { res.status(409).json({ error: "An account with this name already exists." }); return; }
-    res.status(201).json(serializeAccount(account));
+    const movedEntries = await movedToOwnAccount(req, groupId, account.id, parsed.data.accountNumber);
+    res.status(201).json({ ...serializeAccount(account), movedEntries });
   } catch (error) {
     req.log.error({ err: error, groupId }, "Could not create bank account");
     res.status(500).json({ error: "Could not create the bank account. Please try again." });
@@ -466,8 +468,23 @@ router.patch("/joint-accounts/:id", async (req, res): Promise<void> => {
   const [account] = await db.update(bankAccountsTable).set(parsed.data)
     .where(and(eq(bankAccountsTable.id, params.data.id), eq(bankAccountsTable.groupId, groupId))).returning();
   if (!account) { res.status(404).json({ error: "Bank account not found." }); return; }
-  res.json(serializeAccount(account));
+  const movedEntries = parsed.data.accountNumber ? await movedToOwnAccount(req, groupId, account.id, parsed.data.accountNumber) : 0;
+  res.json({ ...serializeAccount(account), movedEntries });
 });
+
+/**
+ * An account number added: what was already saved to or from it becomes a move
+ * (lib/own-account-moves), with no question. The account itself is saved
+ * either way - a failure here only leaves those entries where they were.
+ */
+async function movedToOwnAccount(req: Request, groupId: number, accountId: number, accountNumber: string | null | undefined): Promise<number> {
+  try {
+    return (await moveSavedToOwnAccount(groupId, accountId, accountNumber)).length;
+  } catch (error) {
+    req.log.error({ err: error, groupId, accountId }, "Could not move saved entries to an own account");
+    return 0;
+  }
+}
 
 router.delete("/joint-accounts/:id", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);

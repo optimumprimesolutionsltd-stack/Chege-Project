@@ -143,13 +143,16 @@ export default function TeachJamviScreen() {
     const byNumber = ownByNumber(taught);
     let targetName: string;
     let targetId: number;
+    // The server turns what was already saved to that number into moves (api-server lib/own-account-moves).
+    let moved = 0;
     if ('accountId' in answer) {
       const existing = accounts.find((account) => account.id === answer.accountId);
       targetName = existing?.name ?? taught.label;
       targetId = answer.accountId;
-      if (byNumber) await updateAccount({ id: answer.accountId, data: { name: targetName, accountNumber: taught.reference } });
+      if (byNumber) moved = (await updateAccount({ id: answer.accountId, data: { name: targetName, accountNumber: taught.reference } }) as { movedEntries?: number }).movedEntries ?? 0;
     } else {
       const created = await createAccount({ data: { name: answer.name, ...(byNumber ? { accountNumber: taught.reference } : {}) } });
+      moved = (created as { movedEntries?: number }).movedEntries ?? 0;
       targetId = created.id;
       targetName = answer.name;
       let businessId = answer.businessId;
@@ -163,11 +166,15 @@ export default function TeachJamviScreen() {
     await queryClient.invalidateQueries({ queryKey: getGetJointAccountsQueryKey() });
     setSkipped((current) => new Set([...current, taught.key]));
     setAnswered((count) => count + 1);
-    // Saved entries are left where they are: turning a payment into a move between
-    // accounts is done on Bank. Said, so nobody thinks they changed.
+    if (moved > 0) {
+      await sorted(taught.entries.map((one) => one.id));
+      void queryClient.invalidateQueries({ queryKey: ['entries-to-sort'] });
+    }
     Alert.alert(
       `${targetName} linked`,
-      `From now on, money ${byNumber ? `to and from account ${taught.reference}` : `from ${taught.label}`} counts as moving your own money. The ${taught.count} entries already saved stay where they are: sort them on Bank if they were moves too.`,
+      byNumber
+        ? `Money to and from account ${taught.reference} counts as moving your own money, from now on and the ${moved} already saved.`
+        : `From now on, money from ${taught.label} counts as moving your own money. The ${taught.count} entries already saved stay where they are: sort them on Bank if they were moves too.`,
     );
   };
 
