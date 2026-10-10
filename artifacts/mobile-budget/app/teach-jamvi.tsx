@@ -33,7 +33,7 @@ import { useAuth } from '@/lib/auth';
 import { payeeKey } from '@/lib/payeeLearning';
 import { isNotSure, type EntryToSort } from '@/lib/entriesToSort';
 import { parseStoredRules, rulesStorageKey, withRule, withSourceRule, type PayeeRules } from '@/lib/payeeLearning';
-import { ownByNumber, ownRuleKey, savedGroups, suggestedCategories, teachDoneKey, type SavedGroup } from '@/lib/teachJamvi';
+import { ownByNumber, ownRuleKey, saveEach, savedGroups, suggestedCategories, teachDoneKey, type SavedGroup } from '@/lib/teachJamvi';
 import { LISTS_AN_EDIT_CHANGES, withoutSorted } from '@/lib/showSavedEdit';
 import { plainSaveError } from '@/lib/saveRetry';
 import { saveRules } from '@/lib/rulesStore';
@@ -89,7 +89,6 @@ export default function TeachJamviScreen() {
 
   const [skipped, setSkipped] = useState<ReadonlySet<string>>(new Set());
   const [answered, setAnswered] = useState(0);
-  const [working, setWorking] = useState(false);
   const groups = useMemo(() => savedGroups(entries, rules, { skipped }), [entries, rules, skipped]);
   const waiting = useMemo(() => entries.filter((entry) => !(entry.direction === 'in' && entry.incomeSourceId != null)).length, [entries]);
   const behind = groups.reduce((sum, one) => sum + one.count, 0);
@@ -106,21 +105,23 @@ export default function TeachJamviScreen() {
     for (const queryKey of LISTS_AN_EDIT_CHANGES) void queryClient.invalidateQueries({ queryKey });
   };
 
-  // Every entry of the regular, one save each, as Sort them out does.
+  // Every entry of the regular, saved behind the next question (10 Oct 2026: "Teach
+  // Jamvi is very slow"). One save at a time, with the card locked until the last,
+  // kept a regular of 40 entries on screen for half a minute and every tap on the
+  // next one - "Pick a category…" too - waited for it. The rule is kept at once,
+  // so the next regular shows straight away; the entries leave the list now, and
+  // any that fail come back with a word saying so.
+  const [filing, setFiling] = useState(0);
   const saveAll = async (taught: SavedGroup, change: Record<string, unknown>) => {
-    setWorking(true);
-    const done: number[] = [];
-    try {
-      for (const one of taught.entries) {
-        await updateTransaction({ id: one.id, data: { amount: one.amount, date: one.date, ...change } as never });
-        done.push(one.id);
-      }
-      setAnswered((count) => count + 1);
-    } catch (error) {
-      Alert.alert('Could not file them all', `${done.length} of ${taught.count} filed. ${plainSaveError(error)}`);
-    } finally {
-      await sorted(done);
-      setWorking(false);
+    const ids = taught.entries.map((one) => one.id);
+    setAnswered((count) => count + 1);
+    setFiling((count) => count + ids.length);
+    void sorted(ids);
+    const failed = await saveEach(taught.entries, (one) => updateTransaction({ id: one.id, data: { amount: one.amount, date: one.date, ...change } as never }));
+    setFiling((count) => count - ids.length);
+    if (failed.count > 0) {
+      void queryClient.invalidateQueries({ queryKey: ['entries-to-sort'] });
+      Alert.alert('Could not file them all', `${taught.count - failed.count} of ${taught.count} ${taught.label} filed. The rest stay Not sure yet, in Sort them out. ${plainSaveError(failed.error)}`);
     }
   };
 
@@ -200,12 +201,9 @@ export default function TeachJamviScreen() {
     const key = payeeKey(name);
     const theirs = entries.filter((entry) => entry.direction === 'out' && payeeKey(entry.description) === key);
     if (theirs.length > 0) {
-      const done: number[] = [];
-      for (const one of theirs) {
-        await updateTransaction({ id: one.id, data: { amount: one.amount, date: one.date, expenseCategory: category } as never });
-        done.push(one.id);
-      }
-      await sorted(done);
+      void sorted(theirs.map((one) => one.id));
+      const failed = await saveEach(theirs, (one) => updateTransaction({ id: one.id, data: { amount: one.amount, date: one.date, expenseCategory: category } as never }));
+      if (failed.count > 0) void queryClient.invalidateQueries({ queryKey: ['entries-to-sort'] });
     }
   };
 
@@ -250,7 +248,13 @@ export default function TeachJamviScreen() {
           </Pressable>
         </View>
       ) : (
-        <View style={{ opacity: working ? 0.6 : 1 }} pointerEvents={working ? 'none' : 'auto'}>
+        <View>
+          {filing > 0 ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }} testID="teach-jamvi-filing">
+              <ActivityIndicator size="small" color={colors.primary} />
+              <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>Filing {filing} {filing === 1 ? 'entry' : 'entries'}… carry on.</Text>
+            </View>
+          ) : null}
           {/* Each business asked once too, before the regulars (lib/businessSalary). */}
           <BusinessSalaryQuestion />
           <FamilyNamesCard kept={keptFamily} categories={familyLeaves} suggestions={familySuggestions} onAdd={addFamily} onRemove={(key) => keepRules(withoutFamily(rules, key))} />
