@@ -1795,8 +1795,7 @@ export default function MpesaImportScreen() {
   // found by name or added (as the line's own debt sheet does).
   const teachAsDebt = async (taught: TeachGroup, kind: 'borrowed' | 'repaid') => {
     const same = (text: string) => text.trim().replace(/\s+/g, ' ').toLocaleLowerCase('en-KE');
-    let partyId = parties.find((one) => same(one.name) === same(taught.label))?.id;
-    if (partyId === undefined) {
+    const addParty = async (): Promise<number> => {
       const added = await customFetch<PartyLite>('/api/contributors', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1804,9 +1803,9 @@ export default function MpesaImportScreen() {
       });
       queryClient.setQueryData<PartyLite[]>(['parties'], (current) => [...(current ?? []), added]);
       void queryClient.invalidateQueries({ queryKey: ['parties'] });
-      partyId = added.id;
-    }
-    const debtPartyId: number = partyId;
+      return added.id;
+    };
+    const debtPartyId = parties.find((one) => same(one.name) === same(taught.label))?.id ?? (await addParty());
     setChoices((current) => {
       const next = { ...current };
       for (const index of taught.indexes) {
