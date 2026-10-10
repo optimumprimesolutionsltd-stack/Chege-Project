@@ -3,7 +3,9 @@ import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
-import { customFetch } from '@workspace/api-client-react';
+import { customFetch, useGetGroup } from '@workspace/api-client-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { reconcileAgain } from '@/hooks/useAutoReconcile';
 import { useColors } from '@/hooks/useColors';
 import { formatDisplayDate } from '@/lib/displayFormat';
 import { dayBefore } from '@/lib/bankPeriod';
@@ -101,7 +103,15 @@ export default function MpesaDifferenceScreen() {
   // Checked each time this screen is shown, not only the first: days brought
   // in or fixed from here ("Bring these days in", Bank) have to drop off the
   // list on the way back, or it goes on listing what is already sorted.
-  useFocusEffect(useCallback(() => { void check(); }, [check]));
+  // And on the way out, Home checks again too: its Waiting for you line kept the
+  // old count for hours after the person had sorted it here (10 Oct 2026).
+  const queryClient = useQueryClient();
+  const { data: group } = useGetGroup();
+  const groupId = group?.id;
+  useFocusEffect(useCallback(() => {
+    void check();
+    return () => reconcileAgain(queryClient, groupId);
+  }, [check, queryClient, groupId]));
 
   // "Fix all": one confirmation, then everything that needs no judgement.
   const [fixing, setFixing] = useState(false);

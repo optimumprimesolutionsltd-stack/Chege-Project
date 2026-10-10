@@ -107,7 +107,7 @@ describe('after days are brought in or fixed', () => {
   // tab, which it's not doing" (4 Oct 2026): it checked once, on opening.
   const screen = read('app/mpesa-difference.tsx');
   it('checks again each time the screen is shown, so sorted days drop off the list', () => {
-    expect(screen).toContain('useFocusEffect(useCallback(() => { void check(); }, [check]));');
+    expect(screen).toMatch(/useFocusEffect\(useCallback\(\(\) => \{\s+void check\(\);/);
     expect(screen).not.toContain('useEffect(() => { void check(); }, [check]);');
   });
   it('keeps the last result on screen while it checks again', () => {

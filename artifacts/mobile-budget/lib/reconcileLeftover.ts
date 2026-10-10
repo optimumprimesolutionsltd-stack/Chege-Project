@@ -10,13 +10,15 @@ export type Leftover = {
   extra: number;
   /** In the messages but not saved anywhere, and the days they fall in. */
   missing: { count: number; from: string; to: string } | null;
+  /** Places past the ones the check listed: the counts above are only the start. */
+  more?: boolean;
 };
 
 /** What only the person can answer, from the spans still open. */
-export function leftoverOf(spans: readonly DifferenceSpan[]): Leftover {
+export function leftoverOf(spans: readonly DifferenceSpan[], moreSpans = 0): Leftover {
   const plan = fixPlan(spans);
   const extra = spans.reduce((sum, span) => sum + span.extra.length, 0);
-  return { extra, missing: plan.bringIn };
+  return { extra, missing: plan.bringIn, ...(moreSpans > 0 ? { more: true } : {}) };
 }
 
 /** Whether anything is left for the person at all. */
@@ -27,6 +29,6 @@ export function leftoverText(left: Leftover): string {
   const parts: string[] = [];
   if (left.missing?.count) parts.push(`${left.missing.count} M-Pesa ${left.missing.count === 1 ? 'payment' : 'payments'} to bring in`);
   if (left.extra) parts.push(`${left.extra} ${left.extra === 1 ? 'entry' : 'entries'} M-Pesa never had`);
-  return parts.join(' · ');
+  return parts.join(' · ') + (left.more && parts.length > 0 ? ', and more after' : '');
 }
 
