@@ -347,3 +347,30 @@ export function incomeAnswers<S extends Named, B extends Named>(
     sales: rankByGuess(businesses, label, guessId),
   };
 }
+
+/** How many of a regular's entries are saved at once: quick, without crowding the server. */
+export const SAVES_AT_ONCE = 4;
+
+/**
+ * Saves every one of `items`, a few at a time rather than one after another (a
+ * regular of 40 entries took half a minute one by one). Every item is tried, a
+ * failure does not stop the rest; what failed is counted, with the first error.
+ */
+export async function saveEach<T>(items: readonly T[], save: (item: T) => Promise<unknown>, atOnce = SAVES_AT_ONCE): Promise<{ count: number; error: unknown }> {
+  let next = 0;
+  let count = 0;
+  let error: unknown = null;
+  const worker = async () => {
+    while (next < items.length) {
+      const item = items[next++];
+      try {
+        await save(item);
+      } catch (failure) {
+        if (count === 0) error = failure;
+        count += 1;
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(atOnce, items.length) }, worker));
+  return { count, error };
+}
