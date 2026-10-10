@@ -97,3 +97,18 @@ describe('implemented backwards too', () => {
     expect(hook).toContain("customFetch<{ entries: EntryToSort[] }>('/api/entries-to-sort'");
   });
 });
+
+// "Pork should be identified as food - eating out ... carnivore same", "data, networks - wi-fi" (10 Oct 2026).
+describe('pork joints, Carnivore and Wi-Fi', () => {
+  it('pork and Carnivore are eating out, even a pork butchery', () => {
+    for (const name of ['KWA PORK JOINT', 'Carnivore Restaurant', 'THE CARNIVORE', 'Porkies Den', 'MAMA PORK BUTCHERY', 'Mutura Point', 'Kamau BBQ']) {
+      expect(knownPayeeOf(name)?.key, name).toBe('eating-out');
+    }
+    expect(knownPayeeOf('Kamau Butchery')?.key).toBe('groceries');
+  });
+  it('Wi-Fi, networks and data providers are home internet', () => {
+    for (const name of ['KAMAU WI-FI', 'Ridge Wifi Services', 'Kahawa Networks Ltd', 'Data Hub Internet', 'Skyline Broadband', 'Juja Hotspot']) {
+      expect(knownPayeeOf(name)?.key, name).toBe('home-internet');
+    }
+  });
+});

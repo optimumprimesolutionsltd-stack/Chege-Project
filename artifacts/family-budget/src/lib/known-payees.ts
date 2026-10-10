@@ -57,7 +57,10 @@ const KNOWN_PAYEES: readonly KnownPayee[] = [
   {
     key: "eating-out",
     // Before groceries: a butchery that grills, and a supermarket"s own cafe, are eating out.
-    pattern: /\b(?:kfc|java house|artcaffe|pizza inn|chicken inn|dominos?|galitos|simbisa|bolt food|uber eats|glovo|jumia food|restaurants?|eatery|eateries|bistro|hotels?|hoteli|kitchens?|foods?|fast ?foods?|cafeteria|canteen|grill|nyama choma|choma|chicken|kuku|wings|kibanda|kibandaski|pizza|burgers?|chips|bakery|bakers|bakeries|dishes)\b|\bcaf[eé](?![a-z])/i,
+    // Pork joints and Carnivore too - "Kwa Pork", "pork joint", even "pork butchery" -
+    // where people go to eat, not to shop ("pork should be identified as food -
+    // eating out ... carnivore same", 10 Oct 2026).
+    pattern: /\b(?:kfc|java house|artcaffe|pizza inn|chicken inn|dominos?|galitos|simbisa|bolt food|uber eats|glovo|jumia food|restaurants?|eatery|eateries|bistro|hotels?|hoteli|kitchens?|foods?|fast ?foods?|cafeteria|canteen|grill|nyama choma|choma|chicken|kuku|wings|kibanda|kibandaski|pizza|burgers?|chips|bakery|bakers|bakeries|dishes|carnivore|pork|porky|porkies|nguruwe|mutura|bbq|barbe?cue)\b|\bcaf[eé](?![a-z])/i,
     names: ["Eating out", "Meals", "Lunch", "Food & drinks"],
     words: ["eating out", "restaurant", "meal", "lunch"],
     standard: { name: "Eating out", parent: "Food" },
@@ -93,7 +96,10 @@ const KNOWN_PAYEES: readonly KnownPayee[] = [
   },
   {
     key: "home-internet",
-    pattern: /\b(?:zuku|wananchi|faiba|jtl|poa internet|starlink|liquid home|mawingu)\b/i,
+    // The providers, and the words a small one goes by - "Kamau Wi-Fi", "Ridge Networks",
+    // "Data Hub" ("data, networks - wi-fi", 10 Oct 2026). Safaricom"s own bundles are
+    // products, filed before any of this (lib/mpesaProducts).
+    pattern: /\b(?:zuku|wananchi|faiba|jtl|poa internet|starlink|liquid home|mawingu|wi-?fi|wireless|internet|broadband|fib(?:re|er)|hotspots?|networks?|data)\b/i,
     names: ["Home internet", "Wi-Fi"],
     words: ["internet", "wi-fi", "wifi", "fibre"],
     standard: { name: "Home internet", parent: "Airtime & data" },
