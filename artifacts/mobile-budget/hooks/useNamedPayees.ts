@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useGetGroup } from '@workspace/api-client-react';
 import { namedFor, namedPayeesKey, parseNamedPayees, ruleKeysFor, withNamed, withoutNamed, type NamedPayee } from '@/lib/namedPayees';
 import { parseStoredRules, rulesStorageKey, withoutRule } from '@/lib/payeeLearning';
+import { saveRules } from '@/lib/rulesStore';
 
 /** Names for outside accounts you pay often (lib/namedPayees), kept per budget on this device. */
 export function useNamedPayees() {
@@ -32,15 +33,16 @@ export function useNamedPayees() {
       if (entry.category) next[key] = entry.category;
       else delete next[key];
     }
-    await AsyncStorage.setItem(rulesKey, JSON.stringify(next)).catch(() => {});
-  }, [named, rulesKey, store]);
+    await saveRules(group?.id, next, rules);
+  }, [group?.id, named, rulesKey, store]);
 
   const remove = useCallback(async (key: string) => {
     await store(withoutNamed(named, key));
-    let rules = parseStoredRules(await AsyncStorage.getItem(rulesKey).catch(() => null));
+    const before = parseStoredRules(await AsyncStorage.getItem(rulesKey).catch(() => null));
+    let rules = before;
     for (const ruleKey of ruleKeysFor(key)) rules = withoutRule(rules, ruleKey);
-    await AsyncStorage.setItem(rulesKey, JSON.stringify(rules)).catch(() => {});
-  }, [named, rulesKey, store]);
+    await saveRules(group?.id, rules, before);
+  }, [group?.id, named, rulesKey, store]);
 
   const nameFor = useCallback((description: string | null | undefined) => namedFor(description, named)?.name ?? null, [named]);
 

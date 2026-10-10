@@ -123,6 +123,7 @@ import { fetchOtherBudgetOptions, type OtherBudgetOptions } from '@/lib/otherBud
 import { WhoIsThisFor } from '@/components/WhoIsThisFor';
 import { useBusinesses } from '@/hooks/useBusinesses';
 import { useBusinessAccounts } from '@/hooks/useBusinessAccounts';
+import { saveRules } from '@/lib/rulesStore';
 import { TeachJamviCard, type OwnAccountAnswer } from '@/components/TeachJamviCard';
 import { BusinessSalaryQuestion } from '@/components/BusinessSalaryQuestion';
 import { alreadyKnown, suggestedCategories, teachableGroups, teachCategory, teachOwnAccount, teachSource, withOwnAccounts, type TeachGroup } from '@/lib/teachJamvi';
@@ -901,7 +902,8 @@ export default function MpesaImportScreen() {
   }, [rulesKey]);
   const keepRules = (next: PayeeRules) => {
     setRules(next);
-    AsyncStorage.setItem(rulesKey, JSON.stringify(next)).catch(() => {});
+    // On the server too, for every phone and the web (lib/rulesStore).
+    void saveRules(group?.id, next, rules);
   };
   // Payees remembered as another budget's - the chama's paybill, say - kept the
   // same way, so the next statement suggests that budget for them.

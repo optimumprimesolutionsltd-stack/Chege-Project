@@ -20,6 +20,7 @@ import { useFonts } from 'expo-font';
 import { Stack, router, usePathname, useSegments } from 'expo-router';
 import { refreshAfterSave, refreshShownHistory } from '@/lib/refreshAfterSave';
 import { useStandardLinks } from '@/hooks/useCommonCategories';
+import { useRulesSync } from '@/hooks/useRulesSync';
 import * as SplashScreen from 'expo-splash-screen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEntitlements } from '@/hooks/useEntitlements';
@@ -275,6 +276,8 @@ function RootLayoutNav() {
 
   // The budget's common category for each kind of payee Jamvi knows (lib/commonCategories).
   useStandardLinks(isAuthenticated && !!user?.id && !user?.needsDisplayName);
+  // What Jamvi was taught about payees, kept on the server for every phone and the web.
+  useRulesSync(isAuthenticated && !!user?.id && !user?.needsDisplayName);
 
   const workspaces = workspaceList ?? NO_WORKSPACES;
   // Could not be fetched at all: unknown, not empty. See hasValidMobileWorkspaceSelection.

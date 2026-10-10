@@ -30,6 +30,7 @@ import { parseStoredRules, rulesStorageKey, withRule, withSourceRule, type Payee
 import { savedGroups, suggestedCategories, teachDoneKey, type SavedGroup } from '@/lib/teachJamvi';
 import { LISTS_AN_EDIT_CHANGES, withoutSorted } from '@/lib/showSavedEdit';
 import { plainSaveError } from '@/lib/saveRetry';
+import { saveRules } from '@/lib/rulesStore';
 
 /**
  * Teach Jamvi your M-Pesa, for somebody who already uses Jamvi: "even a current
@@ -77,7 +78,7 @@ export default function TeachJamviScreen() {
   }, [rulesKey]);
   const keepRules = (next: PayeeRules) => {
     setRules(next);
-    AsyncStorage.setItem(rulesKey, JSON.stringify(next)).catch(() => {});
+    void saveRules(group?.id, next, rules);
   };
 
   const [skipped, setSkipped] = useState<ReadonlySet<string>>(new Set());

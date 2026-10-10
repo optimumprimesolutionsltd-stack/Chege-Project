@@ -31,6 +31,7 @@ import { PassThroughPair, type PairEntry } from '@/components/PassThroughPair';
 import { onScreenOnly, useOnScreen } from '@/hooks/useOnScreen';
 import { useAutoMarkBusiness, useOwnerBusiness } from '@/hooks/useOwnerBusiness';
 import { useBusinessAccounts } from '@/hooks/useBusinessAccounts';
+import { saveRules } from '@/lib/rulesStore';
 import { useNamedPayees } from '@/hooks/useNamedPayees';
 import { WhoIsThisFor } from '@/components/WhoIsThisFor';
 import { useBusinesses } from '@/hooks/useBusinesses';
@@ -803,7 +804,7 @@ export default function BankScreen() {
       // The next import files this payee there (payeeLearning).
       const remember = async () => {
         const latest = parseStoredRules(await AsyncStorage.getItem(rulesKey).catch(() => null));
-        await AsyncStorage.setItem(rulesKey, JSON.stringify(withRule(latest, offer.description, offer.to))).catch(() => {});
+        await saveRules(group?.id, withRule(latest, offer.description, offer.to), latest);
       };
       // Asked once per payee, whatever the answer.
       const noteAsked = async () => {
@@ -920,7 +921,7 @@ export default function BankScreen() {
     }
     const key = rulesStorageKey(group?.id);
     const rules = parseStoredRules(await AsyncStorage.getItem(key).catch(() => null));
-    await AsyncStorage.setItem(key, JSON.stringify(withSourceRule(rules, entry.description, entry.business))).catch(() => {});
+    await saveRules(group?.id, withSourceRule(rules, entry.description, entry.business), rules);
     const who = samePayeeName(entry.description);
     const others = (data?.transactions ?? []).filter((row) =>
       row.id !== entry.id && row.type === 'deposit' && row.incomeSourceId == null && !row.isBorrowing && row.settlesContributorId == null &&

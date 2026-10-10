@@ -4,6 +4,7 @@ import { fixBorrowedNotIncome } from "./lib/borrowed-not-income";
 import { ensureOwnerBusiness } from "./lib/owner-business-money";
 import { ensureBusinessAccounts } from "./lib/business-accounts";
 import { ensureBusinessStreams } from "./lib/business-streams";
+import { ensurePayeeRules } from "./lib/payee-rules";
 import { ensureStandardCategories } from "./lib/standard-categories";
 import { ensurePossibleDuplicates } from "./lib/possible-duplicates";
 import { ensureImportSaveJobs } from "./lib/import-save-jobs";
@@ -91,6 +92,7 @@ async function startServer() {
   void ensureOwnerBusiness();
   void ensureBusinessAccounts();
   void ensureBusinessStreams();
+  void ensurePayeeRules();
   void ensureStandardCategories();
   void ensureEveryBudgetHasAnAccount();
 
