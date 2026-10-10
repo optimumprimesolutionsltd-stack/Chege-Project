@@ -1,7 +1,9 @@
-import React, { startTransition, useEffect, useMemo, useState } from 'react';
+import React, { startTransition, useEffect, useMemo, useRef, useState } from 'react';
 import { withoutPersonTag } from '@/lib/personNumber';
 import {
   ActivityIndicator,
+  AppState,
+  BackHandler,
   Alert,
   KeyboardAvoidingView,
   Modal,
@@ -631,6 +633,10 @@ export default function MpesaImportScreen() {
   useEffect(() => clearReadStall, []);
   // A statement PDF: read on this phone, with its password used only here.
   const [statementFile, setStatementFile] = useState<ChosenStatement | null>(null);
+  // The file list is open, or the chosen file is being copied in: the button
+  // says so and takes no second tap (a big statement takes a few seconds).
+  const [pickingStatement, setPickingStatement] = useState(false);
+  const statementPickRef = useRef(false);
   const [statementPassword, setStatementPassword] = useState('');
   // Shown on request: a statement password is long and typed blind, and one
   // wrong digit only shows up as "Wrong password" after the file is read.
@@ -1311,13 +1317,49 @@ export default function MpesaImportScreen() {
   };
 
   const pickStatement = async () => {
+    if (statementPickRef.current) return;
+    statementPickRef.current = true;
+    setPickingStatement(true);
     try {
       const chosen = await chooseStatement();
       if (chosen) setStatementFile(chosen);
     } catch (error: unknown) {
       Alert.alert('Could not open that file', error instanceof Error ? error.message : 'Please try again.');
+    } finally {
+      statementPickRef.current = false;
+      setPickingStatement(false);
     }
   };
+  // Back, from the arrow or the phone's own button. Opened with nothing behind
+  // it - after an update restart, from a shared message - there was nowhere to
+  // go back to, and both did nothing ("these two arrows for going back are not
+  // working", 10 Oct 2026): then it goes Home.
+  const leave = () => {
+    if (router.canGoBack()) router.back();
+    else router.replace('/(tabs)' as never);
+  };
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (router.canGoBack()) return false;
+      router.replace('/(tabs)' as never);
+      return true;
+    });
+    return () => sub.remove();
+  }, []);
+  // Backing out of the file list on some phones never answers the picker, which
+  // left the button waiting for good. Coming back to Jamvi frees it.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state !== 'active' || !statementPickRef.current) return;
+      setTimeout(() => {
+        if (!statementPickRef.current) return;
+        statementPickRef.current = false;
+        setPickingStatement(false);
+      }, 1500);
+    });
+    return () => sub.remove();
+  }, []);
 
   const readStatement = async () => {
     if (!statementFile || readerJob) return;
@@ -2665,12 +2707,15 @@ export default function MpesaImportScreen() {
                 </Text>
                 <Pressable
                   onPress={pickStatement}
-                  style={[styles.secondary, { borderColor: colors.border, borderWidth: 1, borderRadius: 8 }]}
+                  disabled={pickingStatement}
+                  style={({ pressed }) => [styles.secondary, { borderColor: colors.border, borderWidth: 1, borderRadius: 8, flexDirection: 'row', gap: 8, opacity: pressed || pickingStatement ? 0.6 : 1 }]}
                   accessibilityRole="button"
+                  accessibilityState={{ busy: pickingStatement }}
                   testID="mpesa-statement-choose"
                 >
+                  {pickingStatement ? <ActivityIndicator size="small" color={colors.primary} /> : null}
                   <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>
-                    {statementFile ? shownFileName(statementFile.name) : 'Choose the statement PDF'}
+                    {pickingStatement ? 'Opening your files…' : statementFile ? shownFileName(statementFile.name) : 'Choose the statement PDF'}
                   </Text>
                 </Pressable>
                 <View style={{ justifyContent: 'center' }}>
@@ -2726,7 +2771,7 @@ export default function MpesaImportScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <View style={[styles.header, { paddingTop: insets.top + 8, borderColor: colors.border }]}>
-        <Pressable onPress={() => router.back()} hitSlop={10} accessibilityRole="button" accessibilityLabel="Go back">
+        <Pressable onPress={leave} hitSlop={10} accessibilityRole="button" accessibilityLabel="Go back" testID="mpesa-import-back">
           <Feather name="chevron-left" size={24} color={colors.foreground} />
         </Pressable>
         <View style={{ flex: 1 }}>
