@@ -133,7 +133,9 @@ export function MpesaImportCard() {
               <Text style={[styles.figureLabel, { color: colors.mutedForeground }]}>M-Pesa balance now</Text>
               <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.balanceValue, { color: colors.foreground }]}>{kes(live.balance)}</Text>
               <Text style={[styles.figureLabel, { color: colors.mutedForeground }]}>From your M-Pesa message of {messageTime(live.at)}</Text>
-              {comparison ? (
+              {/* Only when the two agree: a difference is fixed by itself, and what
+                  is left for the person is in Home's Waiting for you (lib/autoReconcile). */}
+              {comparison?.agrees ? (
                 <Text
                   testID="mpesa-home-card-balance-comparison"
                   style={[styles.comparison, { color: comparison.agrees ? colors.primary : '#B45309', borderColor: comparison.agrees ? colors.border : '#F59E0B' }]}
@@ -141,19 +143,7 @@ export function MpesaImportCard() {
                   {comparison.text}
                 </Text>
               ) : null}
-              {/* Offered unless the two are known to agree - also while Jamvi's
-                  own figure is still loading or could not load. */}
-              {!comparison?.agrees ? (
-                <Pressable
-                  testID="mpesa-home-card-find-difference"
-                  accessibilityRole="button"
-                  onPress={() => router.push('/mpesa-difference' as never)}
-                  style={({ pressed }) => [styles.findDifference, { borderColor: colors.primary, opacity: pressed ? 0.6 : 1 }]}
-                >
-                  <Feather name="search" size={15} color={colors.primary} />
-                  <Text style={[styles.findDifferenceText, { color: colors.primary }]}>Find the difference</Text>
-                </Pressable>
-              ) : null}
+              {/* Find the difference runs by itself now (lib/autoReconcile): no button. */}
             </View>
           ) : summary?.balance != null ? (
             <View style={styles.balanceRow} testID="mpesa-home-card-balance">

@@ -21,6 +21,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { DebtSummaryCard } from '@/components/DebtSummaryCard';
 import { useColors } from '@/hooks/useColors';
+import { useAutoReconcile } from '@/hooks/useAutoReconcile';
 import { onScreenOnly, useOnScreen } from '@/hooks/useOnScreen';
 import { useSortRecognisedOnce } from '@/hooks/useCommonCategories';
 import { useEntitlements } from '@/hooks/useEntitlements';
@@ -291,6 +292,9 @@ export default function DashboardScreen() {
   const workspaceIcon = (group?.icon ?? 'users') as keyof typeof Feather.glyphMap;
   const workspacePhotoUrl = isSharedWorkspace ? group?.photoUrl : user?.profileImageUrl;
   const canManageBudget = !isSharedWorkspace || group?.role === 'owner' || group?.role === 'admin';
+  // Find the difference, by itself (lib/autoReconcile): the sure fixes are made
+  // quietly, and only what needs the person reaches Waiting for you.
+  const reconcileLeft = useAutoReconcile(group?.id, canManageBudget, onScreen);
   // Entries saved as Not sure yet to payees Jamvi knows are filed once (hooks/useCommonCategories).
   useSortRecognisedOnce(group?.id, canManageBudget);
   const canManageExpenses = !isSharedWorkspace || group?.role === 'owner' || group?.role === 'admin';
@@ -374,6 +378,22 @@ export default function DashboardScreen() {
   };
   const firstUncategorized = editableUncategorizedExpenses[0];
   const waitingRows: WaitingRow[] = [
+    ...(reconcileLeft?.missing?.count ? [{
+      testID: 'reconcile-missing-cta',
+      icon: 'download' as const,
+      color: colors.primary,
+      title: `${reconcileLeft.missing.count} M-Pesa ${reconcileLeft.missing.count === 1 ? 'payment' : 'payments'} not in Jamvi yet`,
+      hint: 'Bring them in as Not sure yet. Everything else in your M-Pesa is already in step.',
+      onPress: () => router.push(`/mpesa-import?smsFrom=${reconcileLeft.missing!.from}&smsTo=${reconcileLeft.missing!.to}&notSure=1` as never),
+    }] : []),
+    ...(reconcileLeft?.extra ? [{
+      testID: 'reconcile-extra-cta',
+      icon: 'alert-circle' as const,
+      color: '#D97706',
+      title: `${reconcileLeft.extra} ${reconcileLeft.extra === 1 ? 'entry' : 'entries'} M-Pesa never had`,
+      hint: 'Typed by hand, or saved twice? Keep or remove each one.',
+      onPress: () => router.push('/mpesa-difference' as never),
+    }] : []),
     ...(regulars.length > 0 && canManageBudget ? [{
       testID: 'teach-jamvi-cta',
       icon: 'zap' as const,

@@ -8,6 +8,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   customFetch,
   getGetBudgetCategoriesQueryKey,
+  useCreateBudgetCategory,
   getGetJointAccountQueryKey,
   useGetBudgetCategories,
   useGetGroup,
@@ -35,6 +36,8 @@ import DateTimePicker, { type DateTimePickerEvent } from '@react-native-communit
 import { isoDay, longDay, monthStartIso, orderedRange } from '@/lib/dayRange';
 import { parseStoredRules, rulesStorageKey, type PayeeRules } from '@/lib/payeeLearning';
 import { plainSaveError } from '@/lib/saveRetry';
+import { FAMILY_CATEGORY, familyCategories, withFamily } from '@/lib/family';
+import { saveRules } from '@/lib/rulesStore';
 import { formatDisplayDate } from '@/lib/displayFormat';
 
 const kes = (value: number) => value.toLocaleString('en-KE', { maximumFractionDigits: 0 });
@@ -182,6 +185,36 @@ export default function SortEntriesScreen() {
         { text: `All ${others.length + 1}`, onPress: () => void sortEach([entry, ...others], change, label) },
       ],
     );
+  };
+
+  // "Judy is family" (10 Oct 2026): one tap files the entry under the family
+  // category and keeps the person as family (lib/family), on the server
+  // (lib/rulesStore), so their next M-Pesa is filed by itself. The family
+  // category is the budget's own, else "Family support", made as Teach Jamvi makes it.
+  const { mutateAsync: createCategory } = useCreateBudgetCategory();
+  const familyCategory = useMemo(
+    () => familyCategories(categoryList as unknown as Array<{ id: number; name: string; parentId?: number | null }>)[0] ?? FAMILY_CATEGORY,
+    [categoryList],
+  );
+  const asFamily = async (entry: EntryToSort) => {
+    setBusy(entry.id);
+    try {
+      if (!categoryList.some((row) => row.name === familyCategory)) {
+        await createCategory({ data: { name: familyCategory, budgetAmount: 0, priority: 3, isRecurring: true, activeMonth: null, activeYear: null } as never });
+        await queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
+      }
+      const next = withFamily(rules, entry.description, familyCategory);
+      if (next !== rules) {
+        await saveRules(group?.id, next, rules);
+        setRules(next);
+      }
+    } catch (error) {
+      Alert.alert('Could not keep them as family', plainSaveError(error));
+      return;
+    } finally {
+      setBusy(null);
+    }
+    sort(entry, { expenseCategory: familyCategory }, familyCategory);
   };
   const { data: group } = useGetGroup();
   // "+ New category" on any entry: name, parent and tier (components/CreateCategorySheet).
@@ -474,6 +507,13 @@ export default function SortEntriesScreen() {
                   out of sight: "there is no place to create child and parent category and
                   lent/borrowed" (7 Oct 2026). */}
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                {entry.direction === 'out' ? (
+                  <Pressable disabled={busy !== null} onPress={() => void asFamily(entry)} accessibilityRole="button" accessibilityLabel={`${entry.description} is family`} testID={`sort-entry-${entry.id}-family`}
+                    style={{ ...chip, flexDirection: 'row', alignItems: 'center', gap: 4, borderColor: colors.primary, backgroundColor: `${colors.primary}14` }}>
+                    <Feather name="heart" size={13} color={colors.primary} />
+                    <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>Family</Text>
+                  </Pressable>
+                ) : null}
                 <Pressable disabled={busy !== null} onPress={() => setDebtFor(entry)} accessibilityRole="button" testID={`sort-entry-${entry.id}-debt`}
                   style={{ ...chip, flexDirection: 'row', alignItems: 'center', gap: 4, borderColor: colors.primary, backgroundColor: `${colors.primary}14` }}>
                   <Feather name="users" size={13} color={colors.primary} />
