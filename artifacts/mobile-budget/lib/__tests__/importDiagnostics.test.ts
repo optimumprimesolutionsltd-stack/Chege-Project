@@ -23,12 +23,10 @@ describe('Import M-Pesa says what it is doing', () => {
 describe('footprints of the page opening, kept if it freezes', () => {
   const trace = readFileSync('lib/importTrace.ts', 'utf8');
   const layout = readFileSync('app/_layout.tsx', 'utf8');
-  it('writes each step at once, deletes them when the page settles, and sends any left at the next start', () => {
-    expect(trace).toContain('file.write(steps.join');
+  it('still sends any left by an older version at the next start, but the page no longer writes them', () => {
     expect(trace).toContain('/api/healthz?trace=');
-    expect(screen).toContain('traceOpen();');
-    expect(screen).toContain("if (tracing) trace('render end');");
-    expect(screen).toContain('setTimeout(() => traceSettled(), 15_000)');
     expect(layout).toContain('void sendLeftTrace();');
+    // Each step was a file write - seconds over the first draws (10 Oct 2026).
+    expect(screen).not.toContain('traceOpen();');
   });
 });

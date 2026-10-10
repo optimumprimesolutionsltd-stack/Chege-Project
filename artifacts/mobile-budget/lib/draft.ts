@@ -39,6 +39,7 @@ export function useDraft<T>({
   active,
   onRestore,
   maxAgeMs = DRAFT_MAX_AGE_MS,
+  manual = false,
 }: {
   key: string;
   value: T;
@@ -46,8 +47,22 @@ export function useDraft<T>({
   onRestore: (saved: T) => void;
   /** How long it is kept. A statement is worked through over days, a paste over an afternoon. */
   maxAgeMs?: number;
-}): { restored: boolean; dismiss: () => void; discard: () => void } {
+  /**
+   * Given back only when the person asks (resume), not as the screen opens. A
+   * statement's review is thousands of entries: restored by itself, it held
+   * Import M-Pesa still for half a minute every time it opened, whatever the
+   * person came to do (10 Oct 2026, 2,512 entries). Until resumed or
+   * discarded, the stored draft is neither overwritten nor removed.
+   */
+  manual?: boolean;
+}): { restored: boolean; dismiss: () => void; discard: () => void; waiting: T | null; resume: () => void } {
   const [restored, setRestored] = useState(false);
+  const [waiting, setWaitingState] = useState<T | null>(null);
+  const waitingRef = useRef<T | null>(null);
+  const setWaiting = (next: T | null) => {
+    waitingRef.current = next;
+    setWaitingState(next);
+  };
   // Nothing is written or removed until the stored draft has been looked at,
   // or the empty screen would erase it before it could be read back.
   const [ready, setReady] = useState(false);
@@ -60,10 +75,13 @@ export function useDraft<T>({
       .then((raw) => {
         if (!alive) return;
         const saved = parseDraft<T>(raw, Date.now(), maxAgeMs);
-        if (saved !== null) {
-          onRestoreRef.current(saved);
-          setRestored(true);
+        if (saved === null) return;
+        if (manual) {
+          setWaiting(saved);
+          return;
         }
+        onRestoreRef.current(saved);
+        setRestored(true);
       })
       .catch(() => {})
       .finally(() => {
@@ -74,27 +92,51 @@ export function useDraft<T>({
     };
   }, [key]);
 
-  const serialized = JSON.stringify(value);
+  // Written a moment after the screen goes quiet, and only when it changed. It
+  // used to be turned into text on every draw - a statement's review is over a
+  // megabyte - which a phone felt on every tap (10 Oct 2026).
+  const valueRef = useRef(value);
+  valueRef.current = value;
+  const lastWritten = useRef<string | null>(null);
   useEffect(() => {
     markUnsavedWork(key, active);
     if (!ready) return;
+    if (waiting !== null) {
+      // A draft still waiting is kept while the screen holds nothing new; new
+      // work - another statement read meanwhile - takes its place.
+      if (!active) return;
+      setWaiting(null);
+    }
     if (!active) {
-      AsyncStorage.removeItem(PREFIX + key).catch(() => {});
+      if (lastWritten.current !== '') AsyncStorage.removeItem(PREFIX + key).catch(() => {});
+      lastWritten.current = '';
       return;
     }
     const timer = setTimeout(() => {
-      AsyncStorage.setItem(PREFIX + key, JSON.stringify({ savedAt: Date.now(), value: JSON.parse(serialized) })).catch(() => {});
-    }, 500);
+      const serialized = JSON.stringify(valueRef.current);
+      if (serialized === lastWritten.current) return;
+      lastWritten.current = serialized;
+      AsyncStorage.setItem(PREFIX + key, `{"savedAt":${Date.now()},"value":${serialized}}`).catch(() => {});
+    }, 800);
     return () => clearTimeout(timer);
-  }, [key, ready, active, serialized]);
+  });
 
   useEffect(() => () => markUnsavedWork(key, false), [key]);
 
   const dismiss = useCallback(() => setRestored(false), []);
   const discard = useCallback(() => {
     setRestored(false);
+    setWaiting(null);
+    lastWritten.current = '';
     AsyncStorage.removeItem(PREFIX + key).catch(() => {});
   }, [key]);
+  const resume = useCallback(() => {
+    const saved = waitingRef.current;
+    if (saved === null) return;
+    setWaiting(null);
+    onRestoreRef.current(saved);
+    setRestored(true);
+  }, []);
 
-  return { restored, dismiss, discard };
+  return { restored, dismiss, discard, waiting, resume };
 }
