@@ -28,6 +28,7 @@ import { CategorySearchBox } from '@/components/CategorySearchBox';
 import { onScreenOnly, useOnScreen } from '@/hooks/useOnScreen';
 import { useBusinesses } from '@/hooks/useBusinesses';
 import { useColors } from '@/hooks/useColors';
+import { HeaderSearchButton } from '@/components/HeaderSearchButton';
 import { isRefund, spentText } from '@/lib/refundLabel';
 import { UndoDeleteBar, useUndoableDelete } from '@/components/UndoDeleteBar';
 import { deletedLabel } from '@/lib/undoDelete';
@@ -1657,6 +1658,7 @@ export default function BudgetScreen() {
             <Text style={styles.headerTitle}>Budget</Text>
             <ScreenHint light>Decide how much to spend on each thing, and see how you are doing.</ScreenHint>
             <View style={styles.headerRight}>
+              <HeaderSearchButton color="#FBF7EC" testID="budget-search" />
               <HelpButton about="category" />
               <View style={styles.monthNav}>
                 <Pressable onPress={prevMonth} style={styles.navBtn} hitSlop={8}>

@@ -1,12 +1,11 @@
 import { openQuickActionsArranger } from '@/lib/layoutPrefs';
 import React from 'react';
-import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { router, type Href } from 'expo-router';
 
 import { PageScrollView } from '@/components/PageScrollReset';
 import { useColors } from '@/hooks/useColors';
-import { useSimpleView } from '@/hooks/useSimpleView';
 import { useTabFlags } from '@/hooks/useTabFlags';
 import { useHasBusiness } from '@/hooks/useHasBusiness';
 
@@ -20,14 +19,13 @@ type Item = {
 };
 
 /**
- * Everything that is not on the small tab bar, one tap away and explained in a
- * sentence. Simple view keeps the bar to four tabs; nothing was taken out, it
- * all lives here. The switch at the foot brings the full bar back.
+ * Everything that is not on the five-tab bar (lib/tabPlan), one tap away and
+ * explained in a sentence: Bank, Goals, Search, Who owes who, Debt, Settings
+ * and the rest. Nothing was taken out of the app; it all lives here (10 Oct 2026).
  */
 export default function MoreScreen() {
   const colors = useColors();
-  const [simple, setSimple] = useSimpleView();
-  const { isShared, showReports, showDebt } = useTabFlags();
+  const { isShared, showBudget, showDebt } = useTabFlags();
   const hasBusiness = useHasBusiness();
 
   const items: Item[] = [
@@ -40,20 +38,29 @@ export default function MoreScreen() {
       show: true,
     },
     {
+      key: 'goals',
+      icon: 'target',
+      title: 'Goals',
+      hint: 'Savings goals and what you have put towards them',
+      href: '/(tabs)/goals',
+      show: true,
+    },
+    {
+      key: 'budget',
+      icon: 'bar-chart-2',
+      title: 'Budget',
+      hint: "The group's categories and what each has left",
+      href: '/(tabs)/budget',
+      // A group's bar carries Contributions in Budget's place (lib/tabPlan).
+      show: isShared && showBudget,
+    },
+    {
       key: 'mpesa',
       icon: 'message-square',
       title: 'Import M-Pesa',
       hint: 'Read your M-Pesa statement, or paste messages, into entries',
       href: '/mpesa-import',
       show: true,
-    },
-    {
-      key: 'reports',
-      icon: 'pie-chart',
-      title: 'Reports',
-      hint: 'See where your money went',
-      href: '/(tabs)/reports',
-      show: showReports,
     },
     {
       key: 'business',
@@ -64,20 +71,12 @@ export default function MoreScreen() {
       show: hasBusiness,
     },
     {
-      key: 'contributions',
-      icon: 'download',
-      title: 'Who put in money',
-      hint: 'What each person has added to the group',
-      href: '/(tabs)/contributions',
-      show: isShared,
-    },
-    {
       key: 'search',
       icon: 'search',
       title: 'Search',
       hint: 'Find any expense or payment',
       href: '/(tabs)/search',
-      // A group's bar has no room for it (Contributions takes the place), so it is here.
+      // Not a tab (lib/tabPlan); also an icon in Activity's and Budget's headers.
       show: true,
     },
     {
@@ -161,22 +160,6 @@ export default function MoreScreen() {
         <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
       </Pressable>
 
-      <View style={[styles.card, styles.switchRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <View style={styles.rowText}>
-          <Text style={[styles.rowTitle, { color: colors.foreground }]}>Simple view</Text>
-          <Text style={[styles.rowHint, { color: colors.mutedForeground }]}>
-            {simple
-              ? 'On: just the main tabs. Switch it off to see every tab at the bottom.'
-              : 'Off: every tab is at the bottom. Switch it on for just the main ones.'}
-          </Text>
-        </View>
-        <Switch
-          value={simple}
-          onValueChange={setSimple}
-          accessibilityLabel="Simple view"
-          testID="more-simple-view-switch"
-        />
-      </View>
     </PageScrollView>
   );
 }

@@ -11,15 +11,14 @@ import { SymbolView } from 'expo-symbols';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GlobalFAB } from '@/components/GlobalFAB';
 import { SubscriptionBanner } from '@/components/SubscriptionBanner';
-import { useSimpleView } from '@/hooks/useSimpleView';
 import { useTabFlags } from '@/hooks/useTabFlags';
 import { useWaitingForYou, waitingBadge } from '@/hooks/useWaitingForYou';
 import { visibleTabs, type TabName } from '@/lib/tabPlan';
 
-// iOS 26+: NativeTabs with liquid glass support
-// 5 core tabs — Bank and Settings remain accessible from Home/header controls.
-// A shared group swaps Search out for Contributions, which is a core shared
-// activity; Search stays reachable from the Home header.
+// iOS 26+: NativeTabs with liquid glass support.
+// Five tabs (lib/tabPlan): Home, Activity, Budget (Contributions in a shared
+// group), Reports, More. Goals, Search, Debt, Bank and Settings are routes with
+// no tab, reached from More, headers and Home cards.
 function NativeTabLayout({ visible }: { visible: TabName[] }) {
   const has = (name: TabName) => visible.includes(name);
   return (
@@ -44,10 +43,12 @@ function NativeTabLayout({ visible }: { visible: TabName[] }) {
           <Label>Contributions</Label>
         </NativeTabs.Trigger>
       )}
-      <NativeTabs.Trigger name="goals">
-        <Icon sf={{ default: 'target', selected: 'target' }} />
-        <Label>Goals</Label>
-      </NativeTabs.Trigger>
+      {has('goals') && (
+        <NativeTabs.Trigger name="goals">
+          <Icon sf={{ default: 'target', selected: 'target' }} />
+          <Label>Goals</Label>
+        </NativeTabs.Trigger>
+      )}
       {has('search') && (
         <NativeTabs.Trigger name="search">
           <Icon sf={{ default: 'magnifyingglass', selected: 'magnifyingglass' }} />
@@ -167,15 +168,17 @@ function ClassicTabLayout({ visible }: { visible: TabName[] }) {
       />
       <Tabs.Screen
         name="goals"
-        options={{
-          title: 'Goals',
-          tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="target" tintColor={color} size={24} />
-            ) : (
-              <Feather name="target" size={22} color={color} />
-            ),
-        }}
+        options={has('goals')
+          ? {
+              title: 'Goals',
+              tabBarIcon: ({ color }) =>
+                isIOS ? (
+                  <SymbolView name="target" tintColor={color} size={24} />
+                ) : (
+                  <Feather name="target" size={22} color={color} />
+                ),
+            }
+          : { href: null }}
       />
       <Tabs.Screen
         name="search"
@@ -264,8 +267,7 @@ function ClassicTabLayout({ visible }: { visible: TabName[] }) {
 export default function TabLayout() {
   const colors = useColors();
   const { group, isShared, showReports, showDebt, showBudget } = useTabFlags();
-  const [simple] = useSimpleView();
-  const visible = visibleTabs({ simple, isShared, showBudget, showDebt, showReports });
+  const visible = visibleTabs({ isShared, showBudget, showDebt, showReports });
   // The shared and personal layouts have a different set of tabs (Contributions
   // vs Search). A native tab bar does not reliably add or drop a trigger when
   // this flips after the group query resolves, so remount the navigator on the
@@ -274,7 +276,7 @@ export default function TabLayout() {
   // tab bar does not reliably grow a trigger when the set changes, so marking
   // the first category as a debt has to remount the navigator for the tab to
   // actually appear.
-  const layoutKey = `${group === undefined ? 'loading' : isShared ? 'shared' : 'personal'}-${showDebt ? 'debt' : 'nodebt'}-${showBudget ? 'budget' : 'nobudget'}-${simple ? 'simple' : 'full'}`;
+  const layoutKey = `${group === undefined ? 'loading' : isShared ? 'shared' : 'personal'}-${showDebt ? 'debt' : 'nodebt'}-${showBudget ? 'budget' : 'nobudget'}-${showReports ? 'reports' : 'noreports'}`;
 
   // SubscriptionBanner sits above the navigator, not inside either tab
   // layout, so it is on screen no matter which tab is active — an in-flow

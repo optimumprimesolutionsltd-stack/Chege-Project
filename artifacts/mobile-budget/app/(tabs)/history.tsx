@@ -21,6 +21,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
+import { HeaderSearchButton } from '@/components/HeaderSearchButton';
 import { isRefund, spentText } from '@/lib/refundLabel';
 import { onScreenOnly, useOnScreen } from '@/hooks/useOnScreen';
 import { UndoDeleteBar, useUndoableDelete } from '@/components/UndoDeleteBar';
@@ -805,6 +806,8 @@ export default function HistoryScreen() {
             {activeTab === 'expenses' && expenses.length > 0 && (
               <ListEditButton editor={expEditor} canManage={isContributionManager || expenses.some(canRemoveExpenseRecord)} />
             )}
+            <View style={{ flex: 1 }} />
+            <HeaderSearchButton color={colors.foreground} testID="activity-search" />
           </View>
           {activeTab === 'expenses' && expenses.length > 0 && (
             <Text style={[styles.headerSub, { color: colors.mutedForeground }]}>

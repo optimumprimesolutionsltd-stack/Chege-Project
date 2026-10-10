@@ -1,53 +1,31 @@
 import { describe, expect, it } from 'vitest';
 import { visibleTabs, type TabFlags } from '@/lib/tabPlan';
 
-const base: TabFlags = { simple: false, isShared: false, showBudget: true, showDebt: true, showReports: true };
+// "Cut the bar to 5 tabs: Home · Activity · Budget · Reports · More" (10 Oct 2026).
+const base: TabFlags = { isShared: false, showBudget: true, showDebt: true, showReports: true };
 
-describe('the full tab bar (unchanged)', () => {
-  it('a personal budget with everything on has seven tabs and no More', () => {
-    expect(visibleTabs(base)).toEqual(['index', 'history', 'budget', 'goals', 'search', 'reports', 'debt']);
+describe('the tab bar: five tabs for everybody', () => {
+  it('a personal budget: Home, Activity, Budget, Reports, More', () => {
+    expect(visibleTabs(base)).toEqual(['index', 'history', 'budget', 'reports', 'more']);
   });
 
-  it('a shared group swaps Search for Contributions', () => {
-    const tabs = visibleTabs({ ...base, isShared: true });
-    expect(tabs).toContain('contributions');
-    expect(tabs).not.toContain('search');
+  it('a shared group: Contributions in Budget\'s place', () => {
+    expect(visibleTabs({ ...base, isShared: true })).toEqual(['index', 'history', 'contributions', 'reports', 'more']);
   });
 
-  it('leaves out what the budget does not have', () => {
-    expect(visibleTabs({ ...base, showBudget: false, showDebt: false, showReports: false })).toEqual([
-      'index',
-      'history',
-      'goals',
-      'search',
-    ]);
+  it('never Goals, Search or Debt - they are under More', () => {
+    for (const flags of [base, { ...base, isShared: true }]) {
+      const tabs = visibleTabs(flags);
+      expect(tabs).not.toContain('goals');
+      expect(tabs).not.toContain('search');
+      expect(tabs).not.toContain('debt');
+    }
   });
 
-  it('never shows More', () => {
-    expect(visibleTabs(base)).not.toContain('more');
-  });
-});
-
-describe('simple view', () => {
-  it('keeps four tabs and a More', () => {
-    expect(visibleTabs({ ...base, simple: true })).toEqual(['index', 'history', 'budget', 'goals', 'more']);
-  });
-
-  it('is the same for a shared group: everything else is under More', () => {
-    expect(visibleTabs({ ...base, simple: true, isShared: true })).toEqual([
-      'index',
-      'history',
-      'budget',
-      'goals',
-      'more',
-    ]);
-  });
-
-  it('drops Budget when the budget is off', () => {
-    expect(visibleTabs({ ...base, simple: true, showBudget: false })).toEqual(['index', 'history', 'goals', 'more']);
-  });
-
-  it('never shows more than five tabs', () => {
-    expect(visibleTabs({ ...base, simple: true }).length).toBeLessThanOrEqual(5);
+  it('follows the Settings switches for Budget and Reports, and never more than five', () => {
+    expect(visibleTabs({ ...base, showBudget: false, showReports: false })).toEqual(['index', 'history', 'more']);
+    for (const isShared of [false, true]) {
+      expect(visibleTabs({ ...base, isShared }).length).toBeLessThanOrEqual(5);
+    }
   });
 });
