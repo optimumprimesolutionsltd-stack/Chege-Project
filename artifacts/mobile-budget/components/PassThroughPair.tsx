@@ -60,8 +60,10 @@ function PersonPicker({ title, parties, value, onChange, testID }: {
  * "Passed through my M-Pesa": an entry and its other half, both already
  * imported, sorted out together (lib/passThrough).
  */
-export function PassThroughPair({ entry, onClose, onDone }: {
+export function PassThroughPair({ entry, mode: startMode = 'held', onClose, onDone }: {
   entry: PairEntry;
+  /** Which kind it opens on: the choice tapped on Sort them out. */
+  mode?: PassThroughMode;
   onClose: () => void;
   onDone: (change: { text: string; ids: number[]; undo: () => Promise<void> }) => void;
 }) {
@@ -78,7 +80,7 @@ export function PassThroughPair({ entry, onClose, onDone }: {
     staleTime: 30_000,
   });
 
-  const [mode, setMode] = useState<PassThroughMode>('held');
+  const [mode, setMode] = useState<PassThroughMode>(startMode);
   const [otherId, setOtherId] = useState<number | null>(null);
   const [owner, setOwner] = useState<Pick>({ id: null, name: '' });
   const [payee, setPayee] = useState<Pick>({ id: null, name: '' });

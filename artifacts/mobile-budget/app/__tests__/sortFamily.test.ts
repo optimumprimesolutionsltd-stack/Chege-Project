@@ -7,7 +7,9 @@ const sort = readFileSync('app/sort-entries.tsx', 'utf8').replace(/\r\n/g, '\n')
 describe('Sort them out: Family', () => {
   it('a Family chip on money out, first in the row', () => {
     expect(sort).toContain('testID={`sort-entry-${entry.id}-family`}');
-    expect(sort.indexOf('sort-entry-${entry.id}-family')).toBeLessThan(sort.indexOf('sort-entry-${entry.id}-debt'));
+    // First of the money-out chips; money in has its own groups (moneyInGroups).
+    const outRow = sort.slice(sort.indexOf('onPress={() => void asFamily(entry)}'));
+    expect(outRow.indexOf('sort-entry-${entry.id}-family')).toBeLessThan(outRow.indexOf('sort-entry-${entry.id}-debt'));
   });
 
   it('files it under the budget\'s family category, made as Teach Jamvi makes it when there is none', () => {
