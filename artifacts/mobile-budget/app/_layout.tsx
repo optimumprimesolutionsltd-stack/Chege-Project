@@ -18,6 +18,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useFonts } from 'expo-font';
 import { Stack, router, usePathname, useSegments } from 'expo-router';
+import { sendLeftTrace } from '@/lib/importTrace';
 import { refreshAfterSave, refreshShownHistory } from '@/lib/refreshAfterSave';
 import { useStandardLinks } from '@/hooks/useCommonCategories';
 import { useRulesSync } from '@/hooks/useRulesSync';
@@ -288,6 +289,11 @@ function RootLayoutNav() {
   // An update restarts the app on Home. If somebody accepted it from another
   // screen, that screen was noted just before the restart: go back to it once
   // the app has settled on Home, instead of making them find their way again.
+  // Footprints a frozen Import M-Pesa page left on the phone, sent once (lib/importTrace).
+  useEffect(() => {
+    void sendLeftTrace();
+  }, []);
+
   const resumedRef = useRef(false);
   useEffect(() => {
     if (!isAuthenticated || checkingChooser || !isTabsHome || resumedRef.current) return;

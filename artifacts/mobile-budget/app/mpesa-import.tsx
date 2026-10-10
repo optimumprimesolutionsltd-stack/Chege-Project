@@ -1,4 +1,4 @@
-import React, { startTransition, useEffect, useMemo, useRef, useState } from 'react';
+import React, { startTransition, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { withoutPersonTag } from '@/lib/personNumber';
 import {
   ActivityIndicator,
@@ -91,6 +91,7 @@ import { formatExact } from '@/lib/formatExact';
 import { READER_STOPPED, StatementReader, type ReaderJob } from '@/components/StatementReader';
 import { rememberMpesaCard } from '@/lib/mpesaCard';
 import { keepScreenAwakeWhileSaving, letScreenSleepAgain } from '@/lib/keepAwake';
+import { trace, traceOpen, traceSettled } from '@/lib/importTrace';
 import { useImportDiagnostics } from '@/lib/importDiagnostics';
 import { getImportProgress, importSaveStalled, setImportProgress, useImportProgress } from '@/lib/importProgress';
 import { clearImportStep, noteImportStep, readUnfinishedImport, type ImportStep } from '@/lib/importBreadcrumb';
@@ -515,62 +516,111 @@ const RECEIPT_BATCH = 1_000;
  */
 
 export default function MpesaImportScreen() {
+  // Footprints while it opens (lib/importTrace): the page froze before it could send anything.
+  const traceFirst = useRef(true);
+  if (traceFirst.current) { traceFirst.current = false; traceOpen(); }
+  const traceRenders = useRef(0);
+  traceRenders.current += 1;
+  const tracing = traceRenders.current <= 6;
+  if (tracing) trace(`render ${traceRenders.current}`);
+  useLayoutEffect(() => { if (traceRenders.current <= 6) trace(`drawn ${traceRenders.current}`); });
+  useEffect(() => {
+    trace('started');
+    const settled = setTimeout(() => traceSettled(), 15_000);
+    return () => { clearTimeout(settled); traceSettled(); };
+  }, []);
   // Payees Jamvi knows may go under a common category the budget does not have
   // yet: it is made just before saving (lib/commonCategories).
+  if (tracing) trace('L520');
   useState(() => { setMakesStandardCategories(true); return null; });
+  if (tracing) trace('L521');
   useEffect(() => () => setMakesStandardCategories(false), []);
+  if (tracing) trace('L522');
   const colors = useColors();
+  if (tracing) trace('L523');
   const insets = useSafeAreaInsets();
+  if (tracing) trace('L524');
   const { user } = useAuth();
+  if (tracing) trace('L525');
   const queryClient = useQueryClient();
+  if (tracing) trace('L526');
   const { data: group } = useGetGroup();
+  if (tracing) trace('L527');
   const isShared = group?.isPrivate === false;
+  if (tracing) trace('L528');
   const { data: entitlements } = useEntitlements();
   // In a shared group only an owner or admin can record payments out, moves between accounts and savings.
+  if (tracing) trace('L530');
   const canManageBudget = !isShared || group?.role === 'owner' || group?.role === 'admin';
 
+  if (tracing) trace('L532');
   const { data: accountList = [] } = useGetJointAccounts();
+  if (tracing) trace('L533');
   const accounts = accountList as unknown as Array<{ id: number; name: string; accountNumber?: string | null }>;
+  if (tracing) trace('L534');
   const { data: categoryList = [] } = useGetBudgetCategories();
+  if (tracing) trace('L535');
   const categories = categoryList as unknown as CategoryRow[];
+  if (tracing) trace('L536');
   const { mutateAsync: createNotSureCategory } = useCreateBudgetCategory();
+  if (tracing) trace('L537');
   const { mutateAsync: createDeposit } = useCreateDeposit();
+  if (tracing) trace('L538');
   const { mutateAsync: createDisbursement } = useCreateDisbursement();
+  if (tracing) trace('L539');
   const { mutateAsync: transferBankToBank } = useTransferBankToBank();
+  if (tracing) trace('L540');
   const { mutateAsync: transferBankToSavings } = useTransferBankToSavings();
+  if (tracing) trace('L541');
   const { mutateAsync: transferSavingsToBank } = useTransferSavingsToBank();
+  if (tracing) trace('L542');
   const { data: savingsGoalList = [] } = useGetSavingsGoals();
+  if (tracing) trace('L543');
   const savingsGoals = savingsGoalList as unknown as Array<{ id: number; name: string; isCompleted?: boolean }>;
   // "Who is this for?" on a line: you, or one of My businesses (lib/importBusiness).
+  if (tracing) trace('L545');
   const businesses = useBusinesses();
+  if (tracing) trace('L546');
   const namedPayees = useNamedPayees();
   // Businesses added from a line, shown before My businesses has caught up.
+  if (tracing) trace('L548');
   const [addedBusinesses, setAddedBusinesses] = useState<Array<{ id: number; name: string }>>([]);
+  if (tracing) trace('L549');
   const businessIds = useMemo(() => new Set([...businesses.ids, ...addedBusinesses.map((one) => one.id)]), [businesses.ids, addedBusinesses]);
+  if (tracing) trace('L550');
   const whoForBusinesses = useMemo(
     () => [...businesses.list, ...addedBusinesses.filter((one) => !businesses.ids.has(one.id))],
     [businesses.list, businesses.ids, addedBusinesses],
   );
+  if (tracing) trace('L554');
   const owners = useMemo(
     () => costOwners(categories as unknown as Array<{ name: string; reducesIncomeSourceId?: number | null }>, businessIds),
     [categories, businessIds],
   );
 
+  if (tracing) trace('L559');
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
   // M-Pesa is usually its own account: start on one that says so.
+  if (tracing) trace('L561');
   const guessedAccount = accounts.find((account) => /m-?pesa/i.test(account.name))?.id ?? accounts[0]?.id ?? null;
+  if (tracing) trace('L562');
   const accountId = selectedAccountId ?? guessedAccount;
   // The person's other accounts, known by number: lines to or from them start as
   // moves, not spending (lib/teachJamvi). Never the account being imported into.
+  if (tracing) trace('L565');
   const ownAccounts = useMemo(() => accounts.filter((account) => account.id !== accountId), [accounts, accountId]);
+  if (tracing) trace('L566');
   const startChoices = (shown: readonly PreviewLine[], fresh: Record<number, Choice>) => withOwnAccounts(shown, fresh, ownAccounts, rules);
+  if (tracing) trace('L567');
   const { data: account } = useGetJointAccount(accountId ? { accountId } : undefined);
+  if (tracing) trace('L568');
   const history = useMemo(
     () => ((account?.transactions ?? []) as Array<{ type: string; description: string; expenseCategory?: string | null; incomeSourceId?: number | null; chargeForTransactionId?: number | null }>),
     [account],
   );
   // Where money in can be said to have come from: the person's own sources in a
   // Personal budget, everybody's in a shared group (each names its owner).
+  if (tracing) trace('L574');
   const { data: incomeSources = [] } = useQuery<Array<{ id: number; name: string; userId?: string | null }>>({
     queryKey: ['income-sources', !isShared ? user?.id ?? '__me__' : '__group__'],
     queryFn: () =>
@@ -583,20 +633,28 @@ export default function MpesaImportScreen() {
   // budget, or a data problem never quite cleaned up) - checked against this
   // so a deposit still saves, attributed to whoever is doing the import now,
   // instead of failing outright over an attribution nobody asked for.
+  if (tracing) trace('L586');
   const { data: members = [] } = useGetMembers();
+  if (tracing) trace('L587');
   const memberIds = useMemo(() => members.map((member) => member.userId), [members]);
 
+  if (tracing) trace('L589');
   const [text, setText] = useState('');
+  if (tracing) trace('L590');
   const [reading, setReading] = useState(false);
   // How far a statement has got, so a long one does not look frozen: opening
   // the file, reading page by page, then checking what is already recorded.
+  if (tracing) trace('L593');
   const [readProgress, setReadProgress] = useState<{ stage: 'opening' | 'reading' | 'checking'; page?: number; of?: number } | null>(null);
   // Reading is noted on the phone as it goes; a read that ends - in a review
   // or a message on screen - leaves nothing behind.
   // Only a read this screen ran is cleared when it ends: on opening, the step
   // an earlier run left must survive long enough to be read below.
+  if (tracing) trace('L598');
   const readThisRun = React.useRef(false);
+  if (tracing) trace('L599');
   useEffect(() => {
+    trace('E599');
     if (readProgress) {
       readThisRun.current = true;
       noteImportStep(
@@ -609,8 +667,11 @@ export default function MpesaImportScreen() {
   }, [readProgress]);
   // The app was closed in the middle of an import the last time: said here,
   // with where it had got to, rather than leaving an empty screen to explain.
+  if (tracing) trace('L612');
   const [unfinished, setUnfinished] = useState<ImportStep | null>(null);
+  if (tracing) trace('L613');
   useEffect(() => {
+    trace('E613');
     void readUnfinishedImport().then((step) => {
       if (step) setUnfinished(step);
     });
@@ -618,12 +679,16 @@ export default function MpesaImportScreen() {
   // A read that stops moving is given up on, so the buttons are not left
   // spinning for ever. Restarted on every page, so a long statement that is
   // still going is never cut off - only one that has gone quiet.
+  if (tracing) trace('L621');
   const readStallTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  if (tracing) trace('L622');
   const READ_STALL_MS = 90_000;
+  if (tracing) trace('L623');
   const clearReadStall = () => {
     if (readStallTimer.current) clearTimeout(readStallTimer.current);
     readStallTimer.current = null;
   };
+  if (tracing) trace('L627');
   const armReadStall = () => {
     clearReadStall();
     readStallTimer.current = setTimeout(() => {
@@ -634,50 +699,72 @@ export default function MpesaImportScreen() {
       Alert.alert('The statement stopped loading', 'Nothing happened for a minute and a half, so Jamvi stopped. Try again, or paste your messages instead.');
     }, READ_STALL_MS);
   };
+  if (tracing) trace('L637');
   useEffect(() => clearReadStall, []);
   // A statement PDF: read on this phone, with its password used only here.
+  if (tracing) trace('L639');
   const [statementFile, setStatementFile] = useState<ChosenStatement | null>(null);
   // The file list is open, or the chosen file is being copied in: the button
   // says so and takes no second tap (a big statement takes a few seconds).
+  if (tracing) trace('L642');
   const [pickingStatement, setPickingStatement] = useState(false);
+  if (tracing) trace('L643');
   const statementPickRef = useRef(false);
+  if (tracing) trace('L644');
   const [statementPassword, setStatementPassword] = useState('');
   // Shown on request: a statement password is long and typed blind, and one
   // wrong digit only shows up as "Wrong password" after the file is read.
+  if (tracing) trace('L647');
   const [showStatementPassword, setShowStatementPassword] = useState(false);
+  if (tracing) trace('L648');
   const [readerJob, setReaderJob] = useState<ReaderJob | null>(null);
+  if (tracing) trace('L649');
   const [statementNote, setStatementNote] = useState<string | null>(null);
+  if (tracing) trace('L650');
   const [statementReading, setStatementReading] = useState<StatementReading | null>(null);
+  if (tracing) trace('L651');
   const [lines, setLines] = useState<PreviewLine[] | null>(null);
   // Tells the server what this page is doing while it is open (lib/importDiagnostics).
+  if (tracing) trace('L653');
   const diagnose = useImportDiagnostics(lines?.length ?? 0);
+  if (tracing) trace('L654');
   const [choices, setChoices] = useState<Record<number, Choice>>({});
   // Undo for every change to the list - a chip, Not sure, Confirm, a bulk
   // button, an untick - most recent first. Cleared for a new list or after a
   // save (when the lines change); a save itself is not undone here.
+  if (tracing) trace('L658');
   const { canUndo, steps: undoSteps, undo } = useUndoHistory(choices, setChoices, lines, {
     skip: (previous) => Object.keys(previous).length === 0,
   });
   // Which of the entries to show: all, or only those still to look at, changed by you, or needing you.
+  if (tracing) trace('L662');
   const [view, setView] = useState<ReviewView>('all');
   // How many entries are drawn. A full year's statement is thousands of
   // entries, each a card with rows of buttons, and drawing them all at once
   // ran the phone out of memory: Android closed Jamvi with no message. The
   // list is drawn a page at a time; saving still covers every entry.
+  if (tracing) trace('L667');
   const [shownCount, setShownCount] = useState(LINES_PER_PAGE);
+  if (tracing) trace('L668');
   const [shownSkipped, setShownSkipped] = useState(LINES_PER_PAGE);
   // Lines whose extra questions (debt, move, savings...) are open. Each closed line is a few native views instead of a dozen, which is what kept toggling snappy with 200 of them.
+  if (tracing) trace('L670');
   const [openMore, setOpenMore] = useState<Set<number>>(new Set());
   // "Record it in a separate budget instead" opened on these lines: a business's money
   // is asked under Who is this for?, so the other-budget question waits to be asked for.
+  if (tracing) trace('L673');
   const [otherBudgetOpen, setOtherBudgetOpen] = useState<Set<number>>(new Set());
+  if (tracing) trace('L674');
   const [chargeCategory, setChargeCategory] = useState('');
   // A number is a line being categorised; 'charge' is the M-Pesa charges; 'recat:N' is an already-recorded entry whose category is being changed.
   // Held in a ref, and the sheet opens itself (CategorySheetHost): as state, every
   // open and close redrew the whole review - up to 100 entries - before the sheet
   // showed, so "Pick a category" answered seconds late on a phone (10 Oct 2026).
+  if (tracing) trace('L679');
   const pickingRef = React.useRef<PickTarget | null>(null);
+  if (tracing) trace('L680');
   const sheetRef = React.useRef<SheetHandle>(null);
+  if (tracing) trace('L681');
   const setPicking = React.useCallback((target: PickTarget | null) => {
     pickingRef.current = target;
     if (target === null) sheetRef.current?.close();
@@ -685,24 +772,34 @@ export default function MpesaImportScreen() {
   }, []);
   // Search over the review ("bundle", "KPLC", a till): what is found can be
   // confirmed, or given one category, all together.
+  if (tracing) trace('L688');
   const [find, setFind] = useState('');
+  if (tracing) trace('L689');
   const [recat, setRecat] = useState<Record<number, string>>({});
+  if (tracing) trace('L690');
   const [recategorising, setRecategorising] = useState(false);
+  if (tracing) trace('L691');
   const [saving, setSaving] = useState(false);
   // How far a save has got, so two hundred entries travelling to the server together does
   // not just sit behind a spinner with no sign of life.
+  if (tracing) trace('L694');
   const [saveProgress, setSaveProgress] = useState<{ done: number; total: number } | null>(null);
+  if (tracing) trace('L695');
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   // How the last save of part of a statement went, shown on the review itself:
   // the whole-screen result is only for when nothing is left to save.
+  if (tracing) trace('L698');
   const [lastSave, setLastSave] = useState<Outcome | null>(null);
   // Seen here, the result needs no bar elsewhere: cleared on leaving once it
   // is done. Left while still saving, it stays for the bar to report.
+  if (tracing) trace('L701');
   useEffect(() => () => {
     if (getImportProgress()?.stage === 'done') setImportProgress(null);
   }, []);
   // Unfinished work survives an update restart, a crash, or a switch of budget.
+  if (tracing) trace('L705');
   const pendingChoicesRef = React.useRef<Record<number, Choice> | null>(null);
+  if (tracing) trace('L706');
   const { restored, dismiss: dismissRestored, discard: discardDraft } = useDraft<{
     text: string;
     choices: Record<number, Choice>;
@@ -723,10 +820,12 @@ export default function MpesaImportScreen() {
   });
   // A statement is worked through at the person's own pace: what is still to do is kept
   // on this phone (never the PDF or its password) and picked up again where it was left.
+  if (tracing) trace('L726');
   const statementLeft = (statementReading?.lines ?? []).filter(isRecordable).length;
 
   // One plain message when the trial or subscription has ended, with the way
   // to pay, in place of the same 402 listed under every entry.
+  if (tracing) trace('L730');
   const lapsedCard = (waiting: number) => {
     const words = lapsedSaveMessage(entitlements?.status, waiting, isShared);
     return (
@@ -747,6 +846,7 @@ export default function MpesaImportScreen() {
       </View>
     );
   };
+  if (tracing) trace('L750');
   const { discard: discardStatementDraft } = useDraft<{
     reading: StatementReading;
     choices: Record<number, Choice>;
@@ -791,14 +891,21 @@ export default function MpesaImportScreen() {
   });
   // A save still running from before this screen opened: shown, not started twice,
   // and the list brought up to date when it ends.
+  if (tracing) trace('L794');
   const [waitingForSave, setWaitingForSave] = useState(false);
+  if (tracing) trace('L795');
   const [resumeSave, setResumeSave] = useState(false);
+  if (tracing) trace('L796');
   const [resumeJob, setResumeJob] = useState<number | null>(null);
+  if (tracing) trace('L797');
   const liveProgress = useImportProgress();
   // A save from an earlier visit to this screen, still running: its progress
   // is shown here, since the bar the rest of Jamvi shows is off on this screen.
+  if (tracing) trace('L800');
   const backgroundSave = !saving && liveProgress?.stage === 'saving' ? liveProgress : null;
+  if (tracing) trace('L801');
   useEffect(() => {
+    trace('E801');
     if (!waitingForSave || liveProgress?.stage === 'saving' || !lines) return;
     setWaitingForSave(false);
     markRecorded(lines)
@@ -821,8 +928,10 @@ export default function MpesaImportScreen() {
   // picker over the entries without clearing them: the work in progress and its
   // copy on this phone stay exactly as they are until the new reading arrives,
   // and that reading keeps every choice (carryChoices).
+  if (tracing) trace('L824');
   const [rereading, setRereading] = useState(false);
 
+  if (tracing) trace('L826');
   const startOver = () => {
     setRereading(false);
     discardStatementDraft();
@@ -836,11 +945,17 @@ export default function MpesaImportScreen() {
   };
 
   // Which budget these will be saved into, and a way to change it without losing the paste.
+  if (tracing) trace('L839');
   const { data: workspaces = [] } = useGetWorkspaces();
+  if (tracing) trace('L840');
   const selectWorkspace = useSelectWorkspace();
+  if (tracing) trace('L841');
   const [switchingBudget, setSwitchingBudget] = useState(false);
+  if (tracing) trace('L842');
   const [budgetPickerOpen, setBudgetPickerOpen] = useState(false);
+  if (tracing) trace('L843');
   const switchedToRef = React.useRef<number | null>(null);
+  if (tracing) trace('L844');
   const switchBudget = async (groupId: number) => {
     if (groupId === group?.id) {
       setBudgetPickerOpen(false);
@@ -868,11 +983,15 @@ export default function MpesaImportScreen() {
   // say. Only a budget this person actually manages, so recording in it is always allowed.
   // Its accounts, categories and income sources are read without ever switching to it, then
   // kept for the rest of this review so picking it on a second line costs nothing further.
+  if (tracing) trace('L871');
   const otherManagedBudgets = (workspaces as Workspace[]).filter(
     (workspace) => workspace.id !== group?.id && (workspace.role === 'owner' || workspace.role === 'admin'),
   );
+  if (tracing) trace('L874');
   const [otherBudgetOptions, setOtherBudgetOptions] = useState<Record<number, OtherBudgetOptions>>({});
+  if (tracing) trace('L875');
   const [loadingOtherBudget, setLoadingOtherBudget] = useState<number | null>(null);
+  if (tracing) trace('L876');
   const loadOtherBudgetOptions = async (groupId: number): Promise<OtherBudgetOptions | null> => {
     const cached = otherBudgetOptions[groupId];
     if (cached) return cached;
@@ -893,9 +1012,12 @@ export default function MpesaImportScreen() {
   // file (the file is gone), so its entries are kept and checked against the new budget:
   // which of them it already has, and fresh suggestions. Switching used to clear the
   // choices and leave every entry unticked and greyed out.
+  if (tracing) trace('L896');
   const statementReadingRef = React.useRef<StatementReading | null>(null);
   statementReadingRef.current = statementReading;
+  if (tracing) trace('L898');
   useEffect(() => {
+    trace('E898');
     if (switchedToRef.current === null || group?.id !== switchedToRef.current) return;
     switchedToRef.current = null;
     if (textRef.current.trim()) {
@@ -918,13 +1040,20 @@ export default function MpesaImportScreen() {
   }, [group?.id]);
 
   // Names the person gave payees, kept on this device for this budget.
+  if (tracing) trace('L921');
   const [nicknames, setNicknames] = useState<NicknameMap>({});
+  if (tracing) trace('L922');
   const [naming, setNaming] = useState<{ index: number; original: string; text: string } | null>(null);
   // What Jamvi was asked to remember: a payee's category, kept on this phone for this budget.
+  if (tracing) trace('L924');
   const rulesKey = rulesStorageKey(group?.id);
+  if (tracing) trace('L925');
   const [rules, setRules] = useState<PayeeRules>({});
+  if (tracing) trace('L926');
   const [rulesOpen, setRulesOpen] = useState(false);
+  if (tracing) trace('L927');
   useEffect(() => {
+    trace('E927');
     let active = true;
     AsyncStorage.getItem(rulesKey)
       .then((stored) => {
@@ -935,6 +1064,7 @@ export default function MpesaImportScreen() {
       active = false;
     };
   }, [rulesKey]);
+  if (tracing) trace('L938');
   const keepRules = (next: PayeeRules) => {
     setRules(next);
     // On the server too, for every phone and the web (lib/rulesStore).
@@ -942,9 +1072,13 @@ export default function MpesaImportScreen() {
   };
   // Payees remembered as another budget's - the chama's paybill, say - kept the
   // same way, so the next statement suggests that budget for them.
+  if (tracing) trace('L945');
   const otherRulesKey = otherBudgetRulesKey(group?.id);
+  if (tracing) trace('L946');
   const [otherRules, setOtherRules] = useState<OtherBudgetRules>({});
+  if (tracing) trace('L947');
   useEffect(() => {
+    trace('E947');
     let active = true;
     AsyncStorage.getItem(otherRulesKey)
       .then((stored) => {
@@ -955,13 +1089,17 @@ export default function MpesaImportScreen() {
       active = false;
     };
   }, [otherRulesKey]);
+  if (tracing) trace('L958');
   const keepOtherRules = (next: OtherBudgetRules) => {
     setOtherRules(next);
     void saveKnowledge(group?.id, 'other-budget-rules', next);
   };
 
+  if (tracing) trace('L963');
   const nicknamesKey = nicknameStorageKey(group?.id);
+  if (tracing) trace('L964');
   useEffect(() => {
+    trace('E964');
     let active = true;
     AsyncStorage.getItem(nicknamesKey)
       .then((stored) => {
@@ -973,6 +1111,7 @@ export default function MpesaImportScreen() {
     };
   }, [nicknamesKey]);
 
+  if (tracing) trace('L976');
   const saveNickname = () => {
     if (!naming || !lines) return;
     const next = withNickname(nicknames, naming.original, naming.text);
@@ -988,7 +1127,9 @@ export default function MpesaImportScreen() {
   // read (a Share opens the app cold, and they load in the background). When they
   // do, suggest again for lines still on a suggestion or on nothing; a category
   // the person chose is never touched.
+  if (tracing) trace('L991');
   useEffect(() => {
+    trace('E991');
     if (!lines) return;
     setChoices((current) => refreshSuggestions(lines, current, history, categories.map((row) => row.name), effectiveChargeCategory, rules));
     // Runs when the lists load, not on every choice.
@@ -996,15 +1137,20 @@ export default function MpesaImportScreen() {
   }, [categoryList, account]);
 
   // Sending a message Jamvi could not read, so its format can be learned.
+  if (tracing) trace('L999');
   const [reporting, setReporting] = useState<{ index: number; text: string } | null>(null);
+  if (tracing) trace('L1000');
   const [sendingReport, setSendingReport] = useState(false);
+  if (tracing) trace('L1001');
   const [reported, setReported] = useState<Set<number>>(new Set());
 
+  if (tracing) trace('L1003');
   const openReport = (index: number) => {
     const message = smsMessages ? smsMessages[index] ?? null : messageFor(text, index);
     if (message) setReporting({ index, text: redactForReport(message) });
   };
 
+  if (tracing) trace('L1008');
   const sendReport = async () => {
     if (!reporting || sendingReport) return;
     setSendingReport(true);
@@ -1024,6 +1170,7 @@ export default function MpesaImportScreen() {
     }
   };
 
+  if (tracing) trace('L1027');
   const reportLink = (item: PreviewLine) => {
     if (!canReport(item)) return null;
     return reported.has(item.index) ? (
@@ -1037,33 +1184,41 @@ export default function MpesaImportScreen() {
     );
   };
 
+  if (tracing) trace('L1040');
   useEffect(() => {
+    trace('E1040');
     AsyncStorage.getItem(CHARGE_CATEGORY_KEY).then((stored) => stored && setChargeCategory(stored)).catch(() => {});
   }, []);
 
   // Every budget has built-in charge categories (the server makes sure). When
   // they are there, fees go to them without asking, the same every time; a
   // budget without them yet keeps the picker, so an import never stalls.
+  if (tracing) trace('L1047');
   const builtInCharge = useMemo(
     () => categories.find((row) => row.name.trim().toLowerCase() === 'm-pesa charges')?.name ?? null,
     [categories],
   );
+  if (tracing) trace('L1051');
   const fulizaCategory = useMemo(
     () => categories.find((row) => row.name.trim().toLowerCase() === 'fuliza charges')?.name ?? null,
     [categories],
   );
+  if (tracing) trace('L1055');
   useEffect(() => {
+    trace('E1055');
     if (builtInCharge) setChargeCategory(builtInCharge);
   }, [builtInCharge]);
   // Charges go to the budget's built-in M-Pesa charges whenever it has one.
   // The last category picked for charges is remembered across budgets, and
   // when it loaded after the categories it quietly won - filing every charge
   // under School fees. It now only stands in where there is no built-in one.
+  if (tracing) trace('L1062');
   const effectiveChargeCategory = builtInCharge ?? chargeCategory;
 
   // Reading messages, pasted or from the phone. It saves nothing, so a server
   // that is briefly not there (a restart, a dropped connection) is waited out
   // and asked again, the same as a save is, before the reading gives up.
+  if (tracing) trace('L1067');
   const readPreview = (pasted: string) =>
     retrySave(() =>
       customFetch<{ lines: PreviewLine[] }>('/api/mpesa/import/preview', {
@@ -1075,6 +1230,7 @@ export default function MpesaImportScreen() {
       throw new ReadRequestFailed(error);
     });
 
+  if (tracing) trace('L1078');
   const readMessages = async (pasted: string = text) => {
     if (!pasted.trim()) {
       Alert.alert('Paste your messages', 'Copy them from your Messages app, then paste them here.');
@@ -1114,26 +1270,37 @@ export default function MpesaImportScreen() {
   // Reading M-Pesa's messages straight from the phone (lib/mpesaSms): Android,
   // in a build that carries it. The texts are kept here only so a line can be
   // matched back to its message; they are never saved.
+  if (tracing) trace('L1117');
   const smsReadable = canReadSms();
   // The first time - nothing brought in from M-Pesa in this budget yet - the
   // screen leads with one statement from a day the person chooses, and the
   // other ways in wait one tap away (lib/mpesaFirstStart).
+  if (tracing) trace('L1121');
   const { data: mpesaSummary } = useQuery<{ imported: boolean }>({
     queryKey: ['mpesa-summary', group?.id ?? null],
     queryFn: () => customFetch<{ imported: boolean }>('/api/mpesa/summary'),
     enabled: group?.id != null,
     staleTime: 60_000,
   });
+  if (tracing) trace('L1127');
   const firstRun = mpesaSummary?.imported === false && !rereading;
+  if (tracing) trace('L1128');
   const [startFrom, setStartFrom] = useState(() => startPresets()[0].from);
+  if (tracing) trace('L1129');
   const [otherWays, setOtherWays] = useState(false);
   // Read the first time, so what the statement left out is said and reading new messages starts after it.
+  if (tracing) trace('L1131');
   const firstStatementRef = React.useRef<{ from: string } | null>(null);
+  if (tracing) trace('L1132');
   const [smsMessages, setSmsMessages] = useState<string[] | null>(null);
+  if (tracing) trace('L1133');
   const [smsFrom, setSmsFrom] = useState<string>(monthStartIso);
+  if (tracing) trace('L1134');
   const [smsTo, setSmsTo] = useState<string>(() => isoDay(new Date()));
   // A month with the arrows, or a period ending today (lib/mpesaSms).
+  if (tracing) trace('L1136');
   const [smsPeriod, setSmsPeriod] = useState<SmsPeriod>('month');
+  if (tracing) trace('L1137');
   const chooseSmsPeriod = (period: SmsPeriod) => {
     setSmsPeriod(period);
     // Picking dates starts from whatever was showing, to adjust from there.
@@ -1142,12 +1309,18 @@ export default function MpesaImportScreen() {
     setSmsFrom(range.from);
     setSmsTo(range.to);
   };
+  if (tracing) trace('L1145');
   const [smsPicker, setSmsPicker] = useState<null | 'from' | 'to'>(null);
+  if (tracing) trace('L1146');
   const [smsAuto, setSmsAuto] = useState<SmsAuto>({ on: false, since: 0 });
   // The newest message taken in by "new since you last looked", so a save moves the mark on.
+  if (tracing) trace('L1148');
   const smsNewestRef = React.useRef<number | null>(null);
+  if (tracing) trace('L1149');
   const autoKey = smsAutoKey(user?.id);
+  if (tracing) trace('L1150');
   useEffect(() => {
+    trace('E1150');
     let active = true;
     AsyncStorage.getItem(autoKey).then((raw) => { if (active) setSmsAuto(parseSmsAuto(raw)); }).catch(() => {});
     return () => { active = false; };
@@ -1155,6 +1328,7 @@ export default function MpesaImportScreen() {
   // Resolves once the mark is stored. Home's count reads it back from storage, so
   // asking Home to count again before then counted the same messages as new until
   // the next refresh (5 Oct 2026): wait for this before invalidating 'new-mpesa-sms'.
+  if (tracing) trace('L1158');
   const keepSmsAuto = (next: SmsAuto): Promise<void> => {
     setSmsAuto(next);
     // The notification opens "new since you last looked", so it goes off with it.
@@ -1162,8 +1336,11 @@ export default function MpesaImportScreen() {
     return AsyncStorage.setItem(autoKey, JSON.stringify(next)).catch(() => {});
   };
   // A notification the moment M-Pesa texts, from a build that carries it.
+  if (tracing) trace('L1165');
   const smsNotifiable = canNotifySms();
+  if (tracing) trace('L1166');
   const [smsNotify, setSmsNotifyState] = useState<boolean>(() => smsNotifyOn());
+  if (tracing) trace('L1167');
   const toggleSmsNotify = async () => {
     const result = await setSmsNotify(!smsNotify);
     setSmsNotifyState(result.on);
@@ -1174,7 +1351,9 @@ export default function MpesaImportScreen() {
   // The messages read through the same reader as pasted ones, a batch at a time.
   // One read at a time: the server's logs showed the same messages read twice
   // at once (10 Oct 2026), each drawing the whole review.
+  if (tracing) trace('L1177');
   const readingSmsRef = useRef(false);
+  if (tracing) trace('L1178');
   const readSmsMessages = async (messages: string[]): Promise<PreviewLine[] | null> => {
     if (readingSmsRef.current) return null;
     if (messages.length === 0) {
@@ -1213,6 +1392,7 @@ export default function MpesaImportScreen() {
       setReading(false);
     }
   };
+  if (tracing) trace('L1216');
   const readSmsRange = async () => {
     try {
       const result = await readMpesaSms(smsFrom, smsTo);
@@ -1229,14 +1409,19 @@ export default function MpesaImportScreen() {
     }
   };
   // Opened from Home's "new M-Pesa messages": everything since Jamvi last looked.
+  if (tracing) trace('L1232');
   const params = useLocalSearchParams<{ fromSms?: string; smsFrom?: string; smsTo?: string; notSure?: string }>();
   // Opened by "Fix all" on Find the difference: what is read is put under Not
   // sure yet and saved straight away - the person confirmed it there.
+  if (tracing) trace('L1235');
   const [autoSaveNotSure, setAutoSaveNotSure] = useState(false);
   // Opened from "Find the difference" for the days where Jamvi and M-Pesa parted:
   // those days' messages, read straight away, with what is already saved marked.
+  if (tracing) trace('L1238');
   const openedForRange = React.useRef(false);
+  if (tracing) trace('L1239');
   useEffect(() => {
+    trace('E1239');
     const day = /^\d{4}-\d{2}-\d{2}$/;
     if (openedForRange.current || lines || !params.smsFrom || !params.smsTo || !day.test(params.smsFrom) || !day.test(params.smsTo)) return;
     openedForRange.current = true;
@@ -1261,8 +1446,11 @@ export default function MpesaImportScreen() {
     }).catch((error: unknown) => Alert.alert('Could not read your messages', plainSaveError(error)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.smsFrom, params.smsTo]);
+  if (tracing) trace('L1264');
   const openedForNew = React.useRef(false);
+  if (tracing) trace('L1265');
   useEffect(() => {
+    trace('E1265');
     if (params.fromSms !== 'new' || openedForNew.current || !smsAuto.on || lines) return;
     openedForNew.current = true;
     void newMpesaSms(smsAuto.since).then(async (found) => {
@@ -1282,6 +1470,7 @@ export default function MpesaImportScreen() {
   }, [params.fromSms, smsAuto.on, smsAuto.since]);
 
   // Which of a statement's entries this budget already has: asked with the receipt codes only.
+  if (tracing) trace('L1285');
   const markRecorded = async (all: PreviewLine[]): Promise<PreviewLine[]> => {
     const codes = [...new Set(all.map((line) => line.receipt).filter((code): code is string => Boolean(code)))];
     if (codes.length === 0) return all;
@@ -1328,6 +1517,7 @@ export default function MpesaImportScreen() {
     return withTwins(marked, matches, elsewhere);
   };
 
+  if (tracing) trace('L1331');
   const pickStatement = async () => {
     diagnose('choose tap');
     if (statementPickRef.current) return;
@@ -1347,8 +1537,11 @@ export default function MpesaImportScreen() {
   // or after a restart, the older one is closed. Back from the top copy landed
   // on an identical page, so the arrows looked dead, and each copy read and drew
   // the messages again (10 Oct 2026).
+  if (tracing) trace('L1350');
   const navigation = useNavigation();
+  if (tracing) trace('L1351');
   useEffect(() => {
+    trace('E1351');
     type Route = { key: string; name: string };
     type StackState = { index: number; routes: Route[] } & Record<string, unknown>;
     const state = navigation.getState() as unknown as StackState | undefined;
@@ -1362,12 +1555,15 @@ export default function MpesaImportScreen() {
   // it - after an update restart, from a shared message - there was nowhere to
   // go back to, and both did nothing ("these two arrows for going back are not
   // working", 10 Oct 2026): then it goes Home.
+  if (tracing) trace('L1365');
   const leave = () => {
     diagnose('back tap');
     if (router.canGoBack()) router.back();
     else router.replace('/(tabs)' as never);
   };
+  if (tracing) trace('L1370');
   useEffect(() => {
+    trace('E1370');
     if (Platform.OS !== 'android') return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       diagnose('phone back');
@@ -1379,7 +1575,9 @@ export default function MpesaImportScreen() {
   }, []);
   // Backing out of the file list on some phones never answers the picker, which
   // left the button waiting for good. Coming back to Jamvi frees it.
+  if (tracing) trace('L1382');
   useEffect(() => {
+    trace('E1382');
     const sub = AppState.addEventListener('change', (state) => {
       if (state !== 'active' || !statementPickRef.current) return;
       setTimeout(() => {
@@ -1391,6 +1589,7 @@ export default function MpesaImportScreen() {
     return () => sub.remove();
   }, []);
 
+  if (tracing) trace('L1394');
   const readStatement = async () => {
     if (!statementFile || readerJob) return;
     // The progress shows under the button, which the keyboard would cover.
@@ -1409,6 +1608,7 @@ export default function MpesaImportScreen() {
   };
 
   // The hidden page has read the PDF (or said why it could not): turn it into the same list a paste makes.
+  if (tracing) trace('L1412');
   const onStatementRead = async (result: ReaderMessage) => {
     if (result.type === 'ready') return;
     if (result.type === 'progress') {
@@ -1477,11 +1677,15 @@ export default function MpesaImportScreen() {
 
   // Messages shared from another app: added to what is here and read at once, whether
   // they arrived as the screen opened or while it was already open.
+  if (tracing) trace('L1480');
   const textRef = React.useRef(text);
   textRef.current = text;
+  if (tracing) trace('L1482');
   const readRef = React.useRef(readMessages);
   readRef.current = readMessages;
+  if (tracing) trace('L1484');
   useEffect(() => {
+    trace('E1484');
     const takeShared = () => {
       const shared = takeSharedMessages();
       if (!shared) return;
@@ -1495,13 +1699,16 @@ export default function MpesaImportScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  if (tracing) trace('L1498');
   const toggle = (index: number, include: boolean) =>
     setChoices((current) => ({ ...current, [index]: { ...current[index], include } }));
   // Keeps Jamvi's suggestion as checked, or takes that back.
   // Confirming keeps Jamvi's suggestion - and remembers it, unless unticked.
+  if (tracing) trace('L1502');
   const confirm = (index: number, confirmed: boolean) =>
     setChoices((current) => ({ ...current, [index]: { ...current[index], confirmed, ...(confirmed ? { remember: current[index]?.remember ?? true } : {}) } }));
 
+  if (tracing) trace('L1505');
   const chooseCategory = (name: string) => {
     const picking = pickingRef.current;
     if (typeof picking === 'string' && picking.startsWith('teach:')) {
@@ -1532,7 +1739,9 @@ export default function MpesaImportScreen() {
 
   // Fuliza's fees: repayments above draws, which nothing else records. Offered
   // as one charge for the statement, once, and not over days already covered.
+  if (tracing) trace('L1535');
   const fuliza = useMemo(() => (statementReading ? fulizaCharges(statementReading) : null), [statementReading]);
+  if (tracing) trace('L1536');
   const fulizaCheck = useMemo(() => {
     if (!fuliza) return null;
     const receipts = ((account?.transactions ?? []) as Array<{ mpesaReceipt?: string | null }>).map((row) => row.mpesaReceipt);
@@ -1541,8 +1750,11 @@ export default function MpesaImportScreen() {
   // Setting the account's opening balance to the statement's, when nothing is
   // recorded in it before the statement starts - the one case where that is
   // certainly right. Anything recorded earlier and the difference is only shown.
+  if (tracing) trace('L1544');
   const { mutateAsync: updateOpeningBalance } = useUpdateJointAccountOpeningBalance();
+  if (tracing) trace('L1545');
   const [openingSaving, setOpeningSaving] = useState(false);
+  if (tracing) trace('L1546');
   const openingFix = useMemo(() => {
     const first = statementReading?.firstDate;
     const opening = statementReading?.opening;
@@ -1558,6 +1770,7 @@ export default function MpesaImportScreen() {
   // Jamvi's own balance for this account the day before the statement starts
   // and on its last day, beside M-Pesa's. A difference at the start is from
   // before the statement, and nothing in it will close it.
+  if (tracing) trace('L1561');
   const balanceSides = useMemo(() => {
     const first = statementReading?.firstDate;
     const last = statementReading?.lastDate;
@@ -1575,12 +1788,15 @@ export default function MpesaImportScreen() {
     };
   }, [statementReading, account]);
   // Removing an entry the statement does not have waits a few seconds for Undo.
+  if (tracing) trace('L1578');
   const undoable = useUndoableDelete();
   // Removed, and kept out of the list while the account reloads: once Undo
   // had passed, the entry came back until everything was fetched again - "the
   // remove button is taking too long to respond" (6 Oct 2026).
+  if (tracing) trace('L1582');
   const [removedIds, setRemovedIds] = useState<ReadonlySet<number>>(() => new Set());
   // What this account has for the statement's days that the statement does not.
+  if (tracing) trace('L1584');
   const extras = useMemo(() => {
     const found = statementReading && account ? notOnStatement(statementReading, (account.transactions ?? []) as unknown as RecordedRow[]) : null;
     if (!found) return null;
@@ -1590,6 +1806,7 @@ export default function MpesaImportScreen() {
   // Sorting a difference out where it is shown (asked for 3 Oct 2026), rather
   // than "open Bank and fix it": an entry M-Pesa never had can be removed, and
   // one saved for a different amount set to the statement's.
+  if (tracing) trace('L1593');
   const removeExtra = (row: { id: number; date: string; description?: string | null; effect: number; why: string }) => {
     Alert.alert(
       'Remove it from Jamvi?',
@@ -1617,7 +1834,9 @@ export default function MpesaImportScreen() {
       ],
     );
   };
+  if (tracing) trace('L1620');
   const [correcting, setCorrecting] = useState<number | null>(null);
+  if (tracing) trace('L1621');
   const applyStatementAmount = (row: { id: number; date: string; description: string; recorded: number; statement: number }) => {
     Alert.alert(
       `Change it to KES ${formatExact(row.statement)}?`,
@@ -1649,8 +1868,11 @@ export default function MpesaImportScreen() {
   // statement - a pasted Fuliza fee its Fuliza charges already hold, an
   // earlier statement's Fuliza line it replaces, a charge kept twice - removed
   // after one confirmation. Anything it cannot prove stays listed to decide.
+  if (tracing) trace('L1652');
   const [fixingExtras, setFixingExtras] = useState(false);
+  if (tracing) trace('L1653');
   const fixableExtras = (extras?.rows ?? []).filter((row) => row.fixable);
+  if (tracing) trace('L1654');
   const fixExtras = () => {
     if (fixableExtras.length === 0 || fixingExtras) return;
     const total = Math.round(fixableExtras.reduce((sum, row) => sum + row.effect, 0) * 100) / 100;
@@ -1682,11 +1904,14 @@ export default function MpesaImportScreen() {
   };
   // And the other way: what the statement has that this account does not, among
   // entries it already holds - chiefly a payment saved without its charge.
+  if (tracing) trace('L1685');
   const missing = useMemo(
     () => (statementReading && account ? missingInJamvi(statementReading, (account.transactions ?? []) as unknown as RecordedRow[]) : null),
     [statementReading, account],
   );
+  if (tracing) trace('L1689');
   const [addingMissing, setAddingMissing] = useState(false);
+  if (tracing) trace('L1690');
   const addMissingCharges = () => {
     if (!missing || missing.charges.length === 0 || addingMissing || !accountId) return;
     const total = missing.charges.reduce((sum, charge) => sum + charge.amount, 0);
@@ -1728,8 +1953,11 @@ export default function MpesaImportScreen() {
   };
   // This statement's own Fuliza lines saved from an earlier download of the
   // same days: brought up to what this statement says, after one tap.
+  if (tracing) trace('L1731');
   const fulizaUpdates = (missing?.amounts ?? []).filter((row) => row.fixable);
+  if (tracing) trace('L1732');
   const [updatingFuliza, setUpdatingFuliza] = useState(false);
+  if (tracing) trace('L1733');
   const updateFuliza = () => {
     if (fulizaUpdates.length === 0 || updatingFuliza) return;
     Alert.alert(
@@ -1761,6 +1989,7 @@ export default function MpesaImportScreen() {
       ],
     );
   };
+  if (tracing) trace('L1764');
   const fixOpeningBalance = async () => {
     if (!openingFix || !accountId || openingSaving) return;
     setOpeningSaving(true);
@@ -1775,20 +2004,26 @@ export default function MpesaImportScreen() {
   };
 
   // Would saving these leave the account moved as far as the statement says M-Pesa moved?
+  if (tracing) trace('L1778');
   const balanceCheck = useMemo(
     () => (statementReading && lines ? reconcile({ ...statementReading, lines }, (line) => choices[line.index]?.include === true) : null),
     [statementReading, lines, choices],
   );
 
+  if (tracing) trace('L1783');
   const summary = useMemo(() => (lines ? summarise(lines, choices) : null), [lines, choices]);
   // Which entry the red message is about, so tapping it can take you there.
+  if (tracing) trace('L1785');
   const firstProblemIndex = useMemo(() => {
     if (!lines) return null;
     for (const item of lines) if (problemWith(item, choices[item.index])) return item.index;
     return null;
   }, [lines, choices]);
+  if (tracing) trace('L1790');
   const scrollRef = React.useRef<ScrollView>(null);
+  if (tracing) trace('L1791');
   const lineTops = React.useRef<Record<number, number>>({});
+  if (tracing) trace('L1792');
   const showProblem = () => {
     if (firstProblemIndex === null) return;
     // The entry may be hidden by a filter, or not drawn yet: show everything
@@ -1800,46 +2035,63 @@ export default function MpesaImportScreen() {
     if (drawing) setShownCount(Math.ceil((at + 1) / LINES_PER_PAGE) * LINES_PER_PAGE);
     setTimeout(() => scrollRef.current?.scrollTo({ y: Math.max(0, (lineTops.current[firstProblemIndex] ?? 0) - 12), animated: true }), drawing ? 400 : 80);
   };
+  if (tracing) trace('L1803');
   const review = useMemo(() => (lines ? reviewCounts(lines, choices) : null), [lines, choices]);
 
   // Teach Jamvi your M-Pesa (lib/teachJamvi): the regulars only the person can
   // name, asked once at the top of the review. Each answer files every line of
   // that payee now, and is kept where the next statement and the daily SMS
   // reading look: a payee rule, a source rule, or the account's own number.
+  if (tracing) trace('L1809');
   const [teachSkipped, setTeachSkipped] = useState<ReadonlySet<string>>(new Set());
+  if (tracing) trace('L1810');
   const [teachAnswered, setTeachAnswered] = useState(0);
+  if (tracing) trace('L1811');
   const [teachClosed, setTeachClosed] = useState(false);
+  if (tracing) trace('L1812');
   const teachGroups = useMemo(
     () => (lines && canManageBudget ? teachableGroups(lines, choices, rules, { skipped: teachSkipped }) : []),
     [lines, choices, rules, teachSkipped, canManageBudget],
   );
+  if (tracing) trace('L1816');
   const known = useMemo(() => (lines ? alreadyKnown(lines, choices, rules) : null), [lines, choices, rules]);
+  if (tracing) trace('L1817');
   const categoryNames = useMemo(() => categories.map((row) => row.name), [categories]);
+  if (tracing) trace('L1818');
   const { mutateAsync: createAccount } = useCreateJointAccount();
+  if (tracing) trace('L1819');
   const { mutateAsync: updateAccount } = useUpdateJointAccount();
+  if (tracing) trace('L1820');
   const businessAccounts = useBusinessAccounts();
   // Your family, once (lib/family): their payments are family support, never a shop.
+  if (tracing) trace('L1822');
   const familyLeaves = useMemo(() => familyCategories(categories as unknown as Array<{ id: number; name: string; parentId?: number | null }>), [categories]);
+  if (tracing) trace('L1823');
   const leafNames = useMemo(() => {
     const parents = new Set(categories.map((row) => row.parentId).filter((id): id is number => id != null));
     return categories.filter((row) => !parents.has(row.id)).map((row) => row.name);
   }, [categories]);
+  if (tracing) trace('L1827');
   const keptFamily = useMemo(() => familyNames(rules, familyLeaves.length > 0 ? familyLeaves : [FAMILY_CATEGORY]), [rules, familyLeaves]);
+  if (tracing) trace('L1828');
   const familySuggestions = useMemo(
     () => relativesBySurname((lines ?? []).filter((line) => line.direction === 'out').map((line) => line.description ?? ''), user?.lastName, keptFamily.map((one) => one.key)),
     [lines, user?.lastName, keptFamily],
   );
   // A family category the budget lacks is made first, as onboarding names it.
+  if (tracing) trace('L1833');
   const ensureCategory = async (name: string) => {
     if (categories.some((row) => row.name === name)) return;
     await createNotSureCategory({ data: { name, budgetAmount: 0, priority: 3, isRecurring: true, activeMonth: null, activeYear: null } });
     await queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
   };
+  if (tracing) trace('L1838');
   const addFamily = async (name: string, category: string) => {
     await ensureCategory(category);
     keepRules(withFamily(rules, name, category));
     setChoices((current) => fileFamilyLines(lines ?? [], current, name, category));
   };
+  if (tracing) trace('L1843');
   const teachAsCategory = (taught: TeachGroup, category: string) => {
     // An answer redraws the whole review - up to 100 entries. Done as a transition,
     // so the tap answers at once and the list catches up ("pick a category and it
@@ -1856,6 +2108,7 @@ export default function MpesaImportScreen() {
       setTeachAnswered((count) => count + 1);
     });
   };
+  if (tracing) trace('L1859');
   const teachAsSource = (taught: TeachGroup, incomeSourceId: number) => {
     // An answer redraws the whole review - up to 100 entries. Done as a transition,
     // so the tap answers at once and the list catches up ("pick a category and it
@@ -1866,6 +2119,7 @@ export default function MpesaImportScreen() {
       setTeachAnswered((count) => count + 1);
     });
   };
+  if (tracing) trace('L1869');
   const teachAsOwnAccount = async (taught: TeachGroup, answer: OwnAccountAnswer) => {
     // The number lives on the account itself, on the server: every phone, the
     // web and the next reinstall all know payments to it are the person's own.
@@ -1900,6 +2154,7 @@ export default function MpesaImportScreen() {
   };
   // Money in that is a loan, or a debt paid back: linked to them in Who owes who,
   // found by name or added (as the line's own debt sheet does).
+  if (tracing) trace('L1903');
   const teachAsDebt = async (taught: TeachGroup, kind: 'borrowed' | 'repaid') => {
     const same = (text: string) => text.trim().replace(/\s+/g, ' ').toLocaleLowerCase('en-KE');
     const addParty = async (): Promise<number> => {
@@ -1922,6 +2177,7 @@ export default function MpesaImportScreen() {
     });
     setTeachAnswered((count) => count + 1);
   };
+  if (tracing) trace('L1925');
   const firstProblem = useMemo(() => {
     if (!lines) return null;
     for (const item of lines) {
@@ -1934,13 +2190,17 @@ export default function MpesaImportScreen() {
 
   // Who owes who, and the categories that track a debt: a payment to or from a
   // person can be a debt or a loan, and paying a debt's category pays it down.
+  if (tracing) trace('L1937');
   const { data: parties = [] } = useQuery<PartyLite[]>({
     queryKey: ['parties'],
     queryFn: () => customFetch<PartyLite[]>('/api/contributors'),
     staleTime: 30_000,
   });
+  if (tracing) trace('L1942');
   const transferHints = useMemo(() => throughMpesaHints(lines ?? []), [lines]);
+  if (tracing) trace('L1943');
   const otherAccounts = accounts.filter((option) => option.id !== accountId);
+  if (tracing) trace('L1944');
   const debtCategories = useMemo(
     () =>
       (categoryList as unknown as Array<{ id: number; name: string; debtBalance?: number | null }>)
@@ -1949,15 +2209,22 @@ export default function MpesaImportScreen() {
     [categoryList],
   );
   // Lines whose optional note box is open (canAddNote); a line with a note shows it anyway.
+  if (tracing) trace('L1952');
   const [noteOpen, setNoteOpen] = useState<Set<number>>(() => new Set());
+  if (tracing) trace('L1953');
   const [debtFor, setDebtFor] = useState<{ index: number; partyId: number | null; kind: DebtKind | null } | null>(null);
   // Somebody not yet in Who owes who, added from the debt sheet itself.
+  if (tracing) trace('L1955');
   const [newParty, setNewParty] = useState<{ name: string; kind: 'person' | 'institution' } | null>(null);
+  if (tracing) trace('L1956');
   const [addingParty, setAddingParty] = useState(false);
   // A name half-typed for one line is not carried to the next one opened.
+  if (tracing) trace('L1958');
   useEffect(() => {
+    trace('E1958');
     if (debtFor === null) setNewParty(null);
   }, [debtFor === null]);
+  if (tracing) trace('L1961');
   const addParty = async () => {
     const name = newParty?.name.trim() ?? '';
     if (!newParty || name.length < 2 || addingParty) return;
@@ -1978,30 +2245,48 @@ export default function MpesaImportScreen() {
       setAddingParty(false);
     }
   };
+  if (tracing) trace('L1981');
   const setDebt = (index: number, debt: { kind: DebtKind; partyId: number } | null) =>
     setChoices((current) => ({ ...current, [index]: { ...current[index], debt } }));
 
+  if (tracing) trace('L1984');
   const recordable = lines?.filter(isRecordable) ?? [];
+  if (tracing) trace('L1985');
   const notImported = lines?.filter((item) => !isRecordable(item)) ?? [];
+  if (tracing) trace('L1986');
   const confirmedLines = recordable.filter((item) => isConfirmedToSave(item, choices[item.index]));
+  if (tracing) trace('L1987');
   const confirmedCount = confirmedLines.length;
+  if (tracing) trace('L1988');
   const confirmedFees = confirmedLines.some((item) => (item.fee ?? 0) > 0);
   // A month at a time, for a statement that runs January to September.
+  if (tracing) trace('L1990');
   const [month, setMonth] = useState<string | null>(null);
+  if (tracing) trace('L1991');
   const months = useMemo(() => monthsOf(recordable), [lines]);
+  if (tracing) trace('L1992');
   const monthLabel = months.find((option) => option.key === month)?.label;
+  if (tracing) trace('L1993');
   const filtering = Boolean(find.trim()) || month !== null;
+  if (tracing) trace('L1994');
   const foundFor = [monthLabel ? `in ${monthLabel}` : '', find.trim() ? `for '${find.trim()}'` : ''].filter(Boolean).join(' ') || 'here';
+  if (tracing) trace('L1995');
   const inView = recordable.filter((item) => (view === 'all' || reviewStatus(item, choices[item.index]) === view) && lineMatches(item, find, choices[item.index]?.category) && inMonth(item, month));
+  if (tracing) trace('L1996');
   const toConfirm = filtering ? confirmableLines(inView, choices) : [];
+  if (tracing) trace('L1997');
   const toCategorise = filtering ? categorisableLines(inView, choices) : [];
   // Money in that was found: one income stream for all of it ("in 50,000" is salary).
+  if (tracing) trace('L1999');
   const toStream = filtering ? streamableLines(inView, choices) : [];
   // Found entries that can go to another budget together: "Umoja" finds the chama's.
+  if (tracing) trace('L2001');
   const toSend = filtering ? sendableLines(inView, choices) : [];
   // Everything still on Jamvi's suggestion (or needing a choice) under Not sure,
   // so a long statement can be saved now and sorted out slowly from Home.
+  if (tracing) trace('L2004');
   const toNotSure = notSureableLines(filtering ? inView : recordable, choices);
+  if (tracing) trace('L2005');
   const allUnderNotSure = () => {
     Alert.alert(
       `Put ${toNotSure.length} ${toNotSure.length === 1 ? 'entry' : 'entries'} under Not sure?`,
@@ -2012,7 +2297,9 @@ export default function MpesaImportScreen() {
       ],
     );
   };
+  if (tracing) trace('L2015');
   const [sendFound, setSendFound] = useState<{ groupId: number | null; accountId: number; category: string; incomeSourceId: number | null } | null>(null);
+  if (tracing) trace('L2016');
   const sendFoundTo = (groupName: string, accountName: string) => {
     if (!sendFound || sendFound.groupId === null) return;
     const target = { groupId: sendFound.groupId, groupName, accountId: sendFound.accountId, accountName, category: sendFound.category, incomeSourceId: sendFound.incomeSourceId };
@@ -2028,8 +2315,11 @@ export default function MpesaImportScreen() {
   // A payee remembered as another budget's is suggested there, waiting to be
   // confirmed. Only lines still on Jamvi's suggestion; returns the same choices
   // when nothing changes, so this settles at once.
+  if (tracing) trace('L2031');
   const managedIds = useMemo(() => otherManagedBudgets.map((option) => option.id), [otherManagedBudgets]);
+  if (tracing) trace('L2032');
   useEffect(() => {
+    trace('E2032');
     if (!lines || Object.keys(otherRules).length === 0) return;
     setChoices((current) => applyOtherBudgetRules(lines, current, otherRules, managedIds));
     // Read what each remembered budget offers, so its account and category show on the line.
@@ -2038,7 +2328,9 @@ export default function MpesaImportScreen() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lines, otherRules, managedIds.join(',')]);
+  if (tracing) trace('L2041');
   const [streamPickerOpen, setStreamPickerOpen] = useState(false);
+  if (tracing) trace('L2042');
   const streamFound = (source: { id: number; name: string }) => {
     setStreamPickerOpen(false);
     Alert.alert(
@@ -2050,6 +2342,7 @@ export default function MpesaImportScreen() {
       ],
     );
   };
+  if (tracing) trace('L2053');
   const confirmFound = () => {
     Alert.alert(
       `Confirm ${toConfirm.length} ${toConfirm.length === 1 ? 'entry' : 'entries'}?`,
@@ -2064,13 +2357,17 @@ export default function MpesaImportScreen() {
   // A new statement starts again from the first page. Changing the view or
   // the search does too - in their handlers, not here, so that going to a
   // problem can draw further after switching to All.
+  if (tracing) trace('L2067');
   useEffect(() => {
+    trace('E2067');
     setShownCount(LINES_PER_PAGE);
     setShownSkipped(LINES_PER_PAGE);
   }, [lines?.length]);
 
   // Changing the category of entries already recorded: nothing else about them is touched.
+  if (tracing) trace('L2073');
   const pendingChanges = useMemo(() => categoryChanges(lines ?? [], recat), [lines, recat]);
+  if (tracing) trace('L2074');
   const applyRecategorise = () => {
     if (pendingChanges.length === 0 || recategorising) return;
     Alert.alert(
@@ -2119,6 +2416,7 @@ export default function MpesaImportScreen() {
   };
 
   // The calls that record things, handed to the one function that saves a line.
+  if (tracing) trace('L2122');
   const rawPostingApi: PostingApi = {
     deposit: (data) => createDeposit({ data: data as never }) as Promise<{ id: number }>,
     disbursement: (data) => createDisbursement({ data: data as never }) as Promise<{ id: number }>,
@@ -2136,11 +2434,13 @@ export default function MpesaImportScreen() {
   };
   // Each request tried again through a server restart or a cut - the M-Pesa
   // charge as much as the entry it came with (lib/saveRetry).
+  if (tracing) trace('L2139');
   const postingApi: PostingApi = withRetries(rawPostingApi, (task) => retryWhenCutOff(task));
 
   // Throwing a statement away loses days of choices, so it is asked first -
   // from the top of the screen or the bottom. What is already saved stays.
   // Asked first, like Start over, so a stray tap does not leave the entries.
+  if (tracing) trace('L2144');
   const confirmReadAgain = () => {
     Alert.alert(
       'Read this statement again?',
@@ -2152,6 +2452,7 @@ export default function MpesaImportScreen() {
     );
   };
 
+  if (tracing) trace('L2155');
   const confirmStartOver = () => {
     const worked = confirmedCount;
     Alert.alert(
@@ -2165,10 +2466,13 @@ export default function MpesaImportScreen() {
   };
 
   /** Which business a line is for, or null for Personal (lib/importBusiness). */
+  if (tracing) trace('L2168');
   const businessFor = (item: PreviewLine): number | null => businessOfLine(item, choices[item.index], owners, businessIds);
+  if (tracing) trace('L2169');
   const chooseLineBusiness = (index: number, businessId: number | null) =>
     setChoices((current) => chooseBusiness(lines ?? [], current, index, businessId, owners, businessIds));
   /** A cost added for the line's business, linked to it as Bank's are, then used on the line. */
+  if (tracing) trace('L2172');
   const addLineCost = async (index: number, name: string) => {
     const businessId = businessOfLine(lines?.find((line) => line.index === index) ?? { direction: 'out' }, choices[index], owners, businessIds);
     if (businessId === null) return;
@@ -2184,6 +2488,7 @@ export default function MpesaImportScreen() {
       Alert.alert('Could not add that cost', error instanceof Error ? error.message : 'Please try again.');
     }
   };
+  if (tracing) trace('L2187');
   const addLineBusiness = async (index: number, name: string) => {
     try {
       // A business, named as one (My businesses), not just another income stream.
@@ -2197,6 +2502,7 @@ export default function MpesaImportScreen() {
     }
   };
 
+  if (tracing) trace('L2200');
   const saveAll = () => {
     if (!lines || saving) return;
     // Said, never silent: a new person's Save did nothing at all, because their
@@ -2253,7 +2559,9 @@ export default function MpesaImportScreen() {
   };
 
   // Finishes a save that was cut short, once the entries and the account are back.
+  if (tracing) trace('L2256');
   useEffect(() => {
+    trace('E2256');
     if (!resumeSave || !lines || !accountId || saving) return;
     setResumeSave(false);
     if (resumeJob) {
@@ -2274,7 +2582,9 @@ export default function MpesaImportScreen() {
   // "Fix all": once the lines are under Not sure yet, saved without another
   // tap. Something that still needs a choice (the charges' category, say) stops
   // it and says so, and the list stays here to finish by hand.
+  if (tracing) trace('L2277');
   useEffect(() => {
+    trace('E2277');
     if (!autoSaveNotSure || !lines || !accountId || saving) return;
     setAutoSaveNotSure(false);
     if (firstProblem) {
@@ -2287,6 +2597,7 @@ export default function MpesaImportScreen() {
 
   // `resumeJob`: a save already running on the server, from before Jamvi was
   // closed, followed to its end instead of being started again.
+  if (tracing) trace('L2290');
   const saveLines = async (resumeJob?: number) => {
     if (!lines || !accountId || saving) return;
     const onlyConfirmed = statementReading !== null;
@@ -2609,6 +2920,7 @@ export default function MpesaImportScreen() {
    * itself: the entries can be edited or deleted afterwards, and a balance moved
    * behind somebody's back would be left quietly wrong.
    */
+  if (tracing) trace('L2612');
   const offerBalanceChanges = (saved: PreviewLine[], savedChoices = choices, knownParties = parties) => {
     const changes = balanceChanges(saved, savedChoices, knownParties, debtCategories);
     if (changes.length === 0) return;
@@ -2727,6 +3039,7 @@ export default function MpesaImportScreen() {
   }
 
   // Step 3 of the first time, and one way in among the others after it.
+  if (tracing) trace('L2730');
   const statementCard = (
     <>
             {canReadStatements ? (
@@ -2798,6 +3111,7 @@ export default function MpesaImportScreen() {
     </>
   );
 
+  if (tracing) trace('render end');
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <View style={[styles.header, { paddingTop: insets.top + 8, borderColor: colors.border }]}>
