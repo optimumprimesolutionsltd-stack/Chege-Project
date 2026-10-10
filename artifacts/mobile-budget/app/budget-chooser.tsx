@@ -1304,7 +1304,7 @@ function MobileOnboardingFlow({
               <View key={key} style={[styles.incomeAmountRow, { backgroundColor: colors.card, borderColor: colors.primary }]}>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.amountLabel, { color: colors.foreground }]} numberOfLines={1}>{key}</Text>
-                  <Text style={[styles.choiceDescription, { color: colors.mutedForeground }]}>{pay === 'salary' ? `Your pay from ${name} · a month (optional)` : 'Its profit · what it makes a month after its costs (optional)'}</Text>
+                  <Text style={[styles.choiceDescription, { color: colors.mutedForeground }]}>{pay === 'salary' ? `Your pay from ${name} · a month (optional)` : 'Expected profit · a month, after its costs (optional)'}</Text>
                 </View>
                 <View style={styles.amountInputWrap}>
                   <Text style={[styles.currency, { color: colors.mutedForeground }]}>KES</Text>
