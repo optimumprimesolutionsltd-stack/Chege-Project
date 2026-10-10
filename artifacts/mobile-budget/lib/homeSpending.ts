@@ -8,7 +8,7 @@ import { isNotSure } from './entriesToSort';
  * there. but my option should only count in reports" (10 Oct 2026). So the
  * categories stay exactly as they are; each one simply falls on a side -
  * Household upkeep (at home) or outside the home - and Reports adds the sides
- * up. "Education is part of home."
+ * up. "Education is part of home", and so is health.
  *
  * The side is decided per subcategory, so Food can be split: Groceries at
  * home, Eating out outside. A side the person chose (api-server
@@ -19,7 +19,7 @@ const norm = (name: string) => name.trim().toLowerCase();
 
 /** Categories whose every subcategory is spent at home, unless moved. */
 const HOME_CATEGORIES = new Set([
-  'housing', 'utilities', 'household', 'education', 'books & supplies', 'shared bills', 'household upkeep',
+  'housing', 'utilities', 'household', 'education', 'health', 'books & supplies', 'shared bills', 'household upkeep',
 ].map(norm));
 
 /** Subcategories (or categories of their own) spent at home wherever they sit. */
@@ -33,6 +33,8 @@ const HOME_ITEMS = new Set([
   'cleaning supplies', 'house repairs', 'house help', 'nanny salary', 'water & electricity',
   // Education
   'school fees', 'uniform', 'uniforms', 'school trips', 'tuition', 'clubs', 'books', 'stationery', 'books & stationery',
+  // Health ("health is part of home")
+  'hospital & clinic', 'clinic visits', 'medicine', 'sha contributions', 'medical cover',
 ].map(norm));
 
 export function defaultAtHome(category: string, parentName?: string | null): boolean {

@@ -15,6 +15,10 @@ describe('at home vs outside, in Reports only', () => {
     expect(defaultAtHome('School fees', 'Education')).toBe(true);
     expect(defaultAtHome('Clubs', 'Education')).toBe(true);
     expect(defaultAtHome('Home internet', 'Airtime & data')).toBe(true);
+    // "health is part of home" (10 Oct 2026).
+    expect(defaultAtHome('Medicine', 'Health')).toBe(true);
+    expect(defaultAtHome('Hospital & clinic', 'Health')).toBe(true);
+    expect(defaultAtHome('Health')).toBe(true);
     expect(defaultAtHome('Eating out', 'Food')).toBe(false);
     expect(defaultAtHome('Fuel', 'Transport')).toBe(false);
     expect(defaultAtHome('Data bundles', 'Airtime & data')).toBe(false);
