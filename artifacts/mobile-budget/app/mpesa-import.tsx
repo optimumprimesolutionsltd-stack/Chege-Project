@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { startTransition, useEffect, useMemo, useState } from 'react';
 import { withoutPersonTag } from '@/lib/personNumber';
 import {
   ActivityIndicator,
@@ -1769,20 +1769,30 @@ export default function MpesaImportScreen() {
     setChoices((current) => fileFamilyLines(lines ?? [], current, name, category));
   };
   const teachAsCategory = (taught: TeachGroup, category: string) => {
-    if (category === FAMILY_CATEGORY) void ensureCategory(category);
-    setChoices((current) => teachCategory(current, taught, category));
-    // A bank account paid through a paybill is remembered by its account number,
-    // never by the bank's paybill, which every customer of that bank shares.
-    // One kind of the payee's payments only (lib/paymentPatterns): kept by its amounts.
-    keepRules(keepAnswer(rules, taught, category, (kept) => taught.key.startsWith('#ref:')
-      ? { ...kept, [taught.key]: category }
-      : withRule(kept, taught.sample.description ?? '', category, taught.sample.payeeNumber)));
-    setTeachAnswered((count) => count + 1);
+    // An answer redraws the whole review - up to 100 entries. Done as a transition,
+    // so the tap answers at once and the list catches up ("pick a category and it
+    // varies: skip take too long to respond", 10 Oct 2026).
+    startTransition(() => {
+      if (category === FAMILY_CATEGORY) void ensureCategory(category);
+      setChoices((current) => teachCategory(current, taught, category));
+      // A bank account paid through a paybill is remembered by its account number,
+      // never by the bank's paybill, which every customer of that bank shares.
+      // One kind of the payee's payments only (lib/paymentPatterns): kept by its amounts.
+      keepRules(keepAnswer(rules, taught, category, (kept) => taught.key.startsWith('#ref:')
+        ? { ...kept, [taught.key]: category }
+        : withRule(kept, taught.sample.description ?? '', category, taught.sample.payeeNumber)));
+      setTeachAnswered((count) => count + 1);
+    });
   };
   const teachAsSource = (taught: TeachGroup, incomeSourceId: number) => {
-    setChoices((current) => teachSource(current, taught, incomeSourceId));
-    keepRules(keepAnswer(rules, taught, String(incomeSourceId), (kept) => withSourceRule(kept, taught.sample.description ?? '', incomeSourceId)));
-    setTeachAnswered((count) => count + 1);
+    // An answer redraws the whole review - up to 100 entries. Done as a transition,
+    // so the tap answers at once and the list catches up ("pick a category and it
+    // varies: skip take too long to respond", 10 Oct 2026).
+    startTransition(() => {
+      setChoices((current) => teachSource(current, taught, incomeSourceId));
+      keepRules(keepAnswer(rules, taught, String(incomeSourceId), (kept) => withSourceRule(kept, taught.sample.description ?? '', incomeSourceId)));
+      setTeachAnswered((count) => count + 1);
+    });
   };
   const teachAsOwnAccount = async (taught: TeachGroup, answer: OwnAccountAnswer) => {
     // The number lives on the account itself, on the server: every phone, the
@@ -1811,8 +1821,10 @@ export default function MpesaImportScreen() {
     }
     if (!byNumber) keepRules(keepAnswer(rules, taught, `${OWN_VALUE}${targetId}`, (kept) => ({ ...kept, [ownRuleKey(taught.key)]: String(targetId) })));
     await queryClient.invalidateQueries({ queryKey: getGetJointAccountsQueryKey() });
-    setChoices((current) => teachOwnAccount(current, taught, targetId));
-    setTeachAnswered((count) => count + 1);
+    startTransition(() => {
+      setChoices((current) => teachOwnAccount(current, taught, targetId));
+      setTeachAnswered((count) => count + 1);
+    });
   };
   // Money in that is a loan, or a debt paid back: linked to them in Who owes who,
   // found by name or added (as the line's own debt sheet does).
@@ -3227,8 +3239,8 @@ export default function MpesaImportScreen() {
                   const first = choices[taught.indexes[0]];
                   return first?.sourceAuto ? first.incomeSourceId ?? null : null;
                 }}
-                onSkip={(taught) => setTeachSkipped((current) => new Set([...current, taught.key]))}
-                onClose={() => setTeachClosed(true)}
+                onSkip={(taught) => startTransition(() => setTeachSkipped((current) => new Set([...current, taught.key])))}
+                onClose={() => startTransition(() => setTeachClosed(true))}
               />
             ) : null}
             {review && review.all > 0 ? (
