@@ -43,8 +43,7 @@ describe('the sure fixes are made with no question', () => {
     const hook = readFileSync('hooks/useAutoReconcile.ts', 'utf8');
     expect(hook).toContain("if (getImportProgress()?.stage === 'saving') return kept?.left ?? null;");
     // A failed run is not kept for six hours; an import that saved, or leaving Find the difference, checks again.
-    expect(hook).toContain('} catch {
-        return kept?.left ?? null;');
+    expect(hook).toMatch(/\} catch \{\s+return kept\?\.left \?\? null;/);
     expect(hook).toContain('if (importDone) reconcileAgain(queryClient, groupId);');
     expect(readFileSync('app/mpesa-difference.tsx', 'utf8')).toContain('return () => reconcileAgain(queryClient, groupId);');
     expect(hook).toContain('enabled: groupId != null && canManage,');
