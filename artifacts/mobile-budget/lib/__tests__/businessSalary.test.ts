@@ -31,3 +31,13 @@ describe('do you pay yourself a salary from it?', () => {
     expect(read('hooks/useBusinesses.ts')).toContain("body: JSON.stringify({ business: true, paysSalary }),");
   });
 });
+
+describe('asked wherever setup happens', () => {
+  const read = (path: string) => readFileSync(path, 'utf8');
+  it('on Home, for whoever manages the budget, and before the regulars on Teach Jamvi', () => {
+    expect(read('app/(tabs)/index.tsx')).toContain('{canManageBudget ? <View style={{ marginHorizontal: 16, marginTop: 12 }}><BusinessSalaryQuestion /></View> : null}');
+    const teach = read('app/teach-jamvi.tsx');
+    expect(teach.indexOf('<BusinessSalaryQuestion />')).toBeGreaterThan(0);
+    expect(teach.indexOf('<BusinessSalaryQuestion />')).toBeLessThan(teach.indexOf('<TeachJamviCard'));
+  });
+});
