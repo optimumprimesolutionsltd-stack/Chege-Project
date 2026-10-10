@@ -220,6 +220,17 @@ type Outcome = { saved: number; repeats: number; failed: Array<{ what: string; w
  * A category can also be added right here, since a payment with nowhere to go
  * should not send someone away from the messages they have pasted.
  */
+/** What the category sheet is choosing for: a line, the M-Pesa charges, a search's lines, a saved entry or a regular. */
+type PickTarget = number | 'charge' | 'bulk' | `recat:${number}` | `teach:${string}`;
+type SheetHandle = { open: () => void; close: () => void };
+
+/** The sheet with its own open/closed state, so opening it redraws only the sheet. */
+const CategorySheetHost = React.forwardRef<SheetHandle, Omit<React.ComponentProps<typeof CategorySheet>, 'visible'>>(function CategorySheetHost(props, ref) {
+  const [visible, setVisible] = useState(false);
+  React.useImperativeHandle(ref, () => ({ open: () => setVisible(true), close: () => setVisible(false) }), []);
+  return <CategorySheet visible={visible} {...props} />;
+});
+
 function CategorySheet({
   visible,
   budgetName,
@@ -650,7 +661,16 @@ export default function MpesaImportScreen() {
   const [otherBudgetOpen, setOtherBudgetOpen] = useState<Set<number>>(new Set());
   const [chargeCategory, setChargeCategory] = useState('');
   // A number is a line being categorised; 'charge' is the M-Pesa charges; 'recat:N' is an already-recorded entry whose category is being changed.
-  const [picking, setPicking] = useState<number | 'charge' | 'bulk' | `recat:${number}` | `teach:${string}` | null>(null);
+  // Held in a ref, and the sheet opens itself (CategorySheetHost): as state, every
+  // open and close redrew the whole review - up to 100 entries - before the sheet
+  // showed, so "Pick a category" answered seconds late on a phone (10 Oct 2026).
+  const pickingRef = React.useRef<PickTarget | null>(null);
+  const sheetRef = React.useRef<SheetHandle>(null);
+  const setPicking = React.useCallback((target: PickTarget | null) => {
+    pickingRef.current = target;
+    if (target === null) sheetRef.current?.close();
+    else sheetRef.current?.open();
+  }, []);
   // Search over the review ("bundle", "KPLC", a till): what is found can be
   // confirmed, or given one category, all together.
   const [find, setFind] = useState('');
@@ -1411,6 +1431,7 @@ export default function MpesaImportScreen() {
     setChoices((current) => ({ ...current, [index]: { ...current[index], confirmed, ...(confirmed ? { remember: current[index]?.remember ?? true } : {}) } }));
 
   const chooseCategory = (name: string) => {
+    const picking = pickingRef.current;
     if (typeof picking === 'string' && picking.startsWith('teach:')) {
       const taught = teachGroups.find((one) => one.key === picking.slice(6));
       if (taught) teachAsCategory(taught, name);
@@ -4466,7 +4487,7 @@ export default function MpesaImportScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
-      <CategorySheet visible={picking !== null} budgetName={group?.name} onPick={chooseCategory} onClose={() => setPicking(null)} />
+      <CategorySheetHost ref={sheetRef} budgetName={group?.name} onPick={chooseCategory} onClose={() => setPicking(null)} />
       <UndoDeleteBar pending={undoable.pending} onUndo={undoable.undo} />
     </View>
   );

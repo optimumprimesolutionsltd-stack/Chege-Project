@@ -37,11 +37,23 @@ export type { Leftover };
 
 type Answer = {
   account: { id: number; name: string; openingBalance: number };
-  result: { from: string; startGap: number; spans: DifferenceSpan[] } | null;
+  result: { from: string; startGap: number; spans: DifferenceSpan[]; moreSpans?: number } | null;
 };
 
 /** Every so often, not on every visit to Home: the check reads a year of messages. */
 export const RECONCILE_EVERY_MS = 6 * 60 * 60 * 1000;
+
+/**
+ * Rounds of fix-and-check before giving up. The server lists 60 places at a
+ * time (api-server lib/mpesa-difference MAX_SPANS), so a long history needs
+ * several: one round fixed the first 60 and stopped, and Home went on saying
+ * there was more to do ("Find the difference is not finishing", 10 Oct 2026).
+ */
+export const MAX_ROUNDS = 10;
+
+/** The sure fixes a check found, as one string: the same twice means the last round changed nothing. */
+const fixesOf = (opening: number | null, plan: ReturnType<typeof fixPlan>): string =>
+  JSON.stringify([opening, plan.move, plan.redate, plan.charges]);
 
 export async function reconcileQuietly(now = Date.now()): Promise<Leftover | null> {
   if (!canReadSms()) return null;
@@ -62,31 +74,50 @@ export async function reconcileQuietly(now = Date.now()): Promise<Leftover | nul
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ messages }),
   });
-  let answer = await ask();
-  if (!answer.result) return { extra: 0, missing: null };
-
-  let changed = false;
-  const opening = openingBalanceFix(answer.result.startGap, answer.account.openingBalance);
-  if (opening !== null) {
-    await customFetch('/api/joint-account/opening-balance', {
+  return fixUntilDone(ask, {
+    setOpening: (accountId, openingBalance, from) => customFetch('/api/joint-account/opening-balance', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ accountId: answer.account.id, openingBalance: opening, openingBalanceDate: dayBefore(answer.result.from) }),
-    });
-    changed = true;
-  }
-  const plan = fixPlan(answer.result.spans, (receipt) => charges.get(receipt) ?? null);
-  if (plan.move.length > 0 || plan.redate.length > 0 || plan.charges.length > 0) {
-    await customFetch('/api/mpesa/difference/fix', {
+      body: JSON.stringify({ accountId, openingBalance, openingBalanceDate: dayBefore(from) }),
+    }),
+    fix: (plan) => customFetch('/api/mpesa/difference/fix', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ move: plan.move, redate: plan.redate, charges: plan.charges }),
-    });
-    changed = true;
+    }),
+    chargeOf: (receipt) => charges.get(receipt) ?? null,
+  });
+}
+
+/**
+ * Check, make every sure fix, check again - until a check finds none, or a round
+ * changes nothing (the same fixes found twice), or MAX_ROUNDS. What is left is
+ * only what needs the person.
+ */
+export async function fixUntilDone(
+  ask: () => Promise<Answer>,
+  apply: {
+    setOpening: (accountId: number, openingBalance: number, from: string) => Promise<unknown>;
+    fix: (plan: ReturnType<typeof fixPlan>) => Promise<unknown>;
+    chargeOf: (receipt: string) => number | null;
+  },
+): Promise<Leftover> {
+  let answer = await ask();
+  let last: string | null = null;
+  for (let round = 0; round < MAX_ROUNDS && answer.result; round += 1) {
+    const opening = openingBalanceFix(answer.result.startGap, answer.account.openingBalance);
+    const plan = fixPlan(answer.result.spans, apply.chargeOf);
+    const sure = plan.move.length > 0 || plan.redate.length > 0 || plan.charges.length > 0;
+    if (opening === null && !sure) break;
+    const these = fixesOf(opening, plan);
+    if (these === last) break;
+    last = these;
+    if (opening !== null) await apply.setOpening(answer.account.id, opening, answer.result.from);
+    if (sure) await apply.fix(plan);
+    answer = await ask();
   }
-  // What is left once the sure fixes are in.
-  if (changed) answer = await ask();
-  return leftoverOf(answer.result?.spans ?? []);
+  if (!answer.result) return { extra: 0, missing: null };
+  return leftoverOf(answer.result.spans, answer.result.moreSpans ?? 0);
 }
 
 export { leftoverOf, leftoverText, needsYou } from './reconcileLeftover';
