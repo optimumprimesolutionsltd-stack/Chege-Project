@@ -1,5 +1,5 @@
 import type { DebtLink } from "./mpesa-debts";
-import { fuzzyCategory, isFeePosting, looksLikePerson, ruleCategory, ruleSource, wordCategory, type PayeeRules } from "./payee-learning";
+import { fuzzyCategory, isFeePosting, looksLikePerson, ruleCategoryFor, ruleSourceFor, wordCategory, type PayeeRules } from "./payee-learning";
 import { loanOf, productCategory, productOf, savingsOf } from "./mpesa-products";
 import { knownPayeeCategory, knownPayeeOf, makesStandardCategories } from "./known-payees";
 import { tagOf, withoutPersonTag } from "./personNumber";
@@ -365,7 +365,7 @@ export function initialChoices(
       // A loan drawn (Fuliza, M-Shwari, KCB M-PESA, Hustler Fund) is borrowed, never income, so it is offered no source.
       // A source the person kept for this payer comes first (payeeLearning ruleSource):
       // a business"s customer is that business"s sales, even from a person"s number.
-      const kept = line.description && loanOf(line)?.kind !== "borrowed" && !savingsOf(line) ? ruleSource(line.description, rules) : null;
+      const kept = line.description && loanOf(line)?.kind !== "borrowed" && !savingsOf(line) ? ruleSourceFor(line.description, line.amount, rules) : null;
       const source = kept ?? (line.description && loanOf(line)?.kind !== "borrowed" && !savingsOf(line) && !sourceNotGuessed(line) ? suggestIncomeSource(line.description, history) : null);
       choices[line.index] = { ...choices[line.index], incomeSourceId: source, sourceAuto: source !== null, ...(notSureIn(line) && kept === null ? { confirmed: true } : {}) };
     }
@@ -436,7 +436,7 @@ function suggestionFor(
   // A rule the person kept, then this exact payee"s history, then payees with a similar name,
   // then a word that has nearly always meant one category in their own books, then a
   // well-known payee (lib/knownPayees).
-  const kept = description ? ruleCategory(description, rules, line.payeeNumber) : "";
+  const kept = description ? ruleCategoryFor(description, line.amount, rules, line.payeeNumber) : "";
   const earlier = description ? suggestCategory(description, history) : "";
   // A Safaricom product goes where the person keeps it, and otherwise to its ledger under M-Pesa -
   // never to a guess from a similar name, which could be anything.
@@ -497,7 +497,7 @@ export function refreshSuggestions(
     // gets its airtime, bundles, charges and loans filed too (see filedByJamvi).
     const untouched = current.confirmed === undefined && current.include && destinationOf(current) === "category";
     if (line.direction === "in") {
-      const kept = line.description && loanOf(line)?.kind !== "borrowed" && !savingsOf(line) ? ruleSource(line.description, rules) : null;
+      const kept = line.description && loanOf(line)?.kind !== "borrowed" && !savingsOf(line) ? ruleSourceFor(line.description, line.amount, rules) : null;
       if (kept !== null && (current.incomeSourceId == null || current.sourceAuto)) {
         next[line.index] = { ...current, incomeSourceId: kept, sourceAuto: true };
         continue;

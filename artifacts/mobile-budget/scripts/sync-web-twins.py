@@ -44,6 +44,8 @@ TWINS = {
     'teachJamvi.ts': ('teach-jamvi.ts', {'./mpesaImport': './mpesa-import', './knownPayees': './known-payees', './mpesaProducts': './mpesa-products', './payeeLearning': './payee-learning', './entriesToSort': './entries-to-sort'}),
     'family.ts': ('family.ts', {'./payeeLearning': './payee-learning'}),
     'businessSalary.ts': ('business-salary.ts', {}),
+    # What a payee's payments have in common (10 Oct 2026). No imports, same name on the web.
+    'paymentPatterns.ts': ('paymentPatterns.ts', {}),
 }
 
 

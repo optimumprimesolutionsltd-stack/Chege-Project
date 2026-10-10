@@ -32,8 +32,8 @@ import { FAMILY_CATEGORY, familyCategories, familyNames, relativesBySurname, wit
 import { useAuth } from '@/lib/auth';
 import { payeeKey } from '@/lib/payeeLearning';
 import { isNotSure, type EntryToSort } from '@/lib/entriesToSort';
-import { parseStoredRules, rulesStorageKey, withRule, withSourceRule, type PayeeRules } from '@/lib/payeeLearning';
-import { ownByNumber, ownRuleKey, saveEach, savedGroups, suggestedCategories, teachDoneKey, type SavedGroup } from '@/lib/teachJamvi';
+import { OWN_VALUE, parseStoredRules, rulesStorageKey, withRule, withSourceRule, type PayeeRules } from '@/lib/payeeLearning';
+import { keepAnswer, ownByNumber, ownRuleKey, saveEach, savedGroups, suggestedCategories, teachDoneKey, type SavedGroup } from '@/lib/teachJamvi';
 import { LISTS_AN_EDIT_CHANGES, withoutSorted } from '@/lib/showSavedEdit';
 import { plainSaveError } from '@/lib/saveRetry';
 import { saveRules } from '@/lib/rulesStore';
@@ -128,11 +128,12 @@ export default function TeachJamviScreen() {
   const onCategory = (taught: SavedGroup, category: string) => {
     if (category === FAMILY_CATEGORY) void ensureCategory(category);
     // A bank account is remembered by its account number, never the bank's shared paybill.
-    keepRules(taught.key.startsWith('#ref:') ? { ...rules, [taught.key]: category } : withRule(rules, taught.entries[0].description, category));
+    // One kind of the payee's payments only (lib/paymentPatterns): kept by its amounts.
+    keepRules(keepAnswer(rules, taught, category, (kept) => taught.key.startsWith('#ref:') ? { ...kept, [taught.key]: category } : withRule(kept, taught.entries[0].description, category)));
     void saveAll(taught, { expenseCategory: category });
   };
   const onSource = (taught: SavedGroup, incomeSourceId: number) => {
-    keepRules(withSourceRule(rules, taught.entries[0].description, incomeSourceId));
+    keepRules(keepAnswer(rules, taught, String(incomeSourceId), (kept) => withSourceRule(kept, taught.entries[0].description, incomeSourceId)));
     // A stream's owner is who the money came in under (as Sort them out does).
     const owner = (incomeSources as Array<{ id: number; userId?: string | null }>).find((source) => source.id === incomeSourceId)?.userId;
     void saveAll(taught, { incomeSourceId, ...(owner ? { madeById: owner } : {}) });
@@ -163,7 +164,7 @@ export default function TeachJamviScreen() {
           Alert.alert('Account added', "It could not be set as the business's yet. Open it on Bank and choose Business."));
       }
     }
-    if (!byNumber) keepRules({ ...rules, [ownRuleKey(taught.key)]: String(targetId) });
+    if (!byNumber) keepRules(keepAnswer(rules, taught, `${OWN_VALUE}${targetId}`, (kept) => ({ ...kept, [ownRuleKey(taught.key)]: String(targetId) })));
     await queryClient.invalidateQueries({ queryKey: getGetJointAccountsQueryKey() });
     setSkipped((current) => new Set([...current, taught.key]));
     setAnswered((count) => count + 1);

@@ -98,7 +98,7 @@ import { isNotSure, needsNotSureCategory, NOT_SURE_CATEGORY, notSureableLines, o
 import { handleLapsedError } from '@/lib/lapsedError';
 import { runPool, savePosting, SAVE_CONCURRENCY, type PostingApi, type Posted } from '@/lib/savePosting';
 import { EarlierSaveRunning, followServerSave, isFollowingServerSave, startServerSave, type ServerJob } from '@/lib/serverSave';
-import { parseStoredRules, payeeKey, payeeName, referenceOf, ruleLabel, rulesStorageKey, withRule, withSourceRule, withoutRule, type PayeeRules } from '@/lib/payeeLearning';
+import { OWN_VALUE, parseStoredRules, payeeKey, payeeName, referenceOf, ruleLabel, rulesStorageKey, withRule, withSourceRule, withoutRule, type PayeeRules } from '@/lib/payeeLearning';
 import { saveDebtLinks } from '@/lib/debtReversal';
 import { mpesaNameFor, saveMpesaNames, type MpesaName } from '@/lib/mpesaNames';
 import { isLapsedRefusal, lapsedSaveMessage } from '@/lib/lapsedSave';
@@ -129,7 +129,7 @@ import { TeachJamviCard, type OwnAccountAnswer } from '@/components/TeachJamviCa
 import { BusinessSalaryQuestion } from '@/components/BusinessSalaryQuestion';
 import { FamilyNamesCard } from '@/components/FamilyNamesCard';
 import { FAMILY_CATEGORY, familyCategories, familyNames, fileFamilyLines, relativesBySurname, withFamily, withoutFamily } from '@/lib/family';
-import { alreadyKnown, ownByNumber, ownRuleKey, suggestedCategories, teachableGroups, teachCategory, teachOwnAccount, teachSource, withOwnAccounts, type TeachGroup } from '@/lib/teachJamvi';
+import { alreadyKnown, keepAnswer, ownByNumber, ownRuleKey, suggestedCategories, teachableGroups, teachCategory, teachOwnAccount, teachSource, withOwnAccounts, type TeachGroup } from '@/lib/teachJamvi';
 import { useNamedPayees } from '@/hooks/useNamedPayees';
 import { namedKeyFor, ruleKeysFor, withNamed } from '@/lib/namedPayees';
 import { businessOfLine, businessPayees, chooseBusiness, chooseNewCost, costOwners, costsOf } from '@/lib/importBusiness';
@@ -1773,14 +1773,15 @@ export default function MpesaImportScreen() {
     setChoices((current) => teachCategory(current, taught, category));
     // A bank account paid through a paybill is remembered by its account number,
     // never by the bank's paybill, which every customer of that bank shares.
-    keepRules(taught.key.startsWith('#ref:')
-      ? { ...rules, [taught.key]: category }
-      : withRule(rules, taught.sample.description ?? '', category, taught.sample.payeeNumber));
+    // One kind of the payee's payments only (lib/paymentPatterns): kept by its amounts.
+    keepRules(keepAnswer(rules, taught, category, (kept) => taught.key.startsWith('#ref:')
+      ? { ...kept, [taught.key]: category }
+      : withRule(kept, taught.sample.description ?? '', category, taught.sample.payeeNumber)));
     setTeachAnswered((count) => count + 1);
   };
   const teachAsSource = (taught: TeachGroup, incomeSourceId: number) => {
     setChoices((current) => teachSource(current, taught, incomeSourceId));
-    keepRules(withSourceRule(rules, taught.sample.description ?? '', incomeSourceId));
+    keepRules(keepAnswer(rules, taught, String(incomeSourceId), (kept) => withSourceRule(kept, taught.sample.description ?? '', incomeSourceId)));
     setTeachAnswered((count) => count + 1);
   };
   const teachAsOwnAccount = async (taught: TeachGroup, answer: OwnAccountAnswer) => {
@@ -1808,7 +1809,7 @@ export default function MpesaImportScreen() {
           Alert.alert('Account added', "It could not be set as the business's yet. Open it on Bank and choose Business."));
       }
     }
-    if (!byNumber) keepRules({ ...rules, [ownRuleKey(taught.key)]: String(targetId) });
+    if (!byNumber) keepRules(keepAnswer(rules, taught, `${OWN_VALUE}${targetId}`, (kept) => ({ ...kept, [ownRuleKey(taught.key)]: String(targetId) })));
     await queryClient.invalidateQueries({ queryKey: getGetJointAccountsQueryKey() });
     setChoices((current) => teachOwnAccount(current, taught, targetId));
     setTeachAnswered((count) => count + 1);
