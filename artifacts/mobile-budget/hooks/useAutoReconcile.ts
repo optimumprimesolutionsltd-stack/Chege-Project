@@ -3,8 +3,17 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { getImportProgress, useImportProgress } from '@/lib/importProgress';
 import { reconcileQuietly, RECONCILE_EVERY_MS, type Leftover } from '@/lib/autoReconcile';
+import { needsYou } from '@/lib/reconcileLeftover';
 
 const keyFor = (groupId: number) => `jamvi:auto-reconcile:${groupId}`;
+
+/**
+ * A count that asks something of the person is checked again after this long,
+ * not six hours: Waiting for you said "4 entries M-Pesa never had" after they
+ * were sorted, and the screen it opened had nothing to do ("why identify
+ * problems you cannot solve?", 10 Oct 2026). Only what still needs them shows.
+ */
+export const RECHECK_WAITING_MS = 10 * 60 * 1000;
 type Kept = { at: number; left: Leftover | null };
 
 /**
@@ -39,12 +48,14 @@ export function useAutoReconcile(groupId: number | undefined, canManage: boolean
     queryKey: ['auto-reconcile', groupId],
     enabled: groupId != null && canManage,
     subscribed: onScreen,
-    staleTime: RECONCILE_EVERY_MS,
+    // Asked again on a visit to Home after this; the kept answer above decides
+    // whether that means a new check.
+    staleTime: RECHECK_WAITING_MS,
     retry: false,
     queryFn: async () => {
       const key = keyFor(groupId!);
       const kept = await AsyncStorage.getItem(key).then((raw) => (raw ? (JSON.parse(raw) as Kept) : null)).catch(() => null);
-      if (kept && Date.now() - kept.at < RECONCILE_EVERY_MS) return kept.left;
+      if (kept && Date.now() - kept.at < (needsYou(kept.left) ? RECHECK_WAITING_MS : RECONCILE_EVERY_MS)) return kept.left;
       if (getImportProgress()?.stage === 'saving') return kept?.left ?? null;
       try {
         const left = await reconcileQuietly();

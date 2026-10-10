@@ -246,9 +246,16 @@ export default function MpesaDifferenceScreen() {
                 Checked {result.checkedDays} days, {formatDisplayDate(result.from)} to {formatDisplayDate(result.to)}
               </Text>
               {allAgree ? (
-                <Text style={{ color: colors.success, fontFamily: 'Inter_700Bold', fontSize: 16 }} testID="mpesa-difference-agree">
-                  Jamvi matches M-Pesa on every one of those days.
-                </Text>
+                <>
+                  <Text style={{ color: colors.success, fontFamily: 'Inter_700Bold', fontSize: 16 }} testID="mpesa-difference-agree">
+                    Jamvi matches M-Pesa on every one of those days.
+                  </Text>
+                  {/* Opened from Waiting for you after it was already sorted: say so, and the way out. */}
+                  <Text style={{ color: colors.mutedForeground, fontSize: 13 }}>Nothing here needs you. Anything Home listed has been sorted.</Text>
+                  <Pressable onPress={() => router.replace('/(tabs)' as never)} accessibilityRole="button" style={[styles.action, { borderColor: colors.primary }]} testID="mpesa-difference-home">
+                    <Text style={[styles.actionText, { color: colors.primary }]}>Back to Home</Text>
+                  </Pressable>
+                </>
               ) : (
                 <Text style={{ color: colors.foreground, fontFamily: 'Inter_700Bold', fontSize: 16 }}>
                   {Math.abs(result.endGap) < 1
@@ -432,6 +439,15 @@ export default function MpesaDifferenceScreen() {
               </Text>
             ) : null}
           </>
+        ) : state === 'done' ? (
+          // Never a blank screen: nothing came back to compare.
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]} testID="mpesa-difference-nothing">
+            <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>Nothing to check yet</Text>
+            <Text style={{ color: colors.mutedForeground, fontSize: 13 }}>No M-Pesa messages with a balance could be laid against {account}. Nothing here needs you.</Text>
+            <Pressable onPress={() => router.replace('/(tabs)' as never)} accessibilityRole="button" style={[styles.action, { borderColor: colors.primary }]}>
+              <Text style={[styles.actionText, { color: colors.primary }]}>Back to Home</Text>
+            </Pressable>
+          </View>
         ) : null}
       </ScrollView>
     </View>
