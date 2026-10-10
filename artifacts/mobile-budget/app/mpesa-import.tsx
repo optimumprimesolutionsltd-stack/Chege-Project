@@ -3,6 +3,7 @@ import { withoutPersonTag } from '@/lib/personNumber';
 import {
   ActivityIndicator,
   AppState,
+  BackHandler,
   Alert,
   KeyboardAvoidingView,
   Modal,
@@ -1329,6 +1330,23 @@ export default function MpesaImportScreen() {
       setPickingStatement(false);
     }
   };
+  // Back, from the arrow or the phone's own button. Opened with nothing behind
+  // it - after an update restart, from a shared message - there was nowhere to
+  // go back to, and both did nothing ("these two arrows for going back are not
+  // working", 10 Oct 2026): then it goes Home.
+  const leave = () => {
+    if (router.canGoBack()) router.back();
+    else router.replace('/(tabs)' as never);
+  };
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (router.canGoBack()) return false;
+      router.replace('/(tabs)' as never);
+      return true;
+    });
+    return () => sub.remove();
+  }, []);
   // Backing out of the file list on some phones never answers the picker, which
   // left the button waiting for good. Coming back to Jamvi frees it.
   useEffect(() => {
@@ -2753,7 +2771,7 @@ export default function MpesaImportScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <View style={[styles.header, { paddingTop: insets.top + 8, borderColor: colors.border }]}>
-        <Pressable onPress={() => router.back()} hitSlop={10} accessibilityRole="button" accessibilityLabel="Go back">
+        <Pressable onPress={leave} hitSlop={10} accessibilityRole="button" accessibilityLabel="Go back" testID="mpesa-import-back">
           <Feather name="chevron-left" size={24} color={colors.foreground} />
         </Pressable>
         <View style={{ flex: 1 }}>

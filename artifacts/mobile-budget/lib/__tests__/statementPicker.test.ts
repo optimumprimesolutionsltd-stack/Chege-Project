@@ -36,4 +36,13 @@ describe('choosing the statement PDF', () => {
     expect(screen).toContain('if (statementPickRef.current) return;');
     expect(screen).toContain("AppState.addEventListener('change'");
   });
+
+  it('goes Home when there is nothing to go back to, from the arrow and the phone button', () => {
+    const screen = readFileSync(join(__dirname, '../../app/mpesa-import.tsx'), 'utf8');
+    expect(screen).toContain('if (router.canGoBack()) router.back();');
+    expect(screen).toContain("else router.replace('/(tabs)' as never);");
+    expect(screen).toContain('onPress={leave}');
+    expect(screen).toContain("BackHandler.addEventListener('hardwareBackPress'");
+    expect(screen).not.toContain('onPress={() => router.back()} hitSlop={10} accessibilityRole="button" accessibilityLabel="Go back"');
+  });
 });
