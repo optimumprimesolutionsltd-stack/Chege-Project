@@ -16,11 +16,11 @@ describe('Year at a glance', () => {
     expect(webApp).toContain('<Route path="/year-report" component={YearReportPage} />');
   });
 
-  it('opens on this year, a month a column, from the reports each month already has', () => {
+  it('opens on this year, the whole year in one request (9 Oct 2026)', () => {
     for (const screen of [phone, web]) {
       expect(screen).toContain('useState(today.year)');
-      expect(screen).toContain('getGetDashboardCategoryBreakdownQueryKey({ month: m, year: y })');
-      expect(screen).toContain('getGetDashboardIncomeStreamsQueryKey({ month: m, year: y })');
+      expect(screen).toContain('/api/dashboard/year?year=${year}');
+      expect(screen).not.toContain('useQueries');
     }
   });
 
@@ -32,5 +32,18 @@ describe('Year at a glance', () => {
     expect(phone).toContain('stickyHeaderIndices={[0]}');
     expect(phone).toContain('monthRow.current?.scrollTo({ x: event.nativeEvent.contentOffset.x, animated: false })');
     expect(web).toContain('<thead className="sticky top-0 z-20 bg-card">');
+  });
+});
+
+describe('the year request gives the same figures as Reports', () => {
+  const dashboard = readFileSync('../api-server/src/routes/dashboard.ts', 'utf8');
+  it('each month comes from the very functions the monthly reports use', () => {
+    expect(dashboard).toContain('router.get("/dashboard/year"');
+    expect(dashboard).toContain('const breakdown = await categoryBreakdownFor(groupId, year, month);');
+    expect(dashboard).toContain('res.json(GetDashboardIncomeStreamsResponse.parse(await incomeStreamsFor(groupId, year, month)));');
+    expect(dashboard).toContain('await Promise.all([categoryBreakdownFor(groupId, year, month), incomeStreamsFor(groupId, year, month)])');
+  });
+  it('two months at a time, to spare the database', () => {
+    expect(dashboard).toContain('for (let i = 0; i < months.length; i += 2) {');
   });
 });
