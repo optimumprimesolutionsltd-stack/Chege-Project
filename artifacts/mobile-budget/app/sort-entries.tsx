@@ -17,6 +17,7 @@ import {
   useUpdateJointAccountTransaction,
 } from '@workspace/api-client-react';
 import { useSourceCorrection } from '@/hooks/useSourceCorrection';
+import { useFamilyLines } from '@/hooks/useFamilyLines';
 import { useColors } from '@/hooks/useColors';
 import { isRefund, spentText } from '@/lib/refundLabel';
 import { isNotSure, isToCheck, NOT_SURE_CATEGORY, sameParty, type EntryToSort } from '@/lib/entriesToSort';
@@ -200,17 +201,17 @@ export default function SortEntriesScreen() {
     () => familyCategories(categoryList as unknown as Array<{ id: number; name: string; parentId?: number | null }>)[0] ?? FAMILY_CATEGORY,
     [categoryList],
   );
+  const familyLines = useFamilyLines();
   const asFamily = async (entry: EntryToSort) => {
     setBusy(entry.id);
+    // Their own line under Family support (lib/familyPeople): "Family support > Jane Wanjiru".
+    let line: string;
     try {
-      if (!categoryList.some((row) => row.name === familyCategory)) {
-        await createCategory({ data: { name: familyCategory, budgetAmount: 0, priority: 3, isRecurring: true, activeMonth: null, activeYear: null } as never });
-        await queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
-      }
-      const next = withFamily(rules, entry.description, familyCategory);
-      if (next !== rules) {
-        await saveRules(group?.id, next, rules);
-        setRules(next);
+      const made = await familyLines.lineFor(entry.description, rules);
+      line = made.line;
+      if (made.rules !== rules) {
+        await saveRules(group?.id, made.rules, rules);
+        setRules(made.rules);
       }
     } catch (error) {
       Alert.alert('Could not keep them as family', plainSaveError(error));
@@ -218,7 +219,7 @@ export default function SortEntriesScreen() {
     } finally {
       setBusy(null);
     }
-    sort(entry, { expenseCategory: familyCategory }, familyCategory);
+    sort(entry, { expenseCategory: line }, line);
   };
   const { data: group } = useGetGroup();
   // "+ New category" on any entry: name, parent and tier (components/CreateCategorySheet).

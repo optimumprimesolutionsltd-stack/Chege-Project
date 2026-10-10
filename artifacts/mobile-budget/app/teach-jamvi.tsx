@@ -21,6 +21,9 @@ import {
   getGetIncomeSourcesQueryKey,
 } from '@workspace/api-client-react';
 
+import { useOwnerBusiness } from '@/hooks/useOwnerBusiness';
+import { namesBusiness, withOwnBusinessPayee } from '@/lib/ownerBusiness';
+import { useFamilyLines } from '@/hooks/useFamilyLines';
 import { useColors } from '@/hooks/useColors';
 import { useBusinesses } from '@/hooks/useBusinesses';
 import { useBusinessAccounts } from '@/hooks/useBusinessAccounts';
@@ -90,7 +93,12 @@ export default function TeachJamviScreen() {
 
   const [skipped, setSkipped] = useState<ReadonlySet<string>>(new Set());
   const [answered, setAnswered] = useState(0);
-  const groups = useMemo(() => savedGroups(entries, rules, { skipped }), [entries, rules, skipped]);
+  const ownerBusiness = useOwnerBusiness();
+  // A payee that is the person's own business is never asked about (lib/ownerBusiness).
+  const groups = useMemo(
+    () => savedGroups(entries, rules, { skipped }).filter((group) => !namesBusiness(group.entries[0].description, ownerBusiness.matching.keys)),
+    [entries, rules, skipped, ownerBusiness.matching.keys],
+  );
   const waiting = useMemo(() => entries.filter((entry) => !(entry.direction === 'in' && entry.incomeSourceId != null)).length, [entries]);
   const behind = groups.reduce((sum, one) => sum + one.count, 0);
 
@@ -126,11 +134,19 @@ export default function TeachJamviScreen() {
     }
   };
 
-  const onCategory = (taught: SavedGroup, category: string) => {
+  const familyLines = useFamilyLines();
+  const onCategory = (taught: SavedGroup, category: string, base: PayeeRules = rules) => {
+    // A person who is family: their own line under Family support (lib/familyPeople).
+    if (category === FAMILY_CATEGORY && taught.kind === 'person') {
+      void familyLines.lineFor(taught.entries[0].description, rules)
+        .then((made) => onCategory(taught, made.line, made.converted ? made.rules : rules))
+        .catch((error: unknown) => Alert.alert('Could not add them', error instanceof Error ? error.message : 'Try again.'));
+      return;
+    }
     if (category === FAMILY_CATEGORY) void ensureCategory(category);
     // A bank account is remembered by its account number, never the bank's shared paybill.
     // One kind of the payee's payments only (lib/paymentPatterns): kept by its amounts.
-    keepRules(keepAnswer(rules, taught, category, (kept) => taught.key.startsWith('#ref:') ? { ...kept, [taught.key]: category } : withRule(kept, taught.entries[0].description, category)));
+    keepRules(keepAnswer(base, taught, category, (kept) => taught.key.startsWith('#ref:') ? { ...kept, [taught.key]: category } : withRule(kept, taught.entries[0].description, category)));
     void saveAll(taught, { expenseCategory: category });
   };
   const onSource = (taught: SavedGroup, incomeSourceId: number) => {
@@ -197,9 +213,13 @@ export default function TeachJamviScreen() {
     await queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
   };
   // Kept for every message after, and their saved Not sure entries filed now.
-  const addFamily = async (name: string, category: string) => {
-    await ensureCategory(category);
-    keepRules(withFamily(rules, name, category));
+  // Each person their own line under Family support (lib/familyPeople).
+  const addFamily = async (name: string) => {
+    const made = await familyLines.lineFor(name, rules);
+    const category = made.line;
+    keepRules(made.rules);
+    // This year's payments to them saved under another family category follow too.
+    void familyLines.moveEarlier(name, category, new Set(familyChoices));
     const key = payeeKey(name);
     const theirs = entries.filter((entry) => entry.direction === 'out' && payeeKey(entry.description) === key);
     if (theirs.length > 0) {
@@ -268,9 +288,26 @@ export default function TeachJamviScreen() {
             incomeSources={incomeSources as Array<{ id: number; name: string }>}
             accounts={accounts}
             businesses={businesses.list}
-            onCategory={onCategory}
+            onCategory={(taught, category) => onCategory(taught, category)}
             onPickCategory={(taught) => { setSearch(''); setPicking(taught); }}
             onSource={onSource}
+            onOwnBusiness={async (taught, answer) => {
+              // One of the person's own businesses (lib/ownerBusiness): kept by name or number,
+              // and these saved entries marked as money between them and it - not spending, not income.
+              let picked: { id: number; name: string };
+              if ('businessId' in answer) picked = { id: answer.businessId, name: businesses.list.find((one) => one.id === answer.businessId)?.name ?? taught.label };
+              else {
+                const made = await businesses.create(answer.newName);
+                if (!made?.id) throw new Error('Could not add the business. Try again.');
+                picked = { id: made.id, name: answer.newName };
+              }
+              await ownerBusiness.save(withOwnBusinessPayee(ownerBusiness.business, taught, picked));
+              const ids = taught.entries.map((one) => one.id);
+              await ownerBusiness.mark(ids);
+              void sorted(ids);
+              setSkipped((current) => new Set([...current, taught.key]));
+              setAnswered((count) => count + 1);
+            }}
             onNewBusiness={async (taught, name) => {
               // A customer of a business not set up yet: added here, and the money is its sales.
               const made = await businesses.create(name);
