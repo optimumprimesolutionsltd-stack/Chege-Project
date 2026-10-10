@@ -231,4 +231,77 @@ router.delete("/entries-to-sort/:transactionId/debt", async (req, res): Promise<
   res.status(204).end();
 });
 
+/**
+ * Money in from one payer that is already filed under an income source, so the
+ * phone can offer to change them all when the person picks another ("if the user
+ * says it's for a business but earlier had specified differently, how do we
+ * correct this instantly", 10 Oct 2026). Matched on the exact description here;
+ * the phone narrows it to the same payer (payeeLearning sourceRuleKey) and, for
+ * one kind of payment, to its amounts.
+ */
+const payerQuery = z.object({ description: z.string().trim().min(1).max(300) });
+
+router.post("/payer-money-in/find", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  const parsed = payerQuery.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Say which payer." });
+    return;
+  }
+  const result = await db.execute(sql`
+    SELECT t."id", t."amount", t."date"::text AS "date", t."description", t."income_source_id" AS "incomeSourceId"
+      FROM "joint_account_transactions" t
+     WHERE t."group_id" = ${groupId}
+       AND t."type" = 'deposit'
+       AND t."income_source_id" IS NOT NULL
+       AND t."bank_transfer_id" IS NULL
+       AND t."savings_goal_id" IS NULL
+       AND lower(t."description") = lower(${parsed.data.description})
+       AND NOT EXISTS (SELECT 1 FROM "joint_account_deposit_splits" s WHERE s."transaction_id" = t."id")
+     ORDER BY t."date" DESC
+     LIMIT 2000`);
+  const rows = result.rows as Array<{ id: number; amount: number | string; date: string; description: string; incomeSourceId: number }>;
+  res.json({ entries: rows.map((row) => ({ id: Number(row.id), amount: Number(row.amount), date: row.date, description: row.description, incomeSourceId: Number(row.incomeSourceId) })) });
+});
+
+const refileSchema = z.object({
+  ids: z.array(z.number().int().positive()).min(1).max(2000),
+  incomeSourceId: z.number().int().positive(),
+});
+
+/**
+ * Those entries moved to another income source in one go: its owner becomes who
+ * the money came in under, as Sort them out does. Only money in that already had
+ * a source, in this budget, and not a move between accounts.
+ */
+router.post("/payer-money-in/refile", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  if (!requireGroupManager(req, res)) return;
+  const parsed = refileSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Say which entries, and where they go." });
+    return;
+  }
+  const source = await db.execute(sql`
+    SELECT "user_id" AS "userId" FROM "income_sources" WHERE "id" = ${parsed.data.incomeSourceId} AND "group_id" = ${groupId} LIMIT 1`);
+  const owner = (source.rows[0] as { userId?: string } | undefined)?.userId;
+  if (!owner) {
+    res.status(400).json({ error: "Choose an income source of this budget." });
+    return;
+  }
+  const ids = [...new Set(parsed.data.ids)];
+  const updated = await db.execute(sql`
+    UPDATE "joint_account_transactions"
+       SET "income_source_id" = ${parsed.data.incomeSourceId}, "made_by_id" = ${owner}
+     WHERE "group_id" = ${groupId}
+       AND "type" = 'deposit'
+       AND "income_source_id" IS NOT NULL
+       AND "bank_transfer_id" IS NULL
+       AND "id" IN (${sql.join(ids.map((id) => sql`${id}`), sql`, `)})
+    RETURNING "id"`);
+  res.json({ refiled: updated.rows.length });
+});
+
 export default router;

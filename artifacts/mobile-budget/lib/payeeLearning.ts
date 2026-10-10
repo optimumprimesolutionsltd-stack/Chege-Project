@@ -359,3 +359,17 @@ export function bandOwnAccount(description: string, direction: 'in' | 'out', amo
 /** Whether a band answers this payment at all: a category, a source or an own account. */
 export const bandAnswers = (description: string, direction: 'in' | 'out', amount: number | null | undefined, rules: PayeeRules): boolean =>
   bandRule(description, direction, amount, rules) !== '';
+
+/** The band kept for this payee that covers this amount, or null. */
+export function bandFor(description: string, direction: 'in' | 'out', amount: number | null | undefined, rules: PayeeRules): Band | null {
+  const base = bandBase(description, direction);
+  if (!base || amount == null) return null;
+  const size = Math.abs(amount);
+  const prefix = `${BAND_PREFIX}${base}:`;
+  for (const key of Object.keys(rules)) {
+    if (!key.startsWith(prefix)) continue;
+    const range = key.slice(prefix.length).match(/^(\d+)-(\d+)$/);
+    if (range && size >= Number(range[1]) && size <= Number(range[2])) return { base, lo: Number(range[1]), hi: Number(range[2]) };
+  }
+  return null;
+}

@@ -19,7 +19,9 @@ const kes = (value: number) => `KES ${Math.round(value).toLocaleString('en-KE')}
 const SHOWN = 3;
 
 function question(group: TeachRegular): string {
-  if (group.direction === 'in') return `What is the money from ${group.label}?`;
+  // Asked by who paid and what for, never in accounting words ("what is the difference
+  // between an income source and a business income? I want to get it right", 10 Oct 2026).
+  if (group.direction === 'in') return `Who paid you, and what for?`;
   if (group.kind === 'person') return `Who is ${group.label} to you?`;
   if (group.kind === 'bank') return 'What is this account?';
   return `What do you pay ${group.label} for?`;
@@ -48,6 +50,7 @@ export function TeachJamviCard<G extends TeachRegular>({
   doneText,
   guess,
   onDebt,
+  onNewBusiness,
 }: {
   groups: G[];
   /** What Jamvi filed by itself in this read; left out for saved history. */
@@ -73,6 +76,8 @@ export function TeachJamviCard<G extends TeachRegular>({
   guess?: (group: G) => number | null;
   /** Money in that is a loan, or a debt being paid back (Who owes who). Left out where it cannot be recorded. */
   onDebt?: (group: G, kind: 'borrowed' | 'repaid') => Promise<void>;
+  /** Money in from a customer of a business not set up yet: add it, and file the money as its sales. */
+  onNewBusiness?: (group: G, name: string) => Promise<void>;
 }) {
   const colors = useColors();
   const group = groups[0] ?? null;
@@ -84,10 +89,14 @@ export function TeachJamviCard<G extends TeachRegular>({
   const [error, setError] = useState<string | null>(null);
   // "Other…" opened on a list of answers.
   const [moreOf, setMoreOf] = useState<{ income: boolean; sales: boolean }>({ income: false, sales: false });
+  const [addingBusiness, setAddingBusiness] = useState(false);
+  const [businessName, setBusinessName] = useState('');
 
   // A new regular starts with the own-account panel folded and its name suggested.
   useEffect(() => {
     setOwnOpen(false);
+    setAddingBusiness(false);
+    setBusinessName('');
     setMoreOf({ income: false, sales: false });
     setNewName(group ? `${group.label} ${group.reference}`.trim() : '');
     setBusinessId(null);
@@ -152,7 +161,7 @@ export function TeachJamviCard<G extends TeachRegular>({
       : []),
   ];
 
-  const notIncomeSection = group && group.direction === 'in' ? (mayBeOwnAccount(group) || onDebt ? section('NOT INCOME', [
+  const notIncomeSection = group && group.direction === 'in' ? (mayBeOwnAccount(group) || onDebt ? section('NOT INCOME: YOUR OWN MONEY, OR A LOAN', [
                   ...(mayBeOwnAccount(group) ? [chip('From my own account', () => setOwnOpen((open) => !open), 'teach-jamvi-own', 'credit-card')] : []),
                   ...(onDebt ? [
                     chip('A loan to me', () => void onDebt(group, 'borrowed'), 'teach-jamvi-debt-borrowed', 'arrow-down-left'),
@@ -214,11 +223,47 @@ export function TeachJamviCard<G extends TeachRegular>({
                 {/* Not income first: money moving between your own places, or borrowed, or paid back.
                     Pay that comes every month is asked the other way round: your income first. */}
                 {monthly ? null : notIncomeSection}
-                {answers.income.length > 0 ? section('YOUR INCOME', listOf(answers.income, moreOf.income, 'income',
-                  (source) => chip(source.name, () => onSource(group, source.id), `teach-jamvi-source-${source.id}`)), 'teach-jamvi-income') : null}
-                {answers.sales.length > 0 ? section("A BUSINESS'S SALES", listOf(answers.sales, moreOf.sales, 'sales',
-                  (business) => chip(business.name, () => onSource(group, business.id), `teach-jamvi-sales-${business.id}`, 'briefcase')),
-                  'teach-jamvi-sales', 'A customer paying one of your businesses. Your pay from a business is under Your income.') : null}
+                {answers.income.length > 0 ? section('PAID TO YOU', listOf(answers.income, moreOf.income, 'income',
+                  (source) => chip(source.name, () => onSource(group, source.id), `teach-jamvi-source-${source.id}`)), 'teach-jamvi-income',
+                  'Your salary, your own work, rent you collect - or your business paying you.') : null}
+                {answers.sales.length > 0 || onNewBusiness ? section('A CUSTOMER PAYING YOUR BUSINESS', [
+                  ...listOf(answers.sales, moreOf.sales, 'sales',
+                    (business) => chip(business.name, () => onSource(group, business.id), `teach-jamvi-sales-${business.id}`, 'briefcase')),
+                  // No business yet, or not this one: added right here, and the money filed under it.
+                  ...(onNewBusiness ? [chip(answers.sales.length > 0 ? 'Another business…' : 'Add your business…', () => setAddingBusiness((open) => !open), 'teach-jamvi-new-business', 'plus')] : []),
+                ], 'teach-jamvi-sales', "Its sales: kept in the business's own report, apart from your income.") : null}
+                {addingBusiness && onNewBusiness ? (
+                  <View style={{ gap: 8 }} testID="teach-jamvi-new-business-panel">
+                    <TextInput
+                      value={businessName}
+                      onChangeText={setBusinessName}
+                      placeholder="The business's name, such as Ujenzi Hardware"
+                      placeholderTextColor={colors.mutedForeground}
+                      style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.muted }]}
+                      testID="teach-jamvi-new-business-name"
+                    />
+                    <Pressable
+                      onPress={() => {
+                        const name = businessName.trim();
+                        if (!name) { setError("Give the business a name."); return; }
+                        setSaving(true);
+                        setError(null);
+                        void onNewBusiness(group, name)
+                          .catch((failure: unknown) => setError(failure instanceof Error ? failure.message : 'Could not add the business. Try again.'))
+                          .finally(() => setSaving(false));
+                      }}
+                      disabled={saving}
+                      accessibilityRole="button"
+                      testID="teach-jamvi-new-business-save"
+                      style={[styles.save, { backgroundColor: colors.primary, opacity: saving ? 0.6 : 1 }]}
+                    >
+                      {saving ? <ActivityIndicator color={colors.primaryForeground} size="small" /> : (
+                        <Text style={[styles.saveText, { color: colors.primaryForeground }]}>Add it, and file this as its sales</Text>
+                      )}
+                    </Pressable>
+                    {error && !ownOpen ? <Text style={[styles.payeeMeta, { color: colors.destructive }]}>{error}</Text> : null}
+                  </View>
+                ) : null}
                 {monthly ? notIncomeSection : null}
               </View>
             )}

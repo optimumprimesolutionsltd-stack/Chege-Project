@@ -18,6 +18,7 @@ import {
   useUpdateJointAccountTransaction,
   useCreateBudgetCategory,
   getGetBudgetCategoriesQueryKey,
+  getGetIncomeSourcesQueryKey,
 } from '@workspace/api-client-react';
 
 import { useColors } from '@/hooks/useColors';
@@ -270,6 +271,13 @@ export default function TeachJamviScreen() {
             onCategory={onCategory}
             onPickCategory={(taught) => { setSearch(''); setPicking(taught); }}
             onSource={onSource}
+            onNewBusiness={async (taught, name) => {
+              // A customer of a business not set up yet: added here, and the money is its sales.
+              const made = await businesses.create(name);
+              if (!made?.id) throw new Error('Could not add the business. Try again.');
+              await queryClient.invalidateQueries({ queryKey: getGetIncomeSourcesQueryKey() });
+              onSource(taught, made.id);
+            }}
             onOwnAccount={onOwnAccount}
             onSkip={(taught) => setSkipped((current) => new Set([...current, taught.key]))}
             onClose={finish}

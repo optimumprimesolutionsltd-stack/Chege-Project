@@ -48,7 +48,7 @@ describe('the question on an entry', () => {
   });
 
   it('after Save it does the rest: the payee remembered for the business, and its other entries offered', () => {
-    expect(bank).toContain('if (whoFor) await rememberWhoFor(whoFor).catch(() => {});');
+    expect(bank).toContain('const askedAboutPayer = whoFor ? await rememberWhoFor(whoFor).catch(() => false) : false;');
     expect(bank).toContain('await namedPayees.add({ key: namedKeyFor(referenceOf(entry.description) || label)');
     expect(bank).toContain('withSourceRule(rules, entry.description, entry.business)');
   });

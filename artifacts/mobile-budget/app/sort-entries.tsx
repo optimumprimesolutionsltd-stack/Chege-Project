@@ -16,6 +16,7 @@ import {
   useGetJointAccount,
   useUpdateJointAccountTransaction,
 } from '@workspace/api-client-react';
+import { useSourceCorrection } from '@/hooks/useSourceCorrection';
 import { useColors } from '@/hooks/useColors';
 import { isRefund, spentText } from '@/lib/refundLabel';
 import { isNotSure, isToCheck, NOT_SURE_CATEGORY, sameParty, type EntryToSort } from '@/lib/entriesToSort';
@@ -145,6 +146,7 @@ export default function SortEntriesScreen() {
   const [noteOpen, setNoteOpen] = useState<Set<number>>(() => new Set());
   const rowState = useMemo(() => ({ notes, noteOpen }), [notes, noteOpen]);
   const noteChange = (id: number) => (notes[id] === undefined ? {} : { notes: notes[id].trim() || null });
+  const correctSource = useSourceCorrection();
   const sortEach = async (list: readonly EntryToSort[], change: { expenseCategory: string } | { incomeSourceId: number; madeById?: string }, label: string) => {
     setBusy(list[0]?.id ?? null);
     const changed: EntryToSort[] = [];
@@ -164,6 +166,8 @@ export default function SortEntriesScreen() {
       }
       await done(changed.map((one) => one.id));
       setBusy(null);
+      // Put under a source that goes against what Jamvi had before: offered once (lib/sourceClash).
+      if ('incomeSourceId' in change && changed.length > 0) void correctSource(changed[0], change.incomeSourceId, changed.map((one) => one.id));
     }
   };
   // A stream's owner is who the money came in under: in a Shared group the entry
