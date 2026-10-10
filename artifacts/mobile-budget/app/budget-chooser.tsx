@@ -57,6 +57,10 @@ import {
   GENERIC_BUSINESS_INCOME_STREAM,
   businessNameFromDraft,
   businessNamesFromDraft,
+  businessesFromDraft,
+  costsBusinessName,
+  BUSINESS_PAY_CHOICES,
+  type BusinessPay,
   MAX_ONBOARDING_BUSINESSES,
   isBusinessCostCategory,
   budgetDurationLabels,
@@ -885,6 +889,24 @@ function MobileOnboardingFlow({
   });
   const businessName = businessNameFromDraft(draft);
   const businessNames = businessNamesFromDraft(draft);
+  const costsName = costsBusinessName(draft);
+  const profitBusinessName = businessesFromDraft(draft).find((business) => business.pay !== 'passThrough')?.name ?? null;
+  // "How does it pay you?" under each business's name: answered here, the
+  // Business screen never has to ask whether it pays a salary.
+  const setBusinessPay = (box: number, pay: BusinessPay) => updateDraft((current) => {
+    const businessPay = [...(current.businessPay ?? [])];
+    while (businessPay.length <= box) businessPay.push(null);
+    businessPay[box] = pay;
+    return { ...current, businessPay };
+  });
+  const payQuestion = (box: number, name: string) => (
+    <View style={{ marginTop: 8, gap: 6 }} testID={`onboarding-business-pay-${box}`}>
+      <Text style={[styles.choiceTitle, { color: colors.foreground }]}>How does {name.trim() || 'it'} pay you?</Text>
+      {BUSINESS_PAY_CHOICES.map((choice) => (
+        <ChoiceRow key={choice.pay} testID={`onboarding-business-pay-${box}-${choice.pay}`} title={choice.title} description={choice.description} selected={(draft.businessPay?.[box] ?? null) === choice.pay} onPress={() => setBusinessPay(box, choice.pay)} colors={colors} />
+      ))}
+    </View>
+  );
 
   // Step 5 asks a monthly amount per category — the budgeting step. Somebody
   // here to save towards something, or to clear a loan, will not sit and set a
@@ -912,6 +934,11 @@ function MobileOnboardingFlow({
     }
     if (step === 1 && draft.usageMode !== 'shared' && draft.runsBusiness == null) {
       setError('Tell Jamvi whether you run a business to continue.');
+      return;
+    }
+    const unpaid = step === 1 && draft.usageMode !== 'shared' ? businessesFromDraft(draft).find((business) => business.pay == null) : undefined;
+    if (unpaid) {
+      setError(`Tell Jamvi how ${unpaid.name} pays you to continue.`);
       return;
     }
     if (step === 2 && draft.budgetDuration === 'custom') {
@@ -1114,21 +1141,25 @@ function MobileOnboardingFlow({
                     placeholderTextColor={colors.mutedForeground}
                     style={[styles.onboardingInput, { borderColor: colors.border, color: colors.foreground, marginTop: 8 }]}
                   />
+                  {payQuestion(0, draft.businessName ?? '')}
                   {/* More than one business - a shop and a boda - each named here,
                       each with its own profit on the Business screen. */}
                   {(draft.moreBusinessNames ?? []).map((name, index) => (
-                    <View key={index} style={[styles.inlineInput, { marginTop: 8 }]}>
-                      <TextInput
-                        testID={`onboarding-more-business-${index}`}
-                        value={name}
-                        onChangeText={(value) => updateDraft((current) => ({ ...current, moreBusinessNames: (current.moreBusinessNames ?? []).map((item, at) => (at === index ? value.slice(0, 80) : item)) }))}
-                        placeholder="Your other business, e.g. a boda"
-                        placeholderTextColor={colors.mutedForeground}
-                        style={[styles.onboardingInput, styles.flexInput, { borderColor: colors.border, color: colors.foreground }]}
-                      />
-                      <Pressable testID={`onboarding-remove-business-${index}`} accessibilityRole="button" accessibilityLabel="Remove this business" hitSlop={8} onPress={() => updateDraft((current) => ({ ...current, moreBusinessNames: (current.moreBusinessNames ?? []).filter((_, at) => at !== index) }))} style={{ padding: 6 }}>
-                        <Feather name="x" size={18} color={colors.mutedForeground} />
-                      </Pressable>
+                    <View key={index} style={{ marginTop: 12 }}>
+                      <View style={styles.inlineInput}>
+                        <TextInput
+                          testID={`onboarding-more-business-${index}`}
+                          value={name}
+                          onChangeText={(value) => updateDraft((current) => ({ ...current, moreBusinessNames: (current.moreBusinessNames ?? []).map((item, at) => (at === index ? value.slice(0, 80) : item)) }))}
+                          placeholder="Your other business, e.g. a boda"
+                          placeholderTextColor={colors.mutedForeground}
+                          style={[styles.onboardingInput, styles.flexInput, { borderColor: colors.border, color: colors.foreground }]}
+                        />
+                        <Pressable testID={`onboarding-remove-business-${index}`} accessibilityRole="button" accessibilityLabel="Remove this business" hitSlop={8} onPress={() => updateDraft((current) => ({ ...current, moreBusinessNames: (current.moreBusinessNames ?? []).filter((_, at) => at !== index), businessPay: (current.businessPay ?? []).filter((_, at) => at !== index + 1) }))} style={{ padding: 6 }}>
+                          <Feather name="x" size={18} color={colors.mutedForeground} />
+                        </Pressable>
+                      </View>
+                      {name.trim() ? payQuestion(index + 1, name) : null}
                     </View>
                   ))}
                   {(draft.moreBusinessNames ?? []).length < MAX_ONBOARDING_BUSINESSES - 1 ? (
@@ -1137,8 +1168,8 @@ function MobileOnboardingFlow({
                       <Text style={[styles.choiceTitle, { color: colors.primary }]}>I run another business</Text>
                     </Pressable>
                   ) : null}
-                  {businessNames.length > 1 ? (
-                    <Text style={[styles.choiceDescription, { color: colors.mutedForeground }]}>Each gets its own profit on the Business screen. The starter costs - stock and supplies - go to {businessNames[0]}; set the others' costs there.</Text>
+                  {businessNames.length > 1 && costsName ? (
+                    <Text style={[styles.choiceDescription, { color: colors.mutedForeground }]}>Each is kept apart on the Business screen. The starter costs - stock and supplies - go to {costsName}; set the others' costs there.</Text>
                   ) : null}
                 </>
               ) : null}
@@ -1220,7 +1251,7 @@ function MobileOnboardingFlow({
 
         {step === 3 ? <>
           <Text style={[styles.onboardingQuestion, { color: colors.foreground }]}>{headingName}{isShared ? 'what does the group spend money on?' : 'what should we help you track?'}</Text>
-          <Text style={[styles.onboardingHint, { color: colors.mutedForeground }]}>{isShared ? "Every category is here, with a star on the ones that usually suit a group like this. Tap what it spends on — you can change them later." : businessName ? `Your business costs are ticked so ${businessName}'s profit adds up. Tap the other categories you use - you can remove any later.` : 'Every category is here, with a star on the ones that suit you. Tap the ones you use, or select them all - you can remove any later.'}</Text>
+          <Text style={[styles.onboardingHint, { color: colors.mutedForeground }]}>{isShared ? "Every category is here, with a star on the ones that usually suit a group like this. Tap what it spends on — you can change them later." : profitBusinessName ? `Your business costs are ticked so ${profitBusinessName}'s profit adds up. Tap the other categories you use - you can remove any later.` : 'Every category is here, with a star on the ones that suit you. Tap the ones you use, or select them all - you can remove any later.'}</Text>
           <Pressable testID="onboarding-select-all" accessibilityRole="button" accessibilityLabel="Select all recommended categories" onPress={() => setDraftValue('selectedCategories', draft.selectedCategories.length === recommendedCategories.length ? [] : recommendedCategories)} style={[styles.selectAll, { backgroundColor: colors.accent, borderColor: colors.primary }]}><View style={styles.choiceCopy}><Text style={[styles.choiceTitle, { color: colors.foreground }]}>{draft.selectedCategories.length === recommendedCategories.length ? 'Clear all categories' : 'Select all recommended categories'}</Text><Text style={[styles.choiceDescription, { color: colors.mutedForeground }]}>Start quickly, then refine your list later.</Text></View><Feather name="check-square" size={20} color={colors.primary} /></Pressable>
           <Pressable testID="onboarding-select-every" accessibilityRole="button" onPress={() => setDraftValue('selectedCategories', dedupeCategoryNames(visibleTiers.flatMap((tier) => tier.categories)))} hitSlop={8} style={{ alignSelf: 'center', paddingVertical: 6 }}>
             <Text style={[styles.choiceTitle, { color: colors.primary }]}>Select every category</Text>
@@ -1263,7 +1294,9 @@ function MobileOnboardingFlow({
               </View>
             </View>
           ) : null}
-          {businessNames.map((name, index) => (
+          {/* Sales for each business whose profit counts; money that is not
+              the person's has no sales to plan. */}
+          {businessesFromDraft(draft).filter((business) => business.pay !== 'passThrough').map(({ name, box: index }) => (
             <View key={name} style={[styles.incomeAmountRow, { backgroundColor: colors.card, borderColor: colors.primary }]}>
               <View style={{ flex: 1 }}>
                 <Text style={[styles.amountLabel, { color: colors.foreground }]} numberOfLines={1}>{name}</Text>

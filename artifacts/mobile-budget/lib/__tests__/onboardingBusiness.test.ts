@@ -19,7 +19,9 @@ const conflict = () => new (ApiError as unknown as new (status: number) => Error
 import { applyMobileOnboardingToWorkspace, setUpBusiness } from '../onboarding-api';
 import {
   businessNameFromDraft,
+  businessFlagsFor,
   businessNamesFromDraft,
+  costsBusinessName,
   normalizeOnboardingDraft,
   recommendedCategoriesForPurpose,
   type MobileOnboardingDraft,
@@ -160,6 +162,47 @@ describe('the business question in onboarding', () => {
     expect(callsTo('GET', '/api/income-sources')).toHaveLength(1);
   });
 
+  it('asks how each business pays, and stores the answer the way My businesses does', () => {
+    expect(businessFlagsFor('profit')).toEqual({ business: true, countsProfit: true, paysSalary: false });
+    expect(businessFlagsFor('salary')).toEqual({ business: true, countsProfit: true, paysSalary: true });
+    expect(businessFlagsFor('passThrough')).toEqual({ business: true, countsProfit: false, paysSalary: null });
+    // Unanswered leaves it to be asked later, as before.
+    expect(businessFlagsFor(null)).toEqual({ business: true });
+    // Kept across a resumed draft; nonsense reads as unanswered.
+    expect(normalizeOnboardingDraft({ ...draft(), businessPay: ['salary', 'nope', 'passThrough'] })?.businessPay).toEqual(['salary', null, 'passThrough']);
+    expect(normalizeOnboardingDraft(draft())?.businessPay).toEqual([]);
+  });
+
+  it('sends each business its own answer, and puts the starter costs on one whose profit counts', async () => {
+    let next = 55;
+    customFetch.mockImplementation(async (url: string, init: { method?: string }) => {
+      const key = `${init?.method ?? 'GET'} ${url}`;
+      if (key === 'POST /api/income-sources') return { id: next++ };
+      if (key === 'GET /api/budget-categories') return categories;
+      return {};
+    });
+    // The first is money they only handle; the boda is the side hustle they live on.
+    const several = draft({ moreBusinessNames: ['Kamau Boda', 'Salon'], businessPay: ['passThrough', 'profit', 'salary'] });
+    expect(costsBusinessName(several)).toBe('Kamau Boda');
+    await setUpBusiness({ draft: several, userId: 'u1' });
+
+    expect(callsTo('PUT', '/api/businesses/').map(([url, init]) => [url, JSON.parse(init.body)])).toEqual([
+      ['/api/businesses/55', { business: true, countsProfit: false, paysSalary: null }],
+      ['/api/businesses/56', { business: true, countsProfit: true, paysSalary: false }],
+      ['/api/businesses/57', { business: true, countsProfit: true, paysSalary: true }],
+    ]);
+    const links = callsTo('PUT', '/api/budget-categories/').map(([, init]) => JSON.parse(init.body).reducesIncomeSourceId);
+    expect(links).toEqual([56, 56]);
+    // With nothing whose profit counts, the costs still go to the first.
+    expect(costsBusinessName(draft({ businessPay: ['passThrough'] }))).toBe("Wanjiru's Duka");
+  });
+
+  it('keeps each answer with its business when a box before it is blank', () => {
+    const withBlank = draft({ moreBusinessNames: ['', 'Salon'], businessPay: ['profit', null, 'salary'] });
+    expect(businessNamesFromDraft(withBlank)).toEqual(["Wanjiru's Duka", 'Salon']);
+    expect(costsBusinessName(withBlank)).toBe("Wanjiru's Duka");
+  });
+
   it('does nothing for somebody without a business', async () => {
     respond({});
     await setUpBusiness({ draft: draft({ runsBusiness: false }), userId: 'u1' });
@@ -192,6 +235,8 @@ describe('the business question in onboarding', () => {
     expect(screen).toContain('Do you run a business or side hustle?');
     expect(screen).toContain('testID="onboarding-business-name"');
     expect(screen).toContain('testID="onboarding-add-business"');
+    expect(screen).toContain("How does {name.trim() || 'it'} pay you?");
+    expect(screen).toContain("Tell Jamvi how ${unpaid.name} pays you to continue.");
     expect(screen).toContain("Tell Jamvi whether you run a business to continue.");
     // The Personal budget is covered by the subscription; it is not free.
     expect(screen).not.toMatch(/free, private/i);

@@ -157,7 +157,35 @@ export type MobileOnboardingDraft = {
   /** Any other businesses they run, as typed: somebody with a shop and a
    *  boda names both here rather than finding My businesses later. */
   moreBusinessNames?: string[];
+  /** How each business pays its owner, in box order: the first box, then
+   *  each of moreBusinessNames. Null until answered. */
+  businessPay?: Array<BusinessPay | null>;
 };
+
+/**
+ * How a business pays the person - the two questions on My businesses
+ * ("Count its profit", "Do you pay yourself a salary from it?") asked as one,
+ * so a business named in onboarding is never asked again later.
+ * - profit: a side hustle they live on; its profit is their income.
+ * - salary: it pays them a salary; the salary is their income, the profit
+ *   stays in its Business report.
+ * - passThrough: its money only passes through their M-Pesa; no Business report.
+ */
+export type BusinessPay = "profit" | "salary" | "passThrough";
+
+export const BUSINESS_PAY_CHOICES: ReadonlyArray<{ pay: BusinessPay; title: string; description: string }> = [
+  { pay: "profit", title: "I live on its profit", description: "A side hustle. What it makes - sales less its costs - counts as your income." },
+  { pay: "salary", title: "It pays me a salary", description: "Your salary is your income. Its profit stays in its own report." },
+  { pay: "passThrough", title: "Its money is not mine", description: "Its customers pay you and you pay its bills - you run it for the owner, or only take a salary. Jamvi keeps that money out of your income and spending, and shows no profit for it." },
+];
+
+/** What My businesses stores for an answer (api-server PUT /api/businesses/:id). */
+export function businessFlagsFor(pay: BusinessPay | null): { business: true; countsProfit?: boolean; paysSalary?: boolean | null } {
+  if (pay === "profit") return { business: true, countsProfit: true, paysSalary: false };
+  if (pay === "salary") return { business: true, countsProfit: true, paysSalary: true };
+  if (pay === "passThrough") return { business: true, countsProfit: false, paysSalary: null };
+  return { business: true };
+}
 
 /** How many businesses onboarding takes; more are added on the Business screen. */
 export const MAX_ONBOARDING_BUSINESSES = 5;
@@ -202,22 +230,36 @@ export function businessNameFromDraft(draft: Pick<MobileOnboardingDraft, "usageM
 }
 
 /**
- * Every business to set up, the first one (the business-name box) first.
- * Blank extra boxes and a name typed twice are dropped. Only the first gets
- * the starter costs - a cost category belongs to one business - so the
- * others start with sales only and their costs are set on the Business screen.
+ * Every business to set up, the first one (the business-name box) first, each
+ * with how it pays the person. Blank extra boxes and a name typed twice are
+ * dropped.
  */
-export function businessNamesFromDraft(draft: Pick<MobileOnboardingDraft, "usageMode" | "runsBusiness" | "businessName" | "moreBusinessNames">): string[] {
+export function businessesFromDraft(draft: Pick<MobileOnboardingDraft, "usageMode" | "runsBusiness" | "businessName" | "moreBusinessNames" | "businessPay">): Array<{ name: string; pay: BusinessPay | null; box: number }> {
   const first = businessNameFromDraft(draft);
   if (!first) return [];
-  const names = [first];
-  for (const raw of draft.moreBusinessNames ?? []) {
+  const payAt = (box: number) => draft.businessPay?.[box] ?? null;
+  const businesses = [{ name: first, pay: payAt(0), box: 0 }];
+  for (const [index, raw] of (draft.moreBusinessNames ?? []).entries()) {
     const name = raw.trim().replace(/\s+/g, " ").slice(0, 80);
-    if (!name || names.some((existing) => existing.toLowerCase() === name.toLowerCase())) continue;
-    names.push(name);
-    if (names.length >= MAX_ONBOARDING_BUSINESSES) break;
+    if (!name || businesses.some((existing) => existing.name.toLowerCase() === name.toLowerCase())) continue;
+    businesses.push({ name, pay: payAt(index + 1), box: index + 1 });
+    if (businesses.length >= MAX_ONBOARDING_BUSINESSES) break;
   }
-  return names;
+  return businesses;
+}
+
+export function businessNamesFromDraft(draft: Parameters<typeof businessesFromDraft>[0]): string[] {
+  return businessesFromDraft(draft).map((business) => business.name);
+}
+
+/**
+ * The business the starter costs - stock and supplies - are linked to. A cost
+ * category belongs to one business, so it is the first whose profit is
+ * counted; one whose money is not the person's has no report to show them in.
+ */
+export function costsBusinessName(draft: Parameters<typeof businessesFromDraft>[0]): string | null {
+  const businesses = businessesFromDraft(draft);
+  return (businesses.find((business) => business.pay !== "passThrough") ?? businesses[0])?.name ?? null;
 }
 
 const ONBOARDING_CATEGORY_ALIASES: Record<string, string> = {
@@ -689,6 +731,9 @@ export function normalizeOnboardingDraft(value: unknown): MobileOnboardingDraft 
     businessName: typeof raw.businessName === "string" ? raw.businessName.slice(0, 80) : "",
     moreBusinessNames: Array.isArray(raw.moreBusinessNames)
       ? raw.moreBusinessNames.filter((item): item is string => typeof item === "string").map((item) => item.slice(0, 80)).slice(0, MAX_ONBOARDING_BUSINESSES - 1)
+      : [],
+    businessPay: Array.isArray(raw.businessPay)
+      ? raw.businessPay.slice(0, MAX_ONBOARDING_BUSINESSES).map((item) => (item === "profit" || item === "salary" || item === "passThrough" ? item : null))
       : [],
   };
 }

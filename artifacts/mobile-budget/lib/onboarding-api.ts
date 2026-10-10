@@ -5,7 +5,9 @@ import {
 } from "@workspace/api-client-react";
 import {
   BUSINESS_COST_CATEGORIES,
-  businessNamesFromDraft,
+  businessFlagsFor,
+  businessesFromDraft,
+  costsBusinessName,
   categoryPriority,
   onboardingSubcategoriesFor,
   plannedCategoryAmount,
@@ -147,10 +149,11 @@ export async function applyMobileOnboardingToWorkspace({
 
 /**
  * The businesses somebody said they run: an income stream named for each,
- * marked as a business, with the business cost categories they kept linked
- * to the first, so the Business screen has a profit and loss from the first
- * sale. A cost category belongs to one business, so the others start with
- * sales only and get their costs on the Business screen.
+ * marked as a business with how it pays them (profit, salary, or money that
+ * is not theirs), and the business cost categories they kept linked to one
+ * of them (costsBusinessName), so the Business screen has a profit and loss
+ * from the first sale. A cost category belongs to one business, so the
+ * others get their costs on the Business screen.
  *
  * Safe to run twice: an existing stream of that name is reused, and a
  * category already linked to something is left alone.
@@ -162,10 +165,11 @@ export async function setUpBusiness({
   draft: MobileOnboardingDraft;
   userId: string;
 }): Promise<void> {
-  const names = businessNamesFromDraft(draft);
+  const businesses = businessesFromDraft(draft);
+  const costsName = costsBusinessName(draft);
   let existing: Array<{ id: number; name: string }> | null = null;
-  let mainId: number | null = null;
-  for (const [index, name] of names.entries()) {
+  let costsId: number | null = null;
+  for (const { name, pay } of businesses) {
     let incomeSourceId: number | null = null;
     try {
       const created = await customFetch<{ id: number }>("/api/income-sources", {
@@ -192,17 +196,16 @@ export async function setUpBusiness({
     }
     if (incomeSourceId == null) continue;
 
-    // Named in My businesses: only a business has costs and a Business report,
-    // and is asked once whether you pay yourself a salary from it (8-9 Oct 2026).
+    // Named in My businesses: only a business has costs and a Business report.
+    // Answered here, it is never asked again whether it pays a salary (8-9 Oct 2026).
     await customFetch(`/api/businesses/${incomeSourceId}`, {
       method: "PUT",
       responseType: "json",
-      body: JSON.stringify({ business: true }),
+      body: JSON.stringify(businessFlagsFor(pay)),
     });
-    // The starter costs go to the business named first, and only to it.
-    if (index === 0) mainId = incomeSourceId;
+    if (name === costsName) costsId = incomeSourceId;
   }
-  if (mainId == null) return;
+  if (costsId == null) return;
 
   const categories = await customFetch<Array<{ id: number; name: string; reducesIncomeSourceId?: number | null }>>("/api/budget-categories", {
     method: "GET",
@@ -214,7 +217,7 @@ export async function setUpBusiness({
     await customFetch(`/api/budget-categories/${category.id}`, {
       method: "PUT",
       responseType: "json",
-      body: JSON.stringify({ reducesIncomeSourceId: mainId, costKind: cost.costKind }),
+      body: JSON.stringify({ reducesIncomeSourceId: costsId, costKind: cost.costKind }),
     });
   }
 }
