@@ -1296,15 +1296,15 @@ function MobileOnboardingFlow({
             </View>
           ) : null}
           {/* Each business as the money it brings into the budget: a side
-              hustle's sales (its profit is the income), or the salary a
-              business pays. Money that is not the person's brings nothing. */}
+              hustle's profit - what it makes after its costs - or the salary
+              a business pays. Money that is not the person's brings nothing. */}
           {businessesFromDraft(draft).filter((business) => business.pay !== 'passThrough').map(({ name, pay, box: index }) => {
             const key = pay === 'salary' ? salaryIncomeName(name) : name;
             return (
               <View key={key} style={[styles.incomeAmountRow, { backgroundColor: colors.card, borderColor: colors.primary }]}>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.amountLabel, { color: colors.foreground }]} numberOfLines={1}>{key}</Text>
-                  <Text style={[styles.choiceDescription, { color: colors.mutedForeground }]}>{pay === 'salary' ? `Your pay from ${name} · a month (optional)` : 'Your business · sales a month (optional)'}</Text>
+                  <Text style={[styles.choiceDescription, { color: colors.mutedForeground }]}>{pay === 'salary' ? `Your pay from ${name} · a month (optional)` : 'Its profit · what it makes a month after its costs (optional)'}</Text>
                 </View>
                 <View style={styles.amountInputWrap}>
                   <Text style={[styles.currency, { color: colors.mutedForeground }]}>KES</Text>
