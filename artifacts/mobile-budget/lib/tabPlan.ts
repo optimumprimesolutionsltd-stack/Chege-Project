@@ -10,8 +10,6 @@ export type TabName =
   | 'more';
 
 export type TabFlags = {
-  /** The reduced tab bar: the main four, and everything else under More. */
-  simple: boolean;
   isShared: boolean;
   showBudget: boolean;
   showDebt: boolean;
@@ -19,34 +17,26 @@ export type TabFlags = {
 };
 
 /**
- * Which tabs are on the bar.
+ * Which tabs are on the bar: five, for everybody.
  *
- * The full bar grew to seven tabs. A newcomer, or a child, cannot tell which of
- * seven matter, so Simple view keeps four (Home, Activity, Budget when the
- * budget is on, Goals) and puts the rest one tap away under More, where each
- * one is explained in a sentence. Nothing is removed: every screen is still
- * reachable, from the same place it always was.
+ * The full bar had grown to eight (Home, Activity, Budget, Goals, Search,
+ * Reports, Debt, More), too many for a phone and confusing for anyone new.
+ * "Cut the bar to 5 tabs: Home, Activity, Budget, Reports, More" (10 Oct 2026),
+ * Reports on it because Reports is where a person lives once the M-Pesa reading
+ * does the filing. A shared group's third tab is Contributions, which is what a
+ * group checks most; its Budget is under More.
+ *
+ * Nothing is removed: Goals, Search, Debt, Bank and Settings are under More,
+ * every route still works, and Search is also an icon in Activity and Budget.
+ * Budget and Reports still follow the person's Settings switches.
  */
 export function visibleTabs(flags: TabFlags): TabName[] {
-  const { simple, isShared, showBudget, showDebt, showReports } = flags;
-  if (simple) {
-    return [
-      'index',
-      'history',
-      ...(showBudget ? (['budget'] as const) : []),
-      'goals',
-      'more',
-    ];
-  }
+  const { isShared, showBudget, showReports } = flags;
   return [
     'index',
     'history',
-    ...(showBudget ? (['budget'] as const) : []),
-    ...(isShared ? (['contributions'] as const) : []),
-    'goals',
-    // A group's bar carries Contributions instead; its Search is under More and the + menu.
-    ...(!isShared ? (['search'] as const) : []),
+    ...(isShared ? (['contributions'] as const) : showBudget ? (['budget'] as const) : []),
     ...(showReports ? (['reports'] as const) : []),
-    ...(showDebt ? (['debt'] as const) : []),
+    'more',
   ];
 }
