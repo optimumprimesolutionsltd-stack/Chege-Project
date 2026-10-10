@@ -33,6 +33,7 @@ import { GROUP_ATTRIBUTION } from "../lib/attribution";
 import { reversalLinksReady, soleReversalCandidate, takenBackReceipt } from "../lib/reversal-links";
 import { isOwnerBusinessMoney } from "../lib/owner-business-money";
 import { moveSavedToOwnAccount } from "../lib/own-account-moves";
+import { beforeDelete, isSplit } from "../lib/transaction-splits";
 import { enrichTransactions } from "../lib/transaction-details";
 import { ledgerEntries, ledgerTotals } from "../lib/account-ledger";
 import { pageOf } from "../lib/account-page";
@@ -1533,6 +1534,11 @@ router.put("/joint-account/:id", async (req, res): Promise<void> => {
   // amount the link was made on, while it still claims to be cancelled out.
   const reversedEdit = await refuseWhileReversed(existing.id, groupId);
   if (reversedEdit) { res.status(409).json({ error: reversedEdit }); return; }
+  // A split payment's parts add up to its M-Pesa message: one amount alone cannot change.
+  if (parsed.data.amount !== undefined && Math.abs(Number(parsed.data.amount) - Number(existing.amount)) >= 0.01 && await isSplit(groupId, existing.id)) {
+    res.status(409).json({ error: "This payment is split. Undo the split first, then change the amount." });
+    return;
+  }
   const requestedAccountId = parsed.data.accountId === undefined ? existing.accountId : parsed.data.accountId;
   const accountId = await requireAccountId(requestedAccountId ?? undefined, groupId, res);
   if (accountId === null) return;
@@ -2251,6 +2257,8 @@ router.delete("/joint-account/:id", async (req, res): Promise<void> => {
     if (existing.expenseId !== null) {
       return { linkedExpense: true };
     }
+    // A part of a split payment goes back into its payment; a split payment takes its parts with it.
+    if (await beforeDelete(tx, groupId, existing.id)) return { deleted: existing };
     if (existing.bankTransferId !== null) {
       const removed = await tx.delete(jointAccountTxTable)
         .where(and(

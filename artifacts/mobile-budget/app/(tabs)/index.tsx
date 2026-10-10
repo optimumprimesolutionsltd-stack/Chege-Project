@@ -24,6 +24,7 @@ import { useColors } from '@/hooks/useColors';
 import { useAutoReconcile } from '@/hooks/useAutoReconcile';
 import { onScreenOnly, useOnScreen } from '@/hooks/useOnScreen';
 import { useSortRecognisedOnce } from '@/hooks/useCommonCategories';
+import { useApplyCovers } from '@/hooks/useApplyCovers';
 import { useEntitlements } from '@/hooks/useEntitlements';
 import { mayStartGroup } from '@/lib/groupStart';
 import { toSortTitle } from '@/lib/entriesToSort';
@@ -297,6 +298,8 @@ export default function DashboardScreen() {
   const reconcileLeft = useAutoReconcile(group?.id, canManageBudget, onScreen);
   // Entries saved as Not sure yet to payees Jamvi knows are filed once (hooks/useCommonCategories).
   useSortRecognisedOnce(group?.id, canManageBudget);
+  // What a person's money covers (Rent, then School fees, then Family support): their new payments split by it (hooks/useApplyCovers).
+  useApplyCovers(group?.id, canManageBudget, onScreen);
   const canManageExpenses = !isSharedWorkspace || group?.role === 'owner' || group?.role === 'admin';
   const canManageAccess = isSharedWorkspace && (group?.role === 'owner' || group?.role === 'admin');
   // The group areas in the person's own order, per budget, hidden ones left out.

@@ -1,6 +1,7 @@
 import { db } from "@workspace/db";
 import { sql } from "drizzle-orm";
 import { logger } from "./logger";
+import { notASplitPart } from "./transaction-splits";
 
 /**
  * Possible duplicates: one payment recorded twice, once typed by hand and once
@@ -86,13 +87,15 @@ const IMPORTED_ANY = sql`
   FROM joint_account_transactions
   WHERE mpesa_receipt IS NOT NULL AND charge_for_transaction_id IS NULL`;
 
-// Typed by hand, both kinds, in one shape.
-const TYPED = sql`
+// Typed by hand, both kinds, in one shape. A part of a split payment has no code of
+// its own but was never typed: it is its payment's (lib/transaction-splits).
+const TYPED_ROWS = () => sql`
   SELECT 'entry'::text AS kind, id, group_id, account_id, type, amount::numeric AS amount, date, description,
          expense_category AS category
   FROM joint_account_transactions
   WHERE mpesa_receipt IS NULL AND charge_for_transaction_id IS NULL AND savings_goal_id IS NULL
     AND expense_id IS NULL AND bank_transfer_id IS NULL
+    ${notASplitPart(sql`joint_account_transactions.id`)}
   UNION ALL
   SELECT 'expense'::text, id, group_id, account_id, 'disbursement'::text, amount::numeric, date, description, category
   FROM expenses`;
@@ -121,7 +124,7 @@ export async function listPossibleDuplicates(groupId: number, limit = 200): Prom
            t.category AS t_category, NULL AS t_receipt,
            i.id AS i_id, i.date AS i_date, i.amount AS i_amount, i.description AS i_description,
            i.category AS i_category, i.receipt AS i_receipt
-    FROM (${TYPED}) t
+    FROM (${TYPED_ROWS()}) t
     JOIN (${IMPORTED}) i
       ON i.group_id = t.group_id AND i.type = t.type AND i.amount = t.amount
      AND abs(i.date - t.date) <= 1
@@ -175,7 +178,7 @@ export async function findTwins(
     candidates.map((c) => sql`(${c.key}, ${c.amount}::numeric, ${c.date}::date, ${c.direction === "in" ? "deposit" : "disbursement"}, ${c.accountId ?? null}::integer, ${c.goalId ?? null}::integer)`),
     sql`, `,
   );
-  const pool = against === "typed" ? TYPED : IMPORTED_ANY;
+  const pool = against === "typed" ? TYPED_ROWS() : IMPORTED_ANY;
   const result = await db.execute(sql`
     SELECT c.key, p.id, p.date, p.amount, p.description, p.category,
            ${against === "typed" ? sql`p.kind` : sql`'imported'::text`} AS kind,

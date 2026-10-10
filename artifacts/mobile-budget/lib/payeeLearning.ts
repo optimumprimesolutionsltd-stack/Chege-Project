@@ -140,6 +140,8 @@ const numberKey = (number: string | null | undefined): string => (number ? `#${n
 
 /** A rule's key in words a person can read. */
 export const ruleLabel = (key: string): string => {
+  // What a person's money covers (lib/covers).
+  if (key.startsWith('covers:')) return `What ${key.slice(7)}'s money covers`;
   // A band (lib/paymentPatterns): the payee, then the amounts it covers.
   const band = key.match(/^band:(?:src:)?(.*):(\d+)-(\d+)$/);
   if (band) return `${ruleLabel(band[1])}, KES ${Number(band[2]).toLocaleString('en-KE')} to ${Number(band[3]).toLocaleString('en-KE')}`;

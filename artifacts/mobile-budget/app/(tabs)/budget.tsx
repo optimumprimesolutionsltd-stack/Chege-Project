@@ -27,6 +27,7 @@ import { effectiveBudgets } from '@workspace/category-tree';
 import { CategorySearchBox } from '@/components/CategorySearchBox';
 import { onScreenOnly, useOnScreen } from '@/hooks/useOnScreen';
 import { useBusinesses } from '@/hooks/useBusinesses';
+import { MoveMoneySheet } from '@/components/MoveMoneySheet';
 import { useColors } from '@/hooks/useColors';
 import { HeaderSearchButton } from '@/components/HeaderSearchButton';
 import { isRefund, spentText } from '@/lib/refundLabel';
@@ -119,6 +120,8 @@ export default function BudgetScreen() {
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
+  // A category whose money for the month is being moved to another (components/MoveMoneySheet).
+  const [movingFrom, setMovingFrom] = useState<string | null>(null);
 
   // Deleting a category waits a few seconds for Undo (components/UndoDeleteBar).
   const undoable = useUndoableDelete();
@@ -1032,6 +1035,19 @@ export default function BudgetScreen() {
                     Renaming keeps existing expenses and tagged bank payments under the new name.
                   </Text>
                 ) : null}
+                {/* Money spent here that was really for another category this month
+                    (components/MoveMoneySheet): "post the journals to align the categories". */}
+                {editTarget && !editingParent ? (
+                  <Pressable
+                    onPress={() => { const target = editTarget.name; closeModal(); setMovingFrom(target); }}
+                    accessibilityRole="button"
+                    testID="budget-move-money"
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8 }}
+                  >
+                    <Feather name="shuffle" size={15} color={colors.primary} />
+                    <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>Move this month's money to another category…</Text>
+                  </Pressable>
+                ) : null}
                 {recurringSetupActive ? (
                   <Text style={[styles.priorityHint, { color: colors.mutedForeground }]}>
                     Enter the average amount you expect to spend each month. Jamvi will use it as this category&apos;s monthly budget.
@@ -1343,6 +1359,7 @@ export default function BudgetScreen() {
           </KeyboardAvoidingView>
         </View>
       </Modal>
+      <MoveMoneySheet from={movingFrom} month={month} year={year} onClose={() => setMovingFrom(null)} />
       <Modal visible={tierEditorOpen} animationType="slide" transparent onRequestClose={() => !savingTiers && setTierEditorOpen(false)}>
         <View style={styles.modalOverlay}>
           <View style={[styles.modalSheet, { backgroundColor: colors.card }]}>
