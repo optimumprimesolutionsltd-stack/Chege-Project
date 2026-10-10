@@ -29,6 +29,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getGetMembersQueryKey } from "@workspace/api-client-react";
 import { Award, BookOpen, BriefcaseBusiness, Camera, Coffee, Gift, Heart, Home, LockKeyhole, LogOut, MapPin, Monitor, Moon, Palette, Pencil, ShoppingBag, Star, Sun, Trash2, TrendingUp, Truck, User, UserPlus, Users, Shield, Send, RotateCcw, Wrench, X, MessageSquare, ArrowRightLeft } from "lucide-react";
 import { FeedbackDialog } from "@/components/feedback-dialog";
+import { ChangeEmail } from "@/components/change-email";
+import { makeOwnerConfirmation } from "@/lib/budget-handover";
 import { MakeGroupMyPersonalBudget, RemoveUnusedPersonalBudget, TurnPersonalIntoGroup } from "@/components/budget-conversion";
 import { canMakeGroupPersonal } from "@/lib/budget-conversion";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -572,12 +574,13 @@ export default function Settings() {
     }
   };
 
+  // Asked in Jamvi's own dialog, worded the same as the handover guide, rather
+  // than the browser's confirm() - which cannot be themed, and which a browser
+  // set to block dialogs answers "no" to silently, so the button looks broken.
+  const [confirmingOwner, setConfirmingOwner] = useState<{ userId: string; name: string } | null>(null);
+  const [transferringOwner, setTransferringOwner] = useState(false);
   const handleTransferOwnership = async (userId: string, memberName: string) => {
-    if (!confirm(
-      `Make ${memberName} the owner? You will drop to admin — you keep full access, just not the owner role. `
-      + `${memberName} will be able to remove members, change group setup, and delete the group. This cannot be `
-      + "undone by yourself; only the new owner can hand it back.",
-    )) return;
+    setTransferringOwner(true);
     try {
       const response = await fetch(`/api/members/${userId}/transfer-ownership`, { method: "POST", credentials: "include" });
       if (!response.ok) {
@@ -586,12 +589,15 @@ export default function Settings() {
       }
       toast({ title: "Ownership transferred", description: `${memberName} is now the owner.` });
       queryClient.invalidateQueries({ queryKey: getGetMembersQueryKey() });
+      setConfirmingOwner(null);
     } catch (error) {
       toast({
         variant: "destructive",
         title: "Could not transfer ownership",
         description: error instanceof Error && error.message ? error.message : "Please try again.",
       });
+    } finally {
+      setTransferringOwner(false);
     }
   };
 
@@ -857,9 +863,7 @@ export default function Settings() {
               </div>
             </div>
           </div>
-          <p className="rounded-lg bg-muted/70 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
-            Your sign-in email is managed by your sign-in account and can’t be changed in Jamvi.
-          </p>
+          <ChangeEmail />
           <p className="rounded-lg bg-muted/70 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
             Your profile photo represents you wherever your name appears. If you have a Personal budget, it uses this photo too; Shared groups can keep their own group photo.
           </p>
@@ -1287,7 +1291,7 @@ export default function Settings() {
                             variant="ghost"
                             size="sm"
                             className="text-primary hover:text-primary"
-                            onClick={() => void handleTransferOwnership(m.userId, m.userName ?? "this person")}
+                            onClick={() => setConfirmingOwner({ userId: m.userId, name: m.userName ?? "this person" })}
                             aria-label={`Make ${m.userName ?? "member"} the owner`}
                           >
                             Make owner
@@ -1781,6 +1785,27 @@ export default function Settings() {
               </AlertDialogFooter>
             </>
           )}
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog open={confirmingOwner !== null} onOpenChange={(open) => { if (!open && !transferringOwner) setConfirmingOwner(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{confirmingOwner ? makeOwnerConfirmation(confirmingOwner.name).title : ""}</AlertDialogTitle>
+            <AlertDialogDescription>{confirmingOwner ? makeOwnerConfirmation(confirmingOwner.name).message : ""}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={transferringOwner}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              data-testid="confirm-make-owner"
+              disabled={transferringOwner}
+              onClick={(event) => {
+                event.preventDefault();
+                if (confirmingOwner) void handleTransferOwnership(confirmingOwner.userId, confirmingOwner.name);
+              }}
+            >
+              {transferringOwner ? "Working…" : "Make owner"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </div>
