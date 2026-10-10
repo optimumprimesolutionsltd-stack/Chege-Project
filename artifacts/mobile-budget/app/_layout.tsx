@@ -541,6 +541,7 @@ function RootLayoutNav() {
       <Stack.Screen name="year-report" options={{ headerShown: false }} />
       <Stack.Screen name="budget-plan" options={{ headerShown: false }} />
       <Stack.Screen name="sort-entries" options={{ headerShown: false }} />
+      <Stack.Screen name="teach-jamvi" options={{ headerShown: false }} />
       <Stack.Screen name="possible-duplicates" options={{ headerShown: false }} />
       <Stack.Screen name="mpesa-difference" options={{ headerShown: false }} />
       <Stack.Screen name="business" options={{ headerShown: false }} />

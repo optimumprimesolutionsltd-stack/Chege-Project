@@ -37,7 +37,8 @@ export function useWaitingForYou() {
   const toSortCount = toSort.data?.entries.length ?? 0;
   const newSmsCount = newSms.data ?? 0;
   const total = waitingTotal({ toSortCount, newSmsCount, canAct: canActOnWaiting(group) });
-  return { toSortCount, newSmsCount, total, recheckSms: newSms.refetch };
+  // The entries themselves too: Home offers Teach Jamvi when regulars are among them.
+  return { toSortCount, newSmsCount, total, recheckSms: newSms.refetch, toSortEntries: toSort.data?.entries };
 }
 
 /**

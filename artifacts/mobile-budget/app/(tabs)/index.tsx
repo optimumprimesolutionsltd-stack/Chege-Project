@@ -145,6 +145,7 @@ const NEW_GROUP_SHORTCUT: Shortcut = {
 import { ArrangeSheet } from '@/components/ArrangeSheet';
 import { arrange, homeAreasKey, useArrangement } from '@/lib/layoutPrefs';
 import { duplicatesTitle } from '@/lib/possibleDuplicates';
+import { savedGroups, teachDoneKey } from '@/lib/teachJamvi';
 
 export default function DashboardScreen() {
   const onScreen = useOnScreen();
@@ -302,7 +303,19 @@ export default function DashboardScreen() {
   // easily forgotten, so they lead Home (hooks/useWaitingForYou, shared with
   // the Home tab's badge). New messages are looked for each time Home is shown
   // and each time Jamvi comes back to the front.
-  const { toSortCount, newSmsCount: newSms, recheckSms } = useWaitingForYou();
+  const { toSortCount, newSmsCount: newSms, recheckSms, toSortEntries } = useWaitingForYou();
+  // Teach Jamvi your M-Pesa, offered once per budget to somebody already using
+  // Jamvi whose saved Not sure entries include regulars (lib/teachJamvi):
+  // "even a current user should be vetted again" (9 Oct 2026).
+  const [teachDone, setTeachDone] = useState(true);
+  useFocusEffect(React.useCallback(() => {
+    let active = true;
+    AsyncStorage.getItem(teachDoneKey(group?.id))
+      .then((value) => { if (active) setTeachDone(value === 'done'); })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [group?.id]));
+  const regulars = useMemo(() => (teachDone || !toSortEntries ? [] : savedGroups(toSortEntries)), [teachDone, toSortEntries]);
   // One payment typed by hand and brought in from M-Pesa (lib/possibleDuplicates).
   const { data: duplicates } = useQuery<{ count: number }>({
     subscribed: onScreen,
@@ -360,6 +373,14 @@ export default function DashboardScreen() {
   };
   const firstUncategorized = editableUncategorizedExpenses[0];
   const waitingRows: WaitingRow[] = [
+    ...(regulars.length > 0 && canManageBudget ? [{
+      testID: 'teach-jamvi-cta',
+      icon: 'zap' as const,
+      color: colors.primary,
+      title: `Teach Jamvi your ${regulars.length === 1 ? 'regular' : `${regulars.length} regulars`}`,
+      hint: `One tap each sorts ${regulars.reduce((sum, one) => sum + one.count, 0)} Not sure entries, and files them by itself from now on.`,
+      onPress: () => router.push('/teach-jamvi' as never),
+    }] : []),
     ...(newSms > 0 && canManageBudget ? [{
       testID: 'new-mpesa-sms-cta',
       icon: 'message-square' as const,

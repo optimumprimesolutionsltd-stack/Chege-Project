@@ -1,10 +1,14 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import type { EntryToSort } from '../entriesToSort';
 import { initialChoices, NOT_SURE_CATEGORY, type PreviewLine } from '../mpesaImport';
 import { withRule } from '../payeeLearning';
 import {
   alreadyKnown,
   mayBeOwnAccount,
   ownAccountFor,
+  savedGroups,
+  teachDoneKey,
   suggestedCategories,
   teachableGroups,
   teachCategory,
@@ -147,5 +151,54 @@ describe('categories offered first', () => {
   it('for a person: the budget\'s family and household ones', () => {
     const group = { kind: 'person' } as Parameters<typeof suggestedCategories>[0];
     expect(suggestedCategories(group, ['Groceries', 'Family support', 'Rent', 'Fuel'], NOT_SURE_CATEGORY)).toEqual(['Family support', 'Rent']);
+  });
+});
+
+describe('existing users: their saved Not sure entries, by payee', () => {
+  let id = 0;
+  const saved = (over: Partial<EntryToSort>): EntryToSort => ({ id: ++id, type: 'disbursement', direction: 'out', amount: 1000, date: '2026-08-01', description: 'Someone', ...over });
+  const entries = [
+    ...Array.from({ length: 4 }, () => saved({ description: 'Jane Wanjiku', amount: 1500 })),
+    ...Array.from({ length: 2 }, () => saved({ description: 'Kcb Paybill Ac (5846630)', amount: 20000 })),
+    saved({ description: 'Peter Otieno' }),
+    ...Array.from({ length: 3 }, () => saved({ direction: 'in', type: 'deposit', description: 'Received from Acme Ltd', incomeSourceId: 5 })),
+    ...Array.from({ length: 2 }, () => saved({ direction: 'in', type: 'deposit', description: 'Received from Mary Akinyi' })),
+  ];
+
+  it('are grouped into regulars, most entries first, one-offs left for Sort them out', () => {
+    const groups = savedGroups(entries);
+    expect(groups.map((group) => [group.label, group.count])).toEqual([['Jane Wanjiku', 4], ['Kcb Paybill Ac', 2], ['Mary Akinyi', 2]]);
+    expect(groups[0].kind).toBe('person');
+    expect(groups[1]).toMatchObject({ kind: 'bank', key: '#ref:5846630', reference: '5846630' });
+    expect(groups[2].direction).toBe('in');
+  });
+
+  it('leave out money in that already has a source, and payees already taught', () => {
+    expect(savedGroups(entries).some((group) => group.label.includes('Acme'))).toBe(false);
+    const rules = withRule({}, 'Jane Wanjiku', 'Family support');
+    expect(savedGroups(entries, rules).map((group) => group.label)).toEqual(['Kcb Paybill Ac', 'Mary Akinyi']);
+  });
+
+  it('are offered once per budget, remembered on the phone', () => {
+    expect(teachDoneKey(12)).toBe('jamvi:teach-jamvi:v1:12');
+  });
+});
+
+describe('where existing users find it', () => {
+  const read = (path: string) => readFileSync(path, 'utf8');
+  it('Home offers it in Waiting for you until it is done or put off', () => {
+    const home = read('app/(tabs)/index.tsx');
+    expect(home).toContain("testID: 'teach-jamvi-cta'");
+    expect(home).toContain("router.push('/teach-jamvi' as never)");
+    expect(home).toContain('AsyncStorage.getItem(teachDoneKey(group?.id))');
+  });
+  it('Settings opens it again, and the screen is registered', () => {
+    expect(read('app/(tabs)/settings.tsx')).toContain('testID="open-teach-jamvi"');
+    expect(read('app/_layout.tsx')).toContain('<Stack.Screen name="teach-jamvi"');
+  });
+  it('finishing or Later marks it done for the budget', () => {
+    const screen = read('app/teach-jamvi.tsx');
+    expect(screen).toContain("AsyncStorage.setItem(teachDoneKey(group?.id), 'done')");
+    expect(screen).toContain('onClose={finish}');
   });
 });

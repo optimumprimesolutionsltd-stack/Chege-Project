@@ -3,7 +3,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 
 import { Feather } from '@expo/vector-icons';
 
 import { useColors } from '@/hooks/useColors';
-import { mayBeOwnAccount, type Known, type TeachGroup } from '@/lib/teachJamvi';
+import { mayBeOwnAccount, type Known, type TeachRegular } from '@/lib/teachJamvi';
 
 type Account = { id: number; name: string; accountNumber?: string | null };
 type Named = { id: number; name: string };
@@ -15,7 +15,7 @@ export type OwnAccountAnswer =
 
 const kes = (value: number) => `KES ${Math.round(value).toLocaleString('en-KE')}`;
 
-function question(group: TeachGroup): string {
+function question(group: TeachRegular): string {
   if (group.direction === 'in') return `What is the money from ${group.label}?`;
   if (group.kind === 'person') return `Who is ${group.label} to you?`;
   if (group.kind === 'bank') return 'What is this account?';
@@ -27,9 +27,10 @@ function question(group: TeachGroup): string {
  * itself, then the regulars only the person can name, one at a time. Each
  * answer files every line of that payee now and every message from it later.
  */
-export function TeachJamviCard({
+export function TeachJamviCard<G extends TeachRegular>({
   groups,
   known,
+  intro,
   answered,
   suggestions,
   incomeSources,
@@ -41,22 +42,28 @@ export function TeachJamviCard({
   onOwnAccount,
   onSkip,
   onClose,
+  doneText,
 }: {
-  groups: TeachGroup[];
-  known: Known;
+  groups: G[];
+  /** What Jamvi filed by itself in this read; left out for saved history. */
+  known?: Known | null;
+  /** A line in place of `known`, for saved history. */
+  intro?: string;
   /** Regulars answered so far in this read. */
   answered: number;
   /** Categories to offer first for a regular (lib/teachJamvi suggestedCategories). */
-  suggestions: (group: TeachGroup) => string[];
+  suggestions: (group: G) => string[];
   incomeSources: Named[];
   accounts: Account[];
   businesses: Named[];
-  onCategory: (group: TeachGroup, category: string) => void;
-  onPickCategory: (group: TeachGroup) => void;
-  onSource: (group: TeachGroup, incomeSourceId: number) => void;
-  onOwnAccount: (group: TeachGroup, answer: OwnAccountAnswer) => Promise<void>;
-  onSkip: (group: TeachGroup) => void;
+  onCategory: (group: G, category: string) => void;
+  onPickCategory: (group: G) => void;
+  onSource: (group: G, incomeSourceId: number) => void;
+  onOwnAccount: (group: G, answer: OwnAccountAnswer) => Promise<void>;
+  onSkip: (group: G) => void;
   onClose: () => void;
+  /** What to say once every regular is answered. */
+  doneText?: string;
 }) {
   const colors = useColors();
   const group = groups[0] ?? null;
@@ -120,7 +127,10 @@ export function TeachJamviCard({
         </Pressable>
       </View>
 
-      {known.filed > 0 ? (
+      {intro ? (
+        <Text style={[styles.known, { color: colors.mutedForeground }]} testID="teach-jamvi-intro">{intro}</Text>
+      ) : null}
+      {known && known.filed > 0 ? (
         <Text style={[styles.known, { color: colors.mutedForeground }]} testID="teach-jamvi-known">
           Jamvi filed {known.filed} of {known.of} by itself: {known.parts.map((part) => `${part.label} ${part.count}`).join(' · ')}.
         </Text>
@@ -218,7 +228,7 @@ export function TeachJamviCard({
         </>
       ) : (
         <Text style={[styles.lead, { color: colors.foreground }]} testID="teach-jamvi-done">
-          Done. Jamvi files your {answered === 1 ? 'regular' : `${answered} regulars`} by itself from now on. Check the list below, then Save.
+          {doneText ?? `Done. Jamvi files your ${answered === 1 ? 'regular' : `${answered} regulars`} by itself from now on. Check the list below, then Save.`}
         </Text>
       )}
     </View>
