@@ -58,6 +58,10 @@ import { ensureCommonCategories } from '@/lib/commonCategories';
 import { CategorySearchBox } from '@/components/CategorySearchBox';
 import { PageScrollView } from '@/components/PageScrollReset';
 import { ScreenHint } from '@/components/ScreenHint';
+import { useOwnerBusiness } from '@/hooks/useOwnerBusiness';
+import { namesBusiness, withOwnBusinessPayee } from '@/lib/ownerBusiness';
+import { useFamilyLines } from '@/hooks/useFamilyLines';
+import { OTHER_FAMILY } from '@/lib/familyPeople';
 import { useColors } from '@/hooks/useColors';
 import { AddIncomeSourceChip } from '@/components/AddIncomeSourceChip';
 import { canReceiveShares } from '@/lib/shareIntent';
@@ -183,6 +187,7 @@ import {
   twinQuestions,
   untickElsewhere,
   withTwins,
+  isBankPayee,
 } from '@/lib/mpesaImport';
 import { findSavingsGoal, ledgersToMake, loanOf, productNote, productOf, savingsNeeded, savingsOf, withSavingsAccounts, type LenderId, type SavingsAccountId } from '@/lib/mpesaProducts';
 
@@ -537,6 +542,11 @@ export default function MpesaImportScreen() {
   const savingsGoals = savingsGoalList as unknown as Array<{ id: number; name: string; isCompleted?: boolean }>;
   // "Who is this for?" on a line: you, or one of My businesses (lib/importBusiness).
   const businesses = useBusinesses();
+  // The person's own business (lib/ownerBusiness): lines to or from it are money
+  // between them and it, marked once saved - said on the Teach Jamvi card, or
+  // naming it already.
+  const ownerBusiness = useOwnerBusiness();
+  const ownBusinessLines = React.useRef(new Set<number>());
   const namedPayees = useNamedPayees();
   // Businesses added from a line, shown before My businesses has caught up.
   const [addedBusinesses, setAddedBusinesses] = useState<Array<{ id: number; name: string }>>([]);
@@ -1738,8 +1748,11 @@ export default function MpesaImportScreen() {
   const [teachAnswered, setTeachAnswered] = useState(0);
   const [teachClosed, setTeachClosed] = useState(false);
   const teachGroups = useMemo(
-    () => (lines && canManageBudget ? teachableGroups(lines, choices, rules, { skipped: teachSkipped }) : []),
-    [lines, choices, rules, teachSkipped, canManageBudget],
+    () => (lines && canManageBudget
+      // A payee that is the person's own business is never asked about: it is marked once saved.
+      ? teachableGroups(lines, choices, rules, { skipped: teachSkipped }).filter((group) => !namesBusiness(group.sample.description, ownerBusiness.matching.keys))
+      : []),
+    [lines, choices, rules, teachSkipped, canManageBudget, ownerBusiness.matching.keys],
   );
   const known = useMemo(() => (lines ? alreadyKnown(lines, choices, rules) : null), [lines, choices, rules]);
   const categoryNames = useMemo(() => categories.map((row) => row.name), [categories]);
@@ -1763,12 +1776,26 @@ export default function MpesaImportScreen() {
     await createNotSureCategory({ data: { name, budgetAmount: 0, priority: 3, isRecurring: true, activeMonth: null, activeYear: null } });
     await queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
   };
-  const addFamily = async (name: string, category: string) => {
-    await ensureCategory(category);
-    keepRules(withFamily(rules, name, category));
-    setChoices((current) => fileFamilyLines(lines ?? [], current, name, category));
+  // Each person their own line under Family support (lib/familyPeople).
+  const addFamily = async (name: string) => {
+    const made = await familyLines.lineFor(name, rules);
+    keepRules(made.rules);
+    startTransition(() => setChoices((current) => {
+      // Family support became a heading: what was on it is Other family now.
+      const moved = made.converted ? Object.fromEntries(Object.entries(current).map(([index, choice]) => [index, choice.category === FAMILY_CATEGORY ? { ...choice, category: OTHER_FAMILY } : choice])) : current;
+      return fileFamilyLines(lines ?? [], moved, name, made.line);
+    }));
+    void familyLines.moveEarlier(name, made.line, new Set(familyLeaves));
   };
-  const teachAsCategory = (taught: TeachGroup, category: string) => {
+  const familyLines = useFamilyLines();
+  const teachAsCategory = (taught: TeachGroup, category: string, base: PayeeRules = rules) => {
+    // A person who is family: their own line under Family support (lib/familyPeople).
+    if (category === FAMILY_CATEGORY && taught.kind === 'person') {
+      void familyLines.lineFor(taught.sample.description ?? taught.label, rules)
+        .then((made) => teachAsCategory(taught, made.line, made.converted ? made.rules : rules))
+        .catch((error: unknown) => Alert.alert('Could not add them', error instanceof Error ? error.message : 'Try again.'));
+      return;
+    }
     // An answer redraws the whole review - up to 100 entries. Done as a transition,
     // so the tap answers at once and the list catches up ("pick a category and it
     // varies: skip take too long to respond", 10 Oct 2026).
@@ -1778,7 +1805,7 @@ export default function MpesaImportScreen() {
       // A bank account paid through a paybill is remembered by its account number,
       // never by the bank's paybill, which every customer of that bank shares.
       // One kind of the payee's payments only (lib/paymentPatterns): kept by its amounts.
-      keepRules(keepAnswer(rules, taught, category, (kept) => taught.key.startsWith('#ref:')
+      keepRules(keepAnswer(base, taught, category, (kept) => taught.key.startsWith('#ref:')
         ? { ...kept, [taught.key]: category }
         : withRule(kept, taught.sample.description ?? '', category, taught.sample.payeeNumber)));
       setTeachAnswered((count) => count + 1);
@@ -1869,6 +1896,37 @@ export default function MpesaImportScreen() {
   });
   const transferHints = useMemo(() => throughMpesaHints(lines ?? []), [lines]);
   const otherAccounts = accounts.filter((option) => option.id !== accountId);
+  // A bank account number a line names that none of the person's accounts carries:
+  // "Equity Paybill Account (0870193430866)" -> "Equity 0870193430866".
+  const knownNumbers = new Set(accounts.map((account) => (account.accountNumber ?? '').replace(/\D/g, '')).filter(Boolean));
+  const unknownAccountOf = (item: PreviewLine): { name: string; number: string } | null => {
+    const description = item.description ?? '';
+    const number = referenceOf(description);
+    if (number.length < 5 || !isBankPayee(description) || knownNumbers.has(number)) return null;
+    const bank = payeeName(description).replace(/\b(?:paybill|account|acc|bank|ltd|limited)\b/gi, '').replace(/\s+/g, ' ').trim();
+    return { name: `${bank || 'Bank'} ${number}`, number };
+  };
+  const [addingOwnAccount, setAddingOwnAccount] = useState(false);
+  // Added as the person's own account, with its number: this line and every other
+  // to or from it become moves (lib/teachJamvi withOwnAccounts), and what was saved
+  // before too, on the server (api-server lib/own-account-moves).
+  const addOwnAccountFrom = async (item: PreviewLine) => {
+    const found = unknownAccountOf(item);
+    if (!found || !lines) return;
+    setAddingOwnAccount(true);
+    try {
+      const created = await createAccount({ data: { name: found.name, accountNumber: found.number } });
+      const moved = (created as { movedEntries?: number }).movedEntries ?? 0;
+      await queryClient.invalidateQueries({ queryKey: getGetJointAccountsQueryKey() });
+      const added = [...ownAccounts, { id: created.id, name: found.name, accountNumber: found.number }];
+      startTransition(() => setChoices((current) => withOwnAccounts(lines, current, added, rules)));
+      Alert.alert(`${found.name} added`, `Money to and from it counts as moving your own money: here, from now on${moved > 0 ? `, and the ${moved} already saved` : ''}. Rename it on Bank any time.`);
+    } catch (error) {
+      Alert.alert('Could not add the account', error instanceof Error ? error.message : 'Try again in a moment.');
+    } finally {
+      setAddingOwnAccount(false);
+    }
+  };
   const debtCategories = useMemo(
     () =>
       (categoryList as unknown as Array<{ id: number; name: string; debtBalance?: number | null }>)
@@ -2225,6 +2283,7 @@ export default function MpesaImportScreen() {
     if (!resumeJob) void markSavePending(savingFor);
     const result: Outcome = { saved: 0, repeats: 0, failed: [] };
     const savedIndexes = new Set<number>();
+    const ownBusinessIds: number[] = [];
     // What each saved line became, for marking money in left on "Not sure".
     const depositIds = new Map<number, number>();
     // And what each line sent to another budget became there.
@@ -2361,6 +2420,7 @@ export default function MpesaImportScreen() {
       savedIndexes.add(item.index);
       if (posted.id !== undefined && item.direction === 'in') depositIds.set(item.index, posted.id);
       if (posted.otherBudget) otherBudgetMade.set(item.index, posted.otherBudget);
+      if (posted.id !== undefined && (ownBusinessLines.current.has(item.index) || namesBusiness(item.description, ownerBusiness.matching.keys))) ownBusinessIds.push(posted.id);
     };
     const onRepeat = (item: PreviewLine) => {
       result.repeats += 1;
@@ -2462,6 +2522,8 @@ export default function MpesaImportScreen() {
         setOutcome(result);
       }
       setImportProgress({ stage: 'done', saved: result.saved, repeats: result.repeats, failed: result.failed.length });
+      // Money between the person and their own business: not spending, not income.
+      if (ownBusinessIds.length > 0) void ownerBusiness.mark(ownBusinessIds).catch(() => {});
       if (result.saved > 0) void rememberMpesaCard('done', group?.id);
       // A reversal just saved is matched to the payment it undid when only one
       // could be it, so it never counts as income. Quietly: the rest are left
@@ -3223,9 +3285,32 @@ export default function MpesaImportScreen() {
                 incomeSources={incomeSources}
                 accounts={ownAccounts}
                 businesses={whoForBusinesses}
-                onCategory={teachAsCategory}
+                onCategory={(taught, category) => teachAsCategory(taught, category)}
                 onPickCategory={(taught) => setPicking(`teach:${taught.key}`)}
                 onSource={teachAsSource}
+                onOwnBusiness={async (taught, answer) => {
+                  // One of the person's own businesses: kept by name or number, and these lines
+                  // marked as money between them and it once saved.
+                  let picked: { id: number; name: string };
+                  if ('businessId' in answer) picked = { id: answer.businessId, name: businesses.list.find((one) => one.id === answer.businessId)?.name ?? taught.label };
+                  else {
+                    const made = await businesses.create(answer.newName);
+                    if (!made?.id) throw new Error('Could not add the business. Try again.');
+                    setAddedBusinesses((current) => [...current, { id: made.id, name: answer.newName }]);
+                    picked = { id: made.id, name: answer.newName };
+                  }
+                  await ownerBusiness.save(withOwnBusinessPayee(ownerBusiness.business, taught, picked));
+                  for (const index of taught.indexes) ownBusinessLines.current.add(index);
+                  startTransition(() => {
+                    setChoices((current) => {
+                      const next = { ...current };
+                      for (const index of taught.indexes) if (next[index]) next[index] = { ...next[index], confirmed: true, auto: false, remember: false };
+                      return next;
+                    });
+                    setTeachSkipped((current) => new Set([...current, taught.key]));
+                    setTeachAnswered((count) => count + 1);
+                  });
+                }}
                 onNewBusiness={async (taught, name) => {
                   // A customer of a business not set up yet: added here, and these lines are its sales.
                   const made = await businesses.create(name);
@@ -3715,7 +3800,7 @@ export default function MpesaImportScreen() {
                   ) : null}
                   {openMore.has(item.index) || destinationOf(choice) !== 'category' || transferHints.has(item.index) ? (
                     <>
-                  {canManageBudget && choice?.include && !choice.debt && !choice.contributorId && otherAccounts.length > 0 ? (
+                  {canManageBudget && choice?.include && !choice.debt && !choice.contributorId && (otherAccounts.length > 0 || unknownAccountOf(item)) ? (
                     <View style={{ gap: 6 }} testID={`mpesa-line-move-${item.index}`}>
                       <Text style={[styles.hint, { color: transferHints.has(item.index) ? colors.primary : colors.mutedForeground, marginTop: 0, fontFamily: transferHints.has(item.index) ? 'Inter_600SemiBold' : undefined }]}>
                         {transferHints.has(item.index)
@@ -3751,6 +3836,21 @@ export default function MpesaImportScreen() {
                             </Pressable>
                           );
                         })}
+                        {/* An account number Jamvi does not know: "what happens if I'm paying to my
+                            personal acc?" (10 Oct 2026). One tap adds it, with its number. */}
+                        {unknownAccountOf(item) ? (
+                          <Pressable
+                            key="mine"
+                            onPress={() => void addOwnAccountFrom(item)}
+                            disabled={addingOwnAccount}
+                            accessibilityRole="button"
+                            testID={`mpesa-line-move-${item.index}-mine`}
+                            style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, borderWidth: 1, borderColor: colors.primary, backgroundColor: `${colors.primary}10`, opacity: addingOwnAccount ? 0.6 : 1 }}
+                          >
+                            <Feather name="plus" size={13} color={colors.primary} />
+                            <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>It's mine: add {unknownAccountOf(item)!.name}</Text>
+                          </Pressable>
+                        ) : null}
                       </ScrollView>
                     </View>
                   ) : null}

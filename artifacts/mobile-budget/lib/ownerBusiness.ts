@@ -171,3 +171,13 @@ export const withBankAccountKeys = (business: OwnerBusiness, keys: ReadonlyArray
 /** Business accounts on Bank with no business chosen yet: shown, so they can be set there. */
 export const unassignedBusinessAccounts = <T extends { id: number }>(accounts: readonly T[], businessOf: ReadonlyMap<number, number | null>): T[] =>
   accounts.filter((account) => businessOf.has(account.id) && (businessOf.get(account.id) ?? null) === null);
+
+/**
+ * A payee said to be the person's own business (Teach Jamvi, "what happens if
+ * ujenzi is my business?", 10 Oct 2026): kept by its account number when a bank
+ * named one, else by its name. The business is named the first time.
+ */
+export function withOwnBusinessPayee(business: OwnerBusiness, payee: { label: string; reference: string }, picked: { id: number; name: string }): OwnerBusiness {
+  const key = businessKeyFor(payee.reference.length >= 5 ? payee.reference : payee.label);
+  return withKey({ ...business, name: business.name || picked.name, ...(business.incomeSourceId == null ? { incomeSourceId: picked.id } : {}) }, key);
+}

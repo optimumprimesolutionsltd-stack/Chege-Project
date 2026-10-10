@@ -10,13 +10,13 @@ describe('Sort them out: Family', () => {
     expect(sort.indexOf('sort-entry-${entry.id}-family')).toBeLessThan(sort.indexOf('sort-entry-${entry.id}-debt'));
   });
 
-  it('files it under the budget\'s family category, made as Teach Jamvi makes it when there is none', () => {
-    expect(sort).toContain('familyCategories(categoryList as unknown as Array<{ id: number; name: string; parentId?: number | null }>)[0] ?? FAMILY_CATEGORY');
-    expect(sort).toContain('sort(entry, { expenseCategory: familyCategory }, familyCategory);');
+  // "Under family support hope it's the parent and subcategories are the people" (10 Oct 2026).
+  it("files it on the person's own line under Family support (lib/familyPeople)", () => {
+    expect(sort).toContain('const made = await familyLines.lineFor(entry.description, rules);');
+    expect(sort).toContain('sort(entry, { expenseCategory: line }, line);');
   });
 
   it('keeps the person as family on the server, so their next M-Pesa files itself', () => {
-    expect(sort).toContain('const next = withFamily(rules, entry.description, familyCategory);');
-    expect(sort).toContain('await saveRules(group?.id, next, rules);');
+    expect(sort).toContain('await saveRules(group?.id, made.rules, rules);');
   });
 });

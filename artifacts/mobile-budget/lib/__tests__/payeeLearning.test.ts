@@ -152,7 +152,7 @@ describe('both screens tell a member what they cannot do', () => {
     for (const screen of [phone, web]) {
       expect(screen).toContain('mpesa-member-warning');
       expect(screen).toMatch(/const canManageBudget = !isShared \|\| group\?\.role === ["']owner["'] \|\| group\?\.role === ["']admin["']/);
-      expect(screen).toContain('canManageBudget && choice?.include && !choice.debt && !choice.contributorId && otherAccounts.length > 0');
+      expect(screen).toContain('canManageBudget && choice?.include && !choice.debt && !choice.contributorId && ');
       expect(screen).toContain('rules, canManageBudget)');
     }
   });

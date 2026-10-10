@@ -8,6 +8,9 @@ import { incomeAnswers, mayBeOwnAccount, ownByNumber, type Known, type TeachRegu
 type Account = { id: number; name: string; accountNumber?: string | null };
 type Named = { id: number; name: string };
 
+/** Which of the person's businesses a regular is: one they have, or a new one by name. */
+export type OwnBusinessAnswer = { businessId: number } | { newName: string };
+
 /** The answer for a regular that is one of the person's own accounts. */
 export type OwnAccountAnswer =
   | { accountId: number }
@@ -51,6 +54,7 @@ export function TeachJamviCard<G extends TeachRegular>({
   guess,
   onDebt,
   onNewBusiness,
+  onOwnBusiness,
 }: {
   groups: G[];
   /** What Jamvi filed by itself in this read; left out for saved history. */
@@ -78,10 +82,14 @@ export function TeachJamviCard<G extends TeachRegular>({
   onDebt?: (group: G, kind: 'borrowed' | 'repaid') => Promise<void>;
   /** Money in from a customer of a business not set up yet: add it, and file the money as its sales. */
   onNewBusiness?: (group: G, name: string) => Promise<void>;
+  /** The payee is one of the person's own businesses: money between them and it, not spending or income. */
+  onOwnBusiness?: (group: G, answer: OwnBusinessAnswer) => Promise<void>;
 }) {
   const colors = useColors();
   const group = groups[0] ?? null;
   const [ownOpen, setOwnOpen] = useState(false);
+  const [bizOpen, setBizOpen] = useState(false);
+  const [bizName, setBizName] = useState('');
   const [newName, setNewName] = useState('');
   const [businessId, setBusinessId] = useState<number | null | 'new'>(null);
   const [newBusinessName, setNewBusinessName] = useState('');
@@ -95,6 +103,8 @@ export function TeachJamviCard<G extends TeachRegular>({
   // A new regular starts with the own-account panel folded and its name suggested.
   useEffect(() => {
     setOwnOpen(false);
+    setBizOpen(false);
+    setBizName('');
     setAddingBusiness(false);
     setBusinessName('');
     setMoreOf({ income: false, sales: false });
@@ -120,6 +130,18 @@ export function TeachJamviCard<G extends TeachRegular>({
     </Pressable>
   );
 
+  const saveBiz = async (answer: OwnBusinessAnswer) => {
+    if (!group || !onOwnBusiness) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await onOwnBusiness(group, answer);
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : 'Could not save it. Try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
   const saveOwn = async (answer: OwnAccountAnswer) => {
     if (!group) return;
     setSaving(true);
@@ -163,6 +185,7 @@ export function TeachJamviCard<G extends TeachRegular>({
 
   const notIncomeSection = group && group.direction === 'in' ? (mayBeOwnAccount(group) || onDebt ? section('NOT INCOME: YOUR OWN MONEY, OR A LOAN', [
                   ...(mayBeOwnAccount(group) ? [chip('From my own account', () => setOwnOpen((open) => !open), 'teach-jamvi-own', 'credit-card')] : []),
+                  ...(onOwnBusiness ? [chip('From my own business', () => setBizOpen((open) => !open), 'teach-jamvi-own-business', 'briefcase')] : []),
                   ...(onDebt ? [
                     chip('A loan to me', () => void onDebt(group, 'borrowed'), 'teach-jamvi-debt-borrowed', 'arrow-down-left'),
                     chip('Someone paying me back', () => void onDebt(group, 'repaid'), 'teach-jamvi-debt-repaid', 'corner-down-left'),
@@ -216,6 +239,7 @@ export function TeachJamviCard<G extends TeachRegular>({
               <View style={styles.chips}>
                 {suggestions(group).map((name) => chip(name, () => onCategory(group, name), `teach-jamvi-category-${name}`))}
                 {mayBeOwnAccount(group) ? chip('My own account', () => setOwnOpen((open) => !open), 'teach-jamvi-own', 'credit-card') : null}
+                {onOwnBusiness ? chip('My own business', () => setBizOpen((open) => !open), 'teach-jamvi-own-business', 'briefcase') : null}
                 {chip('Pick a category…', () => onPickCategory(group), 'teach-jamvi-pick', 'list')}
               </View>
             ) : (
@@ -267,6 +291,39 @@ export function TeachJamviCard<G extends TeachRegular>({
                 {monthly ? notIncomeSection : null}
               </View>
             )}
+
+            {bizOpen && onOwnBusiness ? (
+              // One of the person's own businesses (lib/ownerBusiness): money between them and it,
+              // not spending and not income ("what happens if ujenzi is my business?", 10 Oct 2026).
+              <View style={[styles.own, { borderColor: colors.border }]} testID="teach-jamvi-own-business-panel">
+                <Text style={[styles.payeeMeta, { color: colors.mutedForeground }]}>
+                  {group.direction === 'out'
+                    ? `Money to ${group.label} will count as putting your own money into your business: not spending.`
+                    : `Money from ${group.label} will count as taking your own money out of your business: not income.`}
+                </Text>
+                <Text style={[styles.label, { color: colors.foreground }]}>Which business?</Text>
+                <View style={styles.chips}>
+                  {businesses.map((business) => chip(business.name, () => void saveBiz({ businessId: business.id }), `teach-jamvi-own-business-${business.id}`, 'briefcase'))}
+                </View>
+                <TextInput
+                  value={bizName}
+                  onChangeText={setBizName}
+                  placeholder={businesses.length > 0 ? 'Or a new one: its name' : "Your business's name"}
+                  placeholderTextColor={colors.mutedForeground}
+                  style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.muted }]}
+                  testID="teach-jamvi-own-business-name"
+                />
+                {bizName.trim() ? (
+                  <Pressable onPress={() => void saveBiz({ newName: bizName.trim() })} disabled={saving} accessibilityRole="button" testID="teach-jamvi-own-business-add"
+                    style={[styles.save, { backgroundColor: colors.primary, opacity: saving ? 0.6 : 1 }]}>
+                    {saving ? <ActivityIndicator color={colors.primaryForeground} size="small" /> : (
+                      <Text style={[styles.saveText, { color: colors.primaryForeground }]}>Add {bizName.trim()}</Text>
+                    )}
+                  </Pressable>
+                ) : null}
+                {error && bizOpen ? <Text style={[styles.payeeMeta, { color: colors.destructive }]}>{error}</Text> : null}
+              </View>
+            ) : null}
 
             {ownOpen ? (
               <View style={[styles.own, { borderColor: colors.border }]} testID="teach-jamvi-own-panel">
