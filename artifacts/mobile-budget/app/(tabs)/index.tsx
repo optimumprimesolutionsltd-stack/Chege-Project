@@ -50,6 +50,7 @@ import {
   customFetch,
 } from '@workspace/api-client-react';
 import { HomeAnswersCard } from '@/components/HomeAnswersCard';
+import { BusinessSalaryQuestion } from '@/components/BusinessSalaryQuestion';
 import { MpesaImportCard } from '@/components/MpesaImportCard';
 
 const MONTHS_SHORT = [
@@ -624,6 +625,9 @@ export default function DashboardScreen() {
           ) : null}
 
           <MpesaImportCard />
+
+          {/* Each business asked once: a salary from it, or its profit is your income (lib/businessSalary). */}
+          {canManageBudget ? <View style={{ marginHorizontal: 16, marginTop: 12 }}><BusinessSalaryQuestion /></View> : null}
 
           <WorkspaceSetupGuide />
 

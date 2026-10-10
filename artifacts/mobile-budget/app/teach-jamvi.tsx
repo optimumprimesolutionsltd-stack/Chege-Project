@@ -24,6 +24,7 @@ import { useBusinessAccounts } from '@/hooks/useBusinessAccounts';
 import { PageScrollView } from '@/components/PageScrollReset';
 import { CategorySearchBox } from '@/components/CategorySearchBox';
 import { TeachJamviCard, type OwnAccountAnswer } from '@/components/TeachJamviCard';
+import { BusinessSalaryQuestion } from '@/components/BusinessSalaryQuestion';
 import { isNotSure, type EntryToSort } from '@/lib/entriesToSort';
 import { parseStoredRules, rulesStorageKey, withRule, withSourceRule, type PayeeRules } from '@/lib/payeeLearning';
 import { savedGroups, suggestedCategories, teachDoneKey, type SavedGroup } from '@/lib/teachJamvi';
@@ -198,6 +199,8 @@ export default function TeachJamviScreen() {
         </View>
       ) : (
         <View style={{ opacity: working ? 0.6 : 1 }} pointerEvents={working ? 'none' : 'auto'}>
+          {/* Each business asked once too, before the regulars (lib/businessSalary). */}
+          <BusinessSalaryQuestion />
           <TeachJamviCard
             groups={groups}
             intro={groups.length > 0 ? `${waiting} saved ${waiting === 1 ? 'entry is' : 'entries are'} Not sure yet. ${behind} of them are your ${groups.length === 1 ? 'one regular' : `${groups.length} regulars`} below.` : undefined}
