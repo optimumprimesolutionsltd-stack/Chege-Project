@@ -91,6 +91,7 @@ import { formatExact } from '@/lib/formatExact';
 import { READER_STOPPED, StatementReader, type ReaderJob } from '@/components/StatementReader';
 import { rememberMpesaCard } from '@/lib/mpesaCard';
 import { keepScreenAwakeWhileSaving, letScreenSleepAgain } from '@/lib/keepAwake';
+import { useImportDiagnostics } from '@/lib/importDiagnostics';
 import { getImportProgress, importSaveStalled, setImportProgress, useImportProgress } from '@/lib/importProgress';
 import { clearImportStep, noteImportStep, readUnfinishedImport, type ImportStep } from '@/lib/importBreadcrumb';
 import { clearSavePending, hasPendingSave, markSavePending, pendingSaveJob } from '@/lib/importSaveJob';
@@ -648,6 +649,8 @@ export default function MpesaImportScreen() {
   const [statementNote, setStatementNote] = useState<string | null>(null);
   const [statementReading, setStatementReading] = useState<StatementReading | null>(null);
   const [lines, setLines] = useState<PreviewLine[] | null>(null);
+  // Tells the server what this page is doing while it is open (lib/importDiagnostics).
+  const diagnose = useImportDiagnostics(lines?.length ?? 0);
   const [choices, setChoices] = useState<Record<number, Choice>>({});
   // Undo for every change to the list - a chip, Not sure, Confirm, a bulk
   // button, an untick - most recent first. Cleared for a new list or after a
@@ -1326,6 +1329,7 @@ export default function MpesaImportScreen() {
   };
 
   const pickStatement = async () => {
+    diagnose('choose tap');
     if (statementPickRef.current) return;
     statementPickRef.current = true;
     setPickingStatement(true);
@@ -1359,12 +1363,14 @@ export default function MpesaImportScreen() {
   // go back to, and both did nothing ("these two arrows for going back are not
   // working", 10 Oct 2026): then it goes Home.
   const leave = () => {
+    diagnose('back tap');
     if (router.canGoBack()) router.back();
     else router.replace('/(tabs)' as never);
   };
   useEffect(() => {
     if (Platform.OS !== 'android') return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      diagnose('phone back');
       if (router.canGoBack()) return false;
       router.replace('/(tabs)' as never);
       return true;
