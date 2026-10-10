@@ -123,7 +123,8 @@ import { rememberMpesaCard } from "@/lib/mpesa-card";
 import { keepScreenAwakeWhileSaving, letScreenSleepAgain } from "@/lib/keep-awake";
 import { runPool, savePosting, SAVE_CONCURRENCY, type PostingApi, type Posted } from "@/lib/save-posting";
 import { EarlierSaveRunning, followServerSave, isFollowingServerSave, setSaveProgressBar, startServerSave, type ServerJob } from "@/lib/server-save";
-import { parseStoredRules, payeeKey, payeeName, ruleLabel, rulesStorageKey, withRule, withSourceRule, withoutRule, type PayeeRules } from "@/lib/payee-learning";
+import { payeeKey, payeeName, ruleLabel, rulesStorageKey, withRule, withSourceRule, withoutRule, type PayeeRules } from "@/lib/payee-learning";
+import { readCachedRules, saveRules, syncRules } from "@/lib/rules-store";
 import { applyOtherBudgetRules, otherBudgetRuleFor, otherBudgetRuleLabel, otherBudgetRulesKey, parseOtherBudgetRules, rememberOtherBudgetLabel, withOtherBudgetRule, withoutOtherBudgetRule, type OtherBudgetRules } from "@/lib/other-budget-rules";
 import { saveDebtLinks } from "@/lib/debt-reversal";
 import { mpesaNameFor, saveMpesaNames, type MpesaName } from "@/lib/mpesa-names";
@@ -299,16 +300,18 @@ export default function MpesaImportPage() {
   // "Record it in a separate budget instead" opened on these lines: a business's money
   // is asked under Who is this for?, so the other-budget question waits to be asked for.
   const [otherBudgetOpen, setOtherBudgetOpen] = useState<Set<number>>(new Set());
+  // This browser's copy at once, then the budget's own from the server (lib/rules-store),
+  // so what the phone was taught files imports here too.
   useEffect(() => {
-    try {
-      setRules(parseStoredRules(window.localStorage.getItem(rulesKey)));
-    } catch {
-      setRules({});
-    }
-  }, [rulesKey]);
+    let active = true;
+    setRules(readCachedRules(group?.id));
+    void syncRules(group?.id).then((synced) => { if (active && synced) setRules(synced); });
+    return () => { active = false; };
+  }, [rulesKey, group?.id]);
   const keepRules = (next: PayeeRules) => {
+    const before = rules;
     setRules(next);
-    try { window.localStorage.setItem(rulesKey, JSON.stringify(next)); } catch { /* kept only when storage allows */ }
+    void saveRules(group?.id, next, before);
   };
   // Payees remembered as another budget's - the chama's paybill, say - kept the
   // same way, so the next statement suggests that budget for them.

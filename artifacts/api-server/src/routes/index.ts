@@ -33,6 +33,7 @@ import ownerBusinessRouter from "./owner-business";
 import businessAccountsRouter from "./business-accounts";
 import standardCategoriesRouter from "./standard-categories";
 import businessesRouter from "./businesses";
+import payeeRulesRouter from "./payee-rules";
 import deleteYearRouter from "./delete-year";
 import {
   publicSubscriptionPlansRouter,
@@ -92,6 +93,7 @@ router.use(ownerBusinessRouter);
 router.use(businessAccountsRouter);
 router.use(standardCategoriesRouter);
 router.use(businessesRouter);
+router.use(payeeRulesRouter);
 router.use(deleteYearRouter);
 router.use(incomeSourcesRouter);
 router.use(invitationsRouter);
