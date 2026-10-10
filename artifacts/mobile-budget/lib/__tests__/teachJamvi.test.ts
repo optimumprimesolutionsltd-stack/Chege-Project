@@ -5,7 +5,10 @@ import { initialChoices, NOT_SURE_CATEGORY, type PreviewLine } from '../mpesaImp
 import { withRule } from '../payeeLearning';
 import {
   alreadyKnown,
+  incomeAnswers,
   mayBeOwnAccount,
+  ownByNumber,
+  ownRuleKey,
   ownAccountFor,
   savedGroups,
   teachDoneKey,
@@ -200,5 +203,37 @@ describe('where existing users find it', () => {
     const screen = read('app/teach-jamvi.tsx');
     expect(screen).toContain("AsyncStorage.setItem(teachDoneKey(group?.id), 'done')");
     expect(screen).toContain('onClose={finish}');
+  });
+});
+
+// "A lot is going on here ... can they be structured" (10 Oct 2026): money in
+// answered by kind - not income, your income, a business's sales - likeliest first.
+describe('answers for money in, sorted', () => {
+  const sources = [
+    { id: 1, name: 'Ujenzi salary' }, { id: 2, name: 'Generator income' }, { id: 3, name: 'Rental income' },
+    { id: 4, name: 'Ujenzi Distributors ltd' }, { id: 5, name: 'Generator Business' },
+  ];
+  const businesses = [{ id: 4, name: 'Ujenzi Distributors ltd' }, { id: 5, name: 'Generator Business' }];
+
+  it('keeps businesses out of Your income and lists them as sales', () => {
+    const { income, sales } = incomeAnswers('Kcb 1 501901', sources, businesses);
+    expect(income.map((one) => one.id)).toEqual([2, 3, 1]);
+    expect(sales.map((one) => one.id)).toEqual([5, 4]);
+  });
+
+  it('puts Jamvi\'s guess first, then streams sharing a word with the payer', () => {
+    expect(incomeAnswers('UJENZI DISTRIBUTORS LTD', sources, businesses).income[0].name).toBe('Ujenzi salary');
+    expect(incomeAnswers('UJENZI DISTRIBUTORS LTD', sources, businesses, 3).income[0].name).toBe('Rental income');
+  });
+
+  it('a bank paying in can be one of your own accounts, remembered by name when it shows no number', () => {
+    let n = 1000;
+    const lines = Array.from({ length: 2 }, () => ({ index: n++, status: 'ready', reason: null, receipt: `K${n}`, direction: 'in', type: 'bank_receipt', amount: 20000, description: 'KCB 1 501901', date: '2026-09-02', fee: null, mpesaBalance: null, alreadyRecorded: null } as PreviewLine));
+    const [group] = teachableGroups(lines, initialChoices(lines, [], []));
+    expect(mayBeOwnAccount(group)).toBe(true);
+    expect(ownByNumber(group)).toBe(false);
+    const rules = { [ownRuleKey(group.key)]: '7' };
+    const moved = withOwnAccounts(lines, initialChoices(lines, [], []), [{ id: 7, name: 'KCB current' }], rules);
+    expect(moved[lines[0].index]).toMatchObject({ transferTo: 7, confirmed: true });
   });
 });

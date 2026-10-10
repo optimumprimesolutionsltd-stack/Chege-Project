@@ -128,7 +128,7 @@ import { TeachJamviCard, type OwnAccountAnswer } from '@/components/TeachJamviCa
 import { BusinessSalaryQuestion } from '@/components/BusinessSalaryQuestion';
 import { FamilyNamesCard } from '@/components/FamilyNamesCard';
 import { FAMILY_CATEGORY, familyCategories, familyNames, fileFamilyLines, relativesBySurname, withFamily, withoutFamily } from '@/lib/family';
-import { alreadyKnown, suggestedCategories, teachableGroups, teachCategory, teachOwnAccount, teachSource, withOwnAccounts, type TeachGroup } from '@/lib/teachJamvi';
+import { alreadyKnown, ownByNumber, ownRuleKey, suggestedCategories, teachableGroups, teachCategory, teachOwnAccount, teachSource, withOwnAccounts, type TeachGroup } from '@/lib/teachJamvi';
 import { useNamedPayees } from '@/hooks/useNamedPayees';
 import { namedKeyFor, ruleKeysFor, withNamed } from '@/lib/namedPayees';
 import { businessOfLine, businessPayees, chooseBusiness, chooseNewCost, costOwners, costsOf } from '@/lib/importBusiness';
@@ -545,7 +545,7 @@ export default function MpesaImportScreen() {
   // The person's other accounts, known by number: lines to or from them start as
   // moves, not spending (lib/teachJamvi). Never the account being imported into.
   const ownAccounts = useMemo(() => accounts.filter((account) => account.id !== accountId), [accounts, accountId]);
-  const startChoices = (shown: readonly PreviewLine[], fresh: Record<number, Choice>) => withOwnAccounts(shown, fresh, ownAccounts);
+  const startChoices = (shown: readonly PreviewLine[], fresh: Record<number, Choice>) => withOwnAccounts(shown, fresh, ownAccounts, rules);
   const { data: account } = useGetJointAccount(accountId ? { accountId } : undefined);
   const history = useMemo(
     () => ((account?.transactions ?? []) as Array<{ type: string; description: string; expenseCategory?: string | null; incomeSourceId?: number | null; chargeForTransactionId?: number | null }>),
@@ -1764,13 +1764,16 @@ export default function MpesaImportScreen() {
   const teachAsOwnAccount = async (taught: TeachGroup, answer: OwnAccountAnswer) => {
     // The number lives on the account itself, on the server: every phone, the
     // web and the next reinstall all know payments to it are the person's own.
+    // A bank paying in names no number ("KCB 1 501901"): remembered by a rule
+    // on its name instead, kept with the payee rules on the server.
+    const byNumber = ownByNumber(taught);
     let targetId: number;
     if ('accountId' in answer) {
       const existing = accounts.find((account) => account.id === answer.accountId);
-      await updateAccount({ id: answer.accountId, data: { name: existing?.name ?? taught.label, accountNumber: taught.reference } });
+      if (byNumber) await updateAccount({ id: answer.accountId, data: { name: existing?.name ?? taught.label, accountNumber: taught.reference } });
       targetId = answer.accountId;
     } else {
-      const created = await createAccount({ data: { name: answer.name, accountNumber: taught.reference } });
+      const created = await createAccount({ data: { name: answer.name, ...(byNumber ? { accountNumber: taught.reference } : {}) } });
       targetId = created.id;
       let businessId = answer.businessId;
       if (answer.newBusinessName) {
@@ -1783,8 +1786,34 @@ export default function MpesaImportScreen() {
           Alert.alert('Account added', "It could not be set as the business's yet. Open it on Bank and choose Business."));
       }
     }
+    if (!byNumber) keepRules({ ...rules, [ownRuleKey(taught.key)]: String(targetId) });
     await queryClient.invalidateQueries({ queryKey: getGetJointAccountsQueryKey() });
     setChoices((current) => teachOwnAccount(current, taught, targetId));
+    setTeachAnswered((count) => count + 1);
+  };
+  // Money in that is a loan, or a debt paid back: linked to them in Who owes who,
+  // found by name or added (as the line's own debt sheet does).
+  const teachAsDebt = async (taught: TeachGroup, kind: 'borrowed' | 'repaid') => {
+    const same = (text: string) => text.trim().replace(/\s+/g, ' ').toLocaleLowerCase('en-KE');
+    let partyId = parties.find((one) => same(one.name) === same(taught.label))?.id;
+    if (partyId === undefined) {
+      const added = await customFetch<PartyLite>('/api/contributors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: taught.label, kind: taught.kind === 'person' ? 'person' : 'institution' }),
+      });
+      queryClient.setQueryData<PartyLite[]>(['parties'], (current) => [...(current ?? []), added]);
+      void queryClient.invalidateQueries({ queryKey: ['parties'] });
+      partyId = added.id;
+    }
+    const debtPartyId: number = partyId;
+    setChoices((current) => {
+      const next = { ...current };
+      for (const index of taught.indexes) {
+        if (next[index]) next[index] = { ...next[index], debt: { kind, partyId: debtPartyId }, incomeSourceId: null, sourceAuto: false, confirmed: true };
+      }
+      return next;
+    });
     setTeachAnswered((count) => count + 1);
   };
   const firstProblem = useMemo(() => {
@@ -3164,6 +3193,11 @@ export default function MpesaImportScreen() {
                 onPickCategory={(taught) => setPicking(`teach:${taught.key}`)}
                 onSource={teachAsSource}
                 onOwnAccount={teachAsOwnAccount}
+                onDebt={teachAsDebt}
+                guess={(taught) => {
+                  const first = choices[taught.indexes[0]];
+                  return first?.sourceAuto ? first.incomeSourceId ?? null : null;
+                }}
                 onSkip={(taught) => setTeachSkipped((current) => new Set([...current, taught.key]))}
                 onClose={() => setTeachClosed(true)}
               />

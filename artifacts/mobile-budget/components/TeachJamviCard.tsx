@@ -3,7 +3,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 
 import { Feather } from '@expo/vector-icons';
 
 import { useColors } from '@/hooks/useColors';
-import { mayBeOwnAccount, type Known, type TeachRegular } from '@/lib/teachJamvi';
+import { incomeAnswers, mayBeOwnAccount, ownByNumber, type Known, type TeachRegular } from '@/lib/teachJamvi';
 
 type Account = { id: number; name: string; accountNumber?: string | null };
 type Named = { id: number; name: string };
@@ -14,6 +14,9 @@ export type OwnAccountAnswer =
   | { name: string; businessId: number | null; newBusinessName?: string };
 
 const kes = (value: number) => `KES ${Math.round(value).toLocaleString('en-KE')}`;
+
+/** How many answers a list shows before "Other…": the likeliest, at a glance. */
+const SHOWN = 3;
 
 function question(group: TeachRegular): string {
   if (group.direction === 'in') return `What is the money from ${group.label}?`;
@@ -43,6 +46,8 @@ export function TeachJamviCard<G extends TeachRegular>({
   onSkip,
   onClose,
   doneText,
+  guess,
+  onDebt,
 }: {
   groups: G[];
   /** What Jamvi filed by itself in this read; left out for saved history. */
@@ -64,6 +69,10 @@ export function TeachJamviCard<G extends TeachRegular>({
   onClose: () => void;
   /** What to say once every regular is answered. */
   doneText?: string;
+  /** Jamvi's own guess at the income stream for money in, put first. */
+  guess?: (group: G) => number | null;
+  /** Money in that is a loan, or a debt being paid back (Who owes who). Left out where it cannot be recorded. */
+  onDebt?: (group: G, kind: 'borrowed' | 'repaid') => Promise<void>;
 }) {
   const colors = useColors();
   const group = groups[0] ?? null;
@@ -73,10 +82,13 @@ export function TeachJamviCard<G extends TeachRegular>({
   const [newBusinessName, setNewBusinessName] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // "Other…" opened on a list of answers.
+  const [moreOf, setMoreOf] = useState<{ income: boolean; sales: boolean }>({ income: false, sales: false });
 
   // A new regular starts with the own-account panel folded and its name suggested.
   useEffect(() => {
     setOwnOpen(false);
+    setMoreOf({ income: false, sales: false });
     setNewName(group ? `${group.label} ${group.reference}`.trim() : '');
     setBusinessId(null);
     setNewBusinessName('');
@@ -113,10 +125,30 @@ export function TeachJamviCard<G extends TeachRegular>({
   };
 
   // Accounts this number could be: one with no number yet, or this very number.
+  // A payer with no number (a bank paying in) can be any of them.
   const linkable = group ? accounts.filter((account) => {
+    if (!ownByNumber(group)) return true;
     const digits = (account.accountNumber ?? '').replace(/\D/g, '');
     return !digits || digits === group.reference;
   }) : [];
+  // Money in: the person's own streams apart from their businesses' sales,
+  // best guess first (lib/teachJamvi incomeAnswers).
+  const answers = group && group.direction === 'in'
+    ? incomeAnswers(group.label, incomeSources, businesses, guess?.(group) ?? null)
+    : { income: [], sales: [] };
+  const section = (title: string, children: React.ReactNode, testID: string, hint?: string) => (
+    <View style={styles.section} testID={testID}>
+      <Text style={[styles.sectionTitle, { color: colors.mutedForeground }]}>{title}</Text>
+      {hint ? <Text style={[styles.payeeMeta, { color: colors.mutedForeground }]}>{hint}</Text> : null}
+      <View style={styles.chips}>{children}</View>
+    </View>
+  );
+  const listOf = <T extends Named>(list: T[], open: boolean, which: 'income' | 'sales', make: (one: T) => React.ReactNode) => [
+    ...(open ? list : list.slice(0, SHOWN)).map(make),
+    ...(!open && list.length > SHOWN
+      ? [chip(`Other… (${list.length - SHOWN})`, () => setMoreOf((current) => ({ ...current, [which]: true })), `teach-jamvi-more-${which}`, 'chevron-down')]
+      : []),
+  ];
 
   return (
     <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.primary }]} testID="teach-jamvi">
@@ -152,18 +184,36 @@ export function TeachJamviCard<G extends TeachRegular>({
             </Text>
             <Text style={[styles.question, { color: colors.foreground }]}>{question(group)}</Text>
 
-            <View style={styles.chips}>
-              {group.direction === 'out'
-                ? suggestions(group).map((name) => chip(name, () => onCategory(group, name), `teach-jamvi-category-${name}`))
-                : incomeSources.map((source) => chip(source.name, () => onSource(group, source.id), `teach-jamvi-source-${source.id}`))}
-              {mayBeOwnAccount(group) ? chip('My own account', () => setOwnOpen((open) => !open), 'teach-jamvi-own', 'credit-card') : null}
-              {group.direction === 'out' ? chip('Pick a category…', () => onPickCategory(group), 'teach-jamvi-pick', 'list') : null}
-            </View>
+            {group.direction === 'out' ? (
+              <View style={styles.chips}>
+                {suggestions(group).map((name) => chip(name, () => onCategory(group, name), `teach-jamvi-category-${name}`))}
+                {mayBeOwnAccount(group) ? chip('My own account', () => setOwnOpen((open) => !open), 'teach-jamvi-own', 'credit-card') : null}
+                {chip('Pick a category…', () => onPickCategory(group), 'teach-jamvi-pick', 'list')}
+              </View>
+            ) : (
+              <View style={{ gap: 10 }}>
+                {/* Not income first: money moving between your own places, or borrowed, or paid back. */}
+                {mayBeOwnAccount(group) || onDebt ? section('NOT INCOME', [
+                  ...(mayBeOwnAccount(group) ? [chip('From my own account', () => setOwnOpen((open) => !open), 'teach-jamvi-own', 'credit-card')] : []),
+                  ...(onDebt ? [
+                    chip('A loan to me', () => void onDebt(group, 'borrowed'), 'teach-jamvi-debt-borrowed', 'arrow-down-left'),
+                    chip('Someone paying me back', () => void onDebt(group, 'repaid'), 'teach-jamvi-debt-repaid', 'corner-down-left'),
+                  ] : []),
+                ], 'teach-jamvi-not-income') : null}
+                {answers.income.length > 0 ? section('YOUR INCOME', listOf(answers.income, moreOf.income, 'income',
+                  (source) => chip(source.name, () => onSource(group, source.id), `teach-jamvi-source-${source.id}`)), 'teach-jamvi-income') : null}
+                {answers.sales.length > 0 ? section("A BUSINESS'S SALES", listOf(answers.sales, moreOf.sales, 'sales',
+                  (business) => chip(business.name, () => onSource(group, business.id), `teach-jamvi-sales-${business.id}`, 'briefcase')),
+                  'teach-jamvi-sales', 'A customer paying one of your businesses. Your pay from a business is under Your income.') : null}
+              </View>
+            )}
 
             {ownOpen ? (
               <View style={[styles.own, { borderColor: colors.border }]} testID="teach-jamvi-own-panel">
                 <Text style={[styles.payeeMeta, { color: colors.mutedForeground }]}>
-                  Money to and from account {group.reference} will count as moving your own money: not spending, not income.
+                  {ownByNumber(group)
+                    ? `Money to and from account ${group.reference} will count as moving your own money: not spending, not income.`
+                    : `Money from ${group.label} will count as moving your own money into M-Pesa: not income.`}
                 </Text>
                 {linkable.length > 0 ? (
                   <>
@@ -246,6 +296,8 @@ const styles = StyleSheet.create({
   payeeName: { fontSize: 17, fontFamily: 'Inter_700Bold' },
   payeeMeta: { fontSize: 12, lineHeight: 17, fontFamily: 'Inter_400Regular' },
   question: { fontSize: 14, fontFamily: 'Inter_600SemiBold', marginTop: 4 },
+  section: { gap: 6 },
+  sectionTitle: { fontSize: 10, letterSpacing: 1, fontFamily: 'Inter_700Bold' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
   chipText: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },

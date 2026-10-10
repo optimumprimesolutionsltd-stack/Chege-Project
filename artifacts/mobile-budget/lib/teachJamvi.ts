@@ -25,7 +25,7 @@ import { chooseTransfer, isBankPayee, NOT_SURE_CATEGORY, type Choice, type Previ
 import { knownPayeeOf } from './knownPayees';
 import { loanOf, productOf, savingsOf } from './mpesaProducts';
 import type { EntryToSort } from './entriesToSort';
-import { looksLikePerson, payeeKey, payeeName, referenceOf, ruleCategory, ruleSource, sourceRuleKey, type PayeeRules } from './payeeLearning';
+import { distinctiveWords, looksLikePerson, payeeKey, payeeName, referenceOf, ruleCategory, ruleSource, sourceRuleKey, type PayeeRules } from './payeeLearning';
 
 export type TeachKind = 'person' | 'bank' | 'business';
 
@@ -70,8 +70,10 @@ export function withOwnAccounts(
   lines: readonly PreviewLine[],
   choices: Record<number, Choice>,
   accounts: readonly Account[],
+  rules: PayeeRules = {},
 ): Record<number, Choice> {
-  if (!accounts.some((account) => digitsOf(account.accountNumber).length >= ACCOUNT_DIGITS)) return choices;
+  const byRule = Object.keys(rules).some((key) => key.startsWith(OWN_PREFIX));
+  if (!byRule && !accounts.some((account) => digitsOf(account.accountNumber).length >= ACCOUNT_DIGITS)) return choices;
   let next = choices;
   for (const line of lines) {
     const choice = next[line.index];
@@ -79,7 +81,7 @@ export function withOwnAccounts(
     // Something already said what it was: a category kept, or a source for money in.
     if (line.direction === 'out' && choice.confirmed && choice.category !== NOT_SURE_CATEGORY) continue;
     if (line.direction === 'in' && choice.incomeSourceId) continue;
-    const account = ownAccountFor(line, accounts);
+    const account = ownAccountFor(line, accounts) ?? ownAccountByRule(line, accounts, rules);
     if (!account) continue;
     next = chooseTransfer(next, line.index, account.id);
     next = { ...next, [line.index]: { ...next[line.index], confirmed: true } };
@@ -117,7 +119,21 @@ function unanswered(line: PreviewLine, choice: Choice | undefined, rules: PayeeR
   return ruleSource(line.description, rules) === null;
 }
 
-function groupKey(line: PreviewLine): string {
+/**
+ * A payer that names no account number - a bank paying into M-Pesa, "KCB 1
+ * 501901" - is remembered as one of the person's own accounts by a rule:
+ * "own:<its key>" -> the account's id, kept with the other payee rules (on the
+ * server, lib/rulesStore).
+ */
+export const OWN_PREFIX = 'own:';
+export const ownRuleKey = (groupKeyOf: string): string => `${OWN_PREFIX}${groupKeyOf}`;
+
+function ownAccountByRule(line: PreviewLine, accounts: readonly Account[], rules: PayeeRules): Account | null {
+  const id = Number(rules[ownRuleKey(groupKey(line))]);
+  return Number.isInteger(id) ? accounts.find((account) => account.id === id) ?? null : null;
+}
+
+export function groupKey(line: PreviewLine): string {
   const description = line.description ?? '';
   const reference = referenceOf(description);
   if (isBankPayee(description) && reference.length >= 4) return `#ref:${reference}`;
@@ -168,7 +184,10 @@ export function teachableGroups(
 }
 
 /** Can this regular be one of the person's own accounts? Only a bank account it named by number. */
-export const mayBeOwnAccount = (group: TeachRegular): boolean => group.kind === 'bank' && group.reference.length >= ACCOUNT_DIGITS;
+export const mayBeOwnAccount = (group: TeachRegular): boolean => group.kind === 'bank';
+
+/** Known by the account number M-Pesa wrote, rather than by a rule on its name. */
+export const ownByNumber = (group: TeachRegular): boolean => group.kind === 'bank' && group.reference.length >= ACCOUNT_DIGITS;
 
 /** Every line of the regular under this category, checked and remembered. */
 export function teachCategory(choices: Record<number, Choice>, group: TeachGroup, category: string): Record<number, Choice> {
@@ -299,4 +318,32 @@ export function savedGroups(
     .filter((group) => group.count >= minCount)
     .sort((a, b) => b.count - a.count || b.total - a.total)
     .slice(0, limit);
+}
+
+/**
+ * The answers for money in, sorted so the question reads at a glance (10 Oct
+ * 2026: "a lot is going on here ... can they be structured"): the person's
+ * own income streams apart from their businesses' sales, each list best guess
+ * first - Jamvi's suggestion, then streams sharing a word with the payer
+ * ("Ujenzi" for UJENZI DISTRIBUTORS), then the rest by name.
+ */
+export type Named = { id: number; name: string };
+
+export function rankByGuess<T extends Named>(list: readonly T[], label: string, guessId: number | null | undefined): T[] {
+  const words = new Set(distinctiveWords(label));
+  const score = (one: T) => (one.id === guessId ? 2 : distinctiveWords(one.name).some((word) => words.has(word)) ? 1 : 0);
+  return [...list].sort((a, b) => score(b) - score(a) || a.name.localeCompare(b.name));
+}
+
+export function incomeAnswers<S extends Named, B extends Named>(
+  label: string,
+  sources: readonly S[],
+  businesses: readonly B[],
+  guessId?: number | null,
+): { income: S[]; sales: B[] } {
+  const businessIds = new Set(businesses.map((business) => business.id));
+  return {
+    income: rankByGuess(sources.filter((source) => !businessIds.has(source.id)), label, guessId),
+    sales: rankByGuess(businesses, label, guessId),
+  };
 }

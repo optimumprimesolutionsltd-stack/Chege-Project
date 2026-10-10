@@ -33,7 +33,7 @@ import { useAuth } from '@/lib/auth';
 import { payeeKey } from '@/lib/payeeLearning';
 import { isNotSure, type EntryToSort } from '@/lib/entriesToSort';
 import { parseStoredRules, rulesStorageKey, withRule, withSourceRule, type PayeeRules } from '@/lib/payeeLearning';
-import { savedGroups, suggestedCategories, teachDoneKey, type SavedGroup } from '@/lib/teachJamvi';
+import { ownByNumber, ownRuleKey, savedGroups, suggestedCategories, teachDoneKey, type SavedGroup } from '@/lib/teachJamvi';
 import { LISTS_AN_EDIT_CHANGES, withoutSorted } from '@/lib/showSavedEdit';
 import { plainSaveError } from '@/lib/saveRetry';
 import { saveRules } from '@/lib/rulesStore';
@@ -139,13 +139,18 @@ export default function TeachJamviScreen() {
   const onOwnAccount = async (taught: SavedGroup, answer: OwnAccountAnswer) => {
     // The number goes on the account itself, on the server: every statement and
     // message after counts payments to it as the person's own money moving.
+    // A bank paying in names no number: remembered by a rule on its name instead.
+    const byNumber = ownByNumber(taught);
     let targetName: string;
+    let targetId: number;
     if ('accountId' in answer) {
       const existing = accounts.find((account) => account.id === answer.accountId);
       targetName = existing?.name ?? taught.label;
-      await updateAccount({ id: answer.accountId, data: { name: targetName, accountNumber: taught.reference } });
+      targetId = answer.accountId;
+      if (byNumber) await updateAccount({ id: answer.accountId, data: { name: targetName, accountNumber: taught.reference } });
     } else {
-      const created = await createAccount({ data: { name: answer.name, accountNumber: taught.reference } });
+      const created = await createAccount({ data: { name: answer.name, ...(byNumber ? { accountNumber: taught.reference } : {}) } });
+      targetId = created.id;
       targetName = answer.name;
       let businessId = answer.businessId;
       if (answer.newBusinessName) businessId = (await businesses.create(answer.newBusinessName).catch(() => null))?.id ?? null;
@@ -154,6 +159,7 @@ export default function TeachJamviScreen() {
           Alert.alert('Account added', "It could not be set as the business's yet. Open it on Bank and choose Business."));
       }
     }
+    if (!byNumber) keepRules({ ...rules, [ownRuleKey(taught.key)]: String(targetId) });
     await queryClient.invalidateQueries({ queryKey: getGetJointAccountsQueryKey() });
     setSkipped((current) => new Set([...current, taught.key]));
     setAnswered((count) => count + 1);
@@ -161,7 +167,7 @@ export default function TeachJamviScreen() {
     // accounts is done on Bank. Said, so nobody thinks they changed.
     Alert.alert(
       `${targetName} linked`,
-      `From now on, money to and from account ${taught.reference} counts as moving your own money. The ${taught.count} entries already saved stay under Not sure yet: sort them on Bank if they were moves too.`,
+      `From now on, money ${byNumber ? `to and from account ${taught.reference}` : `from ${taught.label}`} counts as moving your own money. The ${taught.count} entries already saved stay where they are: sort them on Bank if they were moves too.`,
     );
   };
 
