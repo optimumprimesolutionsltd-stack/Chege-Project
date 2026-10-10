@@ -22,6 +22,7 @@ import {
   businessFlagsFor,
   businessNamesFromDraft,
   costsBusinessName,
+  salaryIncomeName,
   normalizeOnboardingDraft,
   recommendedCategoriesForPurpose,
   type MobileOnboardingDraft,
@@ -195,6 +196,36 @@ describe('the business question in onboarding', () => {
     expect(links).toEqual([56, 56]);
     // With nothing whose profit counts, the costs still go to the first.
     expect(costsBusinessName(draft({ businessPay: ['passThrough'] }))).toBe("Wanjiru's Duka");
+  });
+
+  it('names a salary by the business without its company ending', () => {
+    expect(salaryIncomeName('Ujenzi Distributors Ltd')).toBe('Ujenzi Distributors salary');
+    expect(salaryIncomeName('Optimum Prime Solutions Limited')).toBe('Optimum Prime Solutions salary');
+    expect(salaryIncomeName('Ujenzi Ltd.')).toBe('Ujenzi salary');
+    expect(salaryIncomeName('Kamau Enterprises')).toBe('Kamau Enterprises salary');
+    expect(salaryIncomeName('Ltd')).toBe('Ltd salary');
+    expect(salaryIncomeName('x'.repeat(80))).toHaveLength(80);
+  });
+
+  it('gives a business that pays a salary a salary income stream, with the salary amount', async () => {
+    let next = 55;
+    customFetch.mockImplementation(async (url: string, init: { method?: string }) => {
+      const key = `${init?.method ?? 'GET'} ${url}`;
+      if (key === 'POST /api/income-sources') return { id: next++ };
+      if (key === 'GET /api/budget-categories') return categories;
+      return {};
+    });
+    await setUpBusiness({
+      draft: draft({ businessName: 'Ujenzi Distributors Ltd', businessPay: ['salary'], incomeAmounts: { 'Ujenzi Distributors salary': '45000' } }),
+      userId: 'u1',
+    });
+    const created = callsTo('POST', '/api/income-sources').map(([, init]) => JSON.parse(init.body));
+    expect(created).toEqual([
+      expect.objectContaining({ name: 'Ujenzi Distributors Ltd', expectedMonthlyAmount: 0 }),
+      expect.objectContaining({ name: 'Ujenzi Distributors salary', expectedMonthlyAmount: 45000 }),
+    ]);
+    // Only the business is marked as one; the salary is ordinary income.
+    expect(callsTo('PUT', '/api/businesses/').map(([url]) => url)).toEqual(['/api/businesses/55']);
   });
 
   it('keeps each answer with its business when a box before it is blank', () => {
