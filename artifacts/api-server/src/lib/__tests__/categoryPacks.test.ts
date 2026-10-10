@@ -145,6 +145,7 @@ describe("suggested mini-ledgers", () => {
     expect(household.get("Utilities")).toContain("Security");
     expect(household.get("Food")).toContain("Groceries");
     expect(household.get("Education")).toContain("School trips");
+    expect(household.get("Education")).toContain("Clubs");
 
     // A different kind of budget suggests a different shape entirely.
     const chama = categoryPackChildren("chama");

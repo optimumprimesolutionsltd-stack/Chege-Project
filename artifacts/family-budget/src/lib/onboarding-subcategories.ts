@@ -19,7 +19,7 @@ export const ONBOARDING_SUBCATEGORIES: Readonly<Record<string, readonly string[]
   "Shared bills": ["Rent share", "Bills share", "Shopping share"],
   Transport: ["Matatu & bus", "Fuel", "Boda boda", "Parking"],
   Health: ["Hospital & clinic", "Medicine", "SHA contributions"],
-  Education: ["School fees", "Uniform", "School trips", "Tuition"],
+  Education: ["School fees", "Uniform", "School trips", "Tuition", "Clubs"],
   "Books & supplies": ["Books", "Stationery"],
   "Family support": ["Parents", "Siblings", "Other relatives"],
   Loans: ["Loan repayments", "Loan interest"],

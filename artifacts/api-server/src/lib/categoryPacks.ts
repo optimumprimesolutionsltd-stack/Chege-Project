@@ -96,7 +96,7 @@ export const CATEGORY_PACKS: Record<GroupKind, readonly CategoryPackItem[]> = {
     { name: "Housing", budgetAmount: 0, priority: 1, color: "#F59E0B", children: ["Rent", "Service charge", "Repairs"] },
     { name: "Utilities", budgetAmount: 0, priority: 1, color: "#EAB308", children: ["Electricity", "Water", "Wi-Fi", "Garbage", "Security"] },
     { name: "Health", budgetAmount: 0, priority: 2, color: "#EF4444", children: ["Clinic visits", "Medicine", "Insurance"] },
-    { name: "Education", budgetAmount: 0, priority: 2, color: "#3B82F6", children: ["School fees", "School trips", "Uniforms", "Books & stationery"] },
+    { name: "Education", budgetAmount: 0, priority: 2, color: "#3B82F6", children: ["School fees", "School trips", "Uniforms", "Books & stationery", "Clubs"] },
     { name: "Transport", budgetAmount: 0, priority: 3, color: "#8B5CF6", children: ["Matatu & bus", "Fuel", "School run"] },
   ],
   chama: [
