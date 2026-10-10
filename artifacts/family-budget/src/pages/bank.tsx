@@ -589,7 +589,12 @@ export default function Bank() {
       setEditingAccountId(saved.id);
       setAddingAccount(false);
       invalidate();
-      toast({ title: editingAccountId ? "Account updated" : "Account added" });
+      // Its number known, what was already saved to or from it became moves (api-server lib/own-account-moves).
+      const movedEntries = (saved as { movedEntries?: number }).movedEntries ?? 0;
+      toast({
+        title: editingAccountId ? "Account updated" : "Account added",
+        ...(movedEntries > 0 ? { description: `${movedEntries} saved M-Pesa ${movedEntries === 1 ? "payment" : "payments"} to and from it ${movedEntries === 1 ? "is" : "are"} now moves between your own accounts.` } : {}),
+      });
       // Came here from "Record this month" to sort out an account — hand the
       // treasurer straight back so they can carry on.
       if (new URLSearchParams(window.location.search).get("from") === "contributions") {

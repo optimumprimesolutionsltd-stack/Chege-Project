@@ -237,3 +237,34 @@ describe('answers for money in, sorted', () => {
     expect(moved[lines[0].index]).toMatchObject({ transferTo: 7, confirmed: true });
   });
 });
+
+// "Teach Jamvi your M-Pesa is very slow" (10 Oct 2026): a regular's entries were
+// saved one after another with the card locked, so the next question waited.
+describe('saving a regular', () => {
+  it('a few at a time, every one tried, failures counted', async () => {
+    const { saveEach } = await import('@/lib/teachJamvi');
+    let running = 0;
+    let most = 0;
+    const tried: number[] = [];
+    const failed = await saveEach([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], async (n) => {
+      running += 1;
+      most = Math.max(most, running);
+      await new Promise((done) => setTimeout(done, 1));
+      running -= 1;
+      tried.push(n);
+      if (n % 5 === 0) throw new Error(`no ${n}`);
+    }, 4);
+    expect(tried.sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    expect(most).toBe(4);
+    expect(failed.count).toBe(2);
+    expect((failed.error as Error).message).toBe('no 5');
+  });
+
+  it('behind the next question: the screen is never locked while it files', async () => {
+    const { readFileSync } = await import('node:fs');
+    const screen = readFileSync('app/teach-jamvi.tsx', 'utf8');
+    expect(screen).not.toContain("pointerEvents={working ? 'none' : 'auto'}");
+    expect(screen).toContain('const failed = await saveEach(taught.entries,');
+    expect(screen).toContain('testID="teach-jamvi-filing"');
+  });
+});

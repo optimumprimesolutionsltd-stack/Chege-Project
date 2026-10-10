@@ -1159,6 +1159,14 @@ export default function BankScreen() {
       selectAccount(account.id);
       setAccountModalVisible(false);
       await invalidateAccounts();
+      // Its number known, what was already saved to or from it became moves on
+      // the server (api-server lib/own-account-moves): said, never asked.
+      const movedEntries = (account as { movedEntries?: number }).movedEntries ?? 0;
+      if (movedEntries > 0) {
+        void queryClient.invalidateQueries({ queryKey: ['entries-to-sort'] });
+        void queryClient.invalidateQueries({ queryKey: getGetJointAccountQueryKey() });
+        Alert.alert(`${name} recognised`, `${movedEntries} saved M-Pesa ${movedEntries === 1 ? 'payment' : 'payments'} to and from account ${accountNumber} ${movedEntries === 1 ? 'is' : 'are'} now moves between your own accounts: not spending, not income.`);
+      }
       // Back to the posting that sent you here, with the new account already
       // chosen. Everything typed so far is still in the form: the sheet was
       // hidden rather than reset.

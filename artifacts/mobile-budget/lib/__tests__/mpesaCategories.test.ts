@@ -144,7 +144,7 @@ describe('the category picker says what is wrong and can fix it', () => {
     const sheet = phone.slice(phone.indexOf('function CategorySheet'), phone.indexOf('export default function MpesaImportScreen'));
     expect(sheet).toContain('useGetBudgetCategories()');
     expect(sheet).not.toContain('categories: CategoryRow[];');
-    expect(phone).toContain('<CategorySheet visible={picking !== null} budgetName={group?.name}');
+    expect(phone).toContain('<CategorySheetHost ref={sheetRef} budgetName={group?.name}');
   });
 
   it('tells loading, failed and empty apart, and names the budget that has none', () => {
