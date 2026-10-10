@@ -1116,7 +1116,15 @@ export default function SettingsScreen() {
                  <Text style={[styles.profileEmail, { color: colors.mutedForeground }]} numberOfLines={1}>{user.email}</Text>
                </View>
              ) : null}
-             <Text style={[styles.lockedHint, { color: colors.mutedForeground }]}>Your sign-in email can’t be changed in Jamvi.</Text>
+             <Pressable
+               testID="open-change-email"
+               onPress={() => router.push('/change-email' as never)}
+               hitSlop={6}
+               style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 6 }}
+             >
+               <Feather name="mail" size={13} color={colors.primary} />
+               <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 12 }}>Change email</Text>
+             </Pressable>
               <Text style={[styles.lockedHint, { color: colors.mutedForeground, marginTop: 4 }]}>
                 Your profile photo represents you and is also used for your Personal budget. Shared groups can keep their own group photo.
               </Text>

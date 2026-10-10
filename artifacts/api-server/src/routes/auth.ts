@@ -38,7 +38,9 @@ import {
   createSession,
   deleteSession,
   getOidcConfig,
+  getSession,
   getSessionId,
+  updateSession,
   ISSUER_URL,
   SESSION_COOKIE,
   SESSION_TTL,
@@ -61,9 +63,12 @@ import {
   requestAccountDeletionCode,
 } from "../lib/account-deletion";
 import { sendEmail } from '../lib/email';
+import { confirmEmailChange, EmailChangeError, hasMovedAwayFrom, requestEmailChangeCode } from '../lib/email-change';
 import {
   accountDeletionCodeLimiter,
   accountDeletionConfirmLimiter,
+  emailChangeCodeLimiter,
+  emailChangeConfirmLimiter,
   forgotPasswordEmailLimiter,
   forgotPasswordLimiter,
   registerLimiter,
@@ -250,6 +255,15 @@ export async function upsertUser(claims: Record<string, unknown>) {
       await cancelPendingAccountDeletion(updated.id);
       return updated;
     }
+  }
+
+  // This Google identity made an account that has since moved to another
+  // email. Matching it by id would pull that account back to this address, so
+  // the old address starts a fresh account instead (lib/email-change.ts).
+  if (email && await hasMovedAwayFrom(claims.sub as string, email)) {
+    const [fresh] = await db.insert(usersTable).values(profile).returning();
+    await ensureTrialSubscription(fresh.id);
+    return fresh;
   }
 
   const [user] = await db
@@ -517,6 +531,64 @@ router.post('/auth/delete-account/confirm', accountDeletionConfirmLimiter, async
   clearActiveWorkspaceCookie(res);
 
   res.json({ scheduledFor: scheduledFor.toISOString() });
+});
+
+/**
+ * Moving the account to a different email: a code goes to the new address
+ * (step one), and the change happens only when it comes back (step two).
+ * Everything the account has moves with it - it is keyed by id, not email.
+ */
+router.post('/auth/change-email/request-code', emailChangeCodeLimiter, async (req: Request, res: Response) => {
+  if (!req.isAuthenticated()) {
+    res.status(401).json({ error: 'Sign in first.' });
+    return;
+  }
+  const parsed = z.object({ email: z.string().trim().toLowerCase().email('Enter a valid email address.').max(320) })
+    .safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Enter a valid email address.' });
+    return;
+  }
+  try {
+    res.json({ sent: true, ...(await requestEmailChangeCode(req.user.id, parsed.data.email)) });
+  } catch (error) {
+    if (error instanceof EmailChangeError) {
+      res.status(error.status).json({ error: error.message });
+      return;
+    }
+    throw error;
+  }
+});
+
+router.post('/auth/change-email/confirm', emailChangeConfirmLimiter, async (req: Request, res: Response) => {
+  if (!req.isAuthenticated()) {
+    res.status(401).json({ error: 'Sign in first.' });
+    return;
+  }
+  const parsed = z.object({
+    email: z.string().trim().toLowerCase().email('Enter a valid email address.').max(320),
+    code: z.string().trim(),
+    password: z.string().max(200).optional().nullable(),
+  }).safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Check the details and try again.' });
+    return;
+  }
+  let user;
+  try {
+    user = await confirmEmailChange(req.user.id, parsed.data);
+  } catch (error) {
+    if (error instanceof EmailChangeError) {
+      res.status(error.status).json({ error: error.message });
+      return;
+    }
+    throw error;
+  }
+  // The session keeps its own copy of the signed-in person.
+  const sid = getSessionId(req);
+  const session = sid ? await getSession(sid) : null;
+  if (sid && session) await updateSession(sid, { ...session, user: { ...session.user, email: user.email } });
+  res.json({ user: await authUserPayload(user) });
 });
 
 router.put('/auth/display-name', async (req: Request, res: Response) => {

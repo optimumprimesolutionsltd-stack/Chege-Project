@@ -259,3 +259,23 @@ export const accountDeletionConfirmLimiter = rateLimit({
   message: "Too many attempts. Request a new code.",
   keyFor: (req) => req.user?.id ?? null,
 });
+
+/** Asking for an email-change code. Each one is an email to an address the
+ *  person has typed, so it is capped like the deletion codes. */
+export const emailChangeCodeLimiter = rateLimit({
+  name: "email-change-code",
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  message: "Too many codes requested. Check the new inbox, including spam, or try again shortly.",
+  keyFor: (req) => req.user?.id ?? null,
+});
+
+/** Spending an email-change code. Counts only failures, as for deletion codes. */
+export const emailChangeConfirmLimiter = rateLimit({
+  name: "email-change-confirm",
+  windowMs: 60 * 60 * 1000,
+  max: 20,
+  countsAgainstLimit: failed,
+  message: "Too many attempts. Request a new code.",
+  keyFor: (req) => req.user?.id ?? null,
+});

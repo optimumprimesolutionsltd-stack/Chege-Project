@@ -32,6 +32,9 @@ interface AuthContextValue {
   logout: () => Promise<void>;
   saveDisplayName: (name: string) => Promise<void>;
   saveProfilePhoto: (photoPath: string | null) => Promise<void>;
+  /** Take up a user the server has just answered with - e.g. after an email
+   *  change - without asking it again. */
+  adoptUser: (user: AuthUser) => Promise<void>;
 }
 
 /**
@@ -53,6 +56,7 @@ const AuthContext = createContext<AuthContextValue>({
   logout: async () => {},
   saveDisplayName: async () => {},
   saveProfilePhoto: async () => {},
+  adoptUser: async () => {},
 });
 
 // Compiled into the binary: an installed app calls whatever host was baked in
@@ -290,8 +294,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await cacheUser(data.user as AuthUser);
   }, []);
 
+  const adoptUser = useCallback(async (next: AuthUser) => {
+    setUser(next);
+    await cacheUser(next);
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, isLoading, isAuthenticated: !!user, login, logout, saveDisplayName, saveProfilePhoto }}>
+    <AuthContext.Provider value={{ user, isLoading, isAuthenticated: !!user, login, logout, saveDisplayName, saveProfilePhoto, adoptUser }}>
       {children}
     </AuthContext.Provider>
   );

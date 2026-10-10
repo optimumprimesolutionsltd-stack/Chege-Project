@@ -36,7 +36,10 @@ vi.mock("@workspace/db", () => {
   };
 });
 
+vi.mock("../../lib/ownership-notice", () => ({ notifyNewOwner: vi.fn() }));
+
 import { db, groupMembershipsTable } from "@workspace/db";
+import { notifyNewOwner } from "../../lib/ownership-notice";
 import membersRouter from "../members.js";
 
 type Mock = ReturnType<typeof vi.fn>;
@@ -229,6 +232,7 @@ describe("ownership transfer", () => {
       { userId: "member-1", role: "owner" },
       { userId: "current-user", role: "admin" },
     ]);
+    expect(notifyNewOwner).toHaveBeenCalledWith({ groupId: 7, newOwnerId: "member-1", previousOwnerId: "current-user" });
   });
 
   it("refuses to hand ownership to yourself", async () => {
