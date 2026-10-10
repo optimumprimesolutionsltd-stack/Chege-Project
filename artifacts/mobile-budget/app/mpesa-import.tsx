@@ -18,7 +18,7 @@ import {
   Keyboard,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -191,8 +191,11 @@ import { findSavingsGoal, ledgersToMake, loanOf, productNote, productOf, savings
 // Shared with the day of banking and the Bank form: a fee is the same expense every time.
 const CHARGE_CATEGORY_KEY = 'jamvi:last-charge-category';
 
-// Entries drawn at a time on the review screen (see shownCount).
-const LINES_PER_PAGE = 100;
+// Entries drawn at a time on the review screen (see shownCount). 25, not 100:
+// every line is drawn again on each answer, and on a phone a full year's review
+// took minutes to appear and left taps and Back waiting behind it ("the
+// statement opened but i think it took ten minutes", 10 Oct 2026).
+const LINES_PER_PAGE = 25;
 // "Put it under" a group that does not exist yet: made, then used.
 const NEW_GROUP = -1;
 const todayIso = () => new Date(Date.now() + 3 * 3_600_000).toISOString().slice(0, 10);
@@ -1166,11 +1169,16 @@ export default function MpesaImportScreen() {
     else if (result.on && !smsAuto.on) void keepSmsAuto({ on: true, since: smsAuto.since || Date.now() });
   };
   // The messages read through the same reader as pasted ones, a batch at a time.
+  // One read at a time: the server's logs showed the same messages read twice
+  // at once (10 Oct 2026), each drawing the whole review.
+  const readingSmsRef = useRef(false);
   const readSmsMessages = async (messages: string[]): Promise<PreviewLine[] | null> => {
+    if (readingSmsRef.current) return null;
     if (messages.length === 0) {
       Alert.alert('No M-Pesa messages', 'There are no M-Pesa messages on this phone for those dates.');
       return null;
     }
+    readingSmsRef.current = true;
     setReading(true);
     try {
       const all: PreviewLine[] = [];
@@ -1198,6 +1206,7 @@ export default function MpesaImportScreen() {
       Alert.alert('Could not read them', plainReadFailure(error));
       return null;
     } finally {
+      readingSmsRef.current = false;
       setReading(false);
     }
   };
@@ -1330,6 +1339,21 @@ export default function MpesaImportScreen() {
       setPickingStatement(false);
     }
   };
+  // One Import M-Pesa page, never a copy under another: opened again from Home
+  // or after a restart, the older one is closed. Back from the top copy landed
+  // on an identical page, so the arrows looked dead, and each copy read and drew
+  // the messages again (10 Oct 2026).
+  const navigation = useNavigation();
+  useEffect(() => {
+    type Route = { key: string; name: string };
+    type StackState = { index: number; routes: Route[] } & Record<string, unknown>;
+    const state = navigation.getState() as unknown as StackState | undefined;
+    if (!state?.routes?.length) return;
+    const mine = state.routes[state.index];
+    if (!mine || !state.routes.some((route) => route.name === mine.name && route.key !== mine.key)) return;
+    const routes = state.routes.filter((route) => route.name !== mine.name || route.key === mine.key);
+    navigation.dispatch({ type: 'RESET', payload: { ...state, routes, index: routes.length - 1 } } as never);
+  }, [navigation]);
   // Back, from the arrow or the phone's own button. Opened with nothing behind
   // it - after an update restart, from a shared message - there was nowhere to
   // go back to, and both did nothing ("these two arrows for going back are not

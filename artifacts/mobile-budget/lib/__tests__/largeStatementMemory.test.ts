@@ -9,7 +9,7 @@ const readerView = readFileSync('components/StatementReader.tsx', 'utf8');
 // was drawn at once, thousands of cards, and Android ran out of memory.
 describe('a long statement does not run the phone out of memory', () => {
   it('draws the review list a page at a time', () => {
-    expect(mpesa).toContain('const LINES_PER_PAGE = 100;');
+    expect(mpesa).toContain('const LINES_PER_PAGE = 25;');
     expect(mpesa).toContain('{inView.slice(0, shownCount).map((item) => {');
     expect(mpesa).toContain('{notImported.slice(0, shownSkipped).map((item) => (');
     expect(mpesa).toContain('testID="mpesa-show-more"');
