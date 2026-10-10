@@ -14,7 +14,8 @@ const NORMALISE = (text: string) =>
     .replace(/\.\/(payeeLearning|payee-learning)/g, './payee-learning')
     .replace(/\.\/(mpesaProducts|mpesa-products)/g, './mpesa-products')
     .replace(/\.\/(statementTable|statement-table)/g, './statement-table')
-    .replace(/\.\/(knownPayees|known-payees)/g, './known-payees');
+    .replace(/\.\/(knownPayees|known-payees)/g, './known-payees')
+    .replace(/\.\/(entriesToSort|entries-to-sort)/g, './entries-to-sort');
 
 const PAIRS: Array<[string, string]> = [
   ['lib/mpesaImport.ts', '../family-budget/src/lib/mpesa-import.ts'],
@@ -31,6 +32,9 @@ const PAIRS: Array<[string, string]> = [
   ['lib/payeeNicknames.ts', '../family-budget/src/lib/payee-nicknames.ts'],
   ['lib/importBusiness.ts', '../family-budget/src/lib/import-business.ts'],
   ['lib/yearGrid.ts', '../family-budget/src/lib/year-grid.ts'],
+  ['lib/teachJamvi.ts', '../family-budget/src/lib/teach-jamvi.ts'],
+  ['lib/family.ts', '../family-budget/src/lib/family.ts'],
+  ['lib/businessSalary.ts', '../family-budget/src/lib/business-salary.ts'],
 ];
 
 describe('the phone and the web share one copy of the logic', () => {

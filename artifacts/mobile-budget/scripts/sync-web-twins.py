@@ -40,6 +40,10 @@ TWINS = {
     'payeeNicknames.ts': ('payee-nicknames.ts', {}),
     'importBusiness.ts': ('import-business.ts', {'./mpesaImport': './mpesa-import'}),
     'yearGrid.ts': ('year-grid.ts', {}),
+    # Teach Jamvi (10 Oct 2026): the regulars, your family and the salary question, on the web too.
+    'teachJamvi.ts': ('teach-jamvi.ts', {'./mpesaImport': './mpesa-import', './knownPayees': './known-payees', './mpesaProducts': './mpesa-products', './payeeLearning': './payee-learning', './entriesToSort': './entries-to-sort'}),
+    'family.ts': ('family.ts', {'./payeeLearning': './payee-learning'}),
+    'businessSalary.ts': ('business-salary.ts', {}),
 }
 
 

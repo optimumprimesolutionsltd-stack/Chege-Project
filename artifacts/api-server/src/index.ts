@@ -5,6 +5,7 @@ import { ensureOwnerBusiness } from "./lib/owner-business-money";
 import { ensureBusinessAccounts } from "./lib/business-accounts";
 import { ensureBusinessStreams } from "./lib/business-streams";
 import { ensurePayeeRules } from "./lib/payee-rules";
+import { ensureBudgetKnowledge } from "./lib/budget-knowledge";
 import { ensureStandardCategories } from "./lib/standard-categories";
 import { ensurePossibleDuplicates } from "./lib/possible-duplicates";
 import { ensureImportSaveJobs } from "./lib/import-save-jobs";
@@ -93,6 +94,7 @@ async function startServer() {
   void ensureBusinessAccounts();
   void ensureBusinessStreams();
   void ensurePayeeRules();
+  void ensureBudgetKnowledge();
   void ensureStandardCategories();
   void ensureEveryBudgetHasAnAccount();
 

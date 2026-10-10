@@ -125,6 +125,7 @@ import { runPool, savePosting, SAVE_CONCURRENCY, type PostingApi, type Posted } 
 import { EarlierSaveRunning, followServerSave, isFollowingServerSave, setSaveProgressBar, startServerSave, type ServerJob } from "@/lib/server-save";
 import { payeeKey, payeeName, ruleLabel, rulesStorageKey, withRule, withSourceRule, withoutRule, type PayeeRules } from "@/lib/payee-learning";
 import { readCachedRules, saveRules, syncRules } from "@/lib/rules-store";
+import { loadKnowledge, pickDoc, saveKnowledge } from "@/lib/knowledge-store";
 import { applyOtherBudgetRules, otherBudgetRuleFor, otherBudgetRuleLabel, otherBudgetRulesKey, parseOtherBudgetRules, rememberOtherBudgetLabel, withOtherBudgetRule, withoutOtherBudgetRule, type OtherBudgetRules } from "@/lib/other-budget-rules";
 import { saveDebtLinks } from "@/lib/debt-reversal";
 import { mpesaNameFor, saveMpesaNames, type MpesaName } from "@/lib/mpesa-names";
@@ -327,9 +328,15 @@ export default function MpesaImportPage() {
   const keepOtherRules = (next: OtherBudgetRules) => {
     setOtherRules(next);
     try { window.localStorage.setItem(otherRulesKey, JSON.stringify(next)); } catch { /* kept only when storage allows */ }
+    void saveKnowledge("other-budget-rules", next);
   };
 
   const nicknamesKey = nicknameStorageKey(group?.id);
+  // What this browser held when the server answered, read without waiting on a render.
+  const otherRulesRef = useRef(otherRules);
+  otherRulesRef.current = otherRules;
+  const nicknamesRef = useRef(nicknames);
+  nicknamesRef.current = nicknames;
   const readStoredNicknames = (): NicknameMap => {
     try {
       return parseStoredNicknames(window.localStorage.getItem(nicknamesKey));
@@ -341,12 +348,28 @@ export default function MpesaImportPage() {
     setNicknames(readStoredNicknames());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nicknamesKey]);
+  // Then the budget's own copies from the server (lib/knowledge-store), shared
+  // with the phone; what only this browser knew is sent up the first time.
+  useEffect(() => {
+    let active = true;
+    void loadKnowledge().then((docs) => {
+      if (!active || !docs) return;
+      const other = pickDoc(otherRulesRef.current, docs["other-budget-rules"]);
+      setOtherRules(parseOtherBudgetRules(JSON.stringify(other.doc)));
+      if (other.upload) void saveKnowledge("other-budget-rules", other.doc);
+      const names = pickDoc(nicknamesRef.current, docs["payee-nicknames"]);
+      setNicknames(parseStoredNicknames(JSON.stringify(names.doc)));
+      if (names.upload) void saveKnowledge("payee-nicknames", names.doc);
+    });
+    return () => { active = false; };
+  }, [group?.id]);
 
   const saveNickname = () => {
     if (!naming || !lines) return;
     const next = withNickname(nicknames, naming.original, naming.text);
     setNicknames(next);
     try { window.localStorage.setItem(nicknamesKey, JSON.stringify(next)); } catch { /* remembered only when storage allows */ }
+    void saveKnowledge("payee-nicknames", next);
     const renamed = applyNicknames(lines, next);
     setLines(renamed);
     setChoices((current) => refreshSuggestions(renamed, current, history, categories.map((row) => row.name), effectiveChargeCategory, rules));

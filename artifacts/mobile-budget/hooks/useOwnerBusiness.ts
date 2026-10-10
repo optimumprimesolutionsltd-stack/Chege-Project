@@ -6,11 +6,12 @@ import { useBusinessAccounts } from '@/hooks/useBusinessAccounts';
 import { LISTS_AN_EDIT_CHANGES } from '@/lib/showSavedEdit';
 import { unassignedBusinessAccounts, bankAccountKeys, businessKeyFor, businessMatches, ownerBusinessKey, parseOwnerBusiness, withBankAccountKeys, withKey, withSkipped, type OwnerBusiness } from '@/lib/ownerBusiness';
 import { payeeName } from '@/lib/payeeLearning';
+import { saveKnowledge } from '@/lib/knowledgeStore';
 
 type Marked = { ready: boolean; transactionIds: number[] };
 
 /**
- * Your business's names and numbers (kept on this device, lib/ownerBusiness)
+ * Your business's names and numbers (kept on the server, lib/knowledgeStore)
  * and the entries marked on the server as money between you and it.
  */
 export function useOwnerBusiness() {
@@ -47,8 +48,9 @@ export function useOwnerBusiness() {
 
   const save = useCallback(async (next: OwnerBusiness) => {
     queryClient.setQueryData(['owner-business-rule', storageKey], next);
-    await AsyncStorage.setItem(storageKey, JSON.stringify(next)).catch(() => {});
-  }, [queryClient, storageKey]);
+    // On the server too, for every phone and the web (lib/knowledgeStore).
+    await saveKnowledge(group?.id, 'owner-business', next);
+  }, [group?.id, queryClient, storageKey]);
 
   const mark = useCallback(async (ids: readonly number[]) => {
     if (ids.length === 0) return [];

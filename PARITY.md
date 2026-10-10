@@ -71,3 +71,6 @@ Whenever you add, change, or remove a feature on either platform, find the relev
 | Batch email invitations | ✅ | ✅ | Managers can paste multiple email addresses and invite everyone in one batch with per-address results |
 | Add / remove partner | ✅ | ❌ | Settings page on web; no equivalent on mobile |
 | Dark mode | ✅ | ✅ | Both respect the system theme |
+| **Teach Jamvi (setup, once)** | | | |
+| Teach Jamvi: regulars, family, business salary question | ✅ | ✅ | Both answer the regulars among saved Not sure entries, family names and "Do you pay yourself a salary?" (web: Settings > Teach Jamvi; logic shared as twins). Phone also asks in the M-Pesa review and links own bank accounts; web has no own-account step yet |
+| What Jamvi was taught, kept on the server | ✅ | ✅ | Payee rules, other-budget payees and nicknames shared by phone and web; Named accounts and owner-business numbers have no web screen yet |

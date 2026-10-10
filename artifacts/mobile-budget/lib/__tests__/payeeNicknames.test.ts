@@ -124,8 +124,10 @@ describe('both apps do the same', () => {
     expect(source).toContain('Use the name Jamvi read');
   });
 
-  it('keeps them on the device or browser, per budget', () => {
-    expect(read('app/mpesa-import.tsx')).toContain('AsyncStorage.setItem(nicknamesKey, JSON.stringify(next))');
-    expect(read('../family-budget/src/pages/mpesa-import.tsx')).toContain('window.localStorage.setItem(nicknamesKey, JSON.stringify(next))');
+  it('keeps them per budget on the server, the device or browser a cache (10 Oct 2026)', () => {
+    expect(read('app/mpesa-import.tsx')).toContain("void saveKnowledge(group?.id, 'payee-nicknames', next);");
+    const web = read('../family-budget/src/pages/mpesa-import.tsx');
+    expect(web).toContain('window.localStorage.setItem(nicknamesKey, JSON.stringify(next))');
+    expect(web).toContain('void saveKnowledge("payee-nicknames", next);');
   });
 });

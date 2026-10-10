@@ -1,5 +1,6 @@
 import Business from '@/pages/business';
 import SortEntries from '@/pages/sort-entries';
+import TeachJamvi from '@/pages/teach-jamvi';
 import PossibleDuplicates from '@/pages/possible-duplicates';
 import Debt from '@/pages/debt';
 import Help from '@/pages/help';
@@ -160,6 +161,7 @@ function AuthenticatedApp() {
         <Route path="/spending-by-item" component={SpendingByItem} />
         <Route path="/business" component={Business} />
         <Route path="/sort-entries" component={SortEntries} />
+        <Route path="/teach-jamvi" component={TeachJamvi} />
         <Route path="/possible-duplicates" component={PossibleDuplicates} />
         <Route path="/debt" component={Debt} />
         <Route path="/help" component={Help} />

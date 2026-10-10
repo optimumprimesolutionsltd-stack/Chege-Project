@@ -1359,6 +1359,22 @@ export default function Settings() {
           {group && canMakeGroupPersonal({ group, members, userId: user?.id }) ? (
             <MakeGroupMyPersonalBudget groupId={group.id} groupName={budgetName} />
           ) : null}
+          {canManageWorkspace ? (
+            // Teach Jamvi your M-Pesa, as on the phone: answered once, kept on the server.
+            <div className="rounded-xl border border-border/60 p-4" data-testid="teach-jamvi-entry">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">Teach Jamvi your M-Pesa</p>
+                  <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                    Your businesses, your family and your regular payees - answered once, so imports file them by themselves.
+                  </p>
+                </div>
+                <Button asChild variant="outline" className="w-full sm:w-auto sm:shrink-0">
+                  <Link href="/teach-jamvi" data-testid="button-teach-jamvi">Start</Link>
+                </Button>
+              </div>
+            </div>
+          ) : null}
           {isPrivateWorkspace || myMembership?.role === "owner" ? (
             // A Personal budget cannot be handed over as it is - it has to
             // become a Shared group first - and nothing said so. The guide
