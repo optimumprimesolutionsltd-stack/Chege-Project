@@ -27,9 +27,10 @@ const coversSchema = z.object({
   rest: category,
 });
 const candidatesSchema = z.object({
-  descriptions: z.array(z.string().trim().min(1).max(300)).min(1).max(200),
+  names: z.array(z.string().trim().min(2).max(200)).min(1).max(50),
   since: z.string().date(),
 });
+const infoSchema = z.object({ transactionId: z.number().int().positive() });
 const moveSchema = z.object({
   from: category,
   to: category,
@@ -83,8 +84,8 @@ router.post("/transaction-splits/covers", async (req, res): Promise<void> => {
 
 /**
  * Money out to these payees since a day, not split yet: the phone narrows them
- * to the person (payeeLearning payeeKey) and applies what they cover. Matched on
- * the exact description, in the body, never the address.
+ * to the person (payeeLearning payeeKey) and applies what they cover. Found by
+ * the name in the description, sent in the body, never the address.
  */
 router.post("/transaction-splits/candidates", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
@@ -96,7 +97,7 @@ router.post("/transaction-splits/candidates", async (req, res): Promise<void> =>
     SELECT t."id", t."amount", t."date"::text AS "date", t."description", t."expense_category" AS "category"
       FROM "joint_account_transactions" t
      WHERE t."group_id" = ${groupId} AND t."type" = 'disbursement' AND t."date" >= ${parsed.data.since}::date
-       AND lower(t."description") IN (${sql.join(parsed.data.descriptions.map((one) => sql`lower(${one})`), sql`, `)})
+       AND (${sql.join(parsed.data.names.map((name) => sql`lower(t."description") LIKE ${`%${name.toLowerCase().replace(/[\\%_]/g, "")}%`}`), sql` OR `)})
        AND t."bank_transfer_id" IS NULL AND t."savings_goal_id" IS NULL AND t."charge_for_transaction_id" IS NULL
        AND t."expense_id" IS NULL AND t."is_lending" = false AND t."settles_contributor_id" IS NULL
        AND NOT EXISTS (SELECT 1 FROM "transaction_splits" ts WHERE ts."part_transaction_id" = t."id" OR ts."root_transaction_id" = t."id")
@@ -105,6 +106,32 @@ router.post("/transaction-splits/candidates", async (req, res): Promise<void> =>
      LIMIT 500`);
   const rows = result.rows as Array<{ id: number; amount: number | string; date: string; description: string; category: string | null }>;
   res.json({ entries: rows.map((row) => ({ id: Number(row.id), amount: Number(row.amount), date: row.date, description: row.description, category: row.category })) });
+});
+
+/** A payment's split, if it has one: its root and every part, so it can be shown and undone. */
+router.post("/transaction-splits/info", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  const parsed = infoSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "Say which payment." }); return; }
+  if (!splitsReady()) { res.json({ root: null, parts: [] }); return; }
+  const result = await db.execute(sql`
+    WITH root AS (
+      SELECT COALESCE((SELECT ts."root_transaction_id" FROM "transaction_splits" ts
+                        WHERE ts."part_transaction_id" = ${parsed.data.transactionId} AND ts."group_id" = ${groupId}), ${parsed.data.transactionId}) AS id
+    )
+    SELECT t."id", t."amount", t."expense_category" AS category, (t."id" = (SELECT id FROM root)) AS "isRoot"
+      FROM "joint_account_transactions" t
+     WHERE t."group_id" = ${groupId}
+       AND (t."id" = (SELECT id FROM root)
+         OR t."id" IN (SELECT ts."part_transaction_id" FROM "transaction_splits" ts WHERE ts."root_transaction_id" = (SELECT id FROM root)))
+     ORDER BY t."id"`);
+  const rows = result.rows as Array<{ id: number; amount: number | string; category: string | null; isRoot: boolean }>;
+  if (rows.length <= 1) { res.json({ root: null, parts: [] }); return; }
+  res.json({
+    root: Number(rows.find((row) => row.isRoot)?.id ?? parsed.data.transactionId),
+    parts: rows.map((row) => ({ id: Number(row.id), amount: Number(row.amount), category: row.category, isRoot: Boolean(row.isRoot) })),
+  });
 });
 
 router.post("/transaction-splits/move", async (req, res): Promise<void> => {

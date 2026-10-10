@@ -38,7 +38,7 @@ describe("the same payment", () => {
 describe("a payment or move typed by hand", () => {
   it("is checked against every M-Pesa entry but charges - savings moves and transfers included", () => {
     expect(lib).toContain("WHERE mpesa_receipt IS NOT NULL AND charge_for_transaction_id IS NULL`;");
-    expect(lib).toContain('const pool = against === "typed" ? TYPED : IMPORTED_ANY;');
+    expect(lib).toContain('const pool = against === "typed" ? TYPED_ROWS() : IMPORTED_ANY;');
   });
 
   it("into or out of savings, only against M-Pesa moves for that same goal", () => {

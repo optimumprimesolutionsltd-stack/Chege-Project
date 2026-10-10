@@ -42,6 +42,7 @@ import { categoryChanged, moveSummary, parseRememberAsked, rememberAskedKey, rem
 import { parseStoredRules, payeeKey, payeeName, referenceOf, ruleCategory, rulesStorageKey, withRule, withSourceRule } from '@/lib/payeeLearning';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSourceCorrection } from '@/hooks/useSourceCorrection';
+import { SplitSheet } from '@/components/SplitSheet';
 import { useColors } from '@/hooks/useColors';
 import { UndoDeleteBar, useUndoableDelete } from '@/components/UndoDeleteBar';
 import { deletedLabel } from '@/lib/undoDelete';
@@ -277,6 +278,8 @@ export default function BankScreen() {
   // total or report; somewhere to keep anything else worth remembering about it.
   const [notes, setNotes] = useState('');
   const [expenseCategory, setExpenseCategory] = useState('');
+  // A saved payment being split across categories (components/SplitSheet).
+  const [splitting, setSplitting] = useState<{ id: number; amount: number; description: string; category: string | null } | null>(null);
   // The month a deposit was *for*, when that is not the month it arrived.
   // Null is "the month it arrived in", which is almost every deposit.
   const [appliesTo, setAppliesTo] = useState<{ month: number; year: number } | null>(null);
@@ -5869,6 +5872,25 @@ export default function BankScreen() {
                 </Text>
               ) : null}
 
+              {/* One payment, more than one category (components/SplitSheet): "money sent to her
+                  should be to cover rent or school fees" (10 Oct 2026). Saved money out only. */}
+              {editingTransactionId !== null && !editingTransfer && txType === 'disbursement' && withdrawDest !== 'lend' && withdrawDest !== 'savings' && withdrawDest !== 'party' ? (
+                <Pressable
+                  onPress={() => {
+                    const editing = data?.transactions.find((transaction) => transaction.id === editingTransactionId);
+                    if (!editing) return;
+                    setModalVisible(false);
+                    setSplitting({ id: editing.id, amount: Number(editing.amount), description: editing.description, category: editing.expenseCategory ?? null });
+                  }}
+                  accessibilityRole="button"
+                  testID="bank-split-payment"
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10 }}
+                >
+                  <Feather name="git-branch" size={15} color={colors.primary} />
+                  <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>Split this payment across categories…</Text>
+                </Pressable>
+              ) : null}
+
               {/* Money between you and your own business (lib/ownerBusiness). Not offered once
                   Who is this for? names a business - that already says it is the business's
                   ("why do I need to choose this is for my business", 9 Oct 2026). */}
@@ -6305,6 +6327,7 @@ export default function BankScreen() {
           }}
         />
       ) : null}
+      <SplitSheet entry={splitting} onClose={() => setSplitting(null)} />
     </View>
   );
 }
