@@ -8,6 +8,7 @@ import {
   businessFlagsFor,
   businessesFromDraft,
   costsBusinessName,
+  salaryIncomeName,
   categoryPriority,
   onboardingSubcategoriesFor,
   plannedCategoryAmount,
@@ -150,7 +151,7 @@ export async function applyMobileOnboardingToWorkspace({
 /**
  * The businesses somebody said they run: an income stream named for each,
  * marked as a business with how it pays them (profit, salary, or money that
- * is not theirs), and the business cost categories they kept linked to one
+ * is not theirs) - and for a salary, an income stream for the salary - and the business cost categories they kept linked to one
  * of them (costsBusinessName), so the Business screen has a profit and loss
  * from the first sale. A cost category belongs to one business, so the
  * others get their costs on the Business screen.
@@ -204,6 +205,25 @@ export async function setUpBusiness({
       body: JSON.stringify(businessFlagsFor(pay)),
     });
     if (name === costsName) costsId = incomeSourceId;
+
+    // Paid a salary: the salary is the income that reaches the budget.
+    if (pay === "salary") {
+      const salary = salaryIncomeName(name);
+      try {
+        await customFetch("/api/income-sources", {
+          method: "POST",
+          responseType: "json",
+          body: JSON.stringify({
+            userId,
+            name: salary,
+            isMain: false,
+            expectedMonthlyAmount: Math.max(0, Math.round(Number(draft.incomeAmounts[salary] ?? 0)) || 0),
+          }),
+        });
+      } catch (error) {
+        if (!(error instanceof ApiError) || error.status !== 409) throw error;
+      }
+    }
   }
   if (costsId == null) return;
 

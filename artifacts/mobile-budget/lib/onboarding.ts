@@ -179,6 +179,18 @@ export const BUSINESS_PAY_CHOICES: ReadonlyArray<{ pay: BusinessPay; title: stri
   { pay: "passThrough", title: "Its money is not mine", description: "Its customers pay you and you pay its bills - you run it for the owner, or only take a salary. Jamvi keeps that money out of your income and spending, and shows no profit for it." },
 ];
 
+/**
+ * The income stream for a business that pays the person a salary, named
+ * without the company ending - "Ujenzi Distributors salary" for Ujenzi
+ * Distributors Ltd. The salary is what reaches their budget, so it is the
+ * stream; the business's sales stay in its own report. Income stream names
+ * stop at 80.
+ */
+export function salaryIncomeName(business: string): string {
+  const name = business.trim().replace(/[\s,.]+(ltd|limited|plc|llc|inc|co|company)\.?$/i, "").trim() || business.trim();
+  return `${name.slice(0, 73).trim()} salary`;
+}
+
 /** What My businesses stores for an answer (api-server PUT /api/businesses/:id). */
 export function businessFlagsFor(pay: BusinessPay | null): { business: true; countsProfit?: boolean; paysSalary?: boolean | null } {
   if (pay === "profit") return { business: true, countsProfit: true, paysSalary: false };

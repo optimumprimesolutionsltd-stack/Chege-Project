@@ -59,6 +59,7 @@ import {
   businessNamesFromDraft,
   businessesFromDraft,
   costsBusinessName,
+  salaryIncomeName,
   BUSINESS_PAY_CHOICES,
   type BusinessPay,
   MAX_ONBOARDING_BUSINESSES,
@@ -1294,20 +1295,24 @@ function MobileOnboardingFlow({
               </View>
             </View>
           ) : null}
-          {/* Sales for each business whose profit counts; money that is not
-              the person's has no sales to plan. */}
-          {businessesFromDraft(draft).filter((business) => business.pay !== 'passThrough').map(({ name, box: index }) => (
-            <View key={name} style={[styles.incomeAmountRow, { backgroundColor: colors.card, borderColor: colors.primary }]}>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.amountLabel, { color: colors.foreground }]} numberOfLines={1}>{name}</Text>
-                <Text style={[styles.choiceDescription, { color: colors.mutedForeground }]}>Your business · sales a month (optional)</Text>
+          {/* Each business as the money it brings into the budget: a side
+              hustle's profit - what it makes after its costs - or the salary
+              a business pays. Money that is not the person's brings nothing. */}
+          {businessesFromDraft(draft).filter((business) => business.pay !== 'passThrough').map(({ name, pay, box: index }) => {
+            const key = pay === 'salary' ? salaryIncomeName(name) : name;
+            return (
+              <View key={key} style={[styles.incomeAmountRow, { backgroundColor: colors.card, borderColor: colors.primary }]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.amountLabel, { color: colors.foreground }]} numberOfLines={1}>{key}</Text>
+                  <Text style={[styles.choiceDescription, { color: colors.mutedForeground }]}>{pay === 'salary' ? `Your pay from ${name} · a month (optional)` : 'Expected profit · a month, after its costs (optional)'}</Text>
+                </View>
+                <View style={styles.amountInputWrap}>
+                  <Text style={[styles.currency, { color: colors.mutedForeground }]}>KES</Text>
+                  <TextInput testID={pay === 'salary' ? `onboarding-business-salary-${index}` : index === 0 ? 'onboarding-business-sales' : `onboarding-business-sales-${index}`} keyboardType="decimal-pad" value={draft.incomeAmounts[key] ?? ''} onChangeText={(value) => setDraftValue('incomeAmounts', { ...draft.incomeAmounts, [key]: value.replace(/[^0-9.]/g, '') })} placeholder="0" placeholderTextColor={colors.mutedForeground} style={[styles.amountInput, { borderColor: colors.border, color: colors.foreground }]} />
+                </View>
               </View>
-              <View style={styles.amountInputWrap}>
-                <Text style={[styles.currency, { color: colors.mutedForeground }]}>KES</Text>
-                <TextInput testID={index === 0 ? 'onboarding-business-sales' : `onboarding-business-sales-${index}`} keyboardType="decimal-pad" value={draft.incomeAmounts[name] ?? ''} onChangeText={(value) => setDraftValue('incomeAmounts', { ...draft.incomeAmounts, [name]: value.replace(/[^0-9.]/g, '') })} placeholder="0" placeholderTextColor={colors.mutedForeground} style={[styles.amountInput, { borderColor: colors.border, color: colors.foreground }]} />
-              </View>
-            </View>
-          ))}
+            );
+          })}
           {incomeStreamsForMode(draft.usageMode, draft.persona, draft.coupleStage).filter((income) => !businessName || income !== GENERIC_BUSINESS_INCOME_STREAM).map((income) => <ChoiceRow key={income} testID={`onboarding-income-${income}`} title={income} selected={draft.selectedIncomeStreams.includes(income)} onPress={() => toggleIncome(income)} colors={colors} />)}
           {draft.selectedIncomeStreams.length > 0 ? <View style={styles.incomeAmountList}><Text style={[styles.choiceTitle, { color: colors.foreground }]}>Expected monthly amount (optional)</Text>{draft.selectedIncomeStreams.map((income) => <View key={income} style={[styles.incomeAmountRow, { backgroundColor: colors.card, borderColor: colors.border }]}><Text style={[styles.amountLabel, { color: colors.foreground }]}>{income}</Text><View style={styles.amountInputWrap}><Text style={[styles.currency, { color: colors.mutedForeground }]}>KES</Text><TextInput testID={`onboarding-income-amount-${income}`} keyboardType="decimal-pad" value={draft.incomeAmounts[income] ?? ''} onChangeText={(value) => setDraftValue('incomeAmounts', { ...draft.incomeAmounts, [income]: value.replace(/[^0-9.]/g, '') })} placeholder="0" placeholderTextColor={colors.mutedForeground} style={[styles.amountInput, { borderColor: colors.border, color: colors.foreground }]} /></View></View>)}</View> : null}
           <View style={[styles.customBox, { backgroundColor: colors.card, borderColor: colors.border }]}><Text style={[styles.choiceTitle, { color: colors.foreground }]}>Add another income stream</Text><View style={styles.inlineInput}><TextInput testID="onboarding-custom-income" value={customIncomeStream} onChangeText={setCustomIncomeStream} onSubmitEditing={addCustomIncome} placeholder="e.g. dividends" placeholderTextColor={colors.mutedForeground} style={[styles.onboardingInput, styles.flexInput, { borderColor: colors.border, color: colors.foreground }]} /><Pressable onPress={addCustomIncome} style={[styles.smallButton, { backgroundColor: colors.primary }]}><Text style={[styles.smallButtonText, { color: colors.primaryForeground }]}>Add</Text></Pressable></View></View>
