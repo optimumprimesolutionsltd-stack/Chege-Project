@@ -1,7 +1,7 @@
 import { File } from 'expo-file-system';
 
 type Picker = {
-  getDocumentAsync: (options: { type: string; copyToCacheDirectory: boolean }) => Promise<{
+  getDocumentAsync: (options: { type: string | string[]; copyToCacheDirectory: boolean }) => Promise<{
     canceled: boolean;
     assets?: Array<{ uri: string; name: string }>;
   }>;
@@ -29,6 +29,11 @@ try {
   webViewAvailable = false;
 }
 
+/** Tests stand in for the native picker, which vitest cannot load. */
+export function setPickerForTests(next: Picker | null): void {
+  picker = next;
+}
+
 /** True on a build that can choose a statement and read it. */
 export const canReadStatements = picker !== null && webViewAvailable;
 
@@ -37,10 +42,29 @@ export interface ChosenStatement {
   uri: string;
 }
 
-/** Lets the person choose the statement PDF. Null when they back out. */
+/**
+ * The kinds of file the picker lets through. A statement saved from WhatsApp
+ * or some downloads apps is labelled as a plain file, not a PDF, and was
+ * greyed out ("choose the statement pdf ... still slow or not working",
+ * 10 Oct 2026). Anything that is not a statement is turned away by the reader
+ * ("Is it the M-Pesa statement PDF?").
+ */
+export const STATEMENT_TYPES = ['application/pdf', 'application/octet-stream', 'application/x-pdf'];
+
+/**
+ * Lets the person choose the statement PDF. Null when they back out. A second
+ * picker while one is still open (a double tap) is refused by Android; that
+ * is not an error to show, the first one is still there.
+ */
 export async function chooseStatement(): Promise<ChosenStatement | null> {
   if (!picker) return null;
-  const result = await picker.getDocumentAsync({ type: 'application/pdf', copyToCacheDirectory: true });
+  let result: Awaited<ReturnType<Picker['getDocumentAsync']>>;
+  try {
+    result = await picker.getDocumentAsync({ type: STATEMENT_TYPES, copyToCacheDirectory: true });
+  } catch (error) {
+    if (error instanceof Error && /in progress/i.test(error.message)) return null;
+    throw error;
+  }
   const asset = result.canceled ? null : result.assets?.[0];
   return asset ? { name: asset.name, uri: asset.uri } : null;
 }
