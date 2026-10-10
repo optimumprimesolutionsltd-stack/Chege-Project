@@ -60,12 +60,13 @@ describe('Find the difference, on the phone', () => {
     expect(startingBalanceAdvice(-800, 300, 'Chege Mpesa', '1 Jan 2026')).toContain('counted twice or saved to Chege Mpesa by mistake');
   });
 
-  it('is opened from the Home card when Jamvi and M-Pesa disagree, and nothing on it changes anything by itself', () => {
+  it('runs by itself from Home now; the screen opens from Waiting for you for what is left (10 Oct 2026)', () => {
     const card = read('components/MpesaImportCard.tsx');
-    // Unless the two are known to agree - also while Jamvi's figure is loading.
-    expect(card).toContain('{!comparison?.agrees ? (');
-    expect(card).toContain("router.push('/mpesa-difference' as never)");
+    // No button, and no "Jamvi is below M-Pesa" line: a difference fixes itself (lib/autoReconcile).
+    expect(card).not.toContain('mpesa-home-card-find-difference');
+    expect(card).toContain('{comparison?.agrees ? (');
     expect(card).not.toContain('Match M-Pesa');
+    expect(read('app/(tabs)/index.tsx')).toContain("onPress: () => router.push('/mpesa-difference' as never),");
     const screen = read('app/mpesa-difference.tsx');
     expect(screen).toContain("customFetch<Answer>('/api/mpesa/difference', {");
     expect(screen).toContain('body: JSON.stringify({ messages }),');
