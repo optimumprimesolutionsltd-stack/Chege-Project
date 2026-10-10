@@ -5,6 +5,7 @@ import { useGetGroup } from '@workspace/api-client-react';
 import { namedFor, namedPayeesKey, parseNamedPayees, ruleKeysFor, withNamed, withoutNamed, type NamedPayee } from '@/lib/namedPayees';
 import { parseStoredRules, rulesStorageKey, withoutRule } from '@/lib/payeeLearning';
 import { saveRules } from '@/lib/rulesStore';
+import { saveKnowledge } from '@/lib/knowledgeStore';
 
 /** Names for outside accounts you pay often (lib/namedPayees), kept per budget on this device. */
 export function useNamedPayees() {
@@ -21,8 +22,9 @@ export function useNamedPayees() {
 
   const store = useCallback(async (next: NamedPayee[]) => {
     queryClient.setQueryData(['named-payees', storageKey], next);
-    await AsyncStorage.setItem(storageKey, JSON.stringify(next)).catch(() => {});
-  }, [queryClient, storageKey]);
+    // On the server too, for every phone and the web (lib/knowledgeStore).
+    await saveKnowledge(group?.id, 'named-payees', next);
+  }, [group?.id, queryClient, storageKey]);
 
   /** Named, and - with a category - filed there by the next import (payee rules). */
   const add = useCallback(async (entry: NamedPayee) => {

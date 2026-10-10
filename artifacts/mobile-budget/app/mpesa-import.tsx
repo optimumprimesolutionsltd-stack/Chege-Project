@@ -124,6 +124,7 @@ import { WhoIsThisFor } from '@/components/WhoIsThisFor';
 import { useBusinesses } from '@/hooks/useBusinesses';
 import { useBusinessAccounts } from '@/hooks/useBusinessAccounts';
 import { saveRules } from '@/lib/rulesStore';
+import { saveKnowledge } from '@/lib/knowledgeStore';
 import { TeachJamviCard, type OwnAccountAnswer } from '@/components/TeachJamviCard';
 import { BusinessSalaryQuestion } from '@/components/BusinessSalaryQuestion';
 import { FamilyNamesCard } from '@/components/FamilyNamesCard';
@@ -924,7 +925,7 @@ export default function MpesaImportScreen() {
   }, [otherRulesKey]);
   const keepOtherRules = (next: OtherBudgetRules) => {
     setOtherRules(next);
-    AsyncStorage.setItem(otherRulesKey, JSON.stringify(next)).catch(() => {});
+    void saveKnowledge(group?.id, 'other-budget-rules', next);
   };
 
   const nicknamesKey = nicknameStorageKey(group?.id);
@@ -944,7 +945,7 @@ export default function MpesaImportScreen() {
     if (!naming || !lines) return;
     const next = withNickname(nicknames, naming.original, naming.text);
     setNicknames(next);
-    AsyncStorage.setItem(nicknamesKey, JSON.stringify(next)).catch(() => {});
+    void saveKnowledge(group?.id, 'payee-nicknames', next);
     const renamed = applyNicknames(lines, next);
     setLines(renamed);
     setChoices((current) => refreshSuggestions(renamed, current, history, categories.map((row) => row.name), effectiveChargeCategory, rules));

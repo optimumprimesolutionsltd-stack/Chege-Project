@@ -34,6 +34,7 @@ import businessAccountsRouter from "./business-accounts";
 import standardCategoriesRouter from "./standard-categories";
 import businessesRouter from "./businesses";
 import payeeRulesRouter from "./payee-rules";
+import budgetKnowledgeRouter from "./budget-knowledge";
 import deleteYearRouter from "./delete-year";
 import {
   publicSubscriptionPlansRouter,
@@ -94,6 +95,7 @@ router.use(businessAccountsRouter);
 router.use(standardCategoriesRouter);
 router.use(businessesRouter);
 router.use(payeeRulesRouter);
+router.use(budgetKnowledgeRouter);
 router.use(deleteYearRouter);
 router.use(incomeSourcesRouter);
 router.use(invitationsRouter);
