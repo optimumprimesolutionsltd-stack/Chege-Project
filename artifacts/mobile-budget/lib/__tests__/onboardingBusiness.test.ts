@@ -19,6 +19,7 @@ const conflict = () => new (ApiError as unknown as new (status: number) => Error
 import { applyMobileOnboardingToWorkspace, setUpBusiness } from '../onboarding-api';
 import {
   businessNameFromDraft,
+  businessNamesFromDraft,
   normalizeOnboardingDraft,
   recommendedCategoriesForPurpose,
   type MobileOnboardingDraft,
@@ -115,6 +116,50 @@ describe('the business question in onboarding', () => {
     expect(links).toEqual([['/api/budget-categories/9', { reducesIncomeSourceId: 12, costKind: 'expense' }]]);
   });
 
+  it('takes more than one business, dropping blanks and repeats', () => {
+    const several = draft({ moreBusinessNames: ['  Kamau  Boda ', '', "WANJIRU'S DUKA", 'Salon'] });
+    expect(businessNamesFromDraft(several)).toEqual(["Wanjiru's Duka", 'Kamau Boda', 'Salon']);
+    expect(businessNamesFromDraft(draft())).toEqual(["Wanjiru's Duka"]);
+    expect(businessNamesFromDraft(draft({ runsBusiness: false, moreBusinessNames: ['Salon'] }))).toEqual([]);
+    expect(businessNamesFromDraft(draft({ moreBusinessNames: ['A', 'B', 'C', 'D', 'E', 'F'] }))).toHaveLength(5);
+    // Kept across a resumed draft; older drafts have none.
+    expect(normalizeOnboardingDraft(JSON.parse(JSON.stringify(several)))?.moreBusinessNames).toEqual(['  Kamau  Boda ', '', "WANJIRU'S DUKA", 'Salon']);
+    expect(normalizeOnboardingDraft(draft())?.moreBusinessNames).toEqual([]);
+  });
+
+  it('sets up every business, with the starter costs on the first one only', async () => {
+    let next = 55;
+    customFetch.mockImplementation(async (url: string, init: { method?: string }) => {
+      const key = `${init?.method ?? 'GET'} ${url}`;
+      if (key === 'POST /api/income-sources') return { id: next++ };
+      if (key === 'GET /api/budget-categories') return categories;
+      return {};
+    });
+    await setUpBusiness({ draft: draft({ moreBusinessNames: ['Kamau Boda'], incomeAmounts: { "Wanjiru's Duka": '30000', 'Kamau Boda': '12000' } }), userId: 'u1' });
+
+    const created = callsTo('POST', '/api/income-sources').map(([, init]) => JSON.parse(init.body));
+    expect(created).toEqual([
+      expect.objectContaining({ name: "Wanjiru's Duka", expectedMonthlyAmount: 30000 }),
+      expect.objectContaining({ name: 'Kamau Boda', expectedMonthlyAmount: 12000 }),
+    ]);
+    expect(callsTo('PUT', '/api/businesses/').map(([url]) => url)).toEqual(['/api/businesses/55', '/api/businesses/56']);
+    const links = callsTo('PUT', '/api/budget-categories/').map(([, init]) => JSON.parse(init.body).reducesIncomeSourceId);
+    expect(links).toEqual([55, 55]);
+  });
+
+  it('never gives the starter costs to a second business when the first could not be found', async () => {
+    respond({
+      'POST /api/income-sources': conflict(),
+      'GET /api/income-sources?userId=u1': [{ id: 20, name: 'Kamau Boda' }],
+      'GET /api/budget-categories': categories,
+    });
+    await setUpBusiness({ draft: draft({ moreBusinessNames: ['Kamau Boda'] }), userId: 'u1' });
+    expect(callsTo('PUT', '/api/businesses/').map(([url]) => url)).toEqual(['/api/businesses/20']);
+    expect(callsTo('PUT', '/api/budget-categories/')).toHaveLength(0);
+    // The list of existing streams is read once, not once per business.
+    expect(callsTo('GET', '/api/income-sources')).toHaveLength(1);
+  });
+
   it('does nothing for somebody without a business', async () => {
     respond({});
     await setUpBusiness({ draft: draft({ runsBusiness: false }), userId: 'u1' });
@@ -146,6 +191,7 @@ describe('the business question in onboarding', () => {
     const screen = readFileSync(join(__dirname, '../../app/budget-chooser.tsx'), 'utf8');
     expect(screen).toContain('Do you run a business or side hustle?');
     expect(screen).toContain('testID="onboarding-business-name"');
+    expect(screen).toContain('testID="onboarding-add-business"');
     expect(screen).toContain("Tell Jamvi whether you run a business to continue.");
     // The Personal budget is covered by the subscription; it is not free.
     expect(screen).not.toMatch(/free, private/i);

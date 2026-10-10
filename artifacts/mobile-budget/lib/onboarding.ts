@@ -154,7 +154,13 @@ export type MobileOnboardingDraft = {
   runsBusiness?: boolean | null;
   /** What the business is called, as typed. Blank becomes "My business". */
   businessName?: string;
+  /** Any other businesses they run, as typed: somebody with a shop and a
+   *  boda names both here rather than finding My businesses later. */
+  moreBusinessNames?: string[];
 };
+
+/** How many businesses onboarding takes; more are added on the Business screen. */
+export const MAX_ONBOARDING_BUSINESSES = 5;
 
 /**
  * The costs a business set up in onboarding starts with, and where each sits
@@ -193,6 +199,25 @@ export function businessNameFromDraft(draft: Pick<MobileOnboardingDraft, "usageM
   if (draft.usageMode === "shared" || draft.runsBusiness !== true) return null;
   const name = (draft.businessName ?? "").trim().replace(/\s+/g, " ").slice(0, 80);
   return name || "My business";
+}
+
+/**
+ * Every business to set up, the first one (the business-name box) first.
+ * Blank extra boxes and a name typed twice are dropped. Only the first gets
+ * the starter costs - a cost category belongs to one business - so the
+ * others start with sales only and their costs are set on the Business screen.
+ */
+export function businessNamesFromDraft(draft: Pick<MobileOnboardingDraft, "usageMode" | "runsBusiness" | "businessName" | "moreBusinessNames">): string[] {
+  const first = businessNameFromDraft(draft);
+  if (!first) return [];
+  const names = [first];
+  for (const raw of draft.moreBusinessNames ?? []) {
+    const name = raw.trim().replace(/\s+/g, " ").slice(0, 80);
+    if (!name || names.some((existing) => existing.toLowerCase() === name.toLowerCase())) continue;
+    names.push(name);
+    if (names.length >= MAX_ONBOARDING_BUSINESSES) break;
+  }
+  return names;
 }
 
 const ONBOARDING_CATEGORY_ALIASES: Record<string, string> = {
@@ -662,6 +687,9 @@ export function normalizeOnboardingDraft(value: unknown): MobileOnboardingDraft 
     debtBalances,
     runsBusiness,
     businessName: typeof raw.businessName === "string" ? raw.businessName.slice(0, 80) : "",
+    moreBusinessNames: Array.isArray(raw.moreBusinessNames)
+      ? raw.moreBusinessNames.filter((item): item is string => typeof item === "string").map((item) => item.slice(0, 80)).slice(0, MAX_ONBOARDING_BUSINESSES - 1)
+      : [],
   };
 }
 

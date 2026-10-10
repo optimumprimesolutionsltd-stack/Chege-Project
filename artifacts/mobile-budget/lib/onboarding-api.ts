@@ -5,7 +5,7 @@ import {
 } from "@workspace/api-client-react";
 import {
   BUSINESS_COST_CATEGORIES,
-  businessNameFromDraft,
+  businessNamesFromDraft,
   categoryPriority,
   onboardingSubcategoriesFor,
   plannedCategoryAmount,
@@ -146,9 +146,11 @@ export async function applyMobileOnboardingToWorkspace({
 }
 
 /**
- * The business somebody said they run: an income stream named for it, with
- * the business cost categories they kept linked to it, so the Business
- * screen has a profit and loss from the first sale.
+ * The businesses somebody said they run: an income stream named for each,
+ * marked as a business, with the business cost categories they kept linked
+ * to the first, so the Business screen has a profit and loss from the first
+ * sale. A cost category belongs to one business, so the others start with
+ * sales only and get their costs on the Business screen.
  *
  * Safe to run twice: an existing stream of that name is reused, and a
  * category already linked to something is left alone.
@@ -160,41 +162,47 @@ export async function setUpBusiness({
   draft: MobileOnboardingDraft;
   userId: string;
 }): Promise<void> {
-  const name = businessNameFromDraft(draft);
-  if (!name) return;
+  const names = businessNamesFromDraft(draft);
+  let existing: Array<{ id: number; name: string }> | null = null;
+  let mainId: number | null = null;
+  for (const [index, name] of names.entries()) {
+    let incomeSourceId: number | null = null;
+    try {
+      const created = await customFetch<{ id: number }>("/api/income-sources", {
+        method: "POST",
+        responseType: "json",
+        body: JSON.stringify({
+          userId,
+          name,
+          isMain: false,
+          expectedMonthlyAmount: Math.max(0, Math.round(Number(draft.incomeAmounts[name] ?? 0)) || 0),
+        }),
+      });
+      incomeSourceId = created?.id ?? null;
+    } catch (error) {
+      if (!(error instanceof ApiError) || error.status !== 409) throw error;
+    }
+    if (incomeSourceId == null) {
+      const sources: Array<{ id: number; name: string }> = existing ?? ((await customFetch<Array<{ id: number; name: string }>>(`/api/income-sources?userId=${encodeURIComponent(userId)}`, {
+        method: "GET",
+        responseType: "json",
+      })) ?? []);
+      existing = sources;
+      incomeSourceId = sources.find((source) => normalizeIncomeStreamName(source.name) === normalizeIncomeStreamName(name))?.id ?? null;
+    }
+    if (incomeSourceId == null) continue;
 
-  let incomeSourceId: number | null = null;
-  try {
-    const created = await customFetch<{ id: number }>("/api/income-sources", {
-      method: "POST",
+    // Named in My businesses: only a business has costs and a Business report,
+    // and is asked once whether you pay yourself a salary from it (8-9 Oct 2026).
+    await customFetch(`/api/businesses/${incomeSourceId}`, {
+      method: "PUT",
       responseType: "json",
-      body: JSON.stringify({
-        userId,
-        name,
-        isMain: false,
-        expectedMonthlyAmount: Math.max(0, Math.round(Number(draft.incomeAmounts[name] ?? 0)) || 0),
-      }),
+      body: JSON.stringify({ business: true }),
     });
-    incomeSourceId = created?.id ?? null;
-  } catch (error) {
-    if (!(error instanceof ApiError) || error.status !== 409) throw error;
+    // The starter costs go to the business named first, and only to it.
+    if (index === 0) mainId = incomeSourceId;
   }
-  if (incomeSourceId == null) {
-    const sources = await customFetch<Array<{ id: number; name: string }>>(`/api/income-sources?userId=${encodeURIComponent(userId)}`, {
-      method: "GET",
-      responseType: "json",
-    });
-    incomeSourceId = (sources ?? []).find((source) => normalizeIncomeStreamName(source.name) === normalizeIncomeStreamName(name))?.id ?? null;
-  }
-  if (incomeSourceId == null) return;
-
-  // Named in My businesses: only a business has costs and a Business report,
-  // and is asked once whether you pay yourself a salary from it (8-9 Oct 2026).
-  await customFetch(`/api/businesses/${incomeSourceId}`, {
-    method: "PUT",
-    responseType: "json",
-    body: JSON.stringify({ business: true }),
-  });
+  if (mainId == null) return;
 
   const categories = await customFetch<Array<{ id: number; name: string; reducesIncomeSourceId?: number | null }>>("/api/budget-categories", {
     method: "GET",
@@ -206,7 +214,7 @@ export async function setUpBusiness({
     await customFetch(`/api/budget-categories/${category.id}`, {
       method: "PUT",
       responseType: "json",
-      body: JSON.stringify({ reducesIncomeSourceId: incomeSourceId, costKind: cost.costKind }),
+      body: JSON.stringify({ reducesIncomeSourceId: mainId, costKind: cost.costKind }),
     });
   }
 }
