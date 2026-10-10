@@ -361,6 +361,21 @@ export const PARITY_ITEMS: ParityItem[] = [
     mobile: "done",
     note: "Both respect the system theme",
   },
+  // ── Teach Jamvi (setup, once) ─────────────────────────────────────────────
+  {
+    category: "Teach Jamvi (setup, once)",
+    feature: "Teach Jamvi: regulars, family, business salary question",
+    web: "done",
+    mobile: "done",
+    note: "Both answer the regulars among saved Not sure entries, family names and \"Do you pay yourself a salary?\" (web: Settings > Teach Jamvi; logic shared as twins). Phone also asks in the M-Pesa review and links own bank accounts; web has no own-account step yet",
+  },
+  {
+    category: "Teach Jamvi (setup, once)",
+    feature: "What Jamvi was taught, kept on the server",
+    web: "done",
+    mobile: "done",
+    note: "Payee rules, other-budget payees and nicknames shared by phone and web; Named accounts and owner-business numbers have no web screen yet",
+  },
 ];
 
 // ── Status helpers ────────────────────────────────────────────────────────────
