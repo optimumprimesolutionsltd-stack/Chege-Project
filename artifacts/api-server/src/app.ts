@@ -26,7 +26,11 @@ app.use(
         return {
           id: req.id,
           method: req.method,
-          url: req.url?.split("?")[0],
+          // Queries are dropped: they can carry names and amounts. The health
+          // check's is kept - it carries only the phone's step names and
+          // timings from Import M-Pesa (mobile lib/importDiagnostics,
+          // lib/importTrace), cut to 2,000 characters.
+          url: req.url?.startsWith("/api/healthz?") ? req.url.slice(0, 2000) : req.url?.split("?")[0],
         };
       },
       res(res) {
