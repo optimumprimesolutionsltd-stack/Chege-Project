@@ -54,6 +54,6 @@ export function suggestedParty<T extends { id: number; name: string }>(descripti
  * 2026). One is still offered when the entry itself names it.
  */
 export function partiesToOffer<T extends { id: number; name: string }>(parties: readonly T[], suggested: T | null): T[] {
-  const isLender = (party: T) => LENDERS.some((lender) => lender.party.test(party.name.trim().replace(/\s+/g, ' ').toLocaleLowerCase('en-KE')));
+  const isLender = (party: T) => LENDERS.some((lender) => lender.party.test(party.name.trim().replace(/\s+/g, ' ').toLowerCase()));
   return parties.filter((party) => !isLender(party) || party.id === suggested?.id);
 }

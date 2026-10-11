@@ -23,7 +23,7 @@ export type SearchableTx = {
 // find "M-Pesa charges" ("when making a search", 8 Oct 2026). A decimal point
 // is kept, so an amount like 3500.50 still reads as one.
 const fold = (text: string) => text
-  .toLocaleLowerCase('en-KE')
+  .toLowerCase()
   .normalize('NFKD')
   .replace(/[\u0300-\u036f]/g, '')
   .replace(/[^a-z0-9.\s]+/g, '');

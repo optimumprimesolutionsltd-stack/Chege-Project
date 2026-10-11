@@ -99,7 +99,7 @@ export function DebtPayoffCard({ canManage }: { canManage: boolean }) {
     try {
       const debtBalance = Math.max(0, Number(toDigits(newBalance)) || 0);
       const debtInterestRateBps = newRate.trim() ? Math.round(Number(newRate) * 100) : null;
-      const existing = categories.find((category) => category.name.trim().toLocaleLowerCase('en-US') === name.toLocaleLowerCase('en-US'));
+      const existing = categories.find((category) => category.name.trim().toLowerCase() === name.toLowerCase());
       if (existing) {
         await customFetch(`/api/budget-categories/${existing.id}`, {
           method: 'PUT',

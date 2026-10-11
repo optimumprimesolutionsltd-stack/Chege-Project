@@ -318,7 +318,7 @@ export default function BudgetScreen() {
     setReturnToExpense(true);
     const requestedCategory = (Array.isArray(params.category) ? params.category[0] : params.category)?.trim() ?? '';
     const existing = allCategories.find(
-      item => item.name.trim().toLocaleLowerCase() === requestedCategory.toLocaleLowerCase(),
+      item => item.name.trim().toLowerCase() === requestedCategory.toLowerCase(),
     );
     setRecurringSetupActive(true);
     setRecurringSetupHandled(true);
@@ -491,7 +491,7 @@ export default function BudgetScreen() {
       Alert.alert('Category name required', 'Enter a name before adding the category.');
       return;
     }
-    if (allCategories.some((row) => row.name.trim().toLocaleLowerCase() === name.toLocaleLowerCase())) {
+    if (allCategories.some((row) => row.name.trim().toLowerCase() === name.toLowerCase())) {
       Alert.alert('That category already exists', `"${name}" is already in this budget.`);
       return;
     }
@@ -890,8 +890,8 @@ export default function BudgetScreen() {
   // subcategory brings its parent heading.
   const [findingCategory, setFindingCategory] = useState(false);
   const [categoryFind, setCategoryFind] = useState('');
-  const findNeedle = categoryFind.trim().toLocaleLowerCase('en-KE');
-  const nameHit = (name: string) => name.toLocaleLowerCase('en-KE').includes(findNeedle);
+  const findNeedle = categoryFind.trim().toLowerCase();
+  const nameHit = (name: string) => name.toLowerCase().includes(findNeedle);
   const parentsOfHits = new Set(orderedBreakdown.filter(({ row }) => row.parentName && nameHit(row.category)).map(({ row }) => row.parentName));
   const foundBreakdown = findNeedle
     ? orderedBreakdown.filter(({ row }) => nameHit(row.category) || parentsOfHits.has(row.category) || (row.parentName ? nameHit(row.parentName) : false))
@@ -973,9 +973,9 @@ export default function BudgetScreen() {
   // (typing a group shows everything under it), or if one of its own
   // subcategories does (so the match is never orphaned from its heading).
   const shownManagedCategories = useMemo(() => {
-    const needle = manageSearch.trim().toLocaleLowerCase();
+    const needle = manageSearch.trim().toLowerCase();
     if (!needle) return orderedManagedCategories;
-    const hit = (name: string) => name.toLocaleLowerCase().includes(needle);
+    const hit = (name: string) => name.toLowerCase().includes(needle);
     return orderedManagedCategories.filter(({ category }) => {
       if (hit(category.name)) return true;
       const parent = orderedManagedCategories.find((row) => row.category.id === category.parentId);

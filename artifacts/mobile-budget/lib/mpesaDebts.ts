@@ -46,7 +46,7 @@ export const canLinkDebt = (line: PreviewLine, _parties: readonly PartyLite[] = 
 };
 const NEVER_A_DEBT = new Set(['airtime_purchase', 'transaction_charge', 'reversal']);
 
-const clean = (value: string) => value.trim().replace(/\s+/g, ' ').toLocaleLowerCase('en-KE');
+const clean = (value: string) => value.trim().replace(/\s+/g, ' ').toLowerCase();
 const words = (value: string) => clean(value).split(' ').filter((word) => word.length > 1);
 
 /**

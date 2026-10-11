@@ -12,7 +12,7 @@ export type DeletedEntry = { id: number; type: string; amount: number; expenseCa
 
 const money = (value: number) => value.toLocaleString("en-KE", { maximumFractionDigits: 2 });
 const round2 = (value: number) => Math.round(value * 100) / 100;
-const clean = (value: string) => value.trim().replace(/\s+/g, " ").toLocaleLowerCase("en-KE");
+const clean = (value: string) => value.trim().replace(/\s+/g, " ").toLowerCase();
 
 /**
  * The balance changes that undo what saving these entries moved, one per person or

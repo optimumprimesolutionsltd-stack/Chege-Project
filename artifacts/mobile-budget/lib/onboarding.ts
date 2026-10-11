@@ -284,7 +284,7 @@ const ONBOARDING_CATEGORY_ALIASES: Record<string, string> = {
 };
 
 export function normalizeCategoryName(name: string): string {
-  return name.trim().toLocaleLowerCase("en-US");
+  return name.trim().toLowerCase();
 }
 
 export function canonicalCategoryName(name: string): string {
@@ -535,7 +535,7 @@ export function incomeStreamsForMode(
 }
 
 export function normalizeIncomeStreamName(name: string): string {
-  return name.trim().toLocaleLowerCase("en-US");
+  return name.trim().toLowerCase();
 }
 
 export function dedupeIncomeStreamNames(names: string[]): string[] {

@@ -57,7 +57,7 @@ export function useBusinesses() {
    */
   const create = useCallback(async (name: string): Promise<{ id: number; name: string } | null> => {
     if (!user?.id || !name.trim()) return null;
-    const same = (text: string) => text.trim().replace(/\s+/g, ' ').toLocaleLowerCase('en-KE');
+    const same = (text: string) => text.trim().replace(/\s+/g, ' ').toLowerCase();
     const streams = await customFetch<Array<{ id: number; name: string }>>('/api/income-sources').catch(() => [] as Array<{ id: number; name: string }>);
     const existing = streams.find((stream) => same(stream.name) === same(name));
     if (existing) {

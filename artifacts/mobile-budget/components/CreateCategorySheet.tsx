@@ -25,7 +25,7 @@ export function useTiers(): Tier[] {
 export const tierLabel = (tiers: readonly Tier[], priority: number): string =>
   tiers.find((tier) => tier.priority === priority)?.label ?? `Tier ${priority}`;
 
-const lower = (name: string) => name.trim().toLocaleLowerCase('en-KE');
+const lower = (name: string) => name.trim().toLowerCase();
 
 /**
  * "Change" on a new category: its name, its parent - one of the person's

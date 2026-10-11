@@ -209,5 +209,5 @@ export function hydrateCategoryAllocations(
 }
 
 export function hasOtherCategoryAllocation(allocations: Array<{ category: string }>) {
-  return allocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === 'other');
+  return allocations.some((allocation) => allocation.category.trim().toLowerCase() === 'other');
 }

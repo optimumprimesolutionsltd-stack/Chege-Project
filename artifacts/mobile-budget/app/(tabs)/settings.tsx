@@ -140,7 +140,7 @@ interface BudgetPlanSummary {
 function workspaceLabel(workspace: { isPrivate: boolean; name: string }): string {
   if (workspace.isPrivate) return 'Personal budget';
   const name = workspace.name.trim();
-  return name.toLocaleLowerCase('en-US') === 'shared group' || !name ? 'Group' : name;
+  return name.toLowerCase() === 'shared group' || !name ? 'Group' : name;
 }
 
 const APPEARANCE_OPTIONS: { value: Appearance; label: string; sub: string; icon: keyof typeof Feather.glyphMap }[] = [

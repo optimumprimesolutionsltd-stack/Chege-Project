@@ -1454,7 +1454,7 @@ export default function BankScreen() {
     // the list open, so the one thing to do is pick what the payment was for.
     const feeOnThis = [...(data?.transactions ?? []), ...quickRows.current].find((row) => row.chargeForTransactionId === tx.id) ?? null;
     const filedAsItsOwnFee = !!feeOnThis?.expenseCategory && !!tx.expenseCategory &&
-      feeOnThis.expenseCategory.trim().toLocaleLowerCase() === tx.expenseCategory.trim().toLocaleLowerCase();
+      feeOnThis.expenseCategory.trim().toLowerCase() === tx.expenseCategory.trim().toLowerCase();
     setExpenseCategory(filedAsItsOwnFee ? '' : tx.expenseCategory ?? '');
     setWithdrawPartyId(type === 'disbursement' ? tx.settlesContributorId ?? null : null);
     // The fee already on this posting, if it has one, so editing changes that
@@ -1585,11 +1585,11 @@ export default function BankScreen() {
    * would take the money off twice.
    */
   const offerDebtReduction = (categoryName: string, amount: number) => {
-    const name = categoryName.trim().toLocaleLowerCase();
+    const name = categoryName.trim().toLowerCase();
     // The generated category type does not declare the debt columns; the route
     // returns the whole row and always has.
     const debt = (categories as unknown as Array<{ id: number; name: string; debtBalance?: number | null }>)
-      .find((row) => row.name.trim().toLocaleLowerCase() === name && typeof row.debtBalance === 'number');
+      .find((row) => row.name.trim().toLowerCase() === name && typeof row.debtBalance === 'number');
     const owed = debt?.debtBalance;
     if (!debt || typeof owed !== 'number' || owed <= 0 || amount <= 0) return;
 
@@ -1632,9 +1632,9 @@ export default function BankScreen() {
    * unlike the reduction this one is offered on a balance of zero too.
    */
   const offerDebtIncrease = (categoryName: string, amount: number) => {
-    const name = categoryName.trim().toLocaleLowerCase();
+    const name = categoryName.trim().toLowerCase();
     const debt = (categories as unknown as Array<{ id: number; name: string; debtBalance?: number | null }>)
-      .find((row) => row.name.trim().toLocaleLowerCase() === name && typeof row.debtBalance === 'number');
+      .find((row) => row.name.trim().toLowerCase() === name && typeof row.debtBalance === 'number');
     const owed = debt?.debtBalance;
     if (!debt || typeof owed !== 'number' || amount <= 0) return;
     const borrowed = toMoney(amount);
@@ -1928,7 +1928,7 @@ export default function BankScreen() {
         : categories.find((row) => row.id === newCategoryParentId) ?? null;
       if (newCategoryParentId === NEW_GROUP) {
         // An existing top-level category of that name is used as the group.
-        const sameName = categories.find((row) => row.name.trim().toLocaleLowerCase() === groupName.toLocaleLowerCase()) ?? null;
+        const sameName = categories.find((row) => row.name.trim().toLowerCase() === groupName.toLowerCase()) ?? null;
         if (sameName && sameName.parentId) {
           Alert.alert('Already a subcategory', `"${sameName.name}" is inside another group, so it cannot hold categories. Pick another name.`);
           return;
@@ -2104,7 +2104,7 @@ export default function BankScreen() {
       withdrawDest !== 'lend' &&
       expenseCategory.trim() !== '' &&
       categories.length > 0 &&
-      !knownCategoryNames.has(expenseCategory.trim().toLocaleLowerCase())
+      !knownCategoryNames.has(expenseCategory.trim().toLowerCase())
     ) {
       setExpenseCategory('');
       setShowCategoryPicker(true);
@@ -2698,12 +2698,12 @@ export default function BankScreen() {
     const owed = new Map<string, number>();
     for (const row of categories as unknown as Array<{ name: string; debtBalance?: number | null }>) {
       if (typeof row.debtBalance === 'number' && row.debtBalance > 0) {
-        owed.set(row.name.trim().toLocaleLowerCase(), row.debtBalance);
+        owed.set(row.name.trim().toLowerCase(), row.debtBalance);
       }
     }
     return owed;
   }, [categories]);
-  const owedOn = (name: string) => owedByCategory.get(name.trim().toLocaleLowerCase()) ?? null;
+  const owedOn = (name: string) => owedByCategory.get(name.trim().toLowerCase()) ?? null;
 
   // Reconciling compares Jamvi's balance with the statement's. A positive
   // difference means Jamvi holds more than the bank does: money left the
@@ -2720,11 +2720,11 @@ export default function BankScreen() {
   // Both kinds of transfer, for the one toggle that now covers them.
   const isMovingMoney = isTransfer || isBankTransfer;
   const knownCategoryNames = useMemo(
-    () => new Set((categories as unknown as Array<{ name: string }>).map((row) => row.name.trim().toLocaleLowerCase())),
+    () => new Set((categories as unknown as Array<{ name: string }>).map((row) => row.name.trim().toLowerCase())),
     [categories],
   );
   const chargeCategoryIsReal =
-    chargeCategory.trim() !== '' && knownCategoryNames.has(chargeCategory.trim().toLocaleLowerCase());
+    chargeCategory.trim() !== '' && knownCategoryNames.has(chargeCategory.trim().toLowerCase());
   /**
    * The fee's category is asked once, for the first fee, and not shown as a
    * choice again. A second category picker in the same form read as the place
@@ -2747,7 +2747,7 @@ export default function BankScreen() {
   const paymentFiledAsCharge =
     isWithdrawal &&
     expenseCategory.trim() !== '' &&
-    expenseCategory.trim().toLocaleLowerCase() === chargeCategory.trim().toLocaleLowerCase() &&
+    expenseCategory.trim().toLowerCase() === chargeCategory.trim().toLowerCase() &&
     !transactions.some((row) => row.id === editingTransactionId && row.chargeForTransactionId != null);
 
   /**

@@ -106,7 +106,7 @@ type ExpenseRecord = {
 type CategoryAllocation = { category: string; amount: string };
 
 const isOneOffAllocation = (allocation: CategoryAllocation) =>
-  allocation.category.trim().toLocaleLowerCase() === 'other';
+  allocation.category.trim().toLowerCase() === 'other';
 
 function addStandardCategory(
   allocations: CategoryAllocation[],
@@ -462,23 +462,23 @@ export default function AddExpenseSheet() {
     const allocationAmount = Number(allocation.amount.replace(/,/g, ''));
     if (
       !categoryName
-      || categoryName.toLocaleLowerCase() === 'other'
+      || categoryName.toLowerCase() === 'other'
       || !Number.isInteger(allocationAmount)
       || allocationAmount <= 0
     ) {
       return [];
     }
     const categoryBreakdown = breakdown?.find(
-      (item) => item.category.toLocaleLowerCase() === categoryName.toLocaleLowerCase(),
+      (item) => item.category.toLowerCase() === categoryName.toLowerCase(),
     );
     const categoryDefinition = categories.find(
-      (item) => item.name.toLocaleLowerCase() === categoryName.toLocaleLowerCase(),
+      (item) => item.name.toLowerCase() === categoryName.toLowerCase(),
     );
     const budgetAmount = categoryBreakdown?.budgetAmount ?? categoryDefinition?.budgetAmount ?? 0;
     const spentAmount = categoryBreakdown?.spentAmount ?? 0;
     if (budgetAmount <= 0) return [];
     const previousAllocationAmount = originalCategoryAllocations
-      .filter((item) => item.category.toLocaleLowerCase() === categoryName.toLocaleLowerCase())
+      .filter((item) => item.category.toLowerCase() === categoryName.toLowerCase())
       .reduce((sum, item) => sum + item.amount, 0);
     return [{
       category: categoryBreakdown?.category ?? categoryDefinition?.name ?? categoryName,
@@ -496,12 +496,12 @@ export default function AddExpenseSheet() {
   // The same two scans again, for a yes/no answer.
   const hasBudgetedCategorySelection = useMemo(() => categoryAllocations.some((allocation) => {
     const categoryName = allocation.category.trim();
-    if (!categoryName || categoryName.toLocaleLowerCase() === 'other') return false;
+    if (!categoryName || categoryName.toLowerCase() === 'other') return false;
     const categoryBreakdown = breakdown?.find(
-      (item) => item.category.toLocaleLowerCase() === categoryName.toLocaleLowerCase(),
+      (item) => item.category.toLowerCase() === categoryName.toLowerCase(),
     );
     const categoryDefinition = categories.find(
-      (item) => item.name.toLocaleLowerCase() === categoryName.toLocaleLowerCase(),
+      (item) => item.name.toLowerCase() === categoryName.toLowerCase(),
     );
     return (categoryBreakdown?.budgetAmount ?? categoryDefinition?.budgetAmount ?? 0) > 0;
   }), [categoryAllocations, breakdown, categories]);
@@ -902,7 +902,7 @@ export default function AddExpenseSheet() {
   // level deep, so a new child always hangs off this.
   const nestingParentName = parentOf(categoryTree, category) ?? category;
   const nestingParent = categories.find(
-    (row) => row.name.trim().toLocaleLowerCase() === nestingParentName.trim().toLocaleLowerCase(),
+    (row) => row.name.trim().toLowerCase() === nestingParentName.trim().toLowerCase(),
   ) as { id: number } | undefined;
 
   // A category holding subcategories is a heading: its budget is theirs added
@@ -921,7 +921,7 @@ export default function AddExpenseSheet() {
       Alert.alert('Category name required', 'Give this spending a clear name, such as Transport or Childcare.');
       return;
     }
-    if (categories.some((category) => category.name.trim().toLocaleLowerCase() === name.toLocaleLowerCase())) {
+    if (categories.some((category) => category.name.trim().toLowerCase() === name.toLowerCase())) {
       Alert.alert('Category already exists', 'Select the existing category from the list instead.');
       return;
     }
@@ -970,7 +970,7 @@ export default function AddExpenseSheet() {
     try {
       if (newCategoryParentId === NEW_GROUP) {
         // An existing top-level category of that name is used as the group.
-        const sameName = categories.find((row) => row.name.trim().toLocaleLowerCase() === groupName.toLocaleLowerCase());
+        const sameName = categories.find((row) => row.name.trim().toLowerCase() === groupName.toLowerCase());
         if (sameName && sameName.parentId) {
           Alert.alert('Already a subcategory', `"${sameName.name}" is inside another group, so it cannot hold categories. Pick another name.`);
           return;
@@ -1060,7 +1060,7 @@ export default function AddExpenseSheet() {
       setCategoryAllocations([{ category: name, amount }]);
       return;
     }
-    const isOneOff = name.trim().toLocaleLowerCase() === 'other';
+    const isOneOff = name.trim().toLowerCase() === 'other';
     setCategoryAllocations((previous) => {
       if (isOneOff) {
         const next = toggleOneOffCategory(previous);
@@ -1301,7 +1301,7 @@ export default function AddExpenseSheet() {
       const expenseAllocations = normalizedAllocations;
       if (effectiveIsRecurring) {
         const recurringCategory = categories.find(
-          (item) => item.name.trim().toLocaleLowerCase() === expenseCategory.trim().toLocaleLowerCase(),
+          (item) => item.name.trim().toLowerCase() === expenseCategory.trim().toLowerCase(),
         );
         if (recurringCategory) {
           await updateCategory.mutateAsync({
@@ -1395,7 +1395,7 @@ export default function AddExpenseSheet() {
 
   const botPad = Platform.OS === 'web' ? 34 : insets.bottom;
 
-  const hasOneOffAllocation = categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === 'other');
+  const hasOneOffAllocation = categoryAllocations.some((allocation) => allocation.category.trim().toLowerCase() === 'other');
   const displayedCategoryAllocations = categoryAllocations;
   const fundingExpenseTotal = Number(amount.replace(/,/g, '')) || 0;
   const fundingBankAmount = paidFromBank ? (parseFloat(payerAmounts.__joint_bank__ || '0') || 0) : 0;
@@ -1762,7 +1762,7 @@ export default function AddExpenseSheet() {
               </Text>
             </View>
             {displayedCategoryAllocations.map((allocation) => {
-              const isOneOff = allocation.category.trim().toLocaleLowerCase() === 'other';
+              const isOneOff = allocation.category.trim().toLowerCase() === 'other';
               return (
               <View key={allocation.category} style={[styles.allocationRow, { borderColor: colors.border, backgroundColor: colors.background, borderRadius: colors.radius }]}>
                 <View style={styles.allocationCategoryRow}>
@@ -1828,7 +1828,7 @@ export default function AddExpenseSheet() {
                 </Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingVertical: 6, gap: 14 }}>
                   {categories
-                    .filter((item) => item.name.trim().toLocaleLowerCase() !== 'other' && !categoryAllocations.some((allocation) => allocation.category === item.name))
+                    .filter((item) => item.name.trim().toLowerCase() !== 'other' && !categoryAllocations.some((allocation) => allocation.category === item.name))
                     .map((item) => (
                       <Pressable
                         key={item.id}
@@ -2097,7 +2097,7 @@ export default function AddExpenseSheet() {
         {/* Running balance for selected category */}
         {isAdvanced && category ? (() => {
           const preview = categoryBalancePreviews.find(
-            (item) => item.category.toLocaleLowerCase() === category.toLocaleLowerCase(),
+            (item) => item.category.toLowerCase() === category.toLowerCase(),
           );
           if (!preview) return null;
           return (

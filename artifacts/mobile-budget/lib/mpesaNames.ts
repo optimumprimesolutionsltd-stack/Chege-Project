@@ -9,7 +9,7 @@ export type MpesaName = { transactionId: number; name: string };
  */
 export function mpesaNameFor(transactionId: number | null | undefined, original: string | null | undefined, saved: string | null | undefined): MpesaName | null {
   const name = original?.trim();
-  if (!transactionId || !name || name.toLocaleLowerCase() === (saved ?? '').trim().toLocaleLowerCase()) return null;
+  if (!transactionId || !name || name.toLowerCase() === (saved ?? '').trim().toLowerCase()) return null;
   return { transactionId, name };
 }
 

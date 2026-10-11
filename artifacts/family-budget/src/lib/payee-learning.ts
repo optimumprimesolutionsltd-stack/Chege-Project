@@ -18,12 +18,13 @@
  * ("did we solve the logic of common words categorization?", 8 Oct 2026).
  */
 import { tagOf, withoutPersonTag } from "./personNumber";
+import { rememberByText } from "./rememberByText";
 
 export type PayeeRules = Record<string, string>;
 
 type Past = { type: string; description: string; expenseCategory?: string | null; chargeForTransactionId?: number | null };
 
-const clean = (value: string) => value.trim().replace(/\s+/g, " ").toLocaleLowerCase("en-KE");
+const clean = rememberByText((value: string) => value.trim().replace(/\s+/g, " ").toLowerCase());
 
 // Words that name no one in particular, so sharing them says nothing about who a payee is.
 // Generic business words were missing too: "Kamau General Agencies" and "Wanjiru
@@ -62,11 +63,11 @@ const BUSINESS = new Set([
  * business word ("Mary Wachira", not "Mary Wachira Hardware"). For entries
  * that no longer say what kind of payment they were.
  */
-export function looksLikePerson(description: string): boolean {
+export const looksLikePerson = rememberByText((description: string): boolean => {
   const words = clean(payeeName(withoutPersonTag(description))).split(/\s+/).filter(Boolean);
   if (words.length < 2 || words.length > 3) return false;
   return words.every((word) => /^\p{L}{2,}$/u.test(word) && !BUSINESS.has(word));
-}
+});
 
 /** The payee without its account reference: "Sample Utility (42)" is "Sample Utility". */
 export const payeeName = (description: string): string => description.replace(/\s*\([^)]*\)\s*$/, "").trim();
@@ -92,12 +93,12 @@ function remembered(work: (description: string) => string): (description: string
 export const payeeKey = remembered((description: string): string => clean(payeeName(description)));
 
 /** The words that tell one payee from another. */
-export function distinctiveWords(description: string): string[] {
+export const distinctiveWords = rememberByText((description: string): string[] => {
   const words = clean(payeeName(description))
     .split(/[^\p{L}\p{N}]+/u)
     .filter((word) => word.length >= 3 && !/^\d+$/.test(word) && !FILLER.has(word));
   return [...new Set(words)];
-}
+});
 
 /**
  * A fee recorded alongside a payment: "Bank charge — Equity Paybill (…)" under the

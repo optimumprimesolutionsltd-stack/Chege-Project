@@ -46,7 +46,7 @@ export function samePayeeName(description: string | null | undefined): string {
 }
 
 const same = (a: string | null | undefined, b: string | null | undefined) =>
-  (a ?? '').trim().toLocaleLowerCase('en-KE') === (b ?? '').trim().toLocaleLowerCase('en-KE');
+  (a ?? '').trim().toLowerCase() === (b ?? '').trim().toLowerCase();
 
 /**
  * Other payments to the payee of `edited` that are still under `from` or Not

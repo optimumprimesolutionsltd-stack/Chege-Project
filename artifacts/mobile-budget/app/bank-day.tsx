@@ -505,7 +505,7 @@ export default function BankDayScreen() {
         });
       } else if (row.kind === 'spend') {
         const debt = trackedDebts.find(
-          (candidate) => candidate.name.trim().toLocaleLowerCase() === row.category.trim().toLocaleLowerCase(),
+          (candidate) => candidate.name.trim().toLowerCase() === row.category.trim().toLowerCase(),
         );
         if (!debt) continue;
         const owed = debt.debtBalance ?? 0;
@@ -1046,7 +1046,7 @@ function CategoryField({
       Alert.alert('Name it', 'Give this category a clear name, such as Transport or Childcare.');
       return;
     }
-    if (categories.some((candidate) => candidate.name.trim().toLocaleLowerCase() === name.toLocaleLowerCase())) {
+    if (categories.some((candidate) => candidate.name.trim().toLowerCase() === name.toLowerCase())) {
       Alert.alert('Already exists', 'Pick it from the list instead.');
       return;
     }
@@ -1064,8 +1064,8 @@ function CategoryField({
       let parentId: number | null = newParentId;
       if (newParentId === NEW_GROUP) {
         // An existing top-level category of that name is used as the group.
-        const sameName = categories.find((candidate) => candidate.name.trim().toLocaleLowerCase() === groupName.toLocaleLowerCase());
-        if (sameName && tree.some((group) => group.children.some((child) => child.trim().toLocaleLowerCase() === groupName.toLocaleLowerCase()))) {
+        const sameName = categories.find((candidate) => candidate.name.trim().toLowerCase() === groupName.toLowerCase());
+        if (sameName && tree.some((group) => group.children.some((child) => child.trim().toLowerCase() === groupName.toLowerCase()))) {
           Alert.alert('Already a subcategory', `"${sameName.name}" is inside another group, so it cannot hold categories. Pick another name.`);
           return;
         }

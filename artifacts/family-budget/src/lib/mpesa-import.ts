@@ -1,3 +1,4 @@
+import { rememberByText } from "./rememberByText";
 import type { DebtLink } from "./mpesa-debts";
 import { fuzzyCategory, isFeePosting, looksLikePerson, ruleCategoryFor, ruleSourceFor, wordCategory, type PayeeRules } from "./payee-learning";
 import { loanOf, productCategory, productOf, savingsOf } from "./mpesa-products";
@@ -204,7 +205,7 @@ export function suggestForSaved(
 
 type PastPosting = { type: string; description: string; expenseCategory?: string | null; incomeSourceId?: number | null; chargeForTransactionId?: number | null };
 
-const clean = (value: string) => value.trim().replace(/\s+/g, " ").toLocaleLowerCase("en-KE");
+const clean = rememberByText((value: string) => value.trim().replace(/\s+/g, " ").toLowerCase());
 
 /**
  * The category this same payee was filed under before, so the second payment
@@ -329,7 +330,7 @@ export function defaultCategoryFor(line: PreviewLine, categoryNames: readonly st
   const words = line.type ? KIND_DEFAULTS[line.type] : undefined;
   if (!words) return "";
   for (const word of words) {
-    const match = categoryNames.find((name) => name.toLocaleLowerCase("en-KE").includes(word));
+    const match = categoryNames.find((name) => name.toLowerCase().includes(word));
     if (match) return match;
   }
   return "";

@@ -114,7 +114,7 @@ export function collectExpenseProblems(input: ExpenseValidationInput): ExpensePr
   }
 
   const hasOther = input.categoryAllocations.some(
-    (allocation) => allocation.category.trim().toLocaleLowerCase() === 'other',
+    (allocation) => allocation.category.trim().toLowerCase() === 'other',
   );
   if (hasOther && input.notes.trim().length < 3) {
     add('notes', 'Note required', 'Add a short note explaining what this one-off expense was for.');
