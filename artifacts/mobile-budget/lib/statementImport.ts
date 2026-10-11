@@ -677,7 +677,11 @@ export function missingInJamvi(
     if (line.status !== 'ready' || !line.receipt || line.amount === null) continue;
     const saved = byReceipt.get(line.receipt);
     if (!saved) continue;
-    const recorded = Number(saved.amount) || 0;
+    // The size of what was saved: money back from a reversal is saved as a refund, a
+    // payment of minus its amount (api-server lib/refunds). Compared with its sign, every
+    // refund read as saved for the wrong amount, and "Use KES 18,483" would have made the
+    // money back a payment out (11 Oct 2026).
+    const recorded = Math.abs(Number(saved.amount) || 0);
     const siblings = sameCode.get(line.receipt) ?? [line];
     if (siblings.length > 1) {
       const payment = siblings.find((other) => Math.abs((other.amount ?? 0) - recorded) < 0.01)
