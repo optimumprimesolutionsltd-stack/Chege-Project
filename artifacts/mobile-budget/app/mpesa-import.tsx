@@ -669,6 +669,8 @@ export default function MpesaImportScreen() {
   // list is drawn a page at a time; saving still covers every entry.
   const [shownCount, setShownCount] = useState(LINES_PER_PAGE);
   const [shownSkipped, setShownSkipped] = useState(LINES_PER_PAGE);
+  // The payments already in Jamvi and messages it does not save: folded away until asked for.
+  const [showNotSaved, setShowNotSaved] = useState(false);
   // Lines whose extra questions (debt, move, savings...) are open. Each closed line is a few native views instead of a dozen, which is what kept toggling snappy with 200 of them.
   const [openMore, setOpenMore] = useState<Set<number>>(new Set());
   // "Record it in a separate budget instead" opened on these lines: a business's money
@@ -4301,9 +4303,25 @@ export default function MpesaImportScreen() {
               </View>
             ) : null}
 
+            {/* Folded away: the review is only what needs the person ("that place should only
+                have what needs to be sorted only", 11 Oct 2026). Payments already in Jamvi, and
+                messages it does not save, are one line, opened when wanted. */}
             {notImported.length > 0 ? (
               <View style={{ gap: 8 }}>
-                <Text style={[styles.label, { color: colors.mutedForeground }]}>Not saved ({notImported.length})</Text>
+                <Pressable
+                  onPress={() => setShowNotSaved((open) => !open)}
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: showNotSaved }}
+                  hitSlop={6}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6 }}
+                  testID="mpesa-not-saved-toggle"
+                >
+                  <Feather name={showNotSaved ? 'chevron-up' : 'chevron-down'} size={16} color={colors.mutedForeground} />
+                  <Text style={[styles.label, { color: colors.mutedForeground, flex: 1 }]}>
+                    {notImported.length} already in Jamvi or not saved{showNotSaved ? '' : ' - nothing to do. Show them'}
+                  </Text>
+                </Pressable>
+                {showNotSaved ? (<>
                 {notImported.slice(0, shownSkipped).map((item) => (
                   <View key={item.index} style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]} testID={`mpesa-skipped-${item.index}`}>
                     <Text style={[styles.lineTitle, { color: colors.foreground }]}>
@@ -4364,6 +4382,7 @@ export default function MpesaImportScreen() {
                     )}
                   </Pressable>
                 ) : null}
+                </>) : null}
               </View>
             ) : null}
 
