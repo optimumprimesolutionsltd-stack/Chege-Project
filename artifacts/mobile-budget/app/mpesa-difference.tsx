@@ -330,7 +330,9 @@ export default function MpesaDifferenceScreen() {
                       <View key={item.receipt} style={[styles.item, { borderColor: colors.border }]}>
                         <Text style={{ color: colors.foreground, fontSize: 13 }} numberOfLines={3}>{bodies.get(item.receipt) ?? item.receipt}</Text>
                         <Text style={{ color: item.otherBudget ? colors.mutedForeground : item.savedIn ? '#B45309' : colors.mutedForeground, fontSize: 12 }}>
-                          {item.otherBudget
+                          {item.removed
+                            ? 'You removed this from Jamvi, so it is left out. Bring it in again from Import M-Pesa if you want it back.'
+                            : item.otherBudget
                             ? `Saved in ${item.savedIn}, another of your budgets. Left there, so it is not counted twice.`
                             : item.savedIn
                             ? `Saved in ${item.savedIn} instead${item.savedOn ? ` (${formatDisplayDate(item.savedOn)})` : ''}: move it to ${account} in Bank.`

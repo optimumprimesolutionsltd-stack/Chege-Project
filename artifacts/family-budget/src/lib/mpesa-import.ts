@@ -36,6 +36,8 @@ export type PreviewLine = {
   payeeNumber?: string | null;
   /** Another of the person"s budgets that already has this M-Pesa code: saving it here too would count it twice. */
   elsewhere?: string | null;
+  /** The person deleted this payment"s entry from this budget before: left unticked, never brought back unasked (api-server lib/removed-receipts). */
+  removedBefore?: boolean;
   /** An entry typed by hand in this budget that looks like the same payment (api-server lib/possible-duplicates). */
   typedTwin?: TypedTwin | null;
 };
@@ -357,7 +359,7 @@ export function initialChoices(
     choices[line.index] = {
       // Savings either way need an owner or admin, as payments out do.
       // A code already saved in another budget starts unticked, so it is not counted twice.
-      include: isRecordable(line) && !line.elsewhere && (canRecordOut || (line.direction !== "out" && !savingsOf(line))),
+      include: isRecordable(line) && !line.elsewhere && !line.removedBefore && (canRecordOut || (line.direction !== "out" && !savingsOf(line))),
       category: suggested,
       auto: suggested !== "",
       ...(filedByJamvi(line, suggested) ? { confirmed: true } : {}),
@@ -1288,7 +1290,7 @@ export function untickElsewhere(lines: readonly PreviewLine[], choices: Record<n
   const next = { ...choices };
   for (const line of lines) {
     const choice = next[line.index];
-    if (line.elsewhere && choice?.include && choice.confirmed === undefined) next[line.index] = { ...choice, include: false };
+    if ((line.elsewhere || line.removedBefore) && choice?.include && choice.confirmed === undefined) next[line.index] = { ...choice, include: false };
   }
   return next;
 }
@@ -1297,6 +1299,7 @@ export function untickElsewhere(lines: readonly PreviewLine[], choices: Record<n
 export function twinNotes(line: PreviewLine): string[] {
   const notes: string[] = [];
   if (line.elsewhere) notes.push(`Already saved in ${line.elsewhere}. Left unticked so it is not counted twice - tick it only if it belongs in both.`);
+  if (line.removedBefore) notes.push("You removed this from Jamvi before, so it is left unticked. Tick it to bring it back.");
   if (line.typedTwin) {
     const amount = `KES ${line.typedTwin.amount.toLocaleString("en-KE")}`;
     notes.push(`Looks like "${line.typedTwin.description}" (${amount}) you typed on ${line.typedTwin.date}. Save this one from M-Pesa and Home will ask which to keep.`);

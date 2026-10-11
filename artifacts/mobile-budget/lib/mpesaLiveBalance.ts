@@ -171,7 +171,8 @@ export type DifferenceSpan = {
   to: string;
   change: number;
   /** otherBudget: saved in another of the person's budgets - left there, not moved or brought in. */
-  missing: Array<{ receipt: string; day: string; savedIn: string | null; savedOn: string | null; otherBudget?: boolean }>;
+  /** removed: the person deleted this entry - left out, never brought in or moved. */
+  missing: Array<{ receipt: string; day: string; savedIn: string | null; savedOn: string | null; otherBudget?: boolean; removed?: boolean }>;
   extra: Array<{ id: number; date: string; amount: number; description: string; receipt: string | null }>;
   redated: Array<{ id: number; receipt: string; messageDay: string; savedDate: string; amount: number; description: string }>;
   /** Saved, on the right day, for a different amount than the balance moved: most often a charge never saved. */
@@ -236,7 +237,7 @@ export function fixPlan(spans: readonly DifferenceSpan[], chargeOf: (receipt: st
       else leftToCheck += 1;
     }
     for (const item of span.missing) {
-      if (item.otherBudget) continue;
+      if (item.otherBudget || item.removed) continue;
       if (item.savedIn) move.add(item.receipt);
       else {
         count += 1;

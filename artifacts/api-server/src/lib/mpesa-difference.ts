@@ -58,7 +58,8 @@ export type ProblemSpan = {
   /** How far the gap moved: positive means Jamvi fell further below M-Pesa. */
   change: number;
   /** In M-Pesa's messages for these days but not in this account. */
-  missing: Array<{ receipt: string; day: string; savedIn: string | null; savedOn: string | null }>;
+  /** removed: the person deleted this entry - left out, never brought in or moved (lib/removed-receipts). */
+  missing: Array<{ receipt: string; day: string; savedIn: string | null; savedOn: string | null; removed?: boolean }>;
   /** In this account for these days, but in none of the messages. */
   extra: Array<{ id: number; date: string; amount: number; description: string; receipt: string | null }>;
   /** In both, but saved under a different day from its message, so it lands on the wrong side of a day. */
@@ -97,7 +98,7 @@ export function findDifference(
   messages: readonly DifferenceMessage[],
   ledger: readonly LedgerEntry[],
   openingBalance: number,
-  elsewhere: ReadonlyMap<string, { account: string; date: string }> = new Map(),
+  elsewhere: ReadonlyMap<string, { account: string; date: string; removed?: boolean }> = new Map(),
 ): DifferenceResult | null {
   const withBalance = messages.filter((message) => Number.isFinite(message.balance));
   if (withBalance.length === 0) return null;
@@ -160,6 +161,7 @@ export function findDifference(
       .filter((message) => message.record !== false && message.receipt && inSpan(message.day) && !ledgerReceipts.has(message.receipt))
       .map((message) => {
         const other = elsewhere.get(message.receipt!);
+        if (other?.removed) return { receipt: message.receipt!, day: message.day, savedIn: null, savedOn: null, removed: true };
         return { receipt: message.receipt!, day: message.day, savedIn: other?.account ?? null, savedOn: other?.date ?? null };
       });
     const extra = entries
