@@ -122,6 +122,10 @@ export type Choice = {
   businessId?: number | null;
   /** What to call the payee of a business"s payment, kept in Named accounts after Save. */
   payeeName?: string;
+  /** Keep this line"s note for its payee, so the next payment to them starts with it (lib/payeeNotes). */
+  rememberNote?: boolean;
+  /** The note was filled in from the payee"s remembered one, not typed here. */
+  noteAuto?: boolean;
 };
 
 /**

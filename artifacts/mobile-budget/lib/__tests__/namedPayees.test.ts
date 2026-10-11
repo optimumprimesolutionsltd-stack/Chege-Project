@@ -40,7 +40,7 @@ describe('naming an outside account', () => {
     expect(readFileSync('app/(tabs)/settings.tsx', 'utf8')).toContain("router.push('/named-accounts' as never)");
     const bank = readFileSync('app/(tabs)/bank.tsx', 'utf8');
     expect(bank).toContain('testID="bank-name-payee"');
-    expect(bank).toContain('const shownDescription = namedPayees.nameFor(item.description) ?? item.description;');
+    expect(bank).toContain('const shownDescription = item.notes?.trim() || (namedPayees.nameFor(item.description) ?? item.description);');
     const screen = readFileSync('app/named-accounts.tsx', 'utf8');
     expect(screen).toContain("{ text: 'Leave them', style: 'cancel' }");
   });
