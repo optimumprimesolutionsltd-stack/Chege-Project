@@ -9,7 +9,7 @@ export type Leftover = {
   /** In Jamvi's M-Pesa account but in none of the messages. */
   extra: number;
   /** In the messages but not saved anywhere, and the days they fall in. */
-  missing: { count: number; from: string; to: string } | null;
+  missing: { count: number; from: string; to: string; receipts?: string[] } | null;
   /** Places past the ones the check listed: the counts above are only the start. */
   more?: boolean;
 };

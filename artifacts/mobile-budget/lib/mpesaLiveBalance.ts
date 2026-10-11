@@ -206,7 +206,7 @@ export type FixPlan = {
   /** Saved under another day: given the message's day. */
   redate: Array<{ id: number; date: string }>;
   /** Not saved anywhere: brought in, as Not sure yet, from these days. */
-  bringIn: { count: number; from: string; to: string } | null;
+  bringIn: { count: number; from: string; to: string; receipts: string[] } | null;
   /** In the account but in none of the messages: never touched, left to look at. */
   leftToCheck: number;
   /** M-Pesa charges the balance shows were taken but never saved: added to their payment. */
@@ -223,6 +223,7 @@ export function fixPlan(spans: readonly DifferenceSpan[], chargeOf: (receipt: st
   const move = new Set<string>();
   const redate = new Map<number, string>();
   let count = 0;
+  const receipts: string[] = [];
   let from: string | null = null;
   let to: string | null = null;
   let leftToCheck = 0;
@@ -237,6 +238,7 @@ export function fixPlan(spans: readonly DifferenceSpan[], chargeOf: (receipt: st
       if (item.savedIn) move.add(item.receipt);
       else {
         count += 1;
+        receipts.push(item.receipt);
         if (!from || span.from < from) from = span.from;
         if (!to || span.to > to) to = span.to;
       }
@@ -247,7 +249,7 @@ export function fixPlan(spans: readonly DifferenceSpan[], chargeOf: (receipt: st
   return {
     move: [...move],
     redate: [...redate].map(([id, date]) => ({ id, date })),
-    bringIn: count > 0 && from && to ? { count, from, to } : null,
+    bringIn: count > 0 && from && to ? { count, from, to, receipts } : null,
     leftToCheck,
     charges: [...charges].map(([entryId, amount]) => ({ entryId, amount })),
   };

@@ -55,7 +55,10 @@ export function useAutoReconcile(groupId: number | undefined, canManage: boolean
     queryFn: async () => {
       const key = keyFor(groupId!);
       const kept = await AsyncStorage.getItem(key).then((raw) => (raw ? (JSON.parse(raw) as Kept) : null)).catch(() => null);
-      if (kept && Date.now() - kept.at < (needsYou(kept.left) ? RECHECK_WAITING_MS : RECONCILE_EVERY_MS)) return kept.left;
+      // Kept before the missing payments carried their codes: checked again, so
+      // bringing them in reads only those (lib/bringInReceipts).
+      const codesMissing = Boolean(kept?.left?.missing && !kept.left.missing.receipts);
+      if (kept && !codesMissing && Date.now() - kept.at < (needsYou(kept.left) ? RECHECK_WAITING_MS : RECONCILE_EVERY_MS)) return kept.left;
       if (getImportProgress()?.stage === 'saving') return kept?.left ?? null;
       try {
         const left = await reconcileQuietly();

@@ -1,3 +1,4 @@
+import { setBringIn } from '@/lib/bringInReceipts';
 import React, { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -136,6 +137,7 @@ export default function MpesaDifferenceScreen() {
             if (plan.bringIn) {
               // Brought in and saved as Not sure yet by the import; coming back
               // here checks again.
+              setBringIn(plan.bringIn.receipts);
               router.push(`/mpesa-import?smsFrom=${plan.bringIn.from}&smsTo=${plan.bringIn.to}&notSure=1` as never);
             } else {
               await check();
@@ -334,7 +336,10 @@ export default function MpesaDifferenceScreen() {
                     ))}
                     {span.missing.some((item) => !item.savedIn) ? (
                       <Pressable
-                        onPress={() => router.push(`/mpesa-import?smsFrom=${span.from}&smsTo=${span.to}` as never)}
+                        onPress={() => {
+                          setBringIn(span.missing.filter((item) => !item.savedIn).map((item) => item.receipt));
+                          router.push(`/mpesa-import?smsFrom=${span.from}&smsTo=${span.to}` as never);
+                        }}
                         accessibilityRole="button"
                         style={[styles.action, { borderColor: colors.primary }]}
                         testID={`mpesa-difference-bring-${span.to}`}

@@ -91,6 +91,7 @@ import { formatExact } from '@/lib/formatExact';
 import { READER_STOPPED, StatementReader, type ReaderJob } from '@/components/StatementReader';
 import { rememberMpesaCard } from '@/lib/mpesaCard';
 import { keepScreenAwakeWhileSaving, letScreenSleepAgain } from '@/lib/keepAwake';
+import { onlyWanted, takeBringIn } from '@/lib/bringInReceipts';
 import { useImportDiagnostics } from '@/lib/importDiagnostics';
 import { getImportProgress, importSaveStalled, setImportProgress, useImportProgress } from '@/lib/importProgress';
 import { clearImportStep, noteImportStep, readUnfinishedImport, type ImportStep } from '@/lib/importBreadcrumb';
@@ -1132,6 +1133,9 @@ export default function MpesaImportScreen() {
   const [otherWays, setOtherWays] = useState(false);
   // Read the first time, so what the statement left out is said and reading new messages starts after it.
   const firstStatementRef = React.useRef<{ from: string } | null>(null);
+  // Payments M-Pesa had and Jamvi did not, brought in under Not sure from Home or
+  // Find the difference: how many, so the end says what was done and what is next.
+  const broughtInRef = React.useRef<number | null>(null);
   const [smsMessages, setSmsMessages] = useState<string[] | null>(null);
   const [smsFrom, setSmsFrom] = useState<string>(monthStartIso);
   const [smsTo, setSmsTo] = useState<string>(() => isoDay(new Date()));
@@ -1178,6 +1182,8 @@ export default function MpesaImportScreen() {
   // One read at a time: the server's logs showed the same messages read twice
   // at once (10 Oct 2026), each drawing the whole review.
   const readingSmsRef = useRef(false);
+  // How far reading the messages has got, said on screen: a long stretch takes a while.
+  const [smsProgress, setSmsProgress] = useState<{ done: number; total: number } | null>(null);
   const readSmsMessages = async (messages: string[]): Promise<PreviewLine[] | null> => {
     if (readingSmsRef.current) return null;
     if (messages.length === 0) {
@@ -1188,8 +1194,12 @@ export default function MpesaImportScreen() {
     setReading(true);
     try {
       const all: PreviewLine[] = [];
+      let sent = 0;
+      setSmsProgress({ done: 0, total: messages.length });
       for (const batch of smsBatches(messages)) {
         const response = await readPreview(batch.join('\n\n'));
+        sent += batch.length;
+        setSmsProgress({ done: sent, total: messages.length });
         const offset = all.length;
         all.push(...response.lines.map((line) => ({ ...line, index: line.index + offset })));
       }
@@ -1213,6 +1223,7 @@ export default function MpesaImportScreen() {
       return null;
     } finally {
       readingSmsRef.current = false;
+      setSmsProgress(null);
       setReading(false);
     }
   };
@@ -1245,12 +1256,14 @@ export default function MpesaImportScreen() {
     openedForRange.current = true;
     setSmsFrom(params.smsFrom);
     setSmsTo(params.smsTo);
+    // The payments Home or Find the difference found missing: only those are read (lib/bringInReceipts).
+    const codes = takeBringIn();
     void readMpesaSms(params.smsFrom, params.smsTo).then((result) => {
       if (!result.ok) {
         Alert.alert('Could not read your messages', smsRefusal(result.reason));
         return;
       }
-      return readSmsMessages(result.messages).then((shown) => {
+      return readSmsMessages(onlyWanted(result.messages, codes)).then((shown) => {
         if (!shown || params.notSure !== '1') return;
         // Nothing on these days is Jamvi's to save by itself: said so, rather
         // than a save of nothing ("0 entries saved").
@@ -1258,7 +1271,11 @@ export default function MpesaImportScreen() {
           Alert.alert('Nothing to bring in', 'Every message on these days is already saved, or is one Jamvi does not save by itself (each says why below). Go back and tap Check again.');
           return;
         }
-        setChoices((current) => putUnderNotSure(notSureableLines(shown, current), current));
+        setChoices((current) => {
+          const brought = notSureableLines(shown, current);
+          broughtInRef.current = brought.length;
+          return putUnderNotSure(brought, current);
+        });
         setAutoSaveNotSure(true);
       });
     }).catch((error: unknown) => Alert.alert('Could not read your messages', plainSaveError(error)));
@@ -2714,17 +2731,44 @@ export default function MpesaImportScreen() {
             )}
           </View>
         ) : null}
-        <Pressable
-          onPress={() => router.replace('/(tabs)/bank')}
-          style={[styles.primary, { backgroundColor: colors.primary }]}
-          accessibilityRole="button"
-          testID="mpesa-import-open-bank"
-        >
-          <Text style={styles.primaryText}>See my bank</Text>
-        </Pressable>
-        <Pressable onPress={() => router.back()} style={styles.secondary} accessibilityRole="button">
-          <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>Done</Text>
-        </Pressable>
+        {broughtInRef.current !== null && outcome.saved > 0 ? (
+          // The job from Waiting for you, finished: said plainly, with the one
+          // thing left and the way to it ("it needs to fix everything ... and
+          // not have it look incomplete", 11 Oct 2026).
+          <>
+            <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.primary, gap: 6 }]} testID="mpesa-brought-in">
+              <Text style={[styles.lineTitle, { color: colors.foreground }]}>{`All ${outcome.saved.toLocaleString('en-KE')} missing ${outcome.saved === 1 ? 'payment is' : 'payments are'} in`}</Text>
+              <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0 }]}>
+                {`What M-Pesa had and Jamvi did not is saved, under Not sure yet. Say what each one was in Sort them out - one tap each, and the same for a payee's others in one more.`}
+              </Text>
+            </View>
+            <Pressable
+              onPress={() => router.replace('/sort-entries' as never)}
+              style={[styles.primary, { backgroundColor: colors.primary }]}
+              accessibilityRole="button"
+              testID="mpesa-brought-in-sort"
+            >
+              <Text style={styles.primaryText}>Sort them out now</Text>
+            </Pressable>
+            <Pressable onPress={() => router.replace('/(tabs)' as never)} style={styles.secondary} accessibilityRole="button" testID="mpesa-brought-in-home">
+              <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>Back to Home - sort them later</Text>
+            </Pressable>
+          </>
+        ) : (
+          <Pressable
+            onPress={() => router.replace('/(tabs)/bank')}
+            style={[styles.primary, { backgroundColor: colors.primary }]}
+            accessibilityRole="button"
+            testID="mpesa-import-open-bank"
+          >
+            <Text style={styles.primaryText}>See my bank</Text>
+          </Pressable>
+        )}
+        {broughtInRef.current !== null && outcome.saved > 0 ? null : (
+          <Pressable onPress={() => router.back()} style={styles.secondary} accessibilityRole="button">
+            <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>Done</Text>
+          </Pressable>
+        )}
       </PageScrollView>
     );
   }
@@ -2847,6 +2891,18 @@ export default function MpesaImportScreen() {
             <Pressable onPress={() => { setUnfinished(null); clearImportStep(); }} hitSlop={8} accessibilityRole="button" testID="mpesa-unfinished-dismiss">
               <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', marginTop: 6 }}>OK</Text>
             </Pressable>
+          </View>
+        ) : null}
+        {smsProgress && !lines ? (
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.primary, gap: 8 }]} testID="mpesa-sms-progress">
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <ActivityIndicator color={colors.primary} />
+              <Text style={[styles.lineTitle, { color: colors.foreground, flex: 1 }]}>Reading your M-Pesa messages…</Text>
+            </View>
+            <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0 }]}>
+              {smsProgress.done.toLocaleString('en-KE')} of {smsProgress.total.toLocaleString('en-KE')}. Your entries show here when it is done.
+            </Text>
+            <ProgressBar fraction={smsProgress.total > 0 ? smsProgress.done / smsProgress.total : 0} color={colors.primary} track={colors.muted} />
           </View>
         ) : null}
         {statementWaiting && !lines ? (
