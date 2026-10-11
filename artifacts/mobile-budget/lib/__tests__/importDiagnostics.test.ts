@@ -41,3 +41,11 @@ describe('the steps after reading are timed, and a left page stops reading', () 
     expect(screen).toContain('if (!aliveRef.current) return null;');
   });
 });
+
+describe('what a save did with each line is reported, in counts', () => {
+  it('says the kinds of line and the outcome, with names and digits masked', () => {
+    expect(screen).toContain('diagnose(`saved lines${lines.length} toSave${toSave.length} saved${result.saved} repeats${result.repeats} failed${result.failed.length}');
+    expect(screen).toContain("failure.why.replace(");
+    expect(screen).toContain(".replace(/\\d/g, '#').slice(0, 70)");
+  });
+});
