@@ -1,3 +1,4 @@
+import { ensureCashAccount } from "../lib/default-account";
 import { Router } from "express";
 import {
   db,
@@ -132,6 +133,8 @@ router.post("/groups", async (req, res): Promise<void> => {
       name: "Bank account",
       openingBalance: 0,
     });
+    // Cash, built into every budget (lib/default-account).
+    await ensureCashAccount(created.id, tx);
     return created;
     });
   } catch (error) {
