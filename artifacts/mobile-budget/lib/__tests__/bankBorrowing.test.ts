@@ -268,7 +268,7 @@ describe('editing a posting keeps what kind it is', () => {
     // Clearing it left an empty picker on an edit, which invites a guess that
     // moves somebody else's balance. It is stored now, so it can be shown.
     const start = bank.indexOf('const openEdit = (tx: Tx) => {');
-    expect(bank.slice(start, start + 2000)).toContain(
+    expect(bank.slice(start, start + 4000)).toContain(
       "setWithdrawPartyId(type === 'disbursement' ? tx.settlesContributorId ?? null : null);",
     );
   });

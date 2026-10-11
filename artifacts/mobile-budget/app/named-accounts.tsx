@@ -13,6 +13,7 @@ import { useColors } from '@/hooks/useColors';
 import { PageScrollView } from '@/components/PageScrollReset';
 import { useNamedPayees } from '@/hooks/useNamedPayees';
 import { useBusinesses } from '@/hooks/useBusinesses';
+import { useOwnerBusiness } from '@/hooks/useOwnerBusiness';
 import { isNamedPayee, namedKeyFor, namedKeyLabel } from '@/lib/namedPayees';
 import { isNotSure } from '@/lib/entriesToSort';
 import { payeeName, referenceOf } from '@/lib/payeeLearning';
@@ -33,6 +34,7 @@ export default function NamedAccountsScreen() {
   const queryClient = useQueryClient();
   const { prefill } = useLocalSearchParams<{ prefill?: string }>();
   const { named, add, remove } = useNamedPayees();
+  const { markedIds: businessMarked } = useOwnerBusiness();
   const { data: accounts = [] } = useGetJointAccounts();
   const { data: categoryList = [] } = useGetBudgetCategories();
 
@@ -145,6 +147,9 @@ export default function NamedAccountsScreen() {
               let moved = 0;
               try {
                 for (const row of found) {
+                  // One marked as money to the person's business (a church's KCB account caught
+                  // by the business's number) is unmarked first: a marked entry keeps no category.
+                  if (businessMarked.has(row.id)) await customFetch(`/api/owner-business/${row.id}`, { method: 'DELETE' });
                   await customFetch(`/api/joint-account/${row.id}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
@@ -157,6 +162,7 @@ export default function NamedAccountsScreen() {
                 Alert.alert('Could not file them all', `${moved} of ${found.length} filed. ${plainSaveError(error)}`);
               } finally {
                 void queryClient.invalidateQueries({ queryKey: getGetJointAccountQueryKey() });
+                void queryClient.invalidateQueries({ queryKey: ['owner-business'] });
                 for (const queryKey of LISTS_AN_EDIT_CHANGES) void queryClient.invalidateQueries({ queryKey });
               }
             })();

@@ -6,6 +6,8 @@ import { useBusinessAccounts } from '@/hooks/useBusinessAccounts';
 import { LISTS_AN_EDIT_CHANGES } from '@/lib/showSavedEdit';
 import { unassignedBusinessAccounts, bankAccountKeys, businessKeyFor, businessMatches, ownerBusinessKey, parseOwnerBusiness, withBankAccountKeys, withKey, withSkipped, type OwnerBusiness } from '@/lib/ownerBusiness';
 import { payeeName } from '@/lib/payeeLearning';
+import { namedFor } from '@/lib/namedPayees';
+import { useNamedPayees } from '@/hooks/useNamedPayees';
 import { saveKnowledge } from '@/lib/knowledgeStore';
 
 type Marked = { ready: boolean; transactionIds: number[] };
@@ -94,15 +96,19 @@ export function useOwnerBusiness() {
  */
 export function useAutoMarkBusiness<T extends Parameters<typeof businessMatches>[0][number]>(rows: readonly T[] | undefined) {
   const { matching: business, ready, markedIds, mark } = useOwnerBusiness();
+  const { named } = useNamedPayees();
   const tried = useRef(new Set<number>());
   useEffect(() => {
     if (!ready || !rows || business.keys.length === 0) return;
-    const fresh = businessMatches(rows, business, markedIds).filter((row) => !tried.current.has(row.id));
+    // A payee named with a category is the person's word, and wins over a business key that
+    // also matches it (a church's KCB account, 11 Oct 2026).
+    const fresh = businessMatches(rows, business, markedIds)
+      .filter((row) => !tried.current.has(row.id) && !namedFor(row.description, named)?.category);
     if (fresh.length === 0) return;
     for (const row of fresh) tried.current.add(row.id);
     void mark(fresh.map((row) => row.id)).catch(() => {
       // Tried again next time the list is opened.
       for (const row of fresh) tried.current.delete(row.id);
     });
-  }, [rows, business, ready, markedIds, mark]);
+  }, [rows, business, ready, markedIds, mark, named]);
 }
