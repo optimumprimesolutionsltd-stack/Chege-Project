@@ -75,8 +75,8 @@ const KINDS: Array<[RegExp, Kind, 'out' | 'in']> = [
 
 const titleCase = (value: string) =>
   value
-    .toLocaleLowerCase('en-KE')
-    .replace(/(^|[\s(/-])([a-z])/g, (_match, lead: string, letter: string) => `${lead}${letter.toLocaleUpperCase('en-KE')}`);
+    .toLowerCase()
+    .replace(/(^|[\s(/-])([a-z])/g, (_match, lead: string, letter: string) => `${lead}${letter.toUpperCase()}`);
 
 /** The name and the account reference in a row's details, with numbers, tills and the API chatter dropped. */
 function partyOf(details: string): { name: string | null; reference: string | null } {

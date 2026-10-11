@@ -105,7 +105,7 @@ describe('optional expense category layout', () => {
   });
 
   it('requires an explanatory note for one-off spending', () => {
-    expect(rules).toContain("allocation.category.trim().toLocaleLowerCase() === 'other'");
+    expect(rules).toContain("allocation.category.trim().toLowerCase() === 'other'");
     expect(rules).toContain('input.notes.trim().length < 3');
     expect(rules).toContain('Add a short note explaining what this one-off expense was for.');
     expect(source).toContain("'NOTES (required for one-off spending)'");

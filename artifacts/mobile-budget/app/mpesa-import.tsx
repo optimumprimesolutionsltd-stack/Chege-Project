@@ -269,7 +269,7 @@ function CategorySheet({
   const tree = useMemo(() => filterCategoryTree(buildCategoryTree(categories), search), [categories, search]);
   // Only a top-level category can be a group: the app keeps two levels, and the server refuses a third.
   const parentChoices = useMemo(
-    () => categories.filter((row) => !row.parentId && row.name.trim().toLocaleLowerCase() !== 'other'),
+    () => categories.filter((row) => !row.parentId && row.name.trim().toLowerCase() !== 'other'),
     [categories],
   );
 
@@ -296,7 +296,7 @@ function CategorySheet({
       Alert.alert('Name it', 'Give this category a clear name, such as Transport or Airtime.');
       return;
     }
-    const existing = categories.find((row) => row.name.trim().toLocaleLowerCase() === name.toLocaleLowerCase());
+    const existing = categories.find((row) => row.name.trim().toLowerCase() === name.toLowerCase());
     if (existing) {
       pick(existing.name);
       return;
@@ -315,7 +315,7 @@ function CategorySheet({
       // A new group first, then this category inside it. An existing one of that name is used.
       let parentId: number | null = newParentId;
       if (newParentId === NEW_GROUP) {
-        const sameName = categories.find((row) => row.name.trim().toLocaleLowerCase() === groupName.toLocaleLowerCase());
+        const sameName = categories.find((row) => row.name.trim().toLowerCase() === groupName.toLowerCase());
         if (sameName && sameName.parentId) {
           Alert.alert('Already a subcategory', `"${sameName.name}" is inside another group, so it cannot hold categories. Pick another name.`);
           return;
@@ -1941,7 +1941,7 @@ export default function MpesaImportScreen() {
   // Money in that is a loan, or a debt paid back: linked to them in Who owes who,
   // found by name or added (as the line's own debt sheet does).
   const teachAsDebt = async (taught: TeachGroup, kind: 'borrowed' | 'repaid') => {
-    const same = (text: string) => text.trim().replace(/\s+/g, ' ').toLocaleLowerCase('en-KE');
+    const same = (text: string) => text.trim().replace(/\s+/g, ' ').toLowerCase();
     const addParty = async (): Promise<number> => {
       const added = await customFetch<PartyLite>('/api/contributors', {
         method: 'POST',

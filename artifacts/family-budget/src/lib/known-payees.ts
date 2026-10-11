@@ -354,10 +354,26 @@ export function setMakesStandardCategories(on: boolean): void {
 }
 export const makesStandardCategories = (): boolean => makesStandard;
 
+/**
+ * The well-known payee a name matches, searched once per name. Each line of an
+ * import asked up to four times, through every pattern each time: on a phone,
+ * where patterns run hundreds of times slower than on a computer, suggestions
+ * for 354 lines took 12 s (11 Oct 2026).
+ */
+const matched = new Map<string, KnownPayee | null>();
+function knownPayeeFor(description: string): KnownPayee | null {
+  const hit = matched.get(description);
+  if (hit !== undefined) return hit;
+  const payee = KNOWN_PAYEES.find((known) => known.pattern.test(description)) ?? null;
+  if (matched.size > 20_000) matched.clear();
+  matched.set(description, payee);
+  return payee;
+}
+
 /** The kind of payee Jamvi knows this is, or null. */
 export function knownPayeeOf(description: string): { key: string; standard: KnownPayee["standard"] } | null {
   if (!description) return null;
-  const payee = KNOWN_PAYEES.find((known) => known.pattern.test(description));
+  const payee = knownPayeeFor(description);
   return payee ? { key: payee.key, standard: payee.standard } : null;
 }
 
@@ -365,16 +381,27 @@ export function knownPayeeOf(description: string): { key: string; standard: Know
  * The category from this budget that a well-known payee fits, or "" when the
  * payee is not one Jamvi knows or the budget has no category for it.
  */
+/** The budget"s category names, lower-cased once per list rather than once per line. */
+const lowered = new WeakMap<readonly string[], string[]>();
+function lowerNames(categoryNames: readonly string[]): string[] {
+  let lower = lowered.get(categoryNames);
+  if (!lower) {
+    lower = categoryNames.map((name) => name.trim().toLowerCase());
+    lowered.set(categoryNames, lower);
+  }
+  return lower;
+}
+
 export function knownPayeeCategory(description: string, categoryNames: readonly string[]): string {
   if (!description || categoryNames.length === 0) return "";
-  const payee = KNOWN_PAYEES.find((known) => known.pattern.test(description));
+  const payee = knownPayeeFor(description);
   if (!payee) return "";
   // The budget"s own category for this kind of payee, whatever it is called now.
   const linked = links[payee.key];
   if (linked && categoryNames.includes(linked)) return linked;
-  const lower = categoryNames.map((name) => name.trim().toLocaleLowerCase("en-KE"));
+  const lower = lowerNames(categoryNames);
   for (const name of payee.names) {
-    const at = lower.indexOf(name.toLocaleLowerCase("en-KE"));
+    const at = lower.indexOf(name.toLowerCase());
     if (at !== -1) return categoryNames[at];
   }
   for (const word of payee.words) {
@@ -387,5 +414,5 @@ export function knownPayeeCategory(description: string, categoryNames: readonly 
 /** The category names a well-known payee fits, best first, whatever the budget has ([] for any other payee). */
 export function knownPayeeNames(description: string): readonly string[] {
   if (!description) return [];
-  return KNOWN_PAYEES.find((known) => known.pattern.test(description))?.names ?? [];
+  return knownPayeeFor(description)?.names ?? [];
 }

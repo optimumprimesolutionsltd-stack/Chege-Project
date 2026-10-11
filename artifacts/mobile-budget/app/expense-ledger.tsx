@@ -162,13 +162,13 @@ export default function ExpenseLedgerScreen() {
     () => new Set(
       budgetCategories
         .filter((category) => category.reducesIncomeSourceId != null && businesses.ids.has(category.reducesIncomeSourceId))
-        .map((category) => category.name.trim().toLocaleLowerCase('en-KE')),
+        .map((category) => category.name.trim().toLowerCase()),
     ),
     [budgetCategories, businesses.ids],
   );
   // A business entry: every category it is filed under is a side hustle's cost.
   const isBusinessEntry = (entry: (typeof allEntries)[number]) =>
-    entry.categories.length > 0 && entry.categories.every((name) => costCategoryNames.has(name.trim().toLocaleLowerCase('en-KE')));
+    entry.categories.length > 0 && entry.categories.every((name) => costCategoryNames.has(name.trim().toLowerCase()));
   const hasBusiness = costCategoryNames.size > 0;
   const entries = useMemo(
     () => (hasBusiness ? allEntries.filter((entry) => (scope === 'business') === isBusinessEntry(entry)) : allEntries),
@@ -179,8 +179,8 @@ export default function ExpenseLedgerScreen() {
   const [categoryFind, setCategoryFind] = useState('');
   const allCategoryGroups = useMemo(() => groupByCategory(entries), [entries]);
   const scopedCategoryGroups = useMemo(() => {
-    const needle = categoryFind.trim().toLocaleLowerCase('en-KE');
-    return needle ? allCategoryGroups.filter((group) => group.label.toLocaleLowerCase('en-KE').includes(needle)) : allCategoryGroups;
+    const needle = categoryFind.trim().toLowerCase();
+    return needle ? allCategoryGroups.filter((group) => group.label.toLowerCase().includes(needle)) : allCategoryGroups;
   }, [allCategoryGroups, categoryFind]);
   const businessTotal = useMemo(
     () => allEntries.filter(isBusinessEntry).reduce((sum, entry) => sum + entry.amount, 0),

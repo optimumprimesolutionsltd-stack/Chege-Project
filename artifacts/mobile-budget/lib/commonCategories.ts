@@ -37,7 +37,7 @@ const remember = (key: string, categoryId: number) =>
     // Not remembered (an older server, or a member who cannot): found by name next time.
   });
 
-const lower = (name: string) => name.trim().toLocaleLowerCase('en-KE');
+const lower = (name: string) => name.trim().toLowerCase();
 
 /**
  * Makes sure each common category exists, and gives back the name each key is

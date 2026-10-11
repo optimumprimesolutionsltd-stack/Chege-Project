@@ -30,6 +30,6 @@ const CATEGORY_ICON_RULES: { terms: string[]; icon: keyof typeof Feather.glyphMa
 ];
 
 export function getCategoryIcon(category: string): keyof typeof Feather.glyphMap {
-  const normalized = category.trim().toLocaleLowerCase('en-US');
+  const normalized = category.trim().toLowerCase();
   return CATEGORY_ICON_RULES.find(({ terms }) => terms.some((term) => normalized.includes(term)))?.icon ?? 'tag';
 }

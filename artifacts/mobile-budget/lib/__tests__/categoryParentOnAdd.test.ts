@@ -22,7 +22,7 @@ describe('adding a category in the M-Pesa picker', () => {
   });
 
   it('offers only top-level categories as groups, since the app keeps two levels', () => {
-    expect(sheet).toContain('categories.filter((row) => !row.parentId && row.name.trim().toLocaleLowerCase() !== \'other\')');
+    expect(sheet).toContain('categories.filter((row) => !row.parentId && row.name.trim().toLowerCase() !== \'other\')');
   });
 
   it('starts each new category on its own again', () => {

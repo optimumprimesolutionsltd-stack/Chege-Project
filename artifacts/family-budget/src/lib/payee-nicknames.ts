@@ -11,7 +11,7 @@ import { tagOf, withoutPersonTag, withPersonTag } from "./personNumber";
 export type NicknameMap = Record<string, string>;
 
 /** "  SAMPLE  Shop " and "sample shop" are one payee. */
-export const nicknameKey = (name: string): string => name.trim().replace(/\s+/g, " ").toLocaleLowerCase("en-KE");
+export const nicknameKey = (name: string): string => name.trim().replace(/\s+/g, " ").toLowerCase();
 
 /** Where this budget"s nicknames are kept. */
 export const nicknameStorageKey = (groupId: number | string | undefined): string =>

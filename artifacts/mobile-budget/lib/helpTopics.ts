@@ -449,7 +449,7 @@ export function allHelpTopics(): HelpTopic[] {
  * are stuck on as often as for the name of the task.
  */
 export function searchHelp(query: string): HelpSection[] {
-  const needle = query.trim().toLocaleLowerCase();
+  const needle = query.trim().toLowerCase();
   if (!needle) return HELP_SECTIONS;
   return HELP_SECTIONS
     .map((section) => ({
@@ -457,7 +457,7 @@ export function searchHelp(query: string): HelpSection[] {
       topics: section.topics.filter((topic) => {
         const hay = [topic.question, ...topic.steps, ...(topic.keywords ?? [])]
           .join(' ')
-          .toLocaleLowerCase();
+          .toLowerCase();
         return hay.includes(needle);
       }),
     }))

@@ -21,7 +21,7 @@ export const SPLIT_LABEL = 'Split across categories';
 const round2 = (value: number) => Math.round(value * 100) / 100;
 
 /** "  Milk  " and "milk" are one thing. */
-const itemKey = (description: string) => description.trim().replace(/\s+/g, ' ').toLocaleLowerCase('en-KE');
+const itemKey = (description: string) => description.trim().replace(/\s+/g, ' ').toLowerCase();
 
 function collect<T extends LedgerEntry>(
   entries: readonly T[],
@@ -53,7 +53,7 @@ function collect<T extends LedgerEntry>(
 export function groupByCategory<T extends LedgerEntry>(entries: readonly T[]): ExpenseGroup<T>[] {
   return collect(entries, (entry) => {
     const names = entry.categories.filter((name) => name.trim() !== '');
-    if (names.length === 1) return { key: `c:${names[0].toLocaleLowerCase('en-KE')}`, label: names[0] };
+    if (names.length === 1) return { key: `c:${names[0].toLowerCase()}`, label: names[0] };
     if (names.length > 1) return { key: 'split', label: SPLIT_LABEL };
     return { key: 'none', label: 'Uncategorised' };
   });

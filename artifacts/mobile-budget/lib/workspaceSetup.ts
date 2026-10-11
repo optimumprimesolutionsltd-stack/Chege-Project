@@ -27,7 +27,7 @@ export function workspaceSetupStorageKey(workspaceId: string | number): string {
 
 export function deriveWorkspaceSetup(data: WorkspaceSetupData): WorkspaceSetupStep[] {
   const hasPlannedCategory = (data.categories ?? []).some((category) =>
-    category.name?.trim().toLocaleLowerCase() !== 'uncategorized'
+    category.name?.trim().toLowerCase() !== 'uncategorized'
       && (category.budgetAmount ?? 0) > 0,
   );
   const steps: WorkspaceSetupStep[] = [

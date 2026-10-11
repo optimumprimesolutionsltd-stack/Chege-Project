@@ -11,9 +11,9 @@ import { categoryPriority, ONBOARDING_SUBCATEGORIES } from './onboarding';
 export type StandardTarget = { key: string; name: string; parent: string; priority: number };
 
 const PARENT_OF = new Map<string, string>(
-  Object.entries(ONBOARDING_SUBCATEGORIES).flatMap(([parent, children]) => children.map((child) => [child.toLocaleLowerCase('en-KE'), parent] as [string, string])),
+  Object.entries(ONBOARDING_SUBCATEGORIES).flatMap(([parent, children]) => children.map((child) => [child.toLowerCase(), parent] as [string, string])),
 );
-const lower = (name: string) => name.trim().toLocaleLowerCase('en-KE');
+const lower = (name: string) => name.trim().toLowerCase();
 
 /**
  * The common category for a payee Jamvi knows (lib/knownPayees): the one it

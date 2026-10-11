@@ -41,14 +41,14 @@ export function familyNames(rules: PayeeRules, categories: readonly string[]): A
 }
 
 /** A kept name as people write it: "jane wanjiku" -> "Jane Wanjiku". */
-export const displayName = (key: string): string => key.replace(/\b\p{L}/gu, (letter) => letter.toLocaleUpperCase('en-KE'));
+export const displayName = (key: string): string => key.replace(/\b\p{L}/gu, (letter) => letter.toUpperCase());
 
 /**
  * People the person paid who share their surname, not yet kept: the likeliest
  * relatives, offered with one tap. Only names that read as people.
  */
 export function relativesBySurname(descriptions: readonly string[], surname: string | null | undefined, kept: readonly string[]): string[] {
-  const family = (surname ?? '').trim().toLocaleLowerCase('en-KE');
+  const family = (surname ?? '').trim().toLowerCase();
   if (!family) return [];
   const known = new Set(kept);
   const found = new Map<string, string>();

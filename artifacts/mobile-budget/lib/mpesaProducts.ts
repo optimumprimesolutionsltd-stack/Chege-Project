@@ -67,7 +67,7 @@ const wordsOf = (line: Pick<PreviewLine, 'description' | 'original'>) =>
   [line.original, line.description].filter(Boolean).join(' | ');
 
 /** The Safaricom product a payment out was for, or null when it is anything else. */
-export function productOf(line: Pick<PreviewLine, 'direction' | 'type' | 'description' | 'original'>): MpesaProduct | null {
+function productOfUncached(line: Pick<PreviewLine, 'direction' | 'type' | 'description' | 'original'>): MpesaProduct | null {
   if (line.direction !== 'out' || loanOf(line)) return null;
   const words = wordsOf(line);
   const found = words ? PRODUCTS.find((product) => product.pattern.test(words)) : undefined;
@@ -75,7 +75,7 @@ export function productOf(line: Pick<PreviewLine, 'direction' | 'type' | 'descri
   return line.type === 'airtime_purchase' ? AIRTIME : null;
 }
 
-const lower = (value: string) => value.trim().toLocaleLowerCase('en-KE');
+const lower = (value: string) => value.trim().toLowerCase();
 
 /** Where a product is filed: its ledger, spelt the way the budget spells it. */
 export function productCategory(product: MpesaProduct, categoryNames: readonly string[]): string {
@@ -144,7 +144,7 @@ const LOAN_WORDS: ReadonlyArray<[RegExp, LenderId]> = [
  * debt going down, not spending - what the loan bought was recorded when it was
  * spent). Null for anything that is not one of these lenders.
  */
-export function loanOf(line: Pick<PreviewLine, 'direction' | 'type' | 'description' | 'original'>): { lender: Lender; kind: 'borrowed' | 'pay-back' } | null {
+function loanOfUncached(line: Pick<PreviewLine, 'direction' | 'type' | 'description' | 'original'>): { lender: Lender; kind: 'borrowed' | 'pay-back' } | null {
   if (line.type === 'fuliza_borrowed') return { lender: lender('fuliza'), kind: 'borrowed' };
   if (line.type === 'fuliza_repaid') return { lender: lender('fuliza'), kind: 'pay-back' };
   if (!line.direction) return null;
@@ -194,7 +194,7 @@ export const SAVINGS_ACCOUNTS: readonly SavingsAccount[] = [
  * with cents: savings move in whole shillings, so such a line is left to the
  * person.
  */
-export function savingsOf(line: Pick<PreviewLine, 'direction' | 'type' | 'description' | 'original' | 'amount'>): { account: SavingsAccount; into: boolean } | null {
+function savingsOfUncached(line: Pick<PreviewLine, 'direction' | 'type' | 'description' | 'original' | 'amount'>): { account: SavingsAccount; into: boolean } | null {
   if (!line.direction || loanOf(line)) return null;
   if (line.amount === null || !Number.isInteger(line.amount)) return null;
   const words = wordsOf(line);
@@ -239,4 +239,34 @@ export function withSavingsAccounts(lines: readonly PreviewLine[], choices: Reco
     next[line.index] = { ...choice, savingsGoalId: goalId, category: '', auto: false, incomeSourceId: null, sourceAuto: false };
   }
   return next;
+}
+
+const productOfMemo = new WeakMap<object, MpesaProduct | null>();
+/** productOf, worked out once per line: an import asks it of every line several times (see knownPayees knownPayeeFor). */
+export function productOf(line: Parameters<typeof productOfUncached>[0]): MpesaProduct | null {
+  const hit = productOfMemo.get(line);
+  if (hit !== undefined) return hit;
+  const found = productOfUncached(line);
+  productOfMemo.set(line, found);
+  return found;
+}
+
+const loanOfMemo = new WeakMap<object, { lender: Lender; kind: 'borrowed' | 'pay-back' } | null>();
+/** loanOf, worked out once per line: an import asks it of every line several times (see knownPayees knownPayeeFor). */
+export function loanOf(line: Parameters<typeof loanOfUncached>[0]): { lender: Lender; kind: 'borrowed' | 'pay-back' } | null {
+  const hit = loanOfMemo.get(line);
+  if (hit !== undefined) return hit;
+  const found = loanOfUncached(line);
+  loanOfMemo.set(line, found);
+  return found;
+}
+
+const savingsOfMemo = new WeakMap<object, { account: SavingsAccount; into: boolean } | null>();
+/** savingsOf, worked out once per line: an import asks it of every line several times (see knownPayees knownPayeeFor). */
+export function savingsOf(line: Parameters<typeof savingsOfUncached>[0]): { account: SavingsAccount; into: boolean } | null {
+  const hit = savingsOfMemo.get(line);
+  if (hit !== undefined) return hit;
+  const found = savingsOfUncached(line);
+  savingsOfMemo.set(line, found);
+  return found;
 }
