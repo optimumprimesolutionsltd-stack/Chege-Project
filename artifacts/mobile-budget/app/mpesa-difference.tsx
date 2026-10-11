@@ -1,3 +1,4 @@
+import { withOtherBudgets } from '@/lib/otherBudgets';
 import { setBringIn } from '@/lib/bringInReceipts';
 import React, { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -85,11 +86,12 @@ export default function MpesaDifferenceScreen() {
       setBodies(byReceipt);
       setStatedCharges(charges);
       // Only reads, so trying again through a server hiccup is always safe.
-      setAnswer(await retrySave(() => customFetch<Answer>('/api/mpesa/difference', {
+      // Payments another of the person's budgets has are accounted for (lib/otherBudgets).
+      setAnswer(await withOtherBudgets(await retrySave(() => customFetch<Answer>('/api/mpesa/difference', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages }),
-      })));
+      }))));
       setState('done');
       setCheckedAt(Date.now());
       shownRef.current = true;
@@ -327,8 +329,10 @@ export default function MpesaDifferenceScreen() {
                     {span.missing.map((item) => (
                       <View key={item.receipt} style={[styles.item, { borderColor: colors.border }]}>
                         <Text style={{ color: colors.foreground, fontSize: 13 }} numberOfLines={3}>{bodies.get(item.receipt) ?? item.receipt}</Text>
-                        <Text style={{ color: item.savedIn ? '#B45309' : colors.mutedForeground, fontSize: 12 }}>
-                          {item.savedIn
+                        <Text style={{ color: item.otherBudget ? colors.mutedForeground : item.savedIn ? '#B45309' : colors.mutedForeground, fontSize: 12 }}>
+                          {item.otherBudget
+                            ? `Saved in ${item.savedIn}, another of your budgets. Left there, so it is not counted twice.`
+                            : item.savedIn
                             ? `Saved in ${item.savedIn} instead${item.savedOn ? ` (${formatDisplayDate(item.savedOn)})` : ''}: move it to ${account} in Bank.`
                             : 'Not saved anywhere yet.'}
                         </Text>
