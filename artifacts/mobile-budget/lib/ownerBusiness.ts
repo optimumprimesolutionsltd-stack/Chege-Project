@@ -100,6 +100,11 @@ export function namesBusiness(description: string | null | undefined, keys: read
   });
 }
 
+/** Which of the business's keys an entry's description names, for saying why it was marked. */
+export function matchedBusinessKey(description: string | null | undefined, keys: readonly string[]): string | null {
+  return keys.find((key) => namesBusiness(description, [key])) ?? null;
+}
+
 type Row = {
   id: number;
   type: string;
