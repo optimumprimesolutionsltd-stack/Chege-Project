@@ -1,3 +1,4 @@
+import { withOtherBudgets } from './otherBudgets';
 import { customFetch } from '@workspace/api-client-react';
 import { canReadSms, readMpesaRows } from './mpesaSms';
 import { dayBefore } from './bankPeriod';
@@ -69,11 +70,12 @@ export async function reconcileQuietly(now = Date.now()): Promise<Leftover | nul
     const stated = code ? statedCharge(row.body) : null;
     if (code && stated !== null && !charges.has(code)) charges.set(code, stated);
   }
-  const ask = () => customFetch<Answer>('/api/mpesa/difference', {
+  // Payments another of the person's budgets has are accounted for (lib/otherBudgets).
+  const ask = async () => withOtherBudgets(await customFetch<Answer>('/api/mpesa/difference', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ messages }),
-  });
+  }));
   return fixUntilDone(ask, {
     setOpening: (accountId, openingBalance, from) => customFetch('/api/joint-account/opening-balance', {
       method: 'PATCH',

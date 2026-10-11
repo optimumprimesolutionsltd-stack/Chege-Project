@@ -98,7 +98,7 @@ describe('when the check cannot reach the server', () => {
     expect(differenceError(Object.assign(new Error('HTTP 418 : <html>'), { status: 418 }))).toBe('Could not check just then.');
   });
   it('tries again by itself through a hiccup: the check only reads', () => {
-    expect(read('app/mpesa-difference.tsx')).toContain("setAnswer(await retrySave(() => customFetch<Answer>('/api/mpesa/difference', {");
+    expect(read('app/mpesa-difference.tsx')).toContain("setAnswer(await withOtherBudgets(await retrySave(() => customFetch<Answer>('/api/mpesa/difference', {");
   });
 });
 
