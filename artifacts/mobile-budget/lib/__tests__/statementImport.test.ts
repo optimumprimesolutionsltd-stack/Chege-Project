@@ -51,6 +51,17 @@ describe('statementLines', () => {
     expect(reading.lines[0]).toMatchObject({ type: 'paybill_payment', amount: 200, description: 'Sample Utility (42)' });
   });
 
+  it("reads Fuliza giving back a repayment ('Loan Payments to' the person's own number) as the loan drawn again, not income", () => {
+    // 25 May 2026 on a real statement: money in, Fuliza repaid out of it, the repayment
+    // given back, then the money in reversed. The loan is owed again.
+    const repay = at('05 12:49:35', 'OD Loan Repayment to 232323 - M-PESA Overdraw', { withdrawn: 2589.79 });
+    const back = at('05 12:55:04', 'Loan Payments to - 254758***475 Sample Person', { paidIn: 2589.79 });
+    const reading = statementLines([back, repay]);
+    expect(reading.loanDraws).toBe(1);
+    expect(reading.loanDrawTotal).toBe(2589.79);
+    expect(reading.lines.filter((line) => line.direction === 'in' && line.type === 'person_receipt')).toHaveLength(0);
+  });
+
   it('reads a payment to a small business (Pochi la Biashara) as a payment to them', () => {
     const { lines } = statementLines([
       at('27 08:00:00', 'Customer Payment to Small Business to - 0743***708 SAMPLE SHOP', { withdrawn: 100 }),
