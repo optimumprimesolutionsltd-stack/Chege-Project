@@ -138,7 +138,7 @@ describe('Fix all', () => {
     expect(plan).toEqual({
       move: ['AAA0000001'],
       redate: [{ id: 7, date: '2026-05-12' }],
-      bringIn: { count: 2, from: '2026-05-10', to: '2026-08-01' },
+      bringIn: { count: 2, from: '2026-05-10', to: '2026-08-01', receipts: ['AAA0000002', 'AAA0000004'] },
       leftToCheck: 1,
       charges: [],
     });
@@ -174,7 +174,7 @@ describe('Fix all', () => {
 
   it('says in one confirmation what changes, and that nothing is deleted', async () => {
     const { fixConfirmation } = await import('../mpesaLiveBalance');
-    const { title, message } = fixConfirmation({ move: ['A'], redate: [{ id: 1, date: '2026-01-01' }], bringIn: { count: 12, from: '2026-01-01', to: '2026-02-01' }, leftToCheck: 3, charges: [{ entryId: 9, amount: 7 }, { entryId: 10, amount: 13 }] }, 'Chege Mpesa');
+    const { title, message } = fixConfirmation({ move: ['A'], redate: [{ id: 1, date: '2026-01-01' }], bringIn: { count: 12, from: '2026-01-01', to: '2026-02-01', receipts: [] }, leftToCheck: 3, charges: [{ entryId: 9, amount: 7 }, { entryId: 10, amount: 13 }] }, 'Chege Mpesa');
     expect(title).toBe('Fix all of these?');
     expect(message).toContain('Bring in 12 payments not saved anywhere, as Not sure yet');
     expect(message).toContain('Move 1 saved in another account to Chege Mpesa.');

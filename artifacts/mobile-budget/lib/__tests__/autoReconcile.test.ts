@@ -21,7 +21,7 @@ describe('what is left for the person', () => {
       // Saved to another account and saved under another day are fixed by themselves: not left.
       span({ missing: [{ receipt: 'TESTMOVE1', day: '2026-03-01', savedIn: 'Equity', savedOn: '2026-03-01' }], redated: [{ id: 2, receipt: 'TESTDAY1', messageDay: '2026-03-01', savedDate: '2026-03-02', amount: -50, description: 'Shop' }] }),
     ]);
-    expect(left).toEqual({ extra: 1, missing: { count: 1, from: '2026-04-01', to: '2026-04-03' } });
+    expect(left).toEqual({ extra: 1, missing: { count: 1, from: '2026-04-01', to: '2026-04-03', receipts: ['TESTMISS1'] } });
     expect(needsYou(left)).toBe(true);
     expect(leftoverText(left)).toBe('1 M-Pesa payment to bring in \u00b7 1 entry M-Pesa never had');
   });

@@ -1,3 +1,4 @@
+import { setBringIn } from '@/lib/bringInReceipts';
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import {
   View,
@@ -387,7 +388,11 @@ export default function DashboardScreen() {
       color: colors.primary,
       title: `${reconcileLeft.missing.count} M-Pesa ${reconcileLeft.missing.count === 1 ? 'payment' : 'payments'} not in Jamvi yet`,
       hint: 'Bring them in as Not sure yet. Everything else in your M-Pesa is already in step.',
-      onPress: () => router.push(`/mpesa-import?smsFrom=${reconcileLeft.missing!.from}&smsTo=${reconcileLeft.missing!.to}&notSure=1` as never),
+      onPress: () => {
+        // Only these payments are read, not every message over their days (lib/bringInReceipts).
+        setBringIn(reconcileLeft.missing!.receipts);
+        router.push(`/mpesa-import?smsFrom=${reconcileLeft.missing!.from}&smsTo=${reconcileLeft.missing!.to}&notSure=1` as never);
+      },
     }] : []),
     ...(reconcileLeft?.extra ? [{
       testID: 'reconcile-extra-cta',

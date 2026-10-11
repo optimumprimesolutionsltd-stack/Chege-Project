@@ -91,6 +91,7 @@ import { formatExact } from '@/lib/formatExact';
 import { READER_STOPPED, StatementReader, type ReaderJob } from '@/components/StatementReader';
 import { rememberMpesaCard } from '@/lib/mpesaCard';
 import { keepScreenAwakeWhileSaving, letScreenSleepAgain } from '@/lib/keepAwake';
+import { onlyWanted, takeBringIn } from '@/lib/bringInReceipts';
 import { useImportDiagnostics } from '@/lib/importDiagnostics';
 import { getImportProgress, importSaveStalled, setImportProgress, useImportProgress } from '@/lib/importProgress';
 import { clearImportStep, noteImportStep, readUnfinishedImport, type ImportStep } from '@/lib/importBreadcrumb';
@@ -1178,6 +1179,8 @@ export default function MpesaImportScreen() {
   // One read at a time: the server's logs showed the same messages read twice
   // at once (10 Oct 2026), each drawing the whole review.
   const readingSmsRef = useRef(false);
+  // How far reading the messages has got, said on screen: a long stretch takes a while.
+  const [smsProgress, setSmsProgress] = useState<{ done: number; total: number } | null>(null);
   const readSmsMessages = async (messages: string[]): Promise<PreviewLine[] | null> => {
     if (readingSmsRef.current) return null;
     if (messages.length === 0) {
@@ -1188,8 +1191,12 @@ export default function MpesaImportScreen() {
     setReading(true);
     try {
       const all: PreviewLine[] = [];
+      let sent = 0;
+      setSmsProgress({ done: 0, total: messages.length });
       for (const batch of smsBatches(messages)) {
         const response = await readPreview(batch.join('\n\n'));
+        sent += batch.length;
+        setSmsProgress({ done: sent, total: messages.length });
         const offset = all.length;
         all.push(...response.lines.map((line) => ({ ...line, index: line.index + offset })));
       }
@@ -1213,6 +1220,7 @@ export default function MpesaImportScreen() {
       return null;
     } finally {
       readingSmsRef.current = false;
+      setSmsProgress(null);
       setReading(false);
     }
   };
@@ -1245,12 +1253,14 @@ export default function MpesaImportScreen() {
     openedForRange.current = true;
     setSmsFrom(params.smsFrom);
     setSmsTo(params.smsTo);
+    // The payments Home or Find the difference found missing: only those are read (lib/bringInReceipts).
+    const codes = takeBringIn();
     void readMpesaSms(params.smsFrom, params.smsTo).then((result) => {
       if (!result.ok) {
         Alert.alert('Could not read your messages', smsRefusal(result.reason));
         return;
       }
-      return readSmsMessages(result.messages).then((shown) => {
+      return readSmsMessages(onlyWanted(result.messages, codes)).then((shown) => {
         if (!shown || params.notSure !== '1') return;
         // Nothing on these days is Jamvi's to save by itself: said so, rather
         // than a save of nothing ("0 entries saved").
@@ -2847,6 +2857,18 @@ export default function MpesaImportScreen() {
             <Pressable onPress={() => { setUnfinished(null); clearImportStep(); }} hitSlop={8} accessibilityRole="button" testID="mpesa-unfinished-dismiss">
               <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', marginTop: 6 }}>OK</Text>
             </Pressable>
+          </View>
+        ) : null}
+        {smsProgress && !lines ? (
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.primary, gap: 8 }]} testID="mpesa-sms-progress">
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <ActivityIndicator color={colors.primary} />
+              <Text style={[styles.lineTitle, { color: colors.foreground, flex: 1 }]}>Reading your M-Pesa messages…</Text>
+            </View>
+            <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0 }]}>
+              {smsProgress.done.toLocaleString('en-KE')} of {smsProgress.total.toLocaleString('en-KE')}. Your entries show here when it is done.
+            </Text>
+            <ProgressBar fraction={smsProgress.total > 0 ? smsProgress.done / smsProgress.total : 0} color={colors.primary} track={colors.muted} />
           </View>
         ) : null}
         {statementWaiting && !lines ? (
