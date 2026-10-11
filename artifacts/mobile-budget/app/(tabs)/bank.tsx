@@ -2296,7 +2296,11 @@ export default function BankScreen() {
       let samePayeeOffer: { description: string; from: string; to: string; rows: Array<{ id: number; amount: number; date: string }> } | null = null;
       // Said to be one of the businesses: remembered for it after the save (rememberWhoFor).
       let whoFor: { id: number; description: string; direction: 'in' | 'out'; business: number; category: string; name?: string } | null = null;
-      if (editingTransactionId !== null && forBusinessId !== null && (txType === 'deposit' || txType === 'disbursement')) {
+      // A payment's business is its category's: one no business owns (Donations) is Personal,
+      // and its payee is not remembered as the business's ("trying to change a payment that
+      // went by default to ujenzi ... to donations but its not working", 11 Oct 2026).
+      const businessStands = txType !== 'disbursement' || costOfCategory.get(expenseCategory.trim()) === forBusinessId;
+      if (editingTransactionId !== null && forBusinessId !== null && businessStands && (txType === 'deposit' || txType === 'disbursement')) {
         const editing = data?.transactions.find((transaction) => transaction.id === editingTransactionId);
         if (editing) whoFor = { id: editing.id, description: editing.description, direction: txType === 'deposit' ? 'in' : 'out', business: forBusinessId, category: expenseCategory.trim(), name: whoForPayeeName };
       }
@@ -4404,7 +4408,7 @@ export default function BankScreen() {
                     Both sides of the transfer change together.
                   </Text>
                   <TouchableOpacity
-                    style={[styles.memberPill, { alignSelf: 'flex-start', backgroundColor: colors.muted, borderColor: colors.border }]}
+                    style={[styles.memberPill, { alignSelf: 'flex-start', backgroundColor: colors.primary, borderColor: colors.primary }]}
                     onPress={() => {
                       setUnpairKeepId(editingTransactionId);
                       setTxType(editingTransfer.kind);
@@ -4417,7 +4421,11 @@ export default function BankScreen() {
                     }}
                     testID="bank-transfer-not-a-transfer"
                   >
-                    <Text style={[styles.memberPillText, { color: colors.foreground }]}>This wasn't a transfer</Text>
+                    <Text style={[styles.memberPillText, { color: colors.primaryForeground, fontFamily: 'Inter_700Bold' }]}>
+                      {editingTransfer.kind === 'disbursement'
+                        ? `This was a payment, not a move to ${editingTransfer.toName}`
+                        : `This was money in, not a move from ${editingTransfer.fromName}`}
+                    </Text>
                   </TouchableOpacity>
                 </View>
               ) : null}

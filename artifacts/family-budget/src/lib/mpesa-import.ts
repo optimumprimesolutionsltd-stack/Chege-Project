@@ -69,6 +69,8 @@ export type Choice = {
    * out to another bank). Neither income nor spending.
    */
   transferTo?: number | null;
+  /** The move was Jamvi"s guess from an account number, not the person"s word: shown as a question (lib/teachJamvi withOwnAccounts). */
+  transferAuto?: boolean;
   /**
    * "Remember this": keep this category for this payee once it is saved. Ticked
    * by itself when the person chooses or confirms a category - the choice is

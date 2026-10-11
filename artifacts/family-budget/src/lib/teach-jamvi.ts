@@ -91,10 +91,15 @@ export function withOwnAccounts(
     // Something already said what it was: a category kept, or a source for money in.
     if (line.direction === "out" && choice.confirmed && choice.category !== NOT_SURE_CATEGORY) continue;
     if (line.direction === "in" && choice.incomeSourceId) continue;
-    const account = ownAccountFor(line, accounts) ?? ownAccountByRule(line, accounts, rules);
+    // A move the person taught (a rule) is their word. One matched only by an account
+    // number is a guess, shown as a question: a chapel"s paybill account matched the
+    // number on the business"s account, and its payment was saved as a move there
+    // ("how did it end up in ujenzi distributors in the first place?", 11 Oct 2026).
+    const taught = ownAccountByRule(line, accounts, rules);
+    const account = taught ?? ownAccountFor(line, accounts);
     if (!account) continue;
     next = chooseTransfer(next, line.index, account.id);
-    next = { ...next, [line.index]: { ...next[line.index], confirmed: true } };
+    next = { ...next, [line.index]: taught ? { ...next[line.index], confirmed: true } : { ...next[line.index], transferAuto: true } };
   }
   return next;
 }

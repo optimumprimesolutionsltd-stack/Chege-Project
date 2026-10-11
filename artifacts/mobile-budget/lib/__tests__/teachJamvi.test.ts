@@ -114,10 +114,13 @@ describe('the person\'s own accounts, known by number', () => {
     expect(ownAccountFor({ description: 'Shop (123)' }, [{ id: 9, name: 'x', accountNumber: '123' }])).toBeNull();
   });
 
-  it('makes every payment to it a move, already checked', () => {
+  // Matched by number only, it is Jamvi's guess, asked on the line - not checked
+  // (a chapel's paybill matched a business account's number, 11 Oct 2026).
+  it('makes every payment to it a move, as a question rather than already checked', () => {
     const lines = times(2, { description: 'Kcb Paybill Ac (5846630)', amount: 10000 });
     const moved = withOwnAccounts(lines, initialChoices(lines, [], []), accounts);
-    expect(moved[lines[0].index]).toMatchObject({ transferTo: 3, confirmed: true });
+    expect(moved[lines[0].index]).toMatchObject({ transferTo: 3, transferAuto: true });
+    expect(moved[lines[0].index].confirmed).not.toBe(true);
     expect(teachableGroups(lines, moved)).toHaveLength(0);
   });
 
