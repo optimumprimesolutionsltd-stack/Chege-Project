@@ -1133,6 +1133,9 @@ export default function MpesaImportScreen() {
   const [otherWays, setOtherWays] = useState(false);
   // Read the first time, so what the statement left out is said and reading new messages starts after it.
   const firstStatementRef = React.useRef<{ from: string } | null>(null);
+  // Payments M-Pesa had and Jamvi did not, brought in under Not sure from Home or
+  // Find the difference: how many, so the end says what was done and what is next.
+  const broughtInRef = React.useRef<number | null>(null);
   const [smsMessages, setSmsMessages] = useState<string[] | null>(null);
   const [smsFrom, setSmsFrom] = useState<string>(monthStartIso);
   const [smsTo, setSmsTo] = useState<string>(() => isoDay(new Date()));
@@ -1268,7 +1271,11 @@ export default function MpesaImportScreen() {
           Alert.alert('Nothing to bring in', 'Every message on these days is already saved, or is one Jamvi does not save by itself (each says why below). Go back and tap Check again.');
           return;
         }
-        setChoices((current) => putUnderNotSure(notSureableLines(shown, current), current));
+        setChoices((current) => {
+          const brought = notSureableLines(shown, current);
+          broughtInRef.current = brought.length;
+          return putUnderNotSure(brought, current);
+        });
         setAutoSaveNotSure(true);
       });
     }).catch((error: unknown) => Alert.alert('Could not read your messages', plainSaveError(error)));
@@ -2724,17 +2731,44 @@ export default function MpesaImportScreen() {
             )}
           </View>
         ) : null}
-        <Pressable
-          onPress={() => router.replace('/(tabs)/bank')}
-          style={[styles.primary, { backgroundColor: colors.primary }]}
-          accessibilityRole="button"
-          testID="mpesa-import-open-bank"
-        >
-          <Text style={styles.primaryText}>See my bank</Text>
-        </Pressable>
-        <Pressable onPress={() => router.back()} style={styles.secondary} accessibilityRole="button">
-          <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>Done</Text>
-        </Pressable>
+        {broughtInRef.current !== null && outcome.saved > 0 ? (
+          // The job from Waiting for you, finished: said plainly, with the one
+          // thing left and the way to it ("it needs to fix everything ... and
+          // not have it look incomplete", 11 Oct 2026).
+          <>
+            <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.primary, gap: 6 }]} testID="mpesa-brought-in">
+              <Text style={[styles.lineTitle, { color: colors.foreground }]}>{`All ${outcome.saved.toLocaleString('en-KE')} missing ${outcome.saved === 1 ? 'payment is' : 'payments are'} in`}</Text>
+              <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0 }]}>
+                {`What M-Pesa had and Jamvi did not is saved, under Not sure yet. Say what each one was in Sort them out - one tap each, and the same for a payee's others in one more.`}
+              </Text>
+            </View>
+            <Pressable
+              onPress={() => router.replace('/sort-entries' as never)}
+              style={[styles.primary, { backgroundColor: colors.primary }]}
+              accessibilityRole="button"
+              testID="mpesa-brought-in-sort"
+            >
+              <Text style={styles.primaryText}>Sort them out now</Text>
+            </Pressable>
+            <Pressable onPress={() => router.replace('/(tabs)' as never)} style={styles.secondary} accessibilityRole="button" testID="mpesa-brought-in-home">
+              <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>Back to Home - sort them later</Text>
+            </Pressable>
+          </>
+        ) : (
+          <Pressable
+            onPress={() => router.replace('/(tabs)/bank')}
+            style={[styles.primary, { backgroundColor: colors.primary }]}
+            accessibilityRole="button"
+            testID="mpesa-import-open-bank"
+          >
+            <Text style={styles.primaryText}>See my bank</Text>
+          </Pressable>
+        )}
+        {broughtInRef.current !== null && outcome.saved > 0 ? null : (
+          <Pressable onPress={() => router.back()} style={styles.secondary} accessibilityRole="button">
+            <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>Done</Text>
+          </Pressable>
+        )}
       </PageScrollView>
     );
   }

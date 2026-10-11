@@ -40,3 +40,13 @@ describe('bringing in the missing payments reads only those', () => {
     expect(readFileSync('hooks/useAutoReconcile.ts', 'utf8')).toContain('const codesMissing = Boolean(kept?.left?.missing && !kept.left.missing.receipts);');
   });
 });
+
+describe('bringing them in ends finished, with the way on', () => {
+  const screen = readFileSync('app/mpesa-import.tsx', 'utf8');
+  it('says they are all in, under Not sure, and offers Sort them out now or Home', () => {
+    expect(screen).toContain('broughtInRef.current = brought.length;');
+    expect(screen).toContain('testID="mpesa-brought-in"');
+    expect(screen).toContain("onPress={() => router.replace('/sort-entries' as never)}");
+    expect(screen).toContain('testID="mpesa-brought-in-home"');
+  });
+});

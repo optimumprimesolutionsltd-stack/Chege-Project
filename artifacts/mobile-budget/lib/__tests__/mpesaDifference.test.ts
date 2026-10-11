@@ -188,7 +188,8 @@ describe('Fix all', () => {
     expect(screen.indexOf('Alert.alert(title, message, [')).toBeLessThan(screen.indexOf("'/api/mpesa/difference/fix'"));
     expect(screen).toContain('router.push(`/mpesa-import?smsFrom=${plan.bringIn.from}&smsTo=${plan.bringIn.to}&notSure=1` as never);');
     const importScreen = read('app/mpesa-import.tsx');
-    expect(importScreen).toContain("setChoices((current) => putUnderNotSure(notSureableLines(shown, current), current));");
+    expect(importScreen).toContain('const brought = notSureableLines(shown, current);');
+    expect(importScreen).toContain('return putUnderNotSure(brought, current);');
     expect(importScreen).toContain('if (firstProblem) {\n      Alert.alert(\'Almost there\', `${firstProblem} Then tap Save.`);');
   });
 });
