@@ -35,7 +35,7 @@ import { saveRules } from '@/lib/rulesStore';
 import { useNamedPayees } from '@/hooks/useNamedPayees';
 import { WhoIsThisFor } from '@/components/WhoIsThisFor';
 import { useBusinesses } from '@/hooks/useBusinesses';
-import { namedKeyFor } from '@/lib/namedPayees';
+import { namedFor, namedKeyFor } from '@/lib/namedPayees';
 import { samePayeeName } from '@/lib/samePayee';
 import { businessKeyLabel, businessTitle, matchedBusinessKey, withoutKey } from '@/lib/ownerBusiness';
 import { categoryChanged, moveSummary, parseRememberAsked, rememberAskedKey, rememberStep, samePayeeToMove } from '@/lib/samePayee';
@@ -1455,7 +1455,13 @@ export default function BankScreen() {
     const feeOnThis = [...(data?.transactions ?? []), ...quickRows.current].find((row) => row.chargeForTransactionId === tx.id) ?? null;
     const filedAsItsOwnFee = !!feeOnThis?.expenseCategory && !!tx.expenseCategory &&
       feeOnThis.expenseCategory.trim().toLowerCase() === tx.expenseCategory.trim().toLowerCase();
-    setExpenseCategory(filedAsItsOwnFee ? '' : tx.expenseCategory ?? '');
+    // A payment marked as the business's whose payee has been named with a category
+    // opens with that category, so Save files it there (#753 unmarks it): "thought if i
+    // select grace community church it should automatically save to donations?" (11 Oct 2026).
+    const namedCategory = type === 'disbursement' && !tx.expenseCategory && ownerBusiness.markedIds.has(tx.id)
+      ? namedFor(tx.description, namedPayees.named)?.category ?? ''
+      : '';
+    setExpenseCategory(filedAsItsOwnFee ? '' : tx.expenseCategory || namedCategory);
     setWithdrawPartyId(type === 'disbursement' ? tx.settlesContributorId ?? null : null);
     // The fee already on this posting, if it has one, so editing changes that
     // fee instead of writing another. Blank when it has none, so a fee left in
