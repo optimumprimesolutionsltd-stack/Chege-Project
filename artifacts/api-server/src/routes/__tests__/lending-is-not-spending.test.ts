@@ -54,7 +54,9 @@ describe("a missing category is allowed only because it was lent, or paid somebo
   it("is refused on any other withdrawal", () => {
     // Left to the schema alone, any withdrawal could quietly lose its category
     // and drop out of spending.
-    expect(bank).toContain("if (!value.isLending && value.settlesContributorId === undefined && !value.expenseCategory) {");
+    // A refund (money back from a reversal) may come without one: the route finds its category.
+    expect(bank).toContain("if (!value.isLending && !value.isRefund && value.settlesContributorId === undefined && !value.expenseCategory) {");
+    expect(bank).toContain("const refundCategory = isRefund && expenseCategory === null && !isLending");
     expect(bank).toContain('message: "Choose a valid budget category."');
   });
 

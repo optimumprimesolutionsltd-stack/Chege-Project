@@ -57,7 +57,10 @@ const OUT_TYPES = new Set<MpesaTransactionType>([
   "airtime_purchase",
   "cash_withdrawal",
 ]);
-const IN_TYPES = new Set<MpesaTransactionType>(["person_receipt", "bank_receipt", "reversal"]);
+// A cash deposit is the person's own cash put on M-Pesa at an agent: money in, which the
+// phone files as a move from their Cash account. Left for them to record by hand, it was
+// never saved and Home asked for it for ever ("still showing 22 messages", 11 Oct 2026).
+const IN_TYPES = new Set<MpesaTransactionType>(["person_receipt", "bank_receipt", "reversal", "cash_deposit"]);
 
 // A reversal goes either way. Undoing a payment you made says the money "is
 // credited to your M-PESA account" - money back. Undoing money somebody sent
@@ -77,7 +80,6 @@ const REVERSAL_TAKEN_BACK = /\bis\s+debited\s+from\s+your\b/i;
 // Recorded only when the person decides. Guessing what these mean for their
 // books would be inventing an answer about their money.
 const NEEDS_A_DECISION: Partial<Record<MpesaTransactionType, string>> = {
-  cash_deposit: "Cash you gave an agent to put on M-Pesa. Record it yourself as money in from your cash.",
   bank_transfer: "A move between M-Pesa and a bank. Record it yourself as a move between accounts.",
   failed: "This one did not go through, so there is nothing to record.",
   other: "This kind of message is not recognised yet.",
@@ -93,6 +95,8 @@ function describe(type: MpesaTransactionType, counterparty: string | null, refer
   switch (type) {
     case "cash_withdrawal":
       return who ? `Cash withdrawal — ${who}` : "Cash withdrawal";
+    case "cash_deposit":
+      return who ? `Cash deposit — ${who}` : "Cash deposit";
     case "airtime_purchase":
       return who ? `Airtime — ${who}` : "Airtime";
     case "person_receipt":

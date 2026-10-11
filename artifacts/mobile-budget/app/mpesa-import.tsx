@@ -92,6 +92,7 @@ import { READER_STOPPED, StatementReader, type ReaderJob } from '@/components/St
 import { rememberMpesaCard } from '@/lib/mpesaCard';
 import { keepScreenAwakeWhileSaving, letScreenSleepAgain } from '@/lib/keepAwake';
 import { onlyWanted, takeBringIn } from '@/lib/bringInReceipts';
+import { withCashDeposits } from '@/lib/cashDeposits';
 import { useImportDiagnostics } from '@/lib/importDiagnostics';
 import { getImportProgress, importSaveStalled, setImportProgress, useImportProgress } from '@/lib/importProgress';
 import { clearImportStep, noteImportStep, readUnfinishedImport, type ImportStep } from '@/lib/importBreadcrumb';
@@ -564,7 +565,8 @@ export default function MpesaImportScreen() {
   // The person's other accounts, known by number: lines to or from them start as
   // moves, not spending (lib/teachJamvi). Never the account being imported into.
   const ownAccounts = useMemo(() => accounts.filter((account) => account.id !== accountId), [accounts, accountId]);
-  const startChoices = (shown: readonly PreviewLine[], fresh: Record<number, Choice>) => withOwnAccounts(shown, fresh, ownAccounts, rules);
+  // A cash deposit starts as a move from the Cash account (lib/cashDeposits).
+  const startChoices = (shown: readonly PreviewLine[], fresh: Record<number, Choice>) => withOwnAccounts(shown, withCashDeposits(shown, fresh, ownAccounts), ownAccounts, rules);
   const { data: account } = useGetJointAccount(accountId ? { accountId } : undefined);
   const history = useMemo(
     () => ((account?.transactions ?? []) as Array<{ type: string; description: string; expenseCategory?: string | null; incomeSourceId?: number | null; chargeForTransactionId?: number | null }>),

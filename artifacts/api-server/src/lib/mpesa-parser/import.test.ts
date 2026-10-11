@@ -106,14 +106,16 @@ describe("toImportItem: money in", () => {
 });
 
 describe("toImportItem: what it will not decide for you", () => {
-  it.each([
-    ["cash you gave an agent", CASH_DEPOSIT],
-  ])("skips %s and says why, keeping what it read", (_name, message) => {
-    const item = toImportItem(message, 0);
-    expect(item.status).toBe("skipped");
-    expect(item.reason).toBeTruthy();
-    expect(item.direction).toBeNull();
+  // Cash given to an agent is the person's own cash put on M-Pesa: money in, which
+  // the phone files as a move from their Cash account. Skipped, it was never saved
+  // and Home asked for it for ever ("still showing 22 messages", 11 Oct 2026).
+  it("reads cash you gave an agent as money in, with its code", () => {
+    const item = toImportItem(CASH_DEPOSIT, 0);
+    expect(item.status).toBe("ready");
+    expect(item.direction).toBe("in");
+    expect(item.type).toBe("cash_deposit");
     expect(item.receipt).toBeTruthy();
+    expect(item.description).toMatch(/^Cash deposit/);
   });
 
   it("skips text that is not an M-Pesa message and one with no amount", () => {
@@ -179,7 +181,7 @@ describe("readPaste", () => {
     const items = readPaste([SEND_PERSON, "garbage line", RECEIVE, CASH_DEPOSIT].join("\n"));
     // "garbage line" has no receipt code, so it rides along with the message before it.
     expect(items.map((item) => item.receipt)).toEqual(["TESTSEND1", "TESTRECEIVE2", "TESTDEPOSIT2"]);
-    expect(items.map((item) => item.status)).toEqual(["ready", "ready", "skipped"]);
+    expect(items.map((item) => item.status)).toEqual(["ready", "ready", "ready"]);
     expect(items.map((item) => item.index)).toEqual([0, 1, 2]);
   });
 });

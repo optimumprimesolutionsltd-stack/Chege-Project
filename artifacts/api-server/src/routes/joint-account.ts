@@ -187,7 +187,10 @@ const DisbursementInput = z.object({
   // may carry none; when it was not, the person paying picks one. Left to the
   // schema alone, any other withdrawal could quietly lose its category and
   // drop out of spending.
-  if (!value.isLending && value.settlesContributorId === undefined && !value.expenseCategory) {
+  // Money back from a reversal (isRefund) may come without one too: the route then
+  // takes the same-day payment's category, else Not sure yet (lib/refunds). Refused
+  // here first, every reversal brought in failed as "Invalid input" (11 Oct 2026).
+  if (!value.isLending && !value.isRefund && value.settlesContributorId === undefined && !value.expenseCategory) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["expenseCategory"], message: "Choose a valid budget category." });
   }
 });
