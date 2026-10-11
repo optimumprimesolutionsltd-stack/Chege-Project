@@ -37,7 +37,7 @@ import { WhoIsThisFor } from '@/components/WhoIsThisFor';
 import { useBusinesses } from '@/hooks/useBusinesses';
 import { namedKeyFor } from '@/lib/namedPayees';
 import { samePayeeName } from '@/lib/samePayee';
-import { businessTitle } from '@/lib/ownerBusiness';
+import { businessKeyLabel, businessTitle, matchedBusinessKey, withoutKey } from '@/lib/ownerBusiness';
 import { categoryChanged, moveSummary, parseRememberAsked, rememberAskedKey, rememberStep, samePayeeToMove } from '@/lib/samePayee';
 import { parseStoredRules, payeeKey, payeeName, referenceOf, ruleCategory, rulesStorageKey, withRule, withSourceRule } from '@/lib/payeeLearning';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -2113,7 +2113,13 @@ export default function BankScreen() {
     }
     // Paying somebody you owe needs no category: the cost was usually recorded
     // when the debt was taken on, and paying it off is not a second one.
-    if (editingBusinessMoney) {
+    // A category chosen for a payment marked as the business's says it was not the
+    // business's: it is unmarked on save and saved like any payment ("still not saving
+    // to donations even after save", 11 Oct 2026). Before, the category was dropped.
+    const leavesBusiness = editingBusinessMoney && txType === 'disbursement' && expenseCategory.trim() !== '' &&
+      withdrawDest !== 'party' && withdrawDest !== 'lend' && withdrawDest !== 'savings';
+    const businessMoney = editingBusinessMoney && !leavesBusiness;
+    if (businessMoney) {
       // Money between you and your business carries no category (lib/ownerBusiness).
     } else if (txType === 'disbursement' && withdrawDest !== 'savings' && withdrawDest !== 'lend' && withdrawDest !== 'party' && !expenseCategory.trim()) {
       Alert.alert('Category required', 'Choose or add a category for this withdrawal.');
@@ -2314,7 +2320,7 @@ export default function BankScreen() {
       }
       if (editingTransactionId !== null) {
         const editingTransaction = data?.transactions.find((transaction) => transaction.id === editingTransactionId);
-        if (editingTransaction && txType === 'disbursement' && withdrawDest !== 'party' && withdrawDest !== 'lend' && withdrawDest !== 'savings' && !editingBusinessMoney) {
+        if (editingTransaction && txType === 'disbursement' && withdrawDest !== 'party' && withdrawDest !== 'lend' && withdrawDest !== 'savings' && !businessMoney) {
           const from = editingTransaction.expenseCategory ?? '';
           const rows = samePayeeToMove(data?.transactions ?? [], editingTransaction, from, expenseCategory);
           // Changed at all: the others are offered when there are any, and remembering is asked once per payee.
@@ -2351,6 +2357,7 @@ export default function BankScreen() {
             }),
           });
         }
+        if (leavesBusiness) await ownerBusiness.unmark(editingTransactionId);
         const saved = await updateTransaction({
           id: editingTransactionId,
           data: {
@@ -5146,7 +5153,7 @@ export default function BankScreen() {
                       is the same question: ordinary spending, paying somebody
                       you owe, or lending. Borrowing and lending are the two
                       directions of one idea and should not look unrelated. */}
-                  {editingTransactionId !== null && !editingTransfer && !editingBusinessMoney && withdrawDest !== 'party' && withdrawDest !== 'lend' && withdrawDest !== 'savings' ? (
+                  {editingTransactionId !== null && !editingTransfer && withdrawDest !== 'party' && withdrawDest !== 'lend' && withdrawDest !== 'savings' ? (
                     <WhoIsThisFor
                       direction="out"
                       businesses={whoForBusinesses}
@@ -5909,8 +5916,41 @@ export default function BankScreen() {
                       {businessTitle(txType === 'deposit' ? 'in' : 'out', ownerBusiness.business.name)}
                     </Text>
                     <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>
-                      Money between you and your business: not income, not spending. A category or source chosen above is not saved.
+                      Money between you and your business: not income, not spending.{txType === 'disbursement' ? ' Choose a category above and save to make it an ordinary payment instead.' : ''}
                     </Text>
+                    {/* Why it was marked, and a way to stop it - a key that catches other
+                        payments, like a bank's, is the person's to remove here and now. */}
+                    {(() => {
+                      const editing = data?.transactions.find((row) => row.id === editingTransactionId);
+                      const key = matchedBusinessKey(editing?.description, ownerBusiness.matching.keys);
+                      if (!key) return null;
+                      const typed = ownerBusiness.business.keys.includes(key);
+                      return (
+                        <View style={{ gap: 4 }}>
+                          <Text style={{ color: colors.mutedForeground, fontSize: 12 }} testID="bank-business-money-why">
+                            Marked because it names {businessKeyLabel(key)}{typed ? ", one of your business's accounts" : ", the number on one of your business's bank accounts"}.
+                          </Text>
+                          {typed ? (
+                            <TouchableOpacity
+                              onPress={() => {
+                                const id = editingTransactionId;
+                                const without = withoutKey(ownerBusiness.business, key);
+                                // Unmarked first: unmark saves the business as it was, plus this entry set aside.
+                                void ownerBusiness.unmark(id)
+                                  .then(() => ownerBusiness.save(without))
+                                  .then(() => closeModal())
+                                  .catch((error: unknown) => Alert.alert('Could not change it', error instanceof Error ? error.message : 'Try again.'));
+                              }}
+                              testID="bank-business-forget-key"
+                            >
+                              <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>
+                                Stop marking payments that name {businessKeyLabel(key)}
+                              </Text>
+                            </TouchableOpacity>
+                          ) : null}
+                        </View>
+                      );
+                    })()}
                     <TouchableOpacity
                       onPress={() => {
                         const id = editingTransactionId;
