@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { getActiveGroupId, requireGroupManager } from "../lib/activeGroup";
 import { businessStreams, businessStreamsReady, setBusinessStream } from "../lib/business-streams";
+import { combineIncomeSources } from "../lib/combine-income-sources";
 
 const router = Router();
 
@@ -41,6 +42,31 @@ router.put("/businesses/:incomeSourceId", async (req, res): Promise<void> => {
     ...(parsed.data.countsProfit === undefined ? {} : { countsProfit: parsed.data.countsProfit }),
     ...(parsed.data.paysSalary === undefined ? {} : { paysSalary: parsed.data.paysSalary }),
   });
+});
+
+const combineSchema = z.object({ incomeSourceId: z.number().int().positive() });
+
+/**
+ * An income stream that is this business's money (Rental income and the
+ * business that collects the rent): everything under it moves to the
+ * business and the stream goes (lib/combine-income-sources).
+ */
+router.post("/businesses/:incomeSourceId/combine", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  if (!requireGroupManager(req, res)) return;
+  const intoId = Number(req.params.incomeSourceId);
+  const parsed = combineSchema.safeParse(req.body);
+  if (!Number.isInteger(intoId) || intoId <= 0 || !parsed.success) {
+    res.status(400).json({ error: "Say which income stream to combine into this business." });
+    return;
+  }
+  const result = await combineIncomeSources(groupId, parsed.data.incomeSourceId, intoId);
+  if (!result.ok) {
+    res.status(result.status).json({ error: result.error });
+    return;
+  }
+  res.json({ ok: true, moved: result.moved });
 });
 
 export default router;

@@ -15,6 +15,7 @@ import {
   normalizeCategoryName,
   normalizeIncomeStreamName,
   type MobileOnboardingDraft,
+  incomeStreamsToCreate,
 } from "@/lib/onboarding";
 
 function today(): string {
@@ -118,7 +119,8 @@ export async function applyMobileOnboardingToWorkspace({
     });
   }
 
-  for (const name of draft.selectedIncomeStreams) {
+  // One stream per source of money: one a business earns is that business (lib/onboarding).
+  for (const name of incomeStreamsToCreate(draft)) {
     try {
       await customFetch("/api/income-sources", {
         method: "POST",
