@@ -15,6 +15,13 @@ describe('cash put on M-Pesa at an agent', () => {
     expect(next[1]).toBe(choice);
   });
 
+  it('takes cash out at an agent as a move into the Cash account', () => {
+    const lines = [line(0, 'cash_withdrawal', 'out'), line(1, 'paybill_payment', 'out')];
+    const next = withCashDeposits(lines, { 0: choice, 1: choice }, [{ id: 7, name: 'Cash' }]);
+    expect(next[0]).toMatchObject({ transferTo: 7, confirmed: true });
+    expect(next[1]).toBe(choice);
+  });
+
   it('stays money in, to be sorted out, when there is no Cash account', () => {
     const choices = { 0: choice };
     expect(withCashDeposits([line(0, 'cash_deposit')], choices, [{ id: 3, name: 'Equity' }])).toBe(choices);
