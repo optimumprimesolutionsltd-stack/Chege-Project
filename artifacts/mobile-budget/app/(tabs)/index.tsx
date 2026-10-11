@@ -53,6 +53,7 @@ import {
   customFetch,
 } from '@workspace/api-client-react';
 import { HomeAnswersCard } from '@/components/HomeAnswersCard';
+import { CombineIncomeQuestion } from '@/components/CombineIncomeQuestion';
 import { BusinessSalaryQuestion } from '@/components/BusinessSalaryQuestion';
 import { MpesaImportCard } from '@/components/MpesaImportCard';
 
@@ -668,6 +669,8 @@ export default function DashboardScreen() {
 
           {/* Each business asked once: a salary from it, or its profit is your income (lib/businessSalary). */}
           {canManageBudget ? <View style={{ marginHorizontal: 16, marginTop: 12 }}><BusinessSalaryQuestion /></View> : null}
+          {/* One income stream per source of money (lib/combineIncome), asked once each. */}
+          {canManageBudget ? <View style={{ marginHorizontal: 16 }}><CombineIncomeQuestion /></View> : null}
 
           <WorkspaceSetupGuide />
 

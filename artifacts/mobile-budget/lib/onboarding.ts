@@ -136,6 +136,10 @@ export type MobileOnboardingDraft = {
   customSubcategories?: Record<string, string[]>;
   selectedIncomeStreams: string[];
   incomeAmounts: Record<string, string>;
+  /** For an income stream picked beside a business: the business whose money it
+   *  is, or '' for money paid to the person. A stream a business earns is not
+   *  made - the business is that money (incomeStreamsToCreate). */
+  incomeEarnedBy?: Record<string, string>;
   /** For a group: what each member is expected to contribute per month, as a
    *  plain KES string. Applied as the group's default contribution target. */
   memberContribution?: string;
@@ -258,6 +262,47 @@ export function businessesFromDraft(draft: Pick<MobileOnboardingDraft, "usageMod
     if (businesses.length >= MAX_ONBOARDING_BUSINESSES) break;
   }
   return businesses;
+}
+
+/**
+ * Money that is the person's own, never a business's: not asked about.
+ * Everything else picked beside a business - rent, farming, freelance work,
+ * anything typed - may be what that business earns, and is asked once.
+ */
+const OWN_INCOME_STREAMS = new Set([
+  "salary or wages",
+  "pension or benefits",
+  "family support or remittances",
+  "personal savings",
+  "family contributions",
+  "wedding gifts or cash gifts",
+]);
+
+/**
+ * Whether onboarding asks which business earns this income stream. Two
+ * answers for one source of money - "Rental income" picked here and "Dahanak
+ * Ventures" named as a business - made two streams for the same rent ("this
+ * problem came from onboarding", 11 Oct 2026).
+ */
+/** Whether an income stream is plainly the person's own money (a salary, a pension, family support). */
+export const isOwnIncomeStream = (income: string): boolean => OWN_INCOME_STREAMS.has(normalizeIncomeStreamName(income));
+
+export function asksWhichBusiness(income: string, draft: Parameters<typeof businessesFromDraft>[0]): boolean {
+  return businessesFromDraft(draft).length > 0 && !OWN_INCOME_STREAMS.has(normalizeIncomeStreamName(income));
+}
+
+/** The first picked income stream still waiting for "which business earns it?", or null. */
+export function unansweredEarnedBy(draft: Parameters<typeof businessesFromDraft>[0] & Pick<MobileOnboardingDraft, "selectedIncomeStreams" | "incomeEarnedBy">): string | null {
+  return draft.selectedIncomeStreams.find((income) => asksWhichBusiness(income, draft) && draft.incomeEarnedBy?.[income] === undefined) ?? null;
+}
+
+/** The income streams to make: not one that a named business earns - the business is that money. */
+export function incomeStreamsToCreate(draft: Parameters<typeof businessesFromDraft>[0] & Pick<MobileOnboardingDraft, "selectedIncomeStreams" | "incomeEarnedBy">): string[] {
+  const businesses = new Set(businessNamesFromDraft(draft).map((name) => name.toLowerCase()));
+  return draft.selectedIncomeStreams.filter((income) => {
+    const earnedBy = draft.incomeEarnedBy?.[income]?.toLowerCase();
+    return !earnedBy || !businesses.has(earnedBy);
+  });
 }
 
 export function businessNamesFromDraft(draft: Parameters<typeof businessesFromDraft>[0]): string[] {

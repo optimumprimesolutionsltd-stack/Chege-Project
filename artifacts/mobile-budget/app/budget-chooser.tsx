@@ -86,6 +86,8 @@ import {
   type MobileBudgetDuration,
   type MobileOnboardingDraft,
   type MobileOnboardingMode,
+  asksWhichBusiness,
+  unansweredEarnedBy,
 } from '@/lib/onboarding';
 import { applyMobileOnboardingToWorkspace, saveMobileOnboardingPreferences, saveMobileOnboardingProgress } from '@/lib/onboarding-api';
 import { usePrices } from '@/hooks/usePrices';
@@ -954,6 +956,11 @@ function MobileOnboardingFlow({
         return;
       }
     }
+    const notAnswered = step === 4 ? unansweredEarnedBy(draft) : null;
+    if (notAnswered) {
+      setError(`Say whether ${notAnswered} is one of your businesses' money to continue.`);
+      return;
+    }
     if (step === 3 && draft.selectedCategories.length === 0) {
       setError('Choose at least one category, or select all recommended categories.');
       return;
@@ -1314,7 +1321,32 @@ function MobileOnboardingFlow({
             );
           })}
           {incomeStreamsForMode(draft.usageMode, draft.persona, draft.coupleStage).filter((income) => !businessName || income !== GENERIC_BUSINESS_INCOME_STREAM).map((income) => <ChoiceRow key={income} testID={`onboarding-income-${income}`} title={income} selected={draft.selectedIncomeStreams.includes(income)} onPress={() => toggleIncome(income)} colors={colors} />)}
-          {draft.selectedIncomeStreams.length > 0 ? <View style={styles.incomeAmountList}><Text style={[styles.choiceTitle, { color: colors.foreground }]}>Expected monthly amount (optional)</Text>{draft.selectedIncomeStreams.map((income) => <View key={income} style={[styles.incomeAmountRow, { backgroundColor: colors.card, borderColor: colors.border }]}><Text style={[styles.amountLabel, { color: colors.foreground }]}>{income}</Text><View style={styles.amountInputWrap}><Text style={[styles.currency, { color: colors.mutedForeground }]}>KES</Text><TextInput testID={`onboarding-income-amount-${income}`} keyboardType="decimal-pad" value={draft.incomeAmounts[income] ?? ''} onChangeText={(value) => setDraftValue('incomeAmounts', { ...draft.incomeAmounts, [income]: value.replace(/[^0-9.]/g, '') })} placeholder="0" placeholderTextColor={colors.mutedForeground} style={[styles.amountInput, { borderColor: colors.border, color: colors.foreground }]} /></View></View>)}</View> : null}
+          {/* One source of money, one stream: picked beside a business, it is asked
+              whether that business earns it - then the business is that money, and no
+              second stream is made ("this problem came from onboarding", 11 Oct 2026). */}
+          {draft.selectedIncomeStreams.filter((income) => asksWhichBusiness(income, draft)).map((income) => {
+            const answer = draft.incomeEarnedBy?.[income];
+            const choose = (value: string) => setDraftValue('incomeEarnedBy', { ...(draft.incomeEarnedBy ?? {}), [income]: value });
+            return (
+              <View key={`earned-${income}`} style={[styles.customBox, { backgroundColor: colors.card, borderColor: answer === undefined ? colors.primary : colors.border }]} testID={`onboarding-earned-by-${income}`}>
+                <Text style={[styles.choiceTitle, { color: colors.foreground }]}>Is {income} money one of your businesses earns?</Text>
+                <Text style={[styles.choiceDescription, { color: colors.mutedForeground }]}>Then it is that business's income, counted once.</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 6 }}>
+                  {[...businessesFromDraft(draft).map((business) => business.name), ''].map((value) => {
+                    const on = answer === value;
+                    return (
+                      <Pressable key={value || 'mine'} onPress={() => choose(value)} accessibilityRole="button" accessibilityState={{ selected: on }}
+                        testID={`onboarding-earned-by-${income}-${value || 'mine'}`}
+                        style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, borderWidth: 1, borderColor: on ? colors.primary : colors.border, backgroundColor: on ? colors.primary : colors.background }}>
+                        <Text style={{ color: on ? colors.primaryForeground : colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>{value || 'No - paid to me'}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            );
+          })}
+          {draft.selectedIncomeStreams.length > 0 ? <View style={styles.incomeAmountList}><Text style={[styles.choiceTitle, { color: colors.foreground }]}>Expected monthly amount (optional)</Text>{draft.selectedIncomeStreams.filter((income) => !draft.incomeEarnedBy?.[income]).map((income) => <View key={income} style={[styles.incomeAmountRow, { backgroundColor: colors.card, borderColor: colors.border }]}><Text style={[styles.amountLabel, { color: colors.foreground }]}>{income}</Text><View style={styles.amountInputWrap}><Text style={[styles.currency, { color: colors.mutedForeground }]}>KES</Text><TextInput testID={`onboarding-income-amount-${income}`} keyboardType="decimal-pad" value={draft.incomeAmounts[income] ?? ''} onChangeText={(value) => setDraftValue('incomeAmounts', { ...draft.incomeAmounts, [income]: value.replace(/[^0-9.]/g, '') })} placeholder="0" placeholderTextColor={colors.mutedForeground} style={[styles.amountInput, { borderColor: colors.border, color: colors.foreground }]} /></View></View>)}</View> : null}
           <View style={[styles.customBox, { backgroundColor: colors.card, borderColor: colors.border }]}><Text style={[styles.choiceTitle, { color: colors.foreground }]}>Add another income stream</Text><View style={styles.inlineInput}><TextInput testID="onboarding-custom-income" value={customIncomeStream} onChangeText={setCustomIncomeStream} onSubmitEditing={addCustomIncome} placeholder="e.g. dividends" placeholderTextColor={colors.mutedForeground} style={[styles.onboardingInput, styles.flexInput, { borderColor: colors.border, color: colors.foreground }]} /><Pressable onPress={addCustomIncome} style={[styles.smallButton, { backgroundColor: colors.primary }]}><Text style={[styles.smallButtonText, { color: colors.primaryForeground }]}>Add</Text></Pressable></View></View>
         </> : null}
 
