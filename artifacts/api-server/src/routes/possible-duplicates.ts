@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { getActiveGroupId, requireGroupManager } from "../lib/activeGroup";
-import { dismissPair, findTwins, listPossibleDuplicates, receiptsElsewhere } from "../lib/possible-duplicates";
+import { dismissPair, findTwins, listPossibleDuplicates, receiptsElsewhere, receiptsInMemberBudgets } from "../lib/possible-duplicates";
 
 const router = Router();
 
@@ -82,6 +82,23 @@ router.post("/possible-duplicates/elsewhere", async (req, res): Promise<void> =>
     return;
   }
   const elsewhere = await receiptsElsewhere(groupId, req.user!.id, [...new Set(parsed.data.receipts)]);
+  res.json({ elsewhere });
+});
+
+/**
+ * Which of these codes are recorded in another budget the person belongs to,
+ * whoever owns it (lib/possible-duplicates receiptsInMemberBudgets): for the
+ * M-Pesa check, which counts a payment filed into a shared group as accounted for.
+ */
+router.post("/possible-duplicates/in-my-budgets", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  const parsed = elsewhereSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Send the receipt codes to check." });
+    return;
+  }
+  const elsewhere = await receiptsInMemberBudgets(groupId, req.user!.id, [...new Set(parsed.data.receipts)]);
   res.json({ elsewhere });
 });
 

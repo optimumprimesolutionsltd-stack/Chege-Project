@@ -233,3 +233,28 @@ export async function receiptsElsewhere(
     ORDER BY t.mpesa_receipt, t.id`);
   return (result.rows as Row[]).map((row) => ({ receipt: String(row.receipt), budget: String(row.budget) }));
 }
+
+/**
+ * Which of these M-Pesa codes are recorded in another budget the person belongs
+ * to - whoever owns it - by that budget's name. For the M-Pesa check, not for
+ * duplicate warnings: a payment the person files into a shared group is
+ * accounted for there, even when someone else owns the group, and asking for it
+ * again in Personal never cleared Home ("still showing 22 messages", 11 Oct 2026).
+ * Only budgets the person is a member of, and only their names.
+ */
+export async function receiptsInMemberBudgets(
+  groupId: number,
+  userId: string,
+  receipts: readonly string[],
+): Promise<Array<{ receipt: string; budget: string }>> {
+  if (receipts.length === 0) return [];
+  const result = await db.execute(sql`
+    SELECT DISTINCT ON (t.mpesa_receipt) t.mpesa_receipt AS receipt, g.name AS budget
+    FROM joint_account_transactions t
+    JOIN group_memberships m ON m.group_id = t.group_id AND m.user_id = ${userId}
+    JOIN groups g ON g.id = t.group_id
+    WHERE t.group_id <> ${groupId}
+      AND t.mpesa_receipt IN (${sql.join(receipts.map((code) => sql`${code}`), sql`, `)})
+    ORDER BY t.mpesa_receipt, t.id`);
+  return (result.rows as Row[]).map((row) => ({ receipt: String(row.receipt), budget: String(row.budget) }));
+}
