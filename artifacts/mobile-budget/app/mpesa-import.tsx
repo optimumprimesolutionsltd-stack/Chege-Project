@@ -3708,6 +3708,22 @@ export default function MpesaImportScreen() {
                       {status === 'needs' ? 'Needs you' : status === 'changed' ? (choice?.confirmed ? ((choice.auto && out && productOf(item)) || loanOf(item) || savingsOf(item) ? 'Filed by Jamvi' : 'Confirmed') : 'You changed this - confirmed, it saves with the next Save') : 'Suggested by Jamvi'}
                     </Text>
                   ) : null}
+                  {choice?.include && choice.transferTo && choice.transferAuto ? (
+                    <View style={{ gap: 4 }} testID={`mpesa-line-own-guess-${item.index}`}>
+                      <Text style={[styles.hint, { marginTop: 0, color: colors.foreground }]}>
+                        Taken as a move to {accounts.find((one) => one.id === choice.transferTo)?.name ?? 'your account'}, because its number matches that account's.
+                      </Text>
+                      <Pressable
+                        onPress={() => setChoices((current) => ({ ...current, [item.index]: { ...current[item.index], transferTo: null, transferAuto: false, confirmed: false } }))}
+                        accessibilityRole="button"
+                        hitSlop={6}
+                        style={{ alignSelf: 'flex-start', paddingVertical: 4 }}
+                        testID={`mpesa-line-own-guess-payment-${item.index}`}
+                      >
+                        <Text style={{ color: colors.primary, fontFamily: 'Inter_700Bold', fontSize: 13 }}>This was a payment instead</Text>
+                      </Pressable>
+                    </View>
+                  ) : null}
                   {twinNotes(item).map((note) => (
                     <Text key={note} style={[styles.hint, { marginTop: 0, color: colors.destructive }]} testID={`mpesa-line-twin-${item.index}`}>
                       {note}
