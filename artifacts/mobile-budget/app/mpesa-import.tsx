@@ -2561,6 +2561,19 @@ export default function MpesaImportScreen() {
         void queryClient.invalidateQueries({ queryKey: ['new-mpesa-sms'] });
       }
       if (lapsed) result.lapsed = { waiting: toSave.length - result.saved - result.repeats };
+      // What happened to each line, told to the server's log in counts (lib/importDiagnostics):
+      // the same payments were brought in again and again and never cleared, and
+      // nothing said what the save did with them ("still showing 22 messages", 11 Oct 2026).
+      // Message kinds and outcomes only; a reason's quoted names and digits are masked.
+      {
+        const kinds = new Map<string, number>();
+        for (const item of lines) {
+          const kind = `${item.type ?? 'none'}${isRecordable(item) ? '' : '/skip'}${item.alreadyRecorded ? '/recorded' : ''}${item.elsewhere ? '/elsewhere' : ''}${choices[item.index]?.include ? '' : '/off'}`;
+          kinds.set(kind, (kinds.get(kind) ?? 0) + 1);
+        }
+        const why = result.failed.slice(0, 3).map((failure) => failure.why.replace(/"[^"]*"/g, '"-"').replace(/\d/g, '#').slice(0, 70)).join(' | ');
+        diagnose(`saved lines${lines.length} toSave${toSave.length} saved${result.saved} repeats${result.repeats} failed${result.failed.length} kinds ${[...kinds].map(([kind, n]) => `${kind}:${n}`).join(',')}${why ? ` why ${why}` : ''}`);
+      }
       let leftToSave = 0;
       if (statementReading) {
         const stamp = { date: todayIso(), description: 'Saved from your statement' };
