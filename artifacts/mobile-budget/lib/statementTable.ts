@@ -30,9 +30,14 @@ const STATUSES = ['Completed', 'Failed', 'Pending', 'Reversed', 'Cancelled'];
 
 const num = (text: string) => Number(text.replace(/,/g, ''));
 
-/** Items that share a line, left to right. */
+/**
+ * Items that share a line, left to right. Blank items are dropped: a statement
+ * prints an empty one at the very start of each page's first row, which hid that
+ * row's receipt number and left out one row a page - 133 on a 133-page statement
+ * (11 Oct 2026).
+ */
 function lines(items: readonly TextItem[]): TextItem[][] {
-  const sorted = [...items].sort((a, b) => b.y - a.y || a.x - b.x);
+  const sorted = items.filter((item) => item.str.trim()).sort((a, b) => b.y - a.y || a.x - b.x);
   const out: TextItem[][] = [];
   for (const item of sorted) {
     const last = out[out.length - 1];

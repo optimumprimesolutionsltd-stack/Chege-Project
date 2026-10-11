@@ -49,7 +49,9 @@ export interface StatementReading {
   lastDate?: string | null;
 }
 
-const DRAW = /^OverDraft of Credit Party/i;
+// 'Loan Payments to - <own number>' is Fuliza giving back a repayment it took (the
+// money in it was reversed straight after), so the loan is owed again: a draw.
+const DRAW = /^(?:OverDraft of Credit Party|Loan Payments? to\b)/i;
 const REPAYMENT = /^OD Loan Repayment/i;
 const CHARGE = /\bCharge$/i;
 const CHARGE_WORD = /\bCharge\b/i;

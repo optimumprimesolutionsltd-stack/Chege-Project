@@ -48,6 +48,14 @@ describe('readStatementRows', () => {
     expect(rows[1]).toMatchObject({ withdrawn: 7, paidIn: null });
   });
 
+  it("reads a page's first row when the page starts with a blank item before its receipt", () => {
+    // Real statements put an empty text item at the start of each page's first row:
+    // it hid the receipt, and one row a page was left out (11 Oct 2026).
+    const items = page();
+    const withBlank = [{ str: '', x: 40, y: 700, w: 0 }, ...items];
+    expect(readStatementRows([withBlank])).toHaveLength(10);
+  });
+
   it('finds nothing in a page with no table', () => {
     expect(readStatementRows([[{ str: 'Hello', x: 1, y: 1, w: 20 }]])).toEqual([]);
   });
