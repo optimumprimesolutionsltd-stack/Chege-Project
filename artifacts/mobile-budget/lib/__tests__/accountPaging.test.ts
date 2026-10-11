@@ -11,7 +11,8 @@ describe('screens ask for only what they show (9 Oct 2026)', () => {
     expect(home).toContain('const homeAccountParams = { month, year, limit: 0 };');
     // Home shows the balance (How much do I have?) and a below-zero warning;
     // the Bank accounts card with the month's in and out left Home on 9 Oct 2026.
-    expect(home).toContain('balance={bankAccount?.balance}');
+    // How much is on my M-Pesa: the M-Pesa account alone, not every account added up (11 Oct 2026).
+    expect(home).toContain('balance={mpesaSummary?.balance}');
     expect(home).toContain('bankAccount.balance < 0');
   });
 

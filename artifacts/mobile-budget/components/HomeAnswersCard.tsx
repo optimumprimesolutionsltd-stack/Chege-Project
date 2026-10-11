@@ -9,16 +9,20 @@ import { homeAnswers } from '@/lib/homeAnswers';
 
 /**
  * Three questions, three answers, at the top of Home:
- *   How much do I have?  Spent on your budget this month  Am I on track?
+ *   How much is on my M-Pesa?  Spent on your budget this month  Am I on track?
  * Everything else on the screen is detail behind these.
  */
 export function HomeAnswersCard({
   balance,
+  accountName,
   spent,
   budget,
   hidden,
 }: {
+  /** The M-Pesa account's balance today - never every account added up, which mixed in business money. */
   balance: number | null | undefined;
+  /** The M-Pesa account's own name, when it is not plainly M-Pesa. */
+  accountName?: string | null;
   spent: number | null | undefined;
   budget: number | null | undefined;
   /** Private mode hides figures. */
@@ -41,7 +45,7 @@ export function HomeAnswersCard({
       <Pressable
         onPress={() => router.push('/(tabs)/bank')}
         accessibilityRole="button"
-        accessibilityLabel="How much do I have? Open my bank"
+        accessibilityLabel="How much is on my M-Pesa? Open my bank"
         style={styles.row}
         testID="home-answer-have"
       >
@@ -49,9 +53,11 @@ export function HomeAnswersCard({
           <Feather name="credit-card" size={18} color={colors.primary} />
         </View>
         <View style={styles.text}>
-          <Text style={[styles.question, { color: colors.mutedForeground }]}>How much do I have?</Text>
+          <Text style={[styles.question, { color: colors.mutedForeground }]} numberOfLines={1}>
+            {accountName && !/m-?pesa/i.test(accountName) ? `How much is on my M-Pesa (${accountName})?` : 'How much is on my M-Pesa?'}
+          </Text>
           <Text style={[styles.answer, { color: colors.foreground }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
-            {answers.have === null ? 'Add a bank account to see it' : money(answers.have)}
+            {answers.have === null ? 'Bring in your M-Pesa to see it' : money(answers.have)}
           </Text>
         </View>
         <Feather name="chevron-right" size={16} color={colors.mutedForeground} />

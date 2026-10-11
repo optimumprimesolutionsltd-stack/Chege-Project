@@ -40,10 +40,12 @@ describe('homeAnswers', () => {
 });
 
 describe('the answers are on both Home screens', () => {
-  it('phone Home shows the card with the bank balance, month spending and budget', () => {
+  it('phone Home shows the card with the M-Pesa balance, month spending and budget', () => {
     const home = read('app/(tabs)/index.tsx');
     expect(home).toContain('<HomeAnswersCard');
-    expect(home).toContain('balance={bankAccount?.balance}');
+    // The M-Pesa account alone: every account added up mixed in business money (11 Oct 2026).
+    expect(home).toContain('balance={mpesaSummary?.balance}');
+    expect(read('components/HomeAnswersCard.tsx')).toContain("'How much is on my M-Pesa?'");
     expect(home).toContain('spent={summary?.totalSpent}');
     expect(home).toContain('budget={summary?.totalBudget}');
   });

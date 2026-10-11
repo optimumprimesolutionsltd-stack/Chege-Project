@@ -209,6 +209,18 @@ export default function DashboardScreen() {
     refetch: refetchBank,
   } = useGetJointAccount(homeAccountParams, { query: { queryKey: getGetJointAccountQueryKey(homeAccountParams), subscribed: onScreen } });
   const { data: group } = useGetGroup(live);
+  // The M-Pesa account's balance today, for "How much is on my M-Pesa?": every
+  // account added up mixed in business accounts, whose money is not all tracked
+  // here ("there can be confusion if you include business accounts ... or maybe
+  // just be explicit that it is mpesa balance", 11 Oct 2026). Shared with the
+  // import's own question about the same summary.
+  const { data: mpesaSummary } = useQuery<{ balance: number | null; balanceAccount: string | null }>({
+    queryKey: ['mpesa-summary', group?.id ?? null],
+    queryFn: () => customFetch<{ balance: number | null; balanceAccount: string | null }>('/api/mpesa/summary'),
+    enabled: group?.id != null,
+    staleTime: 60_000,
+    subscribed: onScreen,
+  });
   const isSharedWorkspace = group?.isPrivate === false;
 
   const [refreshing, setRefreshing] = useState(false);
@@ -663,7 +675,8 @@ export default function DashboardScreen() {
               track - are the month at a glance. The ring, the Budget/Spent/Left
               strip and the Bank accounts card each said the same again. */}
           <HomeAnswersCard
-            balance={bankAccount?.balance}
+            balance={mpesaSummary?.balance}
+            accountName={mpesaSummary?.balanceAccount}
             spent={summary?.totalSpent}
             budget={summary?.totalBudget}
             hidden={isPrivate}
