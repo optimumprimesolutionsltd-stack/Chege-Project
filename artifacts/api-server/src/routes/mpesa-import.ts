@@ -1,3 +1,4 @@
+import { removedAmong } from "../lib/removed-receipts";
 import { Router } from "express";
 import { z } from "zod";
 import { splitRoots } from "../lib/transaction-splits";
@@ -163,7 +164,10 @@ router.post("/mpesa/import/check-receipts", async (req, res): Promise<void> => {
     .from(jointAccountTxTable)
     .where(and(eq(jointAccountTxTable.groupId, groupId), inArray(jointAccountTxTable.mpesaReceipt, codes)));
 
-  res.json({ recorded: recorded.map((row) => ({ receipt: row.receipt, ...describeRecorded(row) })) });
+  // Removed by the person and not recorded again: shown unticked, saying so (lib/removed-receipts).
+  const recordedCodes = new Set(recorded.map((row) => row.receipt));
+  const removed = (await removedAmong(groupId, codes)).filter((code) => !recordedCodes.has(code));
+  res.json({ recorded: recorded.map((row) => ({ receipt: row.receipt, ...describeRecorded(row) })), removed });
 });
 
 const recategoriseSchema = z.object({
@@ -458,7 +462,7 @@ router.post("/mpesa/difference", async (req, res): Promise<void> => {
   // Messages this account does not have: saved to another of this budget's accounts?
   const here = new Set(ledger.map((entry) => entry.receipt).filter(Boolean));
   const absent = [...new Set(parsed.data.messages.map((message) => message.receipt).filter((code): code is string => Boolean(code) && !here.has(code)))];
-  const elsewhere = new Map<string, { account: string; date: string }>();
+  const elsewhere = new Map<string, { account: string; date: string; removed?: boolean }>();
   for (let i = 0; i < absent.length; i += 2_000) {
     const found = await db
       .select({ receipt: jointAccountTxTable.mpesaReceipt, date: jointAccountTxTable.date, account: bankAccountsTable.name })
@@ -470,6 +474,11 @@ router.post("/mpesa/difference", async (req, res): Promise<void> => {
         inArray(jointAccountTxTable.mpesaReceipt, absent.slice(i, i + 2_000)),
       ));
     for (const row of found) if (row.receipt) elsewhere.set(row.receipt, { account: row.account, date: String(row.date).slice(0, 10) });
+  }
+
+  // Removed by the person: not missing, and never brought in or moved (lib/removed-receipts).
+  for (const code of await removedAmong(groupId, absent.filter((receipt) => !elsewhere.has(receipt)))) {
+    elsewhere.set(code, { account: "", date: "", removed: true });
   }
 
   const result = findDifference(parsed.data.messages, ledger, account.openingBalance, elsewhere);

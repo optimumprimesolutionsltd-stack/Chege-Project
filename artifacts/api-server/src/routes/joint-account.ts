@@ -1,3 +1,4 @@
+import { rememberRemoved } from "../lib/removed-receipts";
 import { Router, type Request, type Response } from "express";
 import { db } from "@workspace/db";
 import {
@@ -2293,6 +2294,8 @@ router.delete("/joint-account/:id", async (req, res): Promise<void> => {
     return;
   }
   if (!deleteResult.deleted) { res.status(404).json({ error: "Not found" }); return; }
+  // Its M-Pesa code is kept, so the next import does not offer it again (lib/removed-receipts).
+  await rememberRemoved(groupId, deleteResult.deleted.mpesaReceipt);
   res.json({ success: true });
 });
 

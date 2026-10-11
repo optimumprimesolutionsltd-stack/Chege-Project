@@ -1,3 +1,4 @@
+import { ensureRemovedReceipts } from "./lib/removed-receipts";
 import { ensureMpesaNames } from "./lib/mpesa-names";
 import { ensureEntriesToSort } from "./lib/entries-to-sort";
 import { fixBorrowedNotIncome } from "./lib/borrowed-not-income";
@@ -97,6 +98,7 @@ async function startServer() {
   void ensureBusinessAccounts();
   void ensureBusinessStreams();
   void ensureCategoryPlaces();
+  void ensureRemovedReceipts();
   void ensurePayeeRules();
   void ensureBudgetKnowledge();
   void ensureStandardCategories();

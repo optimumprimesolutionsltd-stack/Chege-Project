@@ -1330,13 +1330,16 @@ export default function MpesaImportScreen() {
     // A year's statement holds thousands of codes; the server takes 2,000 at a time.
     const found: Array<{ receipt: string; date: string; description: string; category?: string | null; editable?: boolean }> = [];
     const elsewhere: Array<{ receipt: string; budget: string }> = [];
+    // Deleted by the person before: offered unticked, never again by itself (api-server lib/removed-receipts).
+    const removed = new Set<string>();
     for (let start = 0; start < codes.length; start += RECEIPT_BATCH) {
-      const body = await customFetch<{ recorded: typeof found }>('/api/mpesa/import/check-receipts', {
+      const body = await customFetch<{ recorded: typeof found; removed?: string[] }>('/api/mpesa/import/check-receipts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ receipts: codes.slice(start, start + RECEIPT_BATCH) }),
       });
       found.push(...body.recorded);
+      for (const code of body.removed ?? []) removed.add(code);
       // Codes already in another of the person's budgets. Only a warning: a failure is passed over.
       const other = await customFetch<{ elsewhere: typeof elsewhere }>('/api/possible-duplicates/elsewhere', {
         method: 'POST',
@@ -1349,7 +1352,8 @@ export default function MpesaImportScreen() {
     const recorded = new Map(body.recorded.map((row) => [row.receipt, { date: row.date, description: row.description, category: row.category ?? null, editable: row.editable === true }]));
     const marked = all.map((line) => {
       const existing = line.receipt ? recorded.get(line.receipt) : undefined;
-      return existing ? { ...line, alreadyRecorded: existing } : line;
+      const marked = existing ? { ...line, alreadyRecorded: existing } : line;
+      return !existing && line.receipt && removed.has(line.receipt) ? { ...marked, removedBefore: true } : marked;
     });
     // Entries typed by hand that look like the same payment (lib/mpesaImport withTwins).
     // Only a warning: a failed check never stops the reading.
