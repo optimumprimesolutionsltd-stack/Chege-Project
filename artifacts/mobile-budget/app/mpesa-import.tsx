@@ -1182,6 +1182,10 @@ export default function MpesaImportScreen() {
   // One read at a time: the server's logs showed the same messages read twice
   // at once (10 Oct 2026), each drawing the whole review.
   const readingSmsRef = useRef(false);
+  // Whether this page is still open: a read stops when it is left, rather than going on
+  // in the background and freezing the next page opened (11 Oct 2026).
+  const aliveRef = useRef(true);
+  useEffect(() => () => { aliveRef.current = false; }, []);
   // How far reading the messages has got, said on screen: a long stretch takes a while.
   const [smsProgress, setSmsProgress] = useState<{ done: number; total: number } | null>(null);
   const readSmsMessages = async (messages: string[]): Promise<PreviewLine[] | null> => {
@@ -1198,6 +1202,7 @@ export default function MpesaImportScreen() {
       setSmsProgress({ done: 0, total: messages.length });
       for (const batch of smsBatches(messages)) {
         const response = await readPreview(batch.join('\n\n'));
+        if (!aliveRef.current) return null;
         sent += batch.length;
         setSmsProgress({ done: sent, total: messages.length });
         const offset = all.length;
@@ -1205,11 +1210,26 @@ export default function MpesaImportScreen() {
       }
       const known = parseStoredNicknames(await AsyncStorage.getItem(nicknamesKey).catch(() => null));
       setNicknames(known);
+      // Each step after reading, timed and told to the server: on a phone one of
+      // them held the page for 54 s with 862 lines (11 Oct 2026), and none of
+      // them is slow on a computer.
+      let stepAt = Date.now();
+      const step = (name: string) => {
+        const now = Date.now();
+        diagnose(`step ${name} ${now - stepAt}ms lines${all.length} history${history.length} rules${Object.keys(rules).length}`);
+        stepAt = now;
+      };
+      if (!aliveRef.current) return null;
       const shown = applyNicknames(all, known);
+      step('nicknames');
       setText('');
       setSmsMessages(messages);
       setLines(shown);
-      setChoices(startChoices(shown, initialChoices(shown, history, categories.map((row) => row.name), effectiveChargeCategory, rules, canManageBudget)));
+      const suggested = initialChoices(shown, history, categories.map((row) => row.name), effectiveChargeCategory, rules, canManageBudget);
+      step('suggestions');
+      const started = startChoices(shown, suggested);
+      step('own-accounts');
+      setChoices(started);
       // Then: another of the person's budgets that has these codes, and entries typed by hand that look the same.
       void markRecorded(shown)
         .then((checked) => {
@@ -2308,6 +2328,7 @@ export default function MpesaImportScreen() {
   // `resumeJob`: a save already running on the server, from before Jamvi was
   // closed, followed to its end instead of being started again.
   const saveLines = async (resumeJob?: number) => {
+    const saveStartedAt = Date.now();
     if (!lines || !accountId || saving) return;
     const onlyConfirmed = statementReading !== null;
     setSaving(true);
@@ -2472,6 +2493,8 @@ export default function MpesaImportScreen() {
       // stays open (lib/serverSave). This phone only asks how far it has got.
       let job: ServerJob | null = null;
       let serverFailed: unknown = null;
+      // How long this phone took to get the save ready (lib/importDiagnostics).
+      diagnose(`step save-ready ${Date.now() - saveStartedAt}ms lines${lines?.length ?? 0}`);
       try {
         job = resumeJob
           ? { id: resumeJob, status: 'running', total: toSave.length, done: 0 }

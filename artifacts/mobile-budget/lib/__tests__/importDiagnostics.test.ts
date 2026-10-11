@@ -30,3 +30,14 @@ describe('footprints of the page opening, kept if it freezes', () => {
     expect(screen).not.toContain('traceOpen();');
   });
 });
+
+describe('the steps after reading are timed, and a left page stops reading', () => {
+  it('reports each step and the save getting ready, and stops a read when the page is left', () => {
+    expect(screen).toContain("step('nicknames');");
+    expect(screen).toContain("step('suggestions');");
+    expect(screen).toContain("step('own-accounts');");
+    expect(screen).toContain('diagnose(`step save-ready ${Date.now() - saveStartedAt}ms');
+    expect(screen).toContain('useEffect(() => () => { aliveRef.current = false; }, []);');
+    expect(screen).toContain('if (!aliveRef.current) return null;');
+  });
+});
