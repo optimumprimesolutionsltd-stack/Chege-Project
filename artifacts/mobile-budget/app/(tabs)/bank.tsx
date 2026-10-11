@@ -3506,7 +3506,8 @@ export default function BankScreen() {
           const refund = item.type === 'disbursement' && Number(item.amount) < 0;
           const payerLabel = txPayerLabel(item);
           // Shown by the name the person gave its account, when they gave one.
-          const shownDescription = namedPayees.nameFor(item.description) ?? item.description;
+          // A note the person wrote comes before M-Pesa's own words (lib/payeeNotes, 11 Oct 2026).
+          const shownDescription = item.notes?.trim() || (namedPayees.nameFor(item.description) ?? item.description);
           const editing = txEditor.editing;
           const removable = canRemoveTx(item);
           const staged = editing && txEditor.isRemoving(item.id);

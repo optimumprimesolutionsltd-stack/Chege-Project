@@ -93,6 +93,7 @@ import { rememberMpesaCard } from '@/lib/mpesaCard';
 import { keepScreenAwakeWhileSaving, letScreenSleepAgain } from '@/lib/keepAwake';
 import { onlyWanted, takeBringIn } from '@/lib/bringInReceipts';
 import { withCashDeposits } from '@/lib/cashDeposits';
+import { rememberedNote, withNoteRule, withRememberedNotes } from '@/lib/payeeNotes';
 import { useImportDiagnostics } from '@/lib/importDiagnostics';
 import { getImportProgress, importSaveStalled, setImportProgress, useImportProgress } from '@/lib/importProgress';
 import { clearImportStep, noteImportStep, readUnfinishedImport, type ImportStep } from '@/lib/importBreadcrumb';
@@ -566,7 +567,8 @@ export default function MpesaImportScreen() {
   // moves, not spending (lib/teachJamvi). Never the account being imported into.
   const ownAccounts = useMemo(() => accounts.filter((account) => account.id !== accountId), [accounts, accountId]);
   // A cash deposit starts as a move from the Cash account (lib/cashDeposits).
-  const startChoices = (shown: readonly PreviewLine[], fresh: Record<number, Choice>) => withOwnAccounts(shown, withCashDeposits(shown, fresh, ownAccounts), ownAccounts, rules);
+  // A payee's remembered note fills in its lines' notes (lib/payeeNotes).
+  const startChoices = (shown: readonly PreviewLine[], fresh: Record<number, Choice>) => withRememberedNotes(shown, withOwnAccounts(shown, withCashDeposits(shown, fresh, ownAccounts), ownAccounts, rules), rules);
   const { data: account } = useGetJointAccount(accountId ? { accountId } : undefined);
   const history = useMemo(
     () => ((account?.transactions ?? []) as Array<{ type: string; description: string; expenseCategory?: string | null; incomeSourceId?: number | null; chargeForTransactionId?: number | null }>),
@@ -2611,6 +2613,13 @@ export default function MpesaImportScreen() {
     {
       let kept = rules;
       let keptOther = otherRules;
+      // Notes asked to be kept for their payee (lib/payeeNotes), whatever else was remembered.
+      for (const item of lines) {
+        const choice = choices[item.index];
+        if (savedIndexes.has(item.index) && choice?.rememberNote && choice.notes?.trim() && item.description) {
+          kept = withNoteRule(kept, item.description, choice.notes);
+        }
+      }
       for (const item of lines) {
         const choice = choices[item.index];
         if (!savedIndexes.has(item.index) || !choice?.remember) continue;
@@ -4242,7 +4251,7 @@ export default function MpesaImportScreen() {
                     noteOpen.has(item.index) || choice?.notes ? (
                       <TextInput
                         value={choice?.notes ?? ''}
-                        onChangeText={(text) => setChoices((current) => ({ ...current, [item.index]: { ...current[item.index], notes: text } }))}
+                        onChangeText={(text) => setChoices((current) => ({ ...current, [item.index]: { ...current[item.index], notes: text, noteAuto: false } }))}
                         placeholder="A short note (optional)"
                         placeholderTextColor={colors.mutedForeground}
                         maxLength={1000}
@@ -4260,6 +4269,28 @@ export default function MpesaImportScreen() {
                         style={{ alignSelf: 'flex-start', paddingVertical: 4 }}
                       >
                         <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>Add a note (optional)</Text>
+                      </Pressable>
+                    )
+                  ) : null}
+                  {/* A note can be kept for the payee, as a category can ("can it also ask if it can
+                      remember additional notes", 11 Oct 2026): the next payment to them starts with it. */}
+                  {canAddNote(choice) && choice?.notes?.trim() && item.description ? (
+                    choice.noteAuto && choice.notes.trim() === rememberedNote(rules, item.description) ? (
+                      <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0 }]} testID={`mpesa-line-note-remembered-${item.index}`}>
+                        The note you keep for {payeeName(item.description)}. Change it above for this payment.
+                      </Text>
+                    ) : (
+                      <Pressable
+                        onPress={() => setChoices((current) => ({ ...current, [item.index]: { ...current[item.index], rememberNote: !current[item.index]?.rememberNote } }))}
+                        accessibilityRole="checkbox"
+                        accessibilityState={{ checked: choice.rememberNote === true }}
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 }}
+                        testID={`mpesa-line-remember-note-${item.index}`}
+                      >
+                        <Feather name={choice.rememberNote ? 'check-square' : 'square'} size={18} color={choice.rememberNote ? colors.primary : colors.mutedForeground} />
+                        <Text style={{ color: colors.foreground, fontSize: 13, flexShrink: 1 }}>
+                          Also remember this note for {payeeName(item.description)}
+                        </Text>
                       </Pressable>
                     )
                   ) : null}
