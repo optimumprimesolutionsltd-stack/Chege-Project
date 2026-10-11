@@ -8,15 +8,18 @@ import type { DifferenceSpan } from './mpesaLiveBalance';
  * them here, again and again, never cleared Home ("check again. there are
  * messages still left", 11 Oct 2026).
  *
- * Asked of /api/possible-duplicates/elsewhere, the route that knows who is
- * asking; the M-Pesa import routes never read who is asking.
+ * Any budget the person belongs to counts, whoever owns it: a shared group they
+ * file payments into is where those payments are ("still showing 22 messages",
+ * 11 Oct 2026 - only budgets they owned were counted). Asked of
+ * /api/possible-duplicates/in-my-budgets, a route that knows who is asking;
+ * the M-Pesa import routes never read who is asking.
  */
 type Lookup = (receipts: string[]) => Promise<Array<{ receipt: string; budget: string }>>;
 
 const BATCH = 2_000;
 
 export const lookupOtherBudgets: Lookup = async (receipts) => {
-  const body = await customFetch<{ elsewhere: Array<{ receipt: string; budget: string }> }>('/api/possible-duplicates/elsewhere', {
+  const body = await customFetch<{ elsewhere: Array<{ receipt: string; budget: string }> }>('/api/possible-duplicates/in-my-budgets', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ receipts }),
@@ -38,6 +41,9 @@ export async function withOtherBudgets<A extends { result: { spans: DifferenceSp
     // Only a refinement: without it the payments are asked for as before.
     return answer;
   }
+  // Said to the server's log (the health check's query, like lib/importDiagnostics):
+  // how many were missing and how many another budget has - counts only.
+  void customFetch(`/api/healthz?import=${encodeURIComponent(`check missing${codes.length} in-other-budgets${found.size}`)}`).catch(() => {});
   if (found.size === 0) return answer;
   const spans = answer.result.spans.map((span) => ({
     ...span,

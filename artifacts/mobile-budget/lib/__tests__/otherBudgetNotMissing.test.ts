@@ -43,6 +43,17 @@ describe('a payment saved in another of your budgets is accounted for', () => {
     expect(await withOtherBudgets(answer, async () => { throw new Error('offline'); })).toBe(answer);
   });
 
+  it('asks the route that counts every budget the person belongs to, and says how many it found', () => {
+    const lib = readFileSync('lib/otherBudgets.ts', 'utf8');
+    expect(lib).toContain("'/api/possible-duplicates/in-my-budgets'");
+    expect(lib).toContain('check missing${codes.length} in-other-budgets${found.size}');
+    const server = readFileSync('../api-server/src/lib/possible-duplicates.ts', 'utf8');
+    const member = server.slice(server.indexOf('export async function receiptsInMemberBudgets'));
+    expect(member).toContain('JOIN group_memberships m ON m.group_id = t.group_id AND m.user_id = ${userId}');
+    // Whoever owns it: no owner condition.
+    expect(member).not.toContain("role = 'owner'");
+  });
+
   it('is used by Home and Find the difference, and said where it is', () => {
     expect(readFileSync('lib/autoReconcile.ts', 'utf8')).toContain("const ask = async () => withOtherBudgets(await customFetch<Answer>('/api/mpesa/difference', {");
     const screen = readFileSync('app/mpesa-difference.tsx', 'utf8');
