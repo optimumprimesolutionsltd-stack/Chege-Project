@@ -10,7 +10,7 @@ const bank = readFileSync(join(__dirname, '..', '..', 'app', '(tabs)', 'bank.tsx
 
 describe('a payment marked as money to the business', () => {
   it('is unmarked and saved with the category chosen for it', () => {
-    expect(bank).toContain("const leavesBusiness = editingBusinessMoney && toBusinessId === null && txType === 'disbursement' && expenseCategory.trim() !== ''");
+    expect(bank).toContain("const leavesBusiness = editingBusinessMoney && pickedBusinessId === null && txType === 'disbursement' && expenseCategory.trim() !== ''");
     expect(bank).toContain('if (leavesBusiness) await ownerBusiness.unmark(editingTransactionId);');
     expect(bank).not.toContain('A category or source chosen above is not saved.');
   });

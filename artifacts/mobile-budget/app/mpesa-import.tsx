@@ -167,6 +167,7 @@ import {
   chooseTransfer,
   destinationOf,
   isMove,
+  ownerBusinessOf,
   throughMpesaHints,
   initialChoices,
   canReport,
@@ -2481,7 +2482,8 @@ export default function MpesaImportScreen() {
     // What one line became, the same whether the server or this phone saved it.
     const onSaved = (item: PreviewLine, choice: Choice | undefined, posted: Omit<Posted, 'feeFailed'> & { feeFailed?: boolean }) => {
       if (choice?.debt && posted.id) debtLinks.push({ transactionId: posted.id, partyId: choice.debt.partyId, kind: choice.debt.kind });
-      if (choice?.ownerBusinessId && posted.id) businessMarks.set(choice.ownerBusinessId, [...(businessMarks.get(choice.ownerBusinessId) ?? []), posted.id]);
+      const ownerBusinessId = ownerBusinessOf(item, choice);
+      if (ownerBusinessId && posted.id) businessMarks.set(ownerBusinessId, [...(businessMarks.get(ownerBusinessId) ?? []), posted.id]);
       const named = mpesaNameFor(posted.id, item.original, item.description);
       if (named) mpesaNames.push(named);
       if (posted.feeFailed) result.failed.push({ what: `${item.description} charge`, why: `The entry saved, but its M-Pesa charge${item.fee ? ` of KES ${item.fee}` : ''} did not. Add it on the Bank tab as money out.` });

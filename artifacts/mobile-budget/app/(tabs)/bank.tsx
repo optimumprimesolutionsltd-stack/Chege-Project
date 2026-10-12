@@ -2135,9 +2135,14 @@ export default function BankScreen() {
     // A category chosen for a payment marked as the business's says it was not the
     // business's: it is unmarked on save and saved like any payment ("still not saving
     // to donations even after save", 11 Oct 2026). Before, the category was dropped.
-    const leavesBusiness = editingBusinessMoney && toBusinessId === null && txType === 'disbursement' && expenseCategory.trim() !== '' &&
+    // Who is this for? naming a business, with none of its costs chosen: the director's money
+    // to it, saved as is ("when i choose who is this for? its still asking for a category",
+    // 12 Oct 2026). Choosing one of its costs keeps it a cost of the business.
+    const pickedBusinessId = toBusinessId ?? (txType === 'disbursement' && forBusinessId !== null && !expenseCategory.trim() &&
+      withdrawDest !== 'party' && withdrawDest !== 'lend' && withdrawDest !== 'savings' ? forBusinessId : null);
+    const leavesBusiness = editingBusinessMoney && pickedBusinessId === null && txType === 'disbursement' && expenseCategory.trim() !== '' &&
       withdrawDest !== 'party' && withdrawDest !== 'lend' && withdrawDest !== 'savings';
-    const toBusiness = (txType === 'disbursement' || txType === 'deposit') && toBusinessId !== null;
+    const toBusiness = (txType === 'disbursement' || txType === 'deposit') && pickedBusinessId !== null;
     const businessMoney = (editingBusinessMoney && !leavesBusiness) || toBusiness;
     if (businessMoney) {
       // Money between you and your business carries no category (lib/ownerBusiness).
@@ -2379,7 +2384,7 @@ export default function BankScreen() {
         }
         if (leavesBusiness) await ownerBusiness.unmark(editingTransactionId);
         // Marked first: a marked entry keeps no category, and the edit below leaves it that way.
-        if (toBusiness && toBusinessId !== null) await ownerBusiness.mark([editingTransactionId], toBusinessId);
+        if (toBusiness && pickedBusinessId !== null) await ownerBusiness.mark([editingTransactionId], pickedBusinessId);
         const saved = await updateTransaction({
           id: editingTransactionId,
           data: {
@@ -2535,8 +2540,8 @@ export default function BankScreen() {
       // It carries the same date as the posting it came with, so a day's
       // charges sit with the day's postings. Each is separate, and giving
       // them one category is what totals them for the month.
-      if (toBusiness && toBusinessId !== null && editingTransactionId === null && createdPostingId) {
-        await ownerBusiness.mark([createdPostingId], toBusinessId);
+      if (toBusiness && pickedBusinessId !== null && editingTransactionId === null && createdPostingId) {
+        await ownerBusiness.mark([createdPostingId], pickedBusinessId);
       }
       await postBankCharge(txType === 'deposit' ? 'deposit' : 'withdrawal', createdPostingId);
       // Read before finishEntry, which clears it. Asking after an edit would
@@ -5649,7 +5654,7 @@ export default function BankScreen() {
               ) : null}
 
               {/* Expense category (disbursements only) */}
-              {isWithdrawal && withdrawDest !== 'savings' && withdrawDest !== 'lend' && toBusinessId === null && (
+              {isWithdrawal && withdrawDest !== 'savings' && withdrawDest !== 'lend' && toBusinessId === null && forBusinessId === null && (
                 <>
                   <Text style={[styles.label, { color: colors.mutedForeground }]} testID="bank-category-label">
                     Category{' '}
