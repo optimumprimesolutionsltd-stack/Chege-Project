@@ -27,8 +27,9 @@ describe('linking money back to the payment it reversed', () => {
     expect(panel).toContain('testID="reversal-none"');
   });
 
-  it('does not ask on every deposit, only one that could be money back', () => {
-    expect(panel).toContain('if (data.candidates.length === 0 && !saysMoneyBack) return null;');
+  // "is this money coming back from a payment important?" - "but it shouldnt be there" (12 Oct 2026).
+  it('asks only on money M-Pesa calls a reversal, never on ordinary money in', () => {
+    expect(panel).toContain('if (!saysMoneyBack) return null;');
   });
 
   it('shows what it is linked to, and can undo it after asking', () => {

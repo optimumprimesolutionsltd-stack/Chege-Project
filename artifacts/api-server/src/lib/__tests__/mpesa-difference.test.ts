@@ -147,3 +147,25 @@ describe("lines the statement reader makes", () => {
     expect(statementMade(null)).toBe(false);
   });
 });
+
+// "i have 6840" (12 Oct 2026): a Fuliza repayment no message was sent for sat between two
+// messages, and the step between their balances made Tiana's 6,840 read as 9,882.
+describe("a message's own amount", () => {
+  const ledger = [
+    { id: 1, date: "2026-03-15", signed: 10_000, description: "Salary", receipt: "UCGF99HUY4" },
+    { id: 2, date: "2026-03-16", signed: -6882, description: "Tiana", receipt: "UCGF99HV23" },
+  ] as LedgerEntry[];
+  const messages = (moved?: number): DifferenceMessage[] => [
+    { receipt: "UCGF99HUY4", balance: 10_000, at: 1, day: "2026-03-15" },
+    { receipt: "UCGF99HV23", balance: 117.62, at: 2, day: "2026-03-16", ...(moved === undefined ? {} : { moved }) },
+  ];
+  const amounts = (moved?: number) => (findDifference(messages(moved), ledger, 0)?.spans ?? []).flatMap((span) => span.amounts ?? []);
+
+  it("is what an entry is compared with, when the message says it", () => {
+    expect(amounts(-6882)).toEqual([]);
+  });
+
+  it("without it, the step between balances is still used", () => {
+    expect(amounts().map((item) => item.receipt)).toEqual(["UCGF99HV23"]);
+  });
+});

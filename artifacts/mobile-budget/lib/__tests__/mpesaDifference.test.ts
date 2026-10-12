@@ -20,10 +20,12 @@ describe('Find the difference, on the phone', () => {
     expect(kenyaDay(Date.UTC(2026, 9, 3, 20, 59))).toBe('2026-10-03');
   });
 
-  it('sends only the code, the balance and the time of messages that state a balance - never the message', () => {
+  it('sends only the code, the balance, the time and what it moved of messages that state a balance - never the message', () => {
     const sent = differenceMessages([{ body: PAID, date: Date.UTC(2026, 6, 13, 10, 37) }, { body: 'Thank you for using M-PESA', date: 1 }]);
-    expect(sent).toEqual([{ receipt: 'TJ4AB1CD2E', balance: 206.52, at: Date.UTC(2026, 6, 13, 10, 37), day: '2026-07-13' }]);
-    expect(Object.keys(sent[0]).sort()).toEqual(['at', 'balance', 'day', 'receipt']);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({ receipt: 'TJ4AB1CD2E', balance: 206.52, at: Date.UTC(2026, 6, 13, 10, 37), day: '2026-07-13' });
+    // What it moved, a number - never the payee or any words (12 Oct 2026).
+    expect(Object.keys(sent[0]).filter((key) => key !== 'moved').sort()).toEqual(['at', 'balance', 'day', 'receipt']);
   });
 
   // Fix all once brought in Fuliza repayments, which the import never saves,

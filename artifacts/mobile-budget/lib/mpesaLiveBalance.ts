@@ -76,7 +76,28 @@ export function balanceComparison(live: number, inJamvi: number, account: string
  * `record: false` marks a message that moves the balance but is never saved as
  * an entry of its own (a Fuliza loan notice or repayment): not "missing".
  */
-export type DifferenceMessage = { receipt: string | null; balance: number; at: number; day: string; record?: false };
+/**
+ * `moved`: what the message itself says it moved - its amount and charge, out as a
+ * minus - when its wording says which way. Compared with Jamvi instead of the step
+ * between two balances, which swallowed a Fuliza repayment no message was sent for:
+ * "Tiana 6,840" read as 9,882 ("i have 6840", 12 Oct 2026).
+ */
+export type DifferenceMessage = { receipt: string | null; balance: number; at: number; day: string; record?: false; moved?: number };
+
+const COST = /Transaction cost,?\s*Ksh\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)/i;
+const MONEY_IN = /\byou have received\b|\breceived Ksh|\bhas been credited\b|\breversal\b.*\bcredited\b/i;
+const MONEY_OUT = /\bsent to\b|\bpaid to\b|\bwithdraw\b|\bbought\b|\bGive Ksh\b|\bfor account\b/i;
+
+/** What one message says it moved, or undefined when its wording does not say which way. */
+export function movedInMessage(body: string): number | undefined {
+  const amount = amountOf(body.match(FIRST_AMOUNT)?.[1]);
+  if (!Number.isFinite(amount)) return undefined;
+  const cost = amountOf(body.match(COST)?.[1]);
+  const fee = Number.isFinite(cost) ? cost : 0;
+  if (MONEY_IN.test(body) && !MONEY_OUT.test(body)) return cents(amount);
+  if (MONEY_OUT.test(body) && !MONEY_IN.test(body)) return cents(-(amount + fee));
+  return undefined;
+}
 
 /** M-Pesa's receipt code, which every transaction message starts with ("TJ4AB1CD2E Confirmed…"). */
 export function receiptOf(body: string): string | null {
@@ -126,7 +147,8 @@ export function differenceMessages(rows: ReadonlyArray<{ body: string; date: num
     }
     if (stated === null) continue;
     last = stated;
-    out.push({ receipt, balance: cents(stated - owed), at: row.date, day: kenyaDay(row.date) });
+    const moved = movedInMessage(row.body);
+    out.push({ receipt, balance: cents(stated - owed), at: row.date, day: kenyaDay(row.date), ...(moved === undefined ? {} : { moved }) });
   }
   return out;
 }
