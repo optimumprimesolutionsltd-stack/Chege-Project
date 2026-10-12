@@ -1352,13 +1352,10 @@ export default function MpesaImportScreen() {
       });
       found.push(...body.recorded);
       for (const code of body.removed ?? []) removed.add(code);
-      // Codes already in another of the person's budgets. Only a warning: a failure is passed over.
-      const other = await customFetch<{ elsewhere: typeof elsewhere }>('/api/possible-duplicates/elsewhere', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ receipts: codes.slice(start, start + RECEIPT_BATCH) }),
-      }).catch(() => ({ elsewhere: [] }));
-      elsewhere.push(...other.elsewhere);
+      // Not looked for in the person's other budgets: each budget keeps its own record.
+      // "Already saved in lydiah and chege" left a church line's moves unticked
+      // ("jamvi should treat them as indepedent for now", 12 Oct 2026). `elsewhere`
+      // stays empty; lib/mpesaImport withTwins still reads it when that comes back.
     }
     const body = { recorded: found };
     const recorded = new Map(body.recorded.map((row) => [row.receipt, { date: row.date, description: row.description, category: row.category ?? null, editable: row.editable === true }]));
