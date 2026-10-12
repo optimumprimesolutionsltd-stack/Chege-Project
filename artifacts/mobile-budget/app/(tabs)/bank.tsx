@@ -391,6 +391,11 @@ export default function BankScreen() {
    */
   type WithdrawDestType = 'source' | 'savings' | 'party' | 'other' | 'lend';
   const [withdrawDest, setWithdrawDest] = useState<WithdrawDestType | null>(null);
+  // Money out to one of the person's own businesses: the director's money, saved on
+  // one tap - no category, no lending or paying back ("a payment made to one of my
+  // businesses, if i select the business it should automatically register, whether its
+  // lending or repaying is irrelevant as the logic is directors drawings", 12 Oct 2026).
+  const [toBusinessId, setToBusinessId] = useState<number | null>(null);
   // Paying somebody you owe: Mwangi, or KCB. The party is who it went to; the
   // category is still what kind of cost it was, because the money did leave.
   const [withdrawPartyId, setWithdrawPartyId] = useState<number | null>(null);
@@ -608,6 +613,9 @@ export default function BankScreen() {
     const added = allIncomeSources.filter((src) => addedBusinessIds.includes(src.id) && !businesses.ids.has(src.id)).map((src) => ({ id: src.id, name: src.name }));
     return [...listed, ...added];
   }, [allIncomeSources, addedBusinessIds, businesses.list, businesses.ids]);
+  /** A marked entry's business by name; the one set up first when it has none. */
+  const businessNameOf = (id: number | undefined): string =>
+    (id === undefined ? undefined : whoForBusinesses.find((one) => one.id === id)?.name) ?? ownerBusiness.business.name;
   const whoForCosts = useMemo(
     () => (forBusinessId === null ? [] : [...costOfCategory.entries()].filter(([, id]) => id === forBusinessId).map(([name]) => name).sort((a, b) => a.localeCompare(b))),
     [costOfCategory, forBusinessId],
@@ -709,6 +717,7 @@ export default function BankScreen() {
     setWithdrawerId(!isSharedWorkspace ? user?.id ?? null : null);
     // Reset withdrawal destination
     setWithdrawDest(null);
+    setToBusinessId(null);
     setWithdrawSourceName(null);
     setWithdrawGoalId(null);
     setShowGoalPicker(false);
@@ -987,6 +996,7 @@ export default function BankScreen() {
     setShowCategoryPicker(false);
     setNewCategoryName('');
     setWithdrawDest(null);
+    setToBusinessId(null);
     setWithdrawSourceName(null);
     setWithdrawGoalId(null);
     setShowGoalPicker(false);
@@ -1517,6 +1527,9 @@ export default function BankScreen() {
     // category rather than being made to find one as ordinary spending.
     setWithdrawDest(type === 'disbursement'
       ? (tx.isLending ? 'lend' : tx.settlesContributorId ? 'party' : 'other')
+      : null);
+    setToBusinessId(type === 'disbursement' && ownerBusiness.markedIds.has(tx.id)
+      ? ownerBusiness.businessIdOf(tx.id) ?? ownerBusiness.business.incomeSourceId ?? null
       : null);
     setWithdrawSourceName(null);
     setWithdrawGoalId(tx.savingsGoalId ?? null);
@@ -2122,9 +2135,10 @@ export default function BankScreen() {
     // A category chosen for a payment marked as the business's says it was not the
     // business's: it is unmarked on save and saved like any payment ("still not saving
     // to donations even after save", 11 Oct 2026). Before, the category was dropped.
-    const leavesBusiness = editingBusinessMoney && txType === 'disbursement' && expenseCategory.trim() !== '' &&
+    const leavesBusiness = editingBusinessMoney && toBusinessId === null && txType === 'disbursement' && expenseCategory.trim() !== '' &&
       withdrawDest !== 'party' && withdrawDest !== 'lend' && withdrawDest !== 'savings';
-    const businessMoney = editingBusinessMoney && !leavesBusiness;
+    const toBusiness = txType === 'disbursement' && toBusinessId !== null;
+    const businessMoney = (editingBusinessMoney && !leavesBusiness) || toBusiness;
     if (businessMoney) {
       // Money between you and your business carries no category (lib/ownerBusiness).
     } else if (txType === 'disbursement' && withdrawDest !== 'savings' && withdrawDest !== 'lend' && withdrawDest !== 'party' && !expenseCategory.trim()) {
@@ -2364,6 +2378,8 @@ export default function BankScreen() {
           });
         }
         if (leavesBusiness) await ownerBusiness.unmark(editingTransactionId);
+        // Marked first: a marked entry keeps no category, and the edit below leaves it that way.
+        if (toBusiness && toBusinessId !== null) await ownerBusiness.mark([editingTransactionId], toBusinessId);
         const saved = await updateTransaction({
           id: editingTransactionId,
           data: {
@@ -2390,7 +2406,7 @@ export default function BankScreen() {
                 // yet from before it was sorted - is sent as null, which takes off
                 // any the posting had ("made changes but still showing not sure
                 // yet", 8 Oct 2026).
-                : debtPaymentHasNoCategory
+                : debtPaymentHasNoCategory || toBusiness
                   ? { expenseCategory: null }
                   : { expenseCategory, destinationKind: withdrawDest === 'other' ? 'other' : 'category' }
               : {}),
@@ -2502,7 +2518,7 @@ export default function BankScreen() {
               ? { isLending: true }
               // Paying somebody you owe with no category: a debt payment, not
               // spending, so it keeps out of the totals the way a loan does.
-              : debtPaymentHasNoCategory
+              : debtPaymentHasNoCategory || toBusiness
                 ? {}
                 : { expenseCategory, destinationKind: withdrawDest === 'other' ? 'other' : 'category' }),
             ...(withdrawDest === 'lend' || withdrawDest === 'party'
@@ -2519,6 +2535,9 @@ export default function BankScreen() {
       // It carries the same date as the posting it came with, so a day's
       // charges sit with the day's postings. Each is separate, and giving
       // them one category is what totals them for the month.
+      if (toBusiness && toBusinessId !== null && editingTransactionId === null && createdPostingId) {
+        await ownerBusiness.mark([createdPostingId], toBusinessId);
+      }
       await postBankCharge(txType === 'deposit' ? 'deposit' : 'withdrawal', createdPostingId);
       // Read before finishEntry, which clears it. Asking after an edit would
       // take the money off a second time.
@@ -3550,7 +3569,7 @@ export default function BankScreen() {
                       : dep && item.isBorrowing ? (item.debtPartyName ? `Borrowed from ${item.debtPartyName}` : 'Borrowed money')
                       : dep && item.settlesContributorId && item.debtPartyName ? `Repaid by ${item.debtPartyName}`
                       : !dep && item.isLending ? (item.debtPartyName ? `Lent to ${item.debtPartyName}` : 'Money lent out')
-                      : ownerBusiness.markedIds.has(item.id) ? businessTitle(dep ? 'in' : 'out', ownerBusiness.business.name)
+                      : ownerBusiness.markedIds.has(item.id) ? businessTitle(dep ? 'in' : 'out', businessNameOf(ownerBusiness.businessIdOf(item.id)))
                       : !dep && item.expenseCategory ? item.expenseCategory
                       : !dep && item.settlesContributorId ? (item.debtPartyName ? `Paid to ${item.debtPartyName}` : 'Debt payment')
                       : dep && item.incomeSourceId && incomeSourceNames.get(item.incomeSourceId) ? incomeSourceNames.get(item.incomeSourceId)
@@ -5160,7 +5179,7 @@ export default function BankScreen() {
                       is the same question: ordinary spending, paying somebody
                       you owe, or lending. Borrowing and lending are the two
                       directions of one idea and should not look unrelated. */}
-                  {editingTransactionId !== null && !editingTransfer && withdrawDest !== 'party' && withdrawDest !== 'lend' && withdrawDest !== 'savings' ? (
+                  {editingTransactionId !== null && !editingTransfer && toBusinessId === null && withdrawDest !== 'party' && withdrawDest !== 'lend' && withdrawDest !== 'savings' ? (
                     <WhoIsThisFor
                       direction="out"
                       businesses={whoForBusinesses}
@@ -5181,8 +5200,10 @@ export default function BankScreen() {
                     onPress={() => setShowWithdrawKindPicker((open) => !open)}
                     testID="bank-withdraw-kind"
                   >
-                    <Text style={{ flex: 1, color: withdrawDest === 'party' || withdrawDest === 'lend' ? colors.foreground : colors.mutedForeground, fontFamily: 'Inter_400Regular' }}>
-                      {withdrawDest === 'party'
+                    <Text style={{ flex: 1, color: toBusinessId !== null || withdrawDest === 'party' || withdrawDest === 'lend' ? colors.foreground : colors.mutedForeground, fontFamily: 'Inter_400Regular' }}>
+                      {toBusinessId !== null
+                        ? `To ${businessNameOf(toBusinessId)} - director's money`
+                        : withdrawDest === 'party'
                         ? selectedParty ? `Paying ${selectedParty.name}` : 'Paying a person or business I owe'
                         : withdrawDest === 'lend'
                           ? lentToParty ? `Lending to ${lentToParty.name}` : 'Lending it out'
@@ -5196,6 +5217,7 @@ export default function BankScreen() {
                         style={styles.categoryOption}
                         onPress={() => {
                           if (withdrawDest === 'party' || withdrawDest === 'lend') setWithdrawDest('other');
+                          setToBusinessId(null);
                           setWithdrawPartyId(null);
                           setShowWithdrawKindPicker(false);
                         }}
@@ -5211,6 +5233,7 @@ export default function BankScreen() {
                           // should go away", 8 Oct 2026). Re-choosing it keeps one picked
                           // on purpose for a purchase never recorded.
                           if (withdrawDest !== 'party') setExpenseCategory('');
+                          setToBusinessId(null);
                           setWithdrawDest('party');
                           setWithdrawSourceName(null);
                           setWithdrawPartyId(null);
@@ -5232,6 +5255,7 @@ export default function BankScreen() {
                           style={styles.categoryOption}
                           onPress={() => {
                             setWithdrawDest('lend');
+                            setToBusinessId(null);
                             setWithdrawSourceName(null);
                             setExpenseCategory('');
                             setWithdrawPartyId(null);
@@ -5246,13 +5270,41 @@ export default function BankScreen() {
                           </Text>
                         </TouchableOpacity>
                       </View>
+                      {whoForBusinesses.length > 0 ? (
+                        <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }}>
+                          <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold', fontSize: 12, paddingHorizontal: 14, paddingTop: 10 }}>
+                            TO ONE OF MY BUSINESSES - DIRECTOR'S MONEY
+                          </Text>
+                          {whoForBusinesses.map((business) => (
+                            <TouchableOpacity
+                              key={business.id}
+                              style={styles.categoryOption}
+                              onPress={() => {
+                                setToBusinessId(business.id);
+                                setWithdrawDest(null);
+                                setWithdrawPartyId(null);
+                                setWithdrawSourceName(null);
+                                setExpenseCategory('');
+                                setShowCategoryPicker(false);
+                                setShowWithdrawKindPicker(false);
+                              }}
+                              testID={`bank-withdraw-to-business-${business.id}`}
+                            >
+                              <Text style={{ color: colors.dropdownForeground, fontFamily: 'Inter_400Regular' }}>{business.name}</Text>
+                            </TouchableOpacity>
+                          ))}
+                          <Text style={{ color: colors.dropdownMutedForeground, fontFamily: 'Inter_400Regular', fontSize: 12, paddingHorizontal: 14, paddingBottom: 10 }}>
+                            Money between you and your business: not spending, not a loan. No category needed - just save.
+                          </Text>
+                        </View>
+                      ) : null}
                     </View>
                   )}
 
                   {/* Paying a debt or lending already says where the money goes: to
                       them. The row offered income streams there, and tapping one
                       quietly turned the debt payment back into ordinary spending. */}
-                  {withdrawDest !== 'party' && withdrawDest !== 'lend' ? (<>
+                  {withdrawDest !== 'party' && withdrawDest !== 'lend' && toBusinessId === null ? (<>
                   <Text style={[styles.label, { color: colors.mutedForeground }]}>
                     Where is it going?{' '}
                     <Text style={{ fontWeight: '400', fontSize: 11 }}>(optional)</Text>
@@ -5569,7 +5621,7 @@ export default function BankScreen() {
               ) : null}
 
               {/* Expense category (disbursements only) */}
-              {isWithdrawal && withdrawDest !== 'savings' && withdrawDest !== 'lend' && (
+              {isWithdrawal && withdrawDest !== 'savings' && withdrawDest !== 'lend' && toBusinessId === null && (
                 <>
                   <Text style={[styles.label, { color: colors.mutedForeground }]} testID="bank-category-label">
                     Category{' '}
@@ -5920,7 +5972,7 @@ export default function BankScreen() {
                 editingBusinessMoney ? (
                   <View style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 8, padding: 12, gap: 6 }} testID="bank-business-money">
                     <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>
-                      {businessTitle(txType === 'deposit' ? 'in' : 'out', ownerBusiness.business.name)}
+                      {businessTitle(txType === 'deposit' ? 'in' : 'out', businessNameOf(editingTransactionId === null ? undefined : ownerBusiness.businessIdOf(editingTransactionId)))}
                     </Text>
                     <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>
                       Money between you and your business: not income, not spending.{txType === 'disbursement' ? ' Choose a category above and save to make it an ordinary payment instead.' : ''}
@@ -5969,7 +6021,10 @@ export default function BankScreen() {
                       <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>Not my business - sort it out another way</Text>
                     </TouchableOpacity>
                   </View>
-                ) : (
+                ) : txType === 'disbursement' ? null : (
+                  // Money out picks the business in the kind-of-money list above - asking
+                  // again here was a second step ("even the idea this is for my business is
+                  // not needed, since we have already identified up there", 12 Oct 2026).
                   <TouchableOpacity
                     onPress={() => {
                       const tx = (data?.transactions ?? []).find((row) => row.id === editingTransactionId);

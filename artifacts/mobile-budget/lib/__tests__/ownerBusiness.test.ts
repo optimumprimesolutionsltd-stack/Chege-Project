@@ -50,7 +50,7 @@ describe('where it is offered', () => {
     expect(bank).toContain('useAutoMarkBusiness(data?.transactions);');
     expect(bank).toContain('testID="bank-not-my-business"');
     expect(bank).toContain('testID="bank-my-business"');
-    expect(bank).toContain("ownerBusiness.markedIds.has(item.id) ? businessTitle(dep ? 'in' : 'out', ownerBusiness.business.name)");
+    expect(bank).toContain("ownerBusiness.markedIds.has(item.id) ? businessTitle(dep ? 'in' : 'out', businessNameOf(ownerBusiness.businessIdOf(item.id)))");
     expect(readFileSync('app/sort-entries.tsx', 'utf8')).toContain('testID={`sort-entry-${entry.id}-my-business`}');
   });
 

@@ -2,6 +2,8 @@ import { Router } from "express";
 import { z } from "zod";
 import { getActiveGroupId, requireGroupManager } from "../lib/activeGroup";
 import { markOwnerBusiness, ownerBusinessIds, ownerBusinessReady, unmarkOwnerBusiness } from "../lib/owner-business";
+import { ownerBusinessOf } from "../lib/owner-business-money";
+import { businessStreamIds } from "../lib/business-streams";
 
 const router = Router();
 
@@ -9,10 +11,11 @@ const router = Router();
 router.get("/owner-business", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
-  res.json({ ready: ownerBusinessReady(), transactionIds: await ownerBusinessIds(groupId) });
+  res.json({ ready: ownerBusinessReady(), transactionIds: await ownerBusinessIds(groupId), businessOf: await ownerBusinessOf(groupId) });
 });
 
-const markSchema = z.object({ transactionIds: z.array(z.number().int().positive()).min(1).max(5000) });
+// incomeSourceId: which of the person's businesses, when they chose one.
+const markSchema = z.object({ transactionIds: z.array(z.number().int().positive()).min(1).max(5000), incomeSourceId: z.number().int().positive().optional() });
 
 /** Mark entries as owner's drawings (money in) or money put into the business (money out). */
 router.post("/owner-business", async (req, res): Promise<void> => {
@@ -28,7 +31,12 @@ router.post("/owner-business", async (req, res): Promise<void> => {
     res.status(400).json({ error: "Send the entries to mark." });
     return;
   }
-  res.json({ marked: await markOwnerBusiness(groupId, parsed.data.transactionIds) });
+  const business = parsed.data.incomeSourceId ?? null;
+  if (business !== null && !(await businessStreamIds(groupId)).includes(business)) {
+    res.status(400).json({ error: "That is not one of your businesses." });
+    return;
+  }
+  res.json({ marked: await markOwnerBusiness(groupId, parsed.data.transactionIds, business) });
 });
 
 /** Not business money after all: back on the list to sort out. */

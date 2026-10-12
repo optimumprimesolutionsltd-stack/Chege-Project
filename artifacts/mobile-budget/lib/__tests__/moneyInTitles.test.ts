@@ -17,7 +17,7 @@ describe('money in is titled by its income stream', () => {
 // under it meant nothing there, and tapping one quietly undid the debt payment.
 describe('paying a debt does not ask where the money is going', () => {
   it('hides that row while paying or lending', () => {
-    expect(phone).toContain("{withdrawDest !== 'party' && withdrawDest !== 'lend' ? (<>");
+    expect(phone).toContain("{withdrawDest !== 'party' && withdrawDest !== 'lend' && toBusinessId === null ? (<>");
   });
   it('does not assume the creditor is a person', () => {
     expect(phone).not.toContain("'Paying somebody I owe'");
