@@ -11,7 +11,7 @@ import { reversalLinksReady } from "./reversal-links";
  * entries of this budget: not a move between your own accounts or savings, a
  * fee, or a reversal. Returns the ids marked.
  */
-export async function markOwnerBusiness(groupId: number, transactionIds: readonly number[]): Promise<number[]> {
+export async function markOwnerBusiness(groupId: number, transactionIds: readonly number[], incomeSourceId: number | null = null): Promise<number[]> {
   if (!ownerBusinessReady() || transactionIds.length === 0) return [];
   const ids = [...new Set(transactionIds)];
   return db.transaction(async (trx) => {
@@ -47,9 +47,13 @@ export async function markOwnerBusiness(groupId: number, transactionIds: readonl
         await trx.execute(sql`DELETE FROM "entries_to_sort" WHERE "transaction_id" = ${id} AND "group_id" = ${groupId}`);
         await trx.execute(sql`DELETE FROM "entries_to_check" WHERE "transaction_id" = ${id} AND "group_id" = ${groupId}`);
       }
-      await trx.execute(sql`
+      await trx.execute(incomeSourceId === null
+        ? sql`
         INSERT INTO "owner_business_money" ("transaction_id", "group_id") VALUES (${id}, ${groupId})
-        ON CONFLICT ("transaction_id") DO NOTHING`);
+        ON CONFLICT ("transaction_id") DO NOTHING`
+        : sql`
+        INSERT INTO "owner_business_money" ("transaction_id", "group_id", "income_source_id") VALUES (${id}, ${groupId}, ${incomeSourceId})
+        ON CONFLICT ("transaction_id") DO UPDATE SET "income_source_id" = EXCLUDED."income_source_id"`);
       marked.push(id);
     }
     return marked;

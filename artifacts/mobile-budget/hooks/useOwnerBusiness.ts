@@ -10,7 +10,8 @@ import { namedFor } from '@/lib/namedPayees';
 import { useNamedPayees } from '@/hooks/useNamedPayees';
 import { saveKnowledge } from '@/lib/knowledgeStore';
 
-type Marked = { ready: boolean; transactionIds: number[] };
+/** businessOf: the business each entry went to or came from, where one was chosen (transaction id to income stream id). */
+type Marked = { ready: boolean; transactionIds: number[]; businessOf?: Record<string, number> };
 
 /**
  * Your business's names and numbers (kept on the server, lib/knowledgeStore)
@@ -33,6 +34,11 @@ export function useOwnerBusiness() {
     retry: false,
   });
   const markedIds = useMemo(() => new Set(marked?.transactionIds ?? []), [marked]);
+  /** Which of the person's businesses a marked entry is with; undefined for the business set up first. */
+  const businessIdOf = useCallback((id: number): number | undefined => {
+    const business = marked?.businessOf?.[String(id)];
+    return business === undefined ? undefined : Number(business);
+  }, [marked]);
   // The business's bank accounts on Bank count as its own, untyped (lib/ownerBusiness).
   const { data: accounts = [] } = useGetJointAccounts();
   const { businessOf } = useBusinessAccounts();
@@ -54,12 +60,12 @@ export function useOwnerBusiness() {
     await saveKnowledge(group?.id, 'owner-business', next);
   }, [group?.id, queryClient, storageKey]);
 
-  const mark = useCallback(async (ids: readonly number[]) => {
+  const mark = useCallback(async (ids: readonly number[], incomeSourceId?: number) => {
     if (ids.length === 0) return [];
     const result = await customFetch<{ marked: number[] }>('/api/owner-business', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ transactionIds: [...ids] }),
+      body: JSON.stringify({ transactionIds: [...ids], ...(incomeSourceId ? { incomeSourceId } : {}) }),
     });
     refresh();
     return result.marked;
@@ -86,7 +92,7 @@ export function useOwnerBusiness() {
 
   const unassigned = useMemo(() => unassignedBusinessAccounts(accounts, businessOf), [accounts, businessOf]);
 
-  return { business, matching, fromBank, unassigned, ready: marked?.ready === true, markedIds, save, mark, unmark, markFromEntry };
+  return { business, matching, fromBank, unassigned, ready: marked?.ready === true, markedIds, businessIdOf, save, mark, unmark, markFromEntry };
 }
 
 /**

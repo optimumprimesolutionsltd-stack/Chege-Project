@@ -41,6 +41,11 @@ export async function ensureOwnerBusiness(): Promise<void> {
         "created_at" timestamp with time zone NOT NULL DEFAULT now()
       )`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS "owner_business_money_group_idx" ON "owner_business_money" ("group_id")`);
+    // Which of the person's businesses it went to or came from: a payment to Ujenzi,
+    // Dahanak or Optimum is the director's money whichever it is ("a payment made to
+    // one of my businesses, if i select the business it should automatically register",
+    // 12 Oct 2026). Null on entries marked before, which are the business set up then.
+    await db.execute(sql`ALTER TABLE "owner_business_money" ADD COLUMN IF NOT EXISTS "income_source_id" integer REFERENCES "income_sources"("id") ON DELETE SET NULL`);
     ready = true;
     logger.info("Owner's business money is ready");
   } catch (err) {
@@ -67,6 +72,15 @@ export async function ownerBusinessIds(groupId: number): Promise<number[]> {
   if (!ready) return [];
   const result = await db.execute(sql`SELECT "transaction_id" AS id FROM "owner_business_money" WHERE "group_id" = ${groupId}`);
   return (result.rows as Array<{ id: number }>).map((row) => Number(row.id));
+}
+
+/** Each marked entry's business, where one was chosen: transaction id to income stream id. */
+export async function ownerBusinessOf(groupId: number): Promise<Record<number, number>> {
+  if (!ready) return {};
+  const result = await db.execute(sql`
+    SELECT "transaction_id" AS id, "income_source_id" AS business FROM "owner_business_money"
+     WHERE "group_id" = ${groupId} AND "income_source_id" IS NOT NULL`);
+  return Object.fromEntries((result.rows as Array<{ id: number; business: number }>).map((row) => [Number(row.id), Number(row.business)]));
 }
 
 export async function isOwnerBusinessMoney(transactionId: number): Promise<boolean> {

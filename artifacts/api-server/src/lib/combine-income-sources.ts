@@ -4,6 +4,7 @@ import { businessStreamsReady } from "./business-streams";
 import { businessAccountsReady } from "./business-accounts";
 import { entriesToSortReady } from "./entries-to-sort";
 import { payeeRulesReady } from "./payee-rules";
+import { ownerBusinessReady } from "./owner-business-money";
 
 /**
  * One source of money, one income stream. Onboarding used to make two for the
@@ -47,6 +48,9 @@ export async function combineIncomeSources(groupId: number, fromId: number, into
     await trx.execute(sql`UPDATE "budget_categories" SET "reduces_income_source_id" = ${intoId} WHERE "reduces_income_source_id" = ${fromId}`);
     if (businessAccountsReady()) {
       await trx.execute(sql`UPDATE "business_bank_accounts" SET "income_source_id" = ${intoId} WHERE "income_source_id" = ${fromId}`);
+    }
+    if (ownerBusinessReady()) {
+      await trx.execute(sql`UPDATE "owner_business_money" SET "income_source_id" = ${intoId} WHERE "income_source_id" = ${fromId} AND "group_id" = ${groupId}`);
     }
     if (entriesToSortReady()) {
       await trx.execute(sql`UPDATE "entries_to_check" SET "income_source_id" = ${intoId} WHERE "income_source_id" = ${fromId} AND "group_id" = ${groupId}`);

@@ -223,7 +223,7 @@ describe('both sides ask the same question the same way', () => {
 
 describe('neither lending nor borrowing asks for a category', () => {
   it('does not show the picker while lending', () => {
-    expect(bank).toContain("{isWithdrawal && withdrawDest !== 'savings' && withdrawDest !== 'lend' && (");
+    expect(bank).toContain("{isWithdrawal && withdrawDest !== 'savings' && withdrawDest !== 'lend' && toBusinessId === null && (");
   });
 
   it('does not demand one either', () => {

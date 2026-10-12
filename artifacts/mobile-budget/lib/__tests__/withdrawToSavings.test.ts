@@ -25,7 +25,7 @@ describe('a withdrawal into savings is a transfer', () => {
     // one — which is what put it in a budget it had nothing to do with.
     // Lending joined savings in having no category: it is not a cost either.
     expect(bank).toContain("if (txType === 'disbursement' && withdrawDest !== 'savings' && withdrawDest !== 'lend' && withdrawDest !== 'party' && !expenseCategory.trim()) {");
-    expect(bank).toContain("{isWithdrawal && withdrawDest !== 'savings' && withdrawDest !== 'lend' && (");
+    expect(bank).toContain("{isWithdrawal && withdrawDest !== 'savings' && withdrawDest !== 'lend' && toBusinessId === null && (");
   });
 
   it('keeps the whole-shilling rule savings transfers already have', () => {
