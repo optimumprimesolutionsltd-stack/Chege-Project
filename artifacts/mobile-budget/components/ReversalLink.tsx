@@ -132,10 +132,11 @@ export function ReversalLink({ transaction, canManage, onChanged }: Props) {
     );
   }
 
-  // Offered only when a payment could be what came back, or the entry already
-  // says it is money back - otherwise every deposit would ask the question.
+  // Offered only when the entry says it is money back (M-Pesa calls it a reversal).
+  // A payment of the same amount nearby is not reason enough: ordinary money in asked
+  // it too ("is this money coming back from a payment important?", 12 Oct 2026).
   const saysMoneyBack = /money back|revers/i.test(transaction.description ?? '');
-  if (data.candidates.length === 0 && !saysMoneyBack) return null;
+  if (!saysMoneyBack) return null;
 
   return (
     <View style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 8, padding: 12, gap: 8, marginTop: 8 }} testID="reversal-candidates">

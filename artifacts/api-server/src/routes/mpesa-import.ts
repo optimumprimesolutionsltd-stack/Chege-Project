@@ -406,6 +406,7 @@ const differenceSchema = z.object({
     at: z.number().finite(),
     day: z.string().date(),
     record: z.literal(false).optional(),
+    moved: z.number().finite().optional(),
   })).min(1, "No M-Pesa messages with a balance were found.").max(6_000),
 });
 

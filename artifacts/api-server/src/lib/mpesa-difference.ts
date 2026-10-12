@@ -35,6 +35,13 @@ export type DifferenceMessage = {
    * loan notice or repayment), so it is never "missing".
    */
   record?: boolean;
+  /**
+   * What the message itself says it moved (amount and charge, out as a minus), when
+   * its wording says which way. Preferred over the step between two balances, which
+   * also holds anything no message was sent for - a Fuliza repayment taken from a
+   * salary made "Tiana 6,840" read as 9,882 (12 Oct 2026).
+   */
+  moved?: number;
 };
 
 export type LedgerEntry = {
@@ -197,10 +204,10 @@ export function findDifference(
         withBalance.filter((message) => message.record !== false && message.receipt && message.receipt !== firstCode && inSpan(message.day) && ledgerReceipts.has(message.receipt) && movedBy.has(message.receipt)),
         (message) => message.receipt!,
       )
-        .filter((message) => Math.abs(movedBy.get(message.receipt!)! - (savedFor.get(message.receipt!) ?? 0)) >= 1)
+        .filter((message) => Math.abs((message.moved ?? movedBy.get(message.receipt!)!) - (savedFor.get(message.receipt!) ?? 0)) >= 1)
         .map((message) => {
           const entry = ledgerReceipts.get(message.receipt!)!;
-          return { receipt: message.receipt!, day: message.day, entryId: entry.id, description: entry.description, inMessages: movedBy.get(message.receipt!)!, inJamvi: savedFor.get(message.receipt!) ?? 0 };
+          return { receipt: message.receipt!, day: message.day, entryId: entry.id, description: entry.description, inMessages: message.moved ?? movedBy.get(message.receipt!)!, inJamvi: savedFor.get(message.receipt!) ?? 0 };
         })
         .slice(0, MAX_ITEMS),
     });
