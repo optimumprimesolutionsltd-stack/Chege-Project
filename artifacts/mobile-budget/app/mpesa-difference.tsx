@@ -191,7 +191,7 @@ export default function MpesaDifferenceScreen() {
   const removeExtra = (item: { id: number; amount: number; description: string; date: string }) => {
     Alert.alert(
       'Remove this entry?',
-      `${item.description}, ${item.amount < 0 ? '−' : '+'}${kes(Math.abs(item.amount))} on ${formatDisplayDate(item.date)}. No M-Pesa message has it, so it is most likely saved twice or not M-Pesa at all. Remove it only if so.`,
+      `${item.description}, ${item.amount < 0 ? '−' : '+'}${kes(Math.abs(item.amount))} on ${formatDisplayDate(item.date)}. No M-Pesa message on this phone has it - but messages get deleted, so look for it on your M-Pesa statement first. Remove it only if the statement does not have it, or it is saved twice.`,
       [
         { text: 'Keep it', style: 'cancel' },
         {
@@ -331,7 +331,7 @@ export default function MpesaDifferenceScreen() {
                         <Text style={{ color: colors.foreground, fontSize: 13 }} numberOfLines={3}>{bodies.get(item.receipt) ?? item.receipt}</Text>
                         <Text style={{ color: item.otherBudget ? colors.mutedForeground : item.savedIn ? '#B45309' : colors.mutedForeground, fontSize: 12 }}>
                           {item.removed
-                            ? 'You removed this from Jamvi, so it is left out. Bring it in again from Import M-Pesa if you want it back.'
+                            ? 'You removed this from Jamvi before. If it really happened, Bring these days in puts it back.'
                             : item.otherBudget
                             ? `Saved in ${item.savedIn}, another of your budgets. Left there, so it is not counted twice.`
                             : item.savedIn

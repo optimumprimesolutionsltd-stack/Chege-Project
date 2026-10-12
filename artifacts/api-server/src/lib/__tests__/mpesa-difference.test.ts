@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findDifference, nextDay, type DifferenceMessage, type LedgerEntry } from "../mpesa-difference";
+import { findDifference, nextDay, statementMade, type DifferenceMessage, type LedgerEntry } from "../mpesa-difference";
 
 // A small M-Pesa history: 1,000 to start, then a payment, money in, another payment.
 const at = (day: string, hour: number) => new Date(`${day}T${String(hour).padStart(2, "0")}:00:00+03:00`).getTime();
@@ -132,5 +132,18 @@ describe("find the difference", () => {
   it("counts days across a month end", () => {
     expect(nextDay("2026-09-30")).toBe("2026-10-01");
     expect(nextDay("2026-12-31")).toBe("2027-01-01");
+  });
+});
+
+// "it is still taking me back and forth" (12 Oct 2026): the 30 Sep "Borrowed from Fuliza
+// (still owed at the end)" was offered for removal as in none of the messages.
+describe("lines the statement reader makes", () => {
+  it("are known by their codes - no message ever has one", () => {
+    expect(statementMade("FB260101260930")).toBe(true);
+    expect(statementMade("FZ260101260930")).toBe(true);
+    expect(statementMade("FR260101260930")).toBe(true);
+    expect(statementMade("UIUF98FDDTC1")).toBe(true);
+    expect(statementMade("UE5F937HJL")).toBe(false);
+    expect(statementMade(null)).toBe(false);
   });
 });
