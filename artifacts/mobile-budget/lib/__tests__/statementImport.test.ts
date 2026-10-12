@@ -62,6 +62,19 @@ describe('statementLines', () => {
     expect(reading.lines.filter((line) => line.direction === 'in' && line.type === 'person_receipt')).toHaveLength(0);
   });
 
+  it('keeps the charge on a payment it does not know the wording of, and on money in', () => {
+    // Three payments to Airtel Money ("Offnet C2B Transfer") lost KES 71 of charges (12 Oct 2026).
+    const charge = at('12 10:00:00', 'Pay Bill Charge', { withdrawn: 57 });
+    const payment = { ...at('12 10:00:00', 'Offnet C2B Transfer to 585555 - AIRTEL MONEY. for 0733000000', { withdrawn: 5000 }), receipt: charge.receipt };
+    const { lines } = statementLines([charge, payment]);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatchObject({ type: 'other', amount: 5000, fee: 57 });
+    const inCharge = at('13 10:00:00', 'Pay Bill Charge', { withdrawn: 7 });
+    const received = { ...at('13 10:00:00', 'Funds received from - 2547***000 SAMPLE PERSON', { paidIn: 100 }), receipt: inCharge.receipt };
+    const both = statementLines([inCharge, received]).lines;
+    expect(both.map((line) => line.type).sort()).toEqual(['person_receipt', 'transaction_charge']);
+  });
+
   it('reads a payment to a small business (Pochi la Biashara) as a payment to them', () => {
     const { lines } = statementLines([
       at('27 08:00:00', 'Customer Payment to Small Business to - 0743***708 SAMPLE SHOP', { withdrawn: 100 }),

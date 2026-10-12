@@ -232,7 +232,9 @@ export function statementLines(
       }
     }
     const charged = charges.reduce((sum, row) => sum + (row.withdrawn ?? 0), 0);
-    const foldable = mains.length === 1 && charges.length > 0;
+    // Folded into the one payment beside them - money out. A charge beside money in has
+    // nothing to fold into and is listed on its own, so the balance still adds up.
+    const foldable = mains.length === 1 && charges.length > 0 && mains[0].withdrawn !== null;
 
     for (const row of mains) {
       const details = row.details.trim();
@@ -279,7 +281,9 @@ export function statementLines(
           description: details,
           named: false,
           date: dateOf(row.time),
-          fee: null,
+          // Its charge comes with it, as on a payment Jamvi knows: three payments to
+          // Airtel Money ("Offnet C2B Transfer") lost KES 71 of charges (12 Oct 2026).
+          fee: row.withdrawn !== null && foldable && charged > 0 ? Math.round(charged * 100) / 100 : null,
           mpesaBalance: row.balance,
           alreadyRecorded: null,
         });
