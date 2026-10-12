@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findDifference, mpesaCode, nextDay, statementMade, type DifferenceMessage, type LedgerEntry } from "../mpesa-difference";
+import { findDifference, isAnotherLine, mpesaCode, nextDay, statementMade, type DifferenceMessage, type LedgerEntry } from "../mpesa-difference";
 
 // A small M-Pesa history: 1,000 to start, then a payment, money in, another payment.
 const at = (day: string, hour: number) => new Date(`${day}T${String(hour).padStart(2, "0")}:00:00+03:00`).getTime();
@@ -202,5 +202,18 @@ describe("what Find the difference no longer asks about", () => {
     ];
     const amounts = (findDifference(messages, ledger, 0)?.spans ?? []).flatMap((span) => span.amounts ?? []);
     expect(amounts).toEqual([]);
+  });
+});
+
+// A church group's M-Pesa is another line: the phone's own messages laid against it said
+// "Jamvi is KES 170,433 below M-Pesa" (12 Oct 2026).
+describe("messages from another M-Pesa line", () => {
+  const codes = Array.from({ length: 30 }, (_, i) => `UDMF91${String(i).padStart(4, "0")}`);
+  it("are known when almost none of them are in the account", () => {
+    expect(isAnotherLine(codes, new Set(codes.slice(0, 2)))).toBe(true);
+  });
+  it("not when the account has them, or there are too few to tell", () => {
+    expect(isAnotherLine(codes, new Set(codes.slice(0, 20)))).toBe(false);
+    expect(isAnotherLine(codes.slice(0, 5), new Set())).toBe(false);
   });
 });

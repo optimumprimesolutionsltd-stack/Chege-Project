@@ -115,6 +115,19 @@ const MAX_ITEMS = 40;
  */
 export const mpesaCode = (receipt: string | null | undefined): boolean => !!receipt && /^[A-Z0-9]{10}$/.test(receipt);
 
+/**
+ * Whether the phone's messages are this account's at all. A church group's M-Pesa
+ * is another line than the phone's own: laid against it, the phone's messages made
+ * "Jamvi is KES 170,433 below M-Pesa" and listed the person's own payments to bring
+ * in (12 Oct 2026). Too few of them in the account to be its messages: another line.
+ */
+export function isAnotherLine(messageCodes: readonly string[], inAccount: ReadonlySet<string>): boolean {
+  const codes = [...new Set(messageCodes)];
+  if (codes.length < 20) return false;
+  const here = codes.filter((code) => inAccount.has(code)).length;
+  return here / codes.length < 0.1;
+}
+
 export const statementMade = (receipt: string | null | undefined): boolean =>
   !!receipt && (/^F[ZBR]\d{12}$/.test(receipt) || /^[A-Z0-9]{10}C\d+$/.test(receipt));
 

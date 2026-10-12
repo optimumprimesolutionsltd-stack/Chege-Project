@@ -13,7 +13,7 @@ import { feedbackLimiter } from "../middlewares/rateLimit";
 import { EmailNotConfiguredError, sendEmail } from "../lib/email";
 import { findMpesaAccount, mpesaBalance, nairobiToday } from "../lib/mpesa-balance";
 import { addMissingCharges } from "../lib/mpesa-charges";
-import { findDifference } from "../lib/mpesa-difference";
+import { findDifference, isAnotherLine } from "../lib/mpesa-difference";
 
 const router = Router();
 
@@ -462,6 +462,16 @@ router.post("/mpesa/difference", async (req, res): Promise<void> => {
 
   // Messages this account does not have: saved to another of this budget's accounts?
   const here = new Set(ledger.map((entry) => entry.receipt).filter(Boolean));
+  // The phone's messages from another M-Pesa line than this budget's: nothing to compare.
+  const messageCodes = parsed.data.messages.filter((message) => message.record !== false).map((message) => message.receipt).filter((code): code is string => Boolean(code));
+  if (isAnotherLine(messageCodes, here as Set<string>)) {
+    res.json({
+      account: { id: account.id, name: account.name, openingBalance: account.openingBalance },
+      result: null,
+      anotherLine: { messages: new Set(messageCodes).size, here: new Set(messageCodes.filter((code) => here.has(code))).size },
+    });
+    return;
+  }
   const absent = [...new Set(parsed.data.messages.map((message) => message.receipt).filter((code): code is string => Boolean(code) && !here.has(code)))];
   const elsewhere = new Map<string, { account: string; date: string; removed?: boolean }>();
   for (let i = 0; i < absent.length; i += 2_000) {
