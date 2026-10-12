@@ -21,6 +21,8 @@ type Span = DifferenceSpan;
 type Answer = {
   account: { id: number; name: string; openingBalance: number };
   result: { from: string; to: string; checkedDays: number; startGap: number; endGap: number; spans: Span[]; moreSpans: number } | null;
+  /** The phone's messages are from another M-Pesa line than this budget's (api-server lib/mpesa-difference isAnotherLine). */
+  anotherLine?: { messages: number; here: number };
 };
 
 /**
@@ -237,6 +239,14 @@ export default function MpesaDifferenceScreen() {
             <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>Could not check</Text>
             <Text style={{ color: colors.mutedForeground, fontSize: 13 }}>{error} Tap to try again.</Text>
           </Pressable>
+        ) : answer?.anotherLine ? (
+          // Nothing to compare, so nothing to fix: the phone's own line belongs to another budget.
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]} testID="mpesa-difference-another-line">
+            <Text style={{ color: colors.foreground, fontFamily: 'Inter_700Bold' }}>This phone's M-Pesa is another line</Text>
+            <Text style={{ color: colors.mutedForeground, fontSize: 13 }}>
+              Only {answer.anotherLine.here} of the {answer.anotherLine.messages} M-Pesa messages on this phone are in {answer.account.name}, so they are not this budget's line. Nothing here needs you. Check this budget against its own M-Pesa statement instead.
+            </Text>
+          </View>
         ) : result ? (
           <>
             <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]} testID="mpesa-difference-summary">
