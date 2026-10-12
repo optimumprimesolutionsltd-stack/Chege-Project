@@ -47,8 +47,9 @@ describe('count its profit, or its money only passes through', () => {
   });
 
   it('says on the entry which it is', () => {
+    // A cost counts in its profit only where its profit is counted (12 Oct 2026 wording).
     expect(card).toContain("chosen.countsProfit === false");
-    expect(card).toContain('Its profit is not counted here, so no Business report.');
+    expect(card).toContain("and it counts in ${chosen.name}'s profit.");
   });
 });
 

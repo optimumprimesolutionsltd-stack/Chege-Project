@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { buildPostings, destinationOf, isMove, problemWith, type Choice, type PreviewLine } from '@/lib/mpesaImport';
+import { buildPostings, destinationOf, isMove, ownerBusinessOf, problemWith, reviewStatus, type Choice, type PreviewLine } from '@/lib/mpesaImport';
 
 // After money out on Bank (#757): money in from a business on Bank ("yes"), the same one
 // tap on the M-Pesa import ("change too"), and a business lived on shown as income on the
@@ -41,7 +41,7 @@ describe('money in from one of my businesses on Bank', () => {
   it('is a choice under What kind of money is this?, and saves the same way as money out', () => {
     const bank = read('app', '(tabs)', 'bank.tsx');
     expect(bank).toContain("FROM ONE OF MY BUSINESSES - DIRECTOR'S MONEY");
-    expect(bank).toContain("const toBusiness = (txType === 'disbursement' || txType === 'deposit') && toBusinessId !== null;");
+    expect(bank).toContain("const toBusiness = (txType === 'disbursement' || txType === 'deposit') && pickedBusinessId !== null;");
     expect(bank).toContain(") : txType === 'disbursement' || txType === 'deposit' ? null : (");
   });
 });
@@ -54,5 +54,24 @@ describe('a business lived on is income on the Budget tab', () => {
     expect(budget).toContain('editingIncome && !businesses.ids.has(source.id) &&');
     const route = readFileSync(join(__dirname, '..', '..', '..', 'api-server', 'src', 'routes', 'income-sources.ts'), 'utf8');
     expect(route).toContain('req.query.streams === "income" ? new Set(await ownerIncomeBusinessIds(groupId))');
+  });
+});
+
+// "when i choose who is this for? its still asking for a category" (12 Oct 2026).
+describe('Who is this for? naming a business, with none of its costs', () => {
+  it("is the director's money to it - nothing more to choose - on the import", () => {
+    const picked: Choice = { include: true, category: '', businessId: 7 };
+    expect(ownerBusinessOf(line(), picked)).toBe(7);
+    expect(problemWith(line(), picked)).toBeNull();
+    expect(reviewStatus(line(), picked)).toBe('changed');
+    expect(buildPostings(line(), picked, ctx)?.main).not.toHaveProperty('expenseCategory');
+    // One of its costs chosen: a cost of the business, as before.
+    expect(ownerBusinessOf(line(), { ...picked, category: 'Ujenzi - materials' })).toBeNull();
+  });
+
+  it('and on Bank, where the category field gives way to its costs', () => {
+    const bank = read('app', '(tabs)', 'bank.tsx');
+    expect(bank).toContain("const pickedBusinessId = toBusinessId ?? (txType === 'disbursement' && forBusinessId !== null && !expenseCategory.trim() &&");
+    expect(bank).toContain("toBusinessId === null && forBusinessId === null && (");
   });
 });

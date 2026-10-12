@@ -16,9 +16,9 @@ describe('money out to one of my businesses', () => {
 
   it('saves with no category, lending or paying back, and is marked for that business', () => {
     expect(bank).toContain('const businessMoney = (editingBusinessMoney && !leavesBusiness) || toBusiness;');
-    expect(bank).toContain('if (toBusiness && toBusinessId !== null) await ownerBusiness.mark([editingTransactionId], toBusinessId);');
-    expect(bank).toContain('await ownerBusiness.mark([createdPostingId], toBusinessId);');
-    expect(bank).toContain("isWithdrawal && withdrawDest !== 'savings' && withdrawDest !== 'lend' && toBusinessId === null && (");
+    expect(bank).toContain('if (toBusiness && pickedBusinessId !== null) await ownerBusiness.mark([editingTransactionId], pickedBusinessId);');
+    expect(bank).toContain('await ownerBusiness.mark([createdPostingId], pickedBusinessId);');
+    expect(bank).toContain("isWithdrawal && withdrawDest !== 'savings' && withdrawDest !== 'lend' && toBusinessId === null && forBusinessId === null && (");
   });
 
   it('shows which business, not only the first one set up', () => {

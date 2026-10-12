@@ -118,9 +118,8 @@ export function WhoIsThisFor({
       {chosen && direction === 'out' ? (
         <>
           <Text style={{ color: colors.mutedForeground, fontSize: 12, lineHeight: 17 }}>
-            {chosen.countsProfit === false
-              ? `${chosen.name}'s money, not your spending. Its profit is not counted here, so no Business report.`
-              : `One of ${chosen.name}'s costs - it counts in ${chosen.name}'s profit in the Business report.`}
+            {/* Saved with no cost: money to the business, the director's money (12 Oct 2026). */}
+            {`Money to ${chosen.name}? Just save - it is your director's money, not spending. Paid a supplier for ${chosen.name}? Pick the cost below${chosen.countsProfit === false ? '.' : ` and it counts in ${chosen.name}'s profit.`}`}
           </Text>
           {onPayeeName ? (
             <TextInput value={payeeName ?? ''} onChangeText={onPayeeName} placeholder="Name this payee, e.g. Hardware supplier" placeholderTextColor={colors.mutedForeground} style={input} testID={id('who-for-payee-name')} />

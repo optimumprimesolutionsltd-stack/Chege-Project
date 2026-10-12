@@ -143,6 +143,17 @@ export type Choice = {
  */
 export type Destination = "category" | "debt" | "transfer" | "savings" | "contribution" | "other-budget" | "owner-business";
 
+/**
+ * The business a line is the director"s money with: picked as that, or a payment whose
+ * Who is this for? names a business with none of its costs chosen ("when i choose who is
+ * this for? its still asking for a category", 12 Oct 2026).
+ */
+export function ownerBusinessOf(line: Pick<PreviewLine, "direction">, choice: Choice | undefined): number | null {
+  if (!choice) return null;
+  if (choice.ownerBusinessId) return choice.ownerBusinessId;
+  return line.direction === "out" && choice.businessId && !choice.category.trim() && !choice.debt ? choice.businessId : null;
+}
+
 export function destinationOf(choice: Choice | undefined): Destination {
   if (!choice) return "category";
   if (choice.otherBudget) return "other-budget";
@@ -637,7 +648,7 @@ export function problemWith(line: PreviewLine, choice: Choice | undefined): stri
     return null;
   }
   // Money moved between the person"s own places is not spending, so it needs no category.
-  if (isMove(choice)) return null;
+  if (isMove(choice) || ownerBusinessOf(line, choice) !== null) return null;
   // Money lent is not spending, so it needs no category; paying a debt back does.
   // Paying a loan back needs no category: saving links it to its lender in Who owes who.
   const loanRepayment = loanOf(line)?.kind === "pay-back" && (paysOffLoan(line, choice) || !choice.debt);
@@ -664,7 +675,7 @@ export function reviewStatus(line: PreviewLine, choice: Choice | undefined): Rev
   if (!choice.include || choice.confirmed) return "changed";
   // Another budget Jamvi remembered for this payee is a suggestion until confirmed.
   if (destinationOf(choice) === "other-budget") return choice.otherBudgetAuto ? "suggested" : "changed";
-  if (setByHand || sourceByHand || destinationOf(choice) !== "category") return "changed";
+  if (setByHand || sourceByHand || destinationOf(choice) !== "category" || ownerBusinessOf(line, choice) !== null) return "changed";
   return "suggested";
 }
 
@@ -830,7 +841,7 @@ export function buildPostings(line: PreviewLine, choice: Choice, ctx: PostingCon
 
   // Between the person and one of their businesses: saved plain - no category, no source -
   // and marked as the director"s money once saved (app/mpesa-import, businessMarks).
-  if (choice.ownerBusinessId) {
+  if (ownerBusinessOf(line, choice) !== null) {
     const plain = {
       amount: line.amount,
       description,
