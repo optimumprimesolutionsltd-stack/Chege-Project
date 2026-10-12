@@ -126,6 +126,12 @@ export type Choice = {
   rememberNote?: boolean;
   /** The note was filled in from the payee"s remembered one, not typed here. */
   noteAuto?: boolean;
+  /**
+   * Money between the person and one of their own businesses - the director"s money
+   * (api-server lib/owner-business): no category, no source, no lending or paying back.
+   * Picked with one tap ("change too", 12 Oct 2026, after Bank got the same).
+   */
+  ownerBusinessId?: number | null;
 };
 
 /**
@@ -135,11 +141,12 @@ export type Choice = {
  * Everything that has to treat these differently asks this instead of checking each field
  * on its own.
  */
-export type Destination = "category" | "debt" | "transfer" | "savings" | "contribution" | "other-budget";
+export type Destination = "category" | "debt" | "transfer" | "savings" | "contribution" | "other-budget" | "owner-business";
 
 export function destinationOf(choice: Choice | undefined): Destination {
   if (!choice) return "category";
   if (choice.otherBudget) return "other-budget";
+  if (choice.ownerBusinessId) return "owner-business";
   if (choice.transferTo) return "transfer";
   if (choice.savingsGoalId) return "savings";
   if (choice.contributorId) return "contribution";
@@ -154,7 +161,7 @@ export function destinationOf(choice: Choice | undefined): Destination {
  */
 export const isMove = (choice: Choice | undefined): boolean => {
   const destination = destinationOf(choice);
-  return destination === "transfer" || destination === "savings" || destination === "other-budget";
+  return destination === "transfer" || destination === "savings" || destination === "other-budget" || destination === "owner-business";
 };
 
 /**
@@ -819,6 +826,22 @@ export function buildPostings(line: PreviewLine, choice: Choice, ctx: PostingCon
             },
       fee: moveFee,
     };
+  }
+
+  // Between the person and one of their businesses: saved plain - no category, no source -
+  // and marked as the director"s money once saved (app/mpesa-import, businessMarks).
+  if (choice.ownerBusinessId) {
+    const plain = {
+      amount: line.amount,
+      description,
+      date,
+      accountId: ctx.accountId,
+      ...(receipt ? { mpesaReceipt: receipt } : {}),
+      ...(choice.notes?.trim() ? { notes: choice.notes.trim() } : {}),
+    };
+    return line.direction === "in"
+      ? { kind: "deposit" as const, main: { ...plain, madeById: ctx.userId }, fee: null }
+      : { kind: "disbursement" as const, main: { ...plain, madeById: ctx.userId ?? null }, fee: moveFee };
   }
 
   // Into or out of a savings goal: one savings transfer, whole shillings, with the receipt on it.

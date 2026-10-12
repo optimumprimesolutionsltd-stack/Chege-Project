@@ -7,7 +7,7 @@ import { and, eq, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getActiveGroupId, isGroupManager, requireMemberSelfAttribution, requireTransactionEligibility } from "../lib/activeGroup";
 import { dedupeIncomeSources, normalizeIncomeSourceName } from "./income-source-utils";
-import { businessStreamIds } from "../lib/business-streams";
+import { businessStreamIds, ownerIncomeBusinessIds } from "../lib/business-streams";
 export { dedupeIncomeSources, normalizeIncomeSourceName } from "./income-source-utils";
 
 const router = Router();
@@ -53,7 +53,14 @@ router.get("/income-sources", async (req, res) => {
   // ?streams=only: your income streams, without My businesses - a business is
   // never an income stream (lib/business-streams). Pickers for money in ask
   // this way; screens about businesses read them from /api/businesses.
-  const businesses = req.query.streams === "only" ? new Set(await businessStreamIds(groupId)) : new Set<number>();
+  // ?streams=income: what your income is - your streams, and each business you live
+  // on the profit of, whose profit is an income stream (lib/business-streams
+  // ownerIncomeBusinessIds). "the income from the business should be shown as income
+  // stream. that is after expenses reduction" (12 Oct 2026). The Budget tab asks this way.
+  const livedOn = req.query.streams === "income" ? new Set(await ownerIncomeBusinessIds(groupId)) : new Set<number>();
+  const businesses = req.query.streams === "only" || req.query.streams === "income"
+    ? new Set((await businessStreamIds(groupId)).filter((id) => !livedOn.has(id)))
+    : new Set<number>();
   const sources = dedupeIncomeSources(rows).filter((source) => !businesses.has(source.id));
   res.json(forMonth ? await monthExpected(groupId, sources, year, month) : sources);
 });

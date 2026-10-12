@@ -1528,7 +1528,7 @@ export default function BankScreen() {
     setWithdrawDest(type === 'disbursement'
       ? (tx.isLending ? 'lend' : tx.settlesContributorId ? 'party' : 'other')
       : null);
-    setToBusinessId(type === 'disbursement' && ownerBusiness.markedIds.has(tx.id)
+    setToBusinessId((type === 'disbursement' || type === 'deposit') && ownerBusiness.markedIds.has(tx.id)
       ? ownerBusiness.businessIdOf(tx.id) ?? ownerBusiness.business.incomeSourceId ?? null
       : null);
     setWithdrawSourceName(null);
@@ -2137,7 +2137,7 @@ export default function BankScreen() {
     // to donations even after save", 11 Oct 2026). Before, the category was dropped.
     const leavesBusiness = editingBusinessMoney && toBusinessId === null && txType === 'disbursement' && expenseCategory.trim() !== '' &&
       withdrawDest !== 'party' && withdrawDest !== 'lend' && withdrawDest !== 'savings';
-    const toBusiness = txType === 'disbursement' && toBusinessId !== null;
+    const toBusiness = (txType === 'disbursement' || txType === 'deposit') && toBusinessId !== null;
     const businessMoney = (editingBusinessMoney && !leavesBusiness) || toBusiness;
     if (businessMoney) {
       // Money between you and your business carries no category (lib/ownerBusiness).
@@ -4626,7 +4626,7 @@ export default function BankScreen() {
               {/* Somebody paying back what they owe. Kept above who deposited
                   it, because the answer changes what the money means: a
                   repayment is not income, so no income source is asked for. */}
-              {isDeposit && editingTransactionId !== null && !editingTransfer && !editingBusinessMoney && !repayingParty && !isBorrowing ? (
+              {isDeposit && editingTransactionId !== null && !editingTransfer && !editingBusinessMoney && toBusinessId === null && !repayingParty && !isBorrowing ? (
                 <WhoIsThisFor
                   direction="in"
                   businesses={whoForBusinesses}
@@ -4647,8 +4647,10 @@ export default function BankScreen() {
                     onPress={() => setShowRepayPicker((open) => !open)}
                     testID="bank-repayment-picker"
                   >
-                    <Text style={{ flex: 1, color: repayingParty || isBorrowing ? colors.foreground : colors.mutedForeground, fontFamily: 'Inter_400Regular' }}>
-                      {repayingParty
+                    <Text style={{ flex: 1, color: toBusinessId !== null || repayingParty || isBorrowing ? colors.foreground : colors.mutedForeground, fontFamily: 'Inter_400Regular' }}>
+                      {toBusinessId !== null
+                        ? `From ${businessNameOf(toBusinessId)} - director's money`
+                        : repayingParty
                         ? `${repayingParty.name} repaying you`
                         : borrowTarget?.kind === 'debt'
                           ? `Borrowed — ${borrowTarget.name}`
@@ -4664,18 +4666,44 @@ export default function BankScreen() {
                     <View style={[styles.categoryDropdown, { borderColor: colors.dropdownBorder, backgroundColor: colors.dropdownBackground }]}>
                       <TouchableOpacity
                         style={styles.categoryOption}
-                        onPress={() => { setRepayingPartyId(null); setBorrowTarget(null); setShowRepayPicker(false); }}
+                        onPress={() => { setRepayingPartyId(null); setBorrowTarget(null); setToBusinessId(null); setShowRepayPicker(false); }}
                         testID="bank-repayment-none"
                       >
                         <Text style={{ color: colors.dropdownForeground, fontFamily: 'Inter_400Regular' }}>
                           Ordinary money in
                         </Text>
                       </TouchableOpacity>
+                      {/* Money from one of the person's businesses: the director's money, in one
+                          tap - not income, not a loan ("yes", 12 Oct 2026, after money out got it). */}
+                      {whoForBusinesses.length > 0 ? (
+                        <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, paddingTop: 8, marginTop: 4 }}>
+                          <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold', fontSize: 12, paddingHorizontal: 10, paddingBottom: 4 }}>
+                            FROM ONE OF MY BUSINESSES - DIRECTOR'S MONEY
+                          </Text>
+                          {whoForBusinesses.map((business) => (
+                            <TouchableOpacity
+                              key={`from-business-${business.id}`}
+                              style={styles.categoryOption}
+                              onPress={() => {
+                                setToBusinessId(business.id);
+                                setRepayingPartyId(null);
+                                setBorrowTarget(null);
+                                setIncomeSourceId(null);
+                                setForBusinessId(null);
+                                setShowRepayPicker(false);
+                              }}
+                              testID={`bank-deposit-from-business-${business.id}`}
+                            >
+                              <Text style={{ color: colors.dropdownForeground, fontFamily: 'Inter_400Regular' }}>{business.name}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      ) : null}
                       {owingParties.map((party) => (
                         <TouchableOpacity
                           key={`owing-party-${party.id}`}
                           style={[styles.categoryOption, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }]}
-                          onPress={() => { setRepayingPartyId(party.id); setBorrowTarget(null); setShowRepayPicker(false); }}
+                          onPress={() => { setRepayingPartyId(party.id); setBorrowTarget(null); setToBusinessId(null); setShowRepayPicker(false); }}
                           testID={`bank-repayment-party-${party.id}`}
                         >
                           <Text style={{ color: colors.dropdownForeground, fontFamily: 'Inter_400Regular', flexShrink: 1 }}>
@@ -4698,7 +4726,7 @@ export default function BankScreen() {
                           <TouchableOpacity
                             key={`borrow-debt-${debt.id}`}
                             style={[styles.categoryOption, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }]}
-                            onPress={() => { setRepayingPartyId(null); setBorrowTarget({ kind: 'debt', name: debt.name }); setShowRepayPicker(false); }}
+                            onPress={() => { setRepayingPartyId(null); setBorrowTarget({ kind: 'debt', name: debt.name }); setToBusinessId(null); setShowRepayPicker(false); }}
                             testID={`bank-borrow-debt-${debt.id}`}
                           >
                             <Text style={{ color: colors.dropdownForeground, fontFamily: 'Inter_400Regular', flexShrink: 1 }}>
@@ -4713,7 +4741,7 @@ export default function BankScreen() {
                           <TouchableOpacity
                             key={`borrow-party-${party.id}`}
                             style={styles.categoryOption}
-                            onPress={() => { setRepayingPartyId(null); setBorrowTarget({ kind: 'party', id: party.id }); setShowRepayPicker(false); }}
+                            onPress={() => { setRepayingPartyId(null); setBorrowTarget({ kind: 'party', id: party.id }); setToBusinessId(null); setShowRepayPicker(false); }}
                             testID={`bank-borrow-party-${party.id}`}
                           >
                             <Text style={{ color: colors.dropdownForeground, fontFamily: 'Inter_400Regular' }}>
@@ -6021,7 +6049,7 @@ export default function BankScreen() {
                       <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>Not my business - sort it out another way</Text>
                     </TouchableOpacity>
                   </View>
-                ) : txType === 'disbursement' ? null : (
+                ) : txType === 'disbursement' || txType === 'deposit' ? null : (
                   // Money out picks the business in the kind-of-money list above - asking
                   // again here was a second step ("even the idea this is for my business is
                   // not needed, since we have already identified up there", 12 Oct 2026).
