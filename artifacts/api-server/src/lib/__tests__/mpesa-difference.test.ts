@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findDifference, nextDay, statementMade, type DifferenceMessage, type LedgerEntry } from "../mpesa-difference";
+import { findDifference, mpesaCode, nextDay, statementMade, type DifferenceMessage, type LedgerEntry } from "../mpesa-difference";
 
 // A small M-Pesa history: 1,000 to start, then a payment, money in, another payment.
 const at = (day: string, hour: number) => new Date(`${day}T${String(hour).padStart(2, "0")}:00:00+03:00`).getTime();
@@ -167,5 +167,40 @@ describe("a message's own amount", () => {
 
   it("without it, the step between balances is still used", () => {
     expect(amounts().map((item) => item.receipt)).toEqual(["UCGF99HV23"]);
+  });
+});
+
+// Find the difference, 12 Oct 2026: Be Energy's payments (on the statement, no message
+// on the phone) offered for removal, and every Fuliza-paid payment "saved for a
+// different amount" by its access fee.
+describe("what Find the difference no longer asks about", () => {
+  it("an entry with an M-Pesa code is never offered for removal", () => {
+    expect(mpesaCode("UE5F93A2VX")).toBe(true);
+    expect(mpesaCode("UE5F93A2VXFEE")).toBe(false);
+    expect(mpesaCode(null)).toBe(false);
+    const ledger = [
+      { id: 1, date: "2026-05-05", signed: 1000, description: "Salary", receipt: "UE4F930001" },
+      { id: 2, date: "2026-05-06", signed: 544, description: "Received from Be Energy Ltd", receipt: "UE5F93A2VX" },
+    ] as LedgerEntry[];
+    const messages: DifferenceMessage[] = [
+      { receipt: "UE4F930001", balance: 1000, at: 1, day: "2026-05-05" },
+      { receipt: "UE6F930002", balance: 1500, at: 2, day: "2026-05-07" },
+    ];
+    const extra = (findDifference(messages, ledger, 0)?.spans ?? []).flatMap((span) => span.extra);
+    expect(extra.map((item) => item.id)).not.toContain(2);
+  });
+
+  it("a payment's Fuliza access fee is not part of what its message moved", () => {
+    const ledger = [
+      { id: 1, date: "2026-05-06", signed: 2000, description: "Salary", receipt: "UE6F930001" },
+      { id: 2, date: "2026-05-07", signed: -1000, description: "Airtime", receipt: "UE7F930002" },
+      { id: 3, date: "2026-05-07", signed: -10, description: "Fuliza access fee", receipt: "UE7F930002FEE", covers: "UE7F930002" },
+    ] as LedgerEntry[];
+    const messages: DifferenceMessage[] = [
+      { receipt: "UE6F930001", balance: 2000, at: 1, day: "2026-05-06" },
+      { receipt: "UE7F930002", balance: 900, at: 2, day: "2026-05-07", moved: -1000 },
+    ];
+    const amounts = (findDifference(messages, ledger, 0)?.spans ?? []).flatMap((span) => span.amounts ?? []);
+    expect(amounts).toEqual([]);
   });
 });
