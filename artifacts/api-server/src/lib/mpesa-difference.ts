@@ -106,6 +106,15 @@ const MAX_ITEMS = 40;
  * between this screen and the statement import ("it is still taking me back and
  * forth", 12 Oct 2026).
  */
+/**
+ * A code M-Pesa itself gave (ten letters and digits). An entry carrying one came from
+ * M-Pesa - a message or the statement - so it is never "saved twice, or not M-Pesa?"
+ * just because no message on this phone has it: Be Energy's payments are on the
+ * statement, and removing them sent the person round between screens (12 Oct 2026).
+ * A code saved twice is caught by the import's own duplicate check.
+ */
+export const mpesaCode = (receipt: string | null | undefined): boolean => !!receipt && /^[A-Z0-9]{10}$/.test(receipt);
+
 export const statementMade = (receipt: string | null | undefined): boolean =>
   !!receipt && (/^F[ZBR]\d{12}$/.test(receipt) || /^[A-Z0-9]{10}C\d+$/.test(receipt));
 
@@ -167,6 +176,17 @@ export function findDifference(
     const code = entry.receipt && messageReceipts.has(entry.receipt) ? entry.receipt : entry.covers;
     if (code) savedFor.set(code, round((savedFor.get(code) ?? 0) + entry.signed));
   }
+  // The same without Fuliza access fees ("<code>FEE"): M-Pesa sends a fee in its own
+  // Fuliza message, so a payment's message never counts it - comparing with it said
+  // Airtime 1,000 was saved as 1,010 (12 Oct 2026).
+  const savedOwn = new Map<string, number>();
+  for (const entry of entries) {
+    if (entry.receipt?.endsWith("FEE")) continue;
+    const code = entry.receipt && messageReceipts.has(entry.receipt) ? entry.receipt : entry.covers;
+    if (code) savedOwn.set(code, round((savedOwn.get(code) ?? 0) + entry.signed));
+  }
+  const savedAgainst = (message: DifferenceMessage): number =>
+    (message.moved !== undefined ? savedOwn : savedFor).get(message.receipt!) ?? 0;
   const firstCode = ordered[0]?.receipt ?? null;
 
   const all: ProblemSpan[] = [];
@@ -184,7 +204,7 @@ export function findDifference(
         return { receipt: message.receipt!, day: message.day, savedIn: other?.account ?? null, savedOn: other?.date ?? null };
       });
     const extra = entries
-      .filter((entry) => inSpan(entry.date) && !statementMade(entry.receipt) && !(entry.receipt && messageReceipts.has(entry.receipt)) && !(entry.covers && messageReceipts.has(entry.covers)))
+      .filter((entry) => inSpan(entry.date) && !statementMade(entry.receipt) && !mpesaCode(entry.receipt) && !(entry.receipt && messageReceipts.has(entry.receipt)) && !(entry.covers && messageReceipts.has(entry.covers)))
       .map((entry) => ({ id: entry.id, date: entry.date, amount: entry.signed, description: entry.description, receipt: entry.receipt }));
     const redated = entries
       .filter((entry) => {
@@ -204,10 +224,10 @@ export function findDifference(
         withBalance.filter((message) => message.record !== false && message.receipt && message.receipt !== firstCode && inSpan(message.day) && ledgerReceipts.has(message.receipt) && movedBy.has(message.receipt)),
         (message) => message.receipt!,
       )
-        .filter((message) => Math.abs((message.moved ?? movedBy.get(message.receipt!)!) - (savedFor.get(message.receipt!) ?? 0)) >= 1)
+        .filter((message) => Math.abs((message.moved ?? movedBy.get(message.receipt!)!) - savedAgainst(message)) >= 1)
         .map((message) => {
           const entry = ledgerReceipts.get(message.receipt!)!;
-          return { receipt: message.receipt!, day: message.day, entryId: entry.id, description: entry.description, inMessages: message.moved ?? movedBy.get(message.receipt!)!, inJamvi: savedFor.get(message.receipt!) ?? 0 };
+          return { receipt: message.receipt!, day: message.day, entryId: entry.id, description: entry.description, inMessages: message.moved ?? movedBy.get(message.receipt!)!, inJamvi: savedAgainst(message) };
         })
         .slice(0, MAX_ITEMS),
     });
