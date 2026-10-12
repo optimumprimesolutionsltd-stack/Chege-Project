@@ -1279,6 +1279,10 @@ export default function MpesaImportScreen() {
   // Opened from "Find the difference" for the days where Jamvi and M-Pesa parted:
   // those days' messages, read straight away, with what is already saved marked.
   const openedForRange = React.useRef(false);
+  // The codes Find the difference or Home asked to bring in. Asked for by name, one the
+  // person removed before comes in ticked: "Bring these days in" left them unticked, and
+  // the check sent them back here again ("it is still taking me back and forth", 12 Oct 2026).
+  const askedFor = React.useRef<Set<string> | null>(null);
   useEffect(() => {
     const day = /^\d{4}-\d{2}-\d{2}$/;
     if (openedForRange.current || lines || !params.smsFrom || !params.smsTo || !day.test(params.smsFrom) || !day.test(params.smsTo)) return;
@@ -1287,6 +1291,7 @@ export default function MpesaImportScreen() {
     setSmsTo(params.smsTo);
     // The payments Home or Find the difference found missing: only those are read (lib/bringInReceipts).
     const codes = takeBringIn();
+    askedFor.current = codes;
     void readMpesaSms(params.smsFrom, params.smsTo).then((result) => {
       if (!result.ok) {
         Alert.alert('Could not read your messages', smsRefusal(result.reason));
@@ -1360,7 +1365,7 @@ export default function MpesaImportScreen() {
     const marked = all.map((line) => {
       const existing = line.receipt ? recorded.get(line.receipt) : undefined;
       const marked = existing ? { ...line, alreadyRecorded: existing } : line;
-      return !existing && line.receipt && removed.has(line.receipt) ? { ...marked, removedBefore: true } : marked;
+      return !existing && line.receipt && removed.has(line.receipt) && !askedFor.current?.has(line.receipt) ? { ...marked, removedBefore: true } : marked;
     });
     // Entries typed by hand that look like the same payment (lib/mpesaImport withTwins).
     // Only a warning: a failed check never stops the reading.

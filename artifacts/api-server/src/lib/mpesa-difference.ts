@@ -91,6 +91,18 @@ const MAX_SPANS = 60;
 const MAX_ITEMS = 40;
 
 /**
+ * A code the statement reader makes for a line M-Pesa sends no message for: Fuliza
+ * charges (FZ), Fuliza still owed at the end (FB) or owed from before (FR), and a
+ * charge listed on its own (its payment's code, C and a number). No message will
+ * ever have one, so it is never "saved twice, or not M-Pesa?" - offering to remove
+ * the 30 Sep "Borrowed from Fuliza (still owed at the end)" sent the person round
+ * between this screen and the statement import ("it is still taking me back and
+ * forth", 12 Oct 2026).
+ */
+export const statementMade = (receipt: string | null | undefined): boolean =>
+  !!receipt && (/^F[ZBR]\d{12}$/.test(receipt) || /^[A-Z0-9]{10}C\d+$/.test(receipt));
+
+/**
  * Lays the messages against the account. `elsewhere` says, for a receipt not in
  * this account, which other account (and day) it was saved to, if any.
  */
@@ -165,7 +177,7 @@ export function findDifference(
         return { receipt: message.receipt!, day: message.day, savedIn: other?.account ?? null, savedOn: other?.date ?? null };
       });
     const extra = entries
-      .filter((entry) => inSpan(entry.date) && !(entry.receipt && messageReceipts.has(entry.receipt)) && !(entry.covers && messageReceipts.has(entry.covers)))
+      .filter((entry) => inSpan(entry.date) && !statementMade(entry.receipt) && !(entry.receipt && messageReceipts.has(entry.receipt)) && !(entry.covers && messageReceipts.has(entry.covers)))
       .map((entry) => ({ id: entry.id, date: entry.date, amount: entry.signed, description: entry.description, receipt: entry.receipt }));
     const redated = entries
       .filter((entry) => {
