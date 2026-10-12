@@ -145,8 +145,9 @@ export default function BudgetScreen() {
     subscribed: onScreen,
     // What each source was expected to bring in, in the month on screen.
     queryKey: ['income-sources', 'budget-report', year, month],
-    // Your income streams, without businesses: a business is never one (api-server lib/business-streams).
-    queryFn: () => customFetch<IncomeSource[]>(`/api/income-sources?year=${year}&month=${month}&streams=only`),
+    // Your income: your streams, and each business you live on the profit of - its profit is
+    // income, its costs already taken off (api-server routes/income-sources ?streams=income).
+    queryFn: () => customFetch<IncomeSource[]>(`/api/income-sources?year=${year}&month=${month}&streams=income`),
     staleTime: 30_000,
   });
   const { data: members = [], refetch: refetchMembers } = useQuery<Member[]>({
@@ -1839,6 +1840,8 @@ export default function BudgetScreen() {
                           <View style={styles.incomeNameLine}>
                             <Text style={[styles.incomeChipText, { color: colors.foreground }]} numberOfLines={1}>{source.name}</Text>
                             {source.isMain ? <Text style={[styles.incomeMain, { color: colors.primary }]}>MAIN</Text> : null}
+                            {/* A business you live on: its profit is this income (its costs already off). */}
+                            {businesses.ids.has(source.id) ? <Text style={[styles.incomeMain, { color: colors.primary }]}>PROFIT</Text> : null}
                           </View>
                         )}
                         {canManageSharedIncome ? (
@@ -1864,7 +1867,8 @@ export default function BudgetScreen() {
                             KES {formatKES(source.expectedMonthlyAmount ?? 0)}
                           </Text>
                         )}
-                        {editingIncome && (canManageSharedIncome || source.userId === user?.id) ? (
+                        {/* A business is removed on My businesses, never as an income line here. */}
+                        {editingIncome && !businesses.ids.has(source.id) && (canManageSharedIncome || source.userId === user?.id) ? (
                           <View style={styles.incomeEditActions}>
                             <Pressable
                               onPress={() => handleDeleteIncomeSource(source)}

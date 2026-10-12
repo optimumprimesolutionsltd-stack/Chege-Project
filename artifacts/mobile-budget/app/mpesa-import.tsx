@@ -94,6 +94,7 @@ import { keepScreenAwakeWhileSaving, letScreenSleepAgain } from '@/lib/keepAwake
 import { onlyWanted, takeBringIn } from '@/lib/bringInReceipts';
 import { withCashDeposits } from '@/lib/cashDeposits';
 import { rememberedNote, withNoteRule, withRememberedNotes } from '@/lib/payeeNotes';
+import { useOwnerBusiness } from '@/hooks/useOwnerBusiness';
 import { useImportDiagnostics } from '@/lib/importDiagnostics';
 import { getImportProgress, importSaveStalled, setImportProgress, useImportProgress } from '@/lib/importProgress';
 import { clearImportStep, noteImportStep, readUnfinishedImport, type ImportStep } from '@/lib/importBreadcrumb';
@@ -547,6 +548,7 @@ export default function MpesaImportScreen() {
   // "Who is this for?" on a line: you, or one of My businesses (lib/importBusiness).
   const businesses = useBusinesses();
   const namedPayees = useNamedPayees();
+  const ownerBusiness = useOwnerBusiness();
   // Businesses added from a line, shown before My businesses has caught up.
   const [addedBusinesses, setAddedBusinesses] = useState<Array<{ id: number; name: string }>>([]);
   const businessIds = useMemo(() => new Set([...businesses.ids, ...addedBusinesses.map((one) => one.id)]), [businesses.ids, addedBusinesses]);
@@ -2354,6 +2356,8 @@ export default function MpesaImportScreen() {
     const otherBudgetMade = new Map<number, { groupId: number; id: number }>();
     // Who each debt entry was for, kept so deleting it can offer to put that person's balance back.
     const debtLinks: DebtEntryLink[] = [];
+    // Lines saved as money with one of the person's businesses: marked once saved, by business.
+    const businessMarks = new Map<number, number[]>();
     // M-Pesa's own name for each entry saved under a nickname, for Search.
     const mpesaNames: MpesaName[] = [];
     // A loan still owed, or repaid - Fuliza, M-Shwari, KCB M-PESA, Hustler Fund - is a
@@ -2477,6 +2481,7 @@ export default function MpesaImportScreen() {
     // What one line became, the same whether the server or this phone saved it.
     const onSaved = (item: PreviewLine, choice: Choice | undefined, posted: Omit<Posted, 'feeFailed'> & { feeFailed?: boolean }) => {
       if (choice?.debt && posted.id) debtLinks.push({ transactionId: posted.id, partyId: choice.debt.partyId, kind: choice.debt.kind });
+      if (choice?.ownerBusinessId && posted.id) businessMarks.set(choice.ownerBusinessId, [...(businessMarks.get(choice.ownerBusinessId) ?? []), posted.id]);
       const named = mpesaNameFor(posted.id, item.original, item.description);
       if (named) mpesaNames.push(named);
       if (posted.feeFailed) result.failed.push({ what: `${item.description} charge`, why: `The entry saved, but its M-Pesa charge${item.fee ? ` of KES ${item.fee}` : ''} did not. Add it on the Bank tab as money out.` });
@@ -2653,6 +2658,13 @@ export default function MpesaImportScreen() {
       if (keptOther !== otherRules) keepOtherRules(keptOther);
     }
     void saveDebtLinks(debtLinks);
+    for (const [businessId, ids] of businessMarks) {
+      try {
+        await ownerBusiness.mark(ids, businessId);
+      } catch {
+        result.failed.push({ what: `${ids.length} ${ids.length === 1 ? 'entry' : 'entries'} for ${whoForBusinesses.find((one) => one.id === businessId)?.name ?? 'your business'}`, why: 'Saved, but not yet marked as your business\'s money. Open each on Bank and choose the business under What kind of money is this?' });
+      }
+    }
     // Money in left on "Not sure" is kept to sort out later; Home says so.
     {
       const toMark = toMarkAfterSave(lines, choices, depositIds);
@@ -3839,6 +3851,56 @@ export default function MpesaImportScreen() {
                         ? `Saved as ${business}'s. Jamvi will not remember this payee for it.`
                         : `The payee's other lines here follow. After Save, Jamvi remembers this payee for ${business}.`}
                     />
+                  ) : null}
+                  {/* Money with one of the person's own businesses, in one tap: the director's
+                      money - no category, no lending or paying back ("change too", 12 Oct 2026). */}
+                  {canManageBudget && choice?.include && whoForBusinesses.length > 0
+                    && (destinationOf(choice) === 'category' || destinationOf(choice) === 'owner-business')
+                    && !item.type?.startsWith('fuliza_') && item.type !== 'reversal' && !loanOf(item) && !savingsOf(item) ? (
+                    choice.ownerBusinessId ? (
+                      <Pressable
+                        onPress={() => setChoices((current) => ({ ...current, [item.index]: { ...current[item.index], ownerBusinessId: null, confirmed: false } }))}
+                        accessibilityRole="button"
+                        testID={`mpesa-line-owner-business-${item.index}`}
+                        hitSlop={6}
+                        style={{ alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, backgroundColor: `${colors.primary}1a` }}
+                      >
+                        <Feather name="briefcase" size={11} color={colors.primary} />
+                        <Text style={{ color: colors.primary, fontSize: 12, fontFamily: 'Inter_600SemiBold' }}>
+                          {out ? 'To' : 'From'} {whoForBusinesses.find((one) => one.id === choice.ownerBusinessId)?.name ?? 'your business'} - director's money · change
+                        </Text>
+                      </Pressable>
+                    ) : (
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 }} testID={`mpesa-line-owner-business-pick-${item.index}`}>
+                        <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>{out ? 'To' : 'From'} my business:</Text>
+                        {whoForBusinesses.map((business) => (
+                          <Pressable
+                            key={business.id}
+                            onPress={() => setChoices((current) => ({
+                              ...current,
+                              [item.index]: {
+                                ...current[item.index],
+                                ownerBusinessId: business.id,
+                                category: '',
+                                auto: false,
+                                debt: null,
+                                incomeSourceId: null,
+                                sourceAuto: false,
+                                businessId: null,
+                                remember: false,
+                                confirmed: true,
+                              },
+                            }))}
+                            accessibilityRole="button"
+                            testID={`mpesa-line-owner-business-${item.index}-${business.id}`}
+                            hitSlop={4}
+                            style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, borderWidth: 1, borderColor: colors.border }}
+                          >
+                            <Text style={{ color: colors.foreground, fontSize: 12, fontFamily: 'Inter_600SemiBold' }}>{business.name}</Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    )
                   ) : null}
                   {out && choice?.include && choice.debt?.kind !== 'lend' && !isMove(choice) && !isNotSure(choice.category) && canManageBudget && businessFor(item) === null ? (
                     <Pressable
