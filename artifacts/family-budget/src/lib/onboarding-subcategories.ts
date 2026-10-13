@@ -16,7 +16,6 @@ export const ONBOARDING_SUBCATEGORIES: Readonly<Record<string, readonly string[]
   Food: ["Groceries", "Market shopping", "Eating out"],
   Housing: ["Rent", "Mortgage", "Service charge"],
   Utilities: ["Electricity", "Water", "Cooking gas", "Garbage collection"],
-  "Shared bills": ["Rent share", "Bills share", "Shopping share"],
   Transport: ["Matatu & bus", "Fuel", "Boda boda", "Parking"],
   Health: ["Hospital & clinic", "Medicine", "SHA contributions"],
   Education: ["School fees", "Uniform", "School trips", "Tuition", "Clubs"],
