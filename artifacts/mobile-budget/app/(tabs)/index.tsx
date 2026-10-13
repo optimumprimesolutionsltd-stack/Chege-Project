@@ -54,6 +54,7 @@ import {
 } from '@workspace/api-client-react';
 import { HomeAnswersCard } from '@/components/HomeAnswersCard';
 import { CombineIncomeQuestion } from '@/components/CombineIncomeQuestion';
+import { CombineCategoriesQuestion } from '@/components/CombineCategoriesQuestion';
 import { BusinessSalaryQuestion } from '@/components/BusinessSalaryQuestion';
 import { MpesaImportCard } from '@/components/MpesaImportCard';
 
@@ -671,6 +672,7 @@ export default function DashboardScreen() {
           {canManageBudget ? <View style={{ marginHorizontal: 16, marginTop: 12 }}><BusinessSalaryQuestion /></View> : null}
           {/* One income stream per source of money (lib/combineIncome), asked once each. */}
           {canManageBudget ? <View style={{ marginHorizontal: 16 }}><CombineIncomeQuestion /></View> : null}
+          {canManageBudget ? <View style={{ marginHorizontal: 16 }}><CombineCategoriesQuestion /></View> : null}
 
           <WorkspaceSetupGuide />
 

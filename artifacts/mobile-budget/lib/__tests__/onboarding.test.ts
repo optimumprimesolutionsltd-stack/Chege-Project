@@ -84,7 +84,10 @@ describe('mobile onboarding', () => {
     expect(wedding).not.toContain('Shared bills');
 
     const together = recommendedCategoriesForPurpose('couple', 'together');
-    expect(together).toContain('Shared bills');
+    expect(together).toContain('Housing');
+    // Rent shared with someone is still rent: "rent share and rent are one
+    // and the same thing" (13 Oct 2026). Sharing is the budget, not a category.
+    expect(together).not.toContain('Shared bills');
     expect(together).not.toContain('Venue');
   });
 

@@ -10,6 +10,7 @@ import {
   GetBudgetCategoryRecommendationsResponse,
 } from "@workspace/api-zod";
 import { getActiveGroupId, requireGroupManager, requireTransactionEligibility } from "../lib/activeGroup";
+import { combineCategories } from "../lib/combine-categories";
 import { categoryPackChildren, categoryPackForKind, categoryPackRows, normalizedCategoryPackKind, priorityTiersForKind, subcategorySuggestions } from "../lib/categoryPacks";
 
 import { canonicalExpenseCategoryName } from "../lib/categoryNames";
@@ -783,6 +784,31 @@ router.delete("/budget-categories/:id", async (req, res) => {
     .returning();
   if (!deleted) { res.status(404).json({ error: "Category not found" }); return; }
   res.json({ success: true });
+});
+
+const combineCategorySchema = z.object({ intoId: z.number().int().positive() });
+
+/**
+ * Two categories for one thing (Rent and Rent share): everything filed under
+ * this one moves to `intoId` and this one goes (lib/combine-categories).
+ */
+router.post("/budget-categories/:id/combine", async (req, res) => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  if (!requireGroupManager(req, res)) return;
+  if (!await requireTransactionEligibility(req, res)) return;
+  const fromId = parseInt(req.params.id, 10);
+  const parsed = combineCategorySchema.safeParse(req.body);
+  if (isNaN(fromId) || !parsed.success) {
+    res.status(400).json({ error: "Say which category to combine this one into." });
+    return;
+  }
+  const result = await combineCategories(groupId, fromId, parsed.data.intoId);
+  if (!result.ok) {
+    res.status(result.status).json({ error: result.error });
+    return;
+  }
+  res.json({ ok: true, moved: result.moved, into: result.into });
 });
 
 export default router;
