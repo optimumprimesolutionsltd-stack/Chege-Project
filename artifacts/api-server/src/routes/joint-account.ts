@@ -34,7 +34,7 @@ import { GROUP_ATTRIBUTION } from "../lib/attribution";
 import { reversalLinksReady, soleReversalCandidate, takenBackReceipt } from "../lib/reversal-links";
 import { isOwnerBusinessMoney } from "../lib/owner-business-money";
 import { moveSavedToOwnAccount } from "../lib/own-account-moves";
-import { beforeDelete, isSplit } from "../lib/transaction-splits";
+import { beforeDelete, foldSplitParts, isSplit, splitRoots, type SplitPart } from "../lib/transaction-splits";
 import { enrichTransactions } from "../lib/transaction-details";
 import { ledgerEntries, ledgerTotals } from "../lib/account-ledger";
 import { pageOf } from "../lib/account-page";
@@ -326,6 +326,8 @@ const AccountQuery = z.object({
   before: z.string().max(80).optional(),
   month: z.coerce.number().int().min(1).max(12).optional(),
   year: z.coerce.number().int().min(2000).max(2100).optional(),
+  // "together": a split payment as one entry, for Bank (lib/transaction-splits foldSplitParts).
+  splits: z.string().max(20).optional(),
 });
 
 const accountColumns = {
@@ -816,7 +818,11 @@ router.get("/joint-account", async (req, res): Promise<void> => {
   // entry (lib/describe-transaction).
   const { limit, before, month, year } = query.data;
   const paged = limit != null || before != null || (month != null && year != null);
-  const page = pageOf(entries, { limit, before, month, year });
+  // Bank asks for a split payment as one entry; everything else, Home and
+  // Activity included, still adds up its parts by category.
+  const listed: Array<(typeof entries)[number] & { splitParts?: SplitPart[] }> =
+    query.data.splits === "together" ? foldSplitParts(entries, await splitRoots(groupId)) : entries;
+  const page = pageOf(listed, { limit, before, month, year });
   const enriched = await enrichTransactions(page.rows.map(({ entry }) => entry), groupId);
 
   const openingBalance = isAggregate
@@ -832,6 +838,7 @@ router.get("/joint-account", async (req, res): Promise<void> => {
   const transactions = enriched.map((transaction, index) => ({
     ...transaction,
     runningBalance: isAggregate ? null : openingBalance + page.rows[index].sumThroughThis,
+    ...(page.rows[index].splitParts ? { splitParts: page.rows[index].splitParts } : {}),
   }));
 
   res.json({

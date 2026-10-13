@@ -89,6 +89,53 @@ export async function splitRoots(groupId: number): Promise<Map<number, number>> 
   return new Map((result.rows as Array<{ part: number; root: number }>).map((row) => [Number(row.part), Number(row.root)]));
 }
 
+/** One category's share of a split payment, as Bank shows it under the payment. */
+export type SplitPart = { id: number; category: string | null; amount: number };
+
+/**
+ * A split payment as one entry again, for Bank: "its 10,000 is not split but the
+ * category is the one that is split" (13 Oct 2026). Its parts are left out of the
+ * list and the payment carries its whole amount, with each category's share in
+ * splitParts (the payment's own share first). It sits where the newest of them
+ * did, with that one's running balance - the balance once all of it was paid.
+ * Only the list changes: the parts stay entries of their own, so every spending
+ * figure, Find the difference and the duplicate check go on as before.
+ */
+export function foldSplitParts<T extends { entry: { id: number; amount: number | string; expenseCategory: string | null }; sumThroughThis: number }>(
+  rows: readonly T[],
+  rootOf: ReadonlyMap<number, number>,
+): Array<T & { splitParts?: SplitPart[] }> {
+  if (rootOf.size === 0) return [...rows];
+  const roots = new Set(rootOf.values());
+  const keyOf = (id: number) => rootOf.get(id) ?? (roots.has(id) ? id : null);
+  const members = new Map<number, T[]>();
+  for (const row of rows) {
+    const key = keyOf(row.entry.id);
+    if (key !== null) members.set(key, [...(members.get(key) ?? []), row]);
+  }
+  const out: Array<T & { splitParts?: SplitPart[] }> = [];
+  const done = new Set<number>();
+  for (const row of rows) {
+    const key = keyOf(row.entry.id);
+    if (key === null) { out.push(row); continue; }
+    if (done.has(key)) continue;
+    done.add(key);
+    const group = members.get(key)!;
+    const root = group.find((member) => member.entry.id === key);
+    // Its payment not in this list: the parts are shown as they are.
+    if (!root) { out.push(...group); continue; }
+    const ordered = [root, ...group.filter((member) => member !== root).sort((a, b) => a.entry.id - b.entry.id)];
+    const total = ordered.reduce((sum, member) => sum + cents(Number(member.entry.amount)), 0) / 100;
+    out.push({
+      ...root,
+      entry: { ...root.entry, amount: total },
+      sumThroughThis: row.sumThroughThis,
+      splitParts: ordered.map((member) => ({ id: member.entry.id, category: member.entry.expenseCategory, amount: Number(member.entry.amount) })),
+    });
+  }
+  return out;
+}
+
 export type Part = { category: string; amount: number };
 type Trx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type Row = {
