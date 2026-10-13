@@ -139,10 +139,10 @@ export default function MpesaDifferenceScreen() {
               }));
             }
             if (plan.bringIn) {
-              // Brought in and saved as Not sure yet by the import; coming back
-              // here checks again.
+              // Opened in the import to check each one's category before saving;
+              // coming back here checks again.
               setBringIn(plan.bringIn.receipts);
-              router.push(`/mpesa-import?smsFrom=${plan.bringIn.from}&smsTo=${plan.bringIn.to}&notSure=1` as never);
+              router.push(`/mpesa-import?smsFrom=${plan.bringIn.from}&smsTo=${plan.bringIn.to}&missing=1` as never);
             } else {
               await check();
             }

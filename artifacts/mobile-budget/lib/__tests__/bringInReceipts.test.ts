@@ -43,8 +43,9 @@ describe('bringing in the missing payments reads only those', () => {
 
 describe('bringing them in ends finished, with the way on', () => {
   const screen = readFileSync('app/mpesa-import.tsx', 'utf8');
-  it('says they are all in, under Not sure, and offers Sort them out now or Home', () => {
-    expect(screen).toContain('broughtInRef.current = brought.length;');
+  it('says how many are in, offers Sort them out only for any left Not sure, and Home', () => {
+    expect(screen).toContain('broughtInRef.current = brought;');
+    expect(screen).toContain('{notSure > 0 ? (');
     expect(screen).toContain('testID="mpesa-brought-in"');
     expect(screen).toContain("onPress={() => router.replace('/sort-entries' as never)}");
     expect(screen).toContain('testID="mpesa-brought-in-home"');

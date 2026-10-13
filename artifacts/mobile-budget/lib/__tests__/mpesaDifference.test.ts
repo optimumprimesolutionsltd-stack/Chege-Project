@@ -86,7 +86,7 @@ describe('Find the difference, on the phone', () => {
   it('can open the import on just the days that parted', () => {
     expect(read('app/mpesa-difference.tsx')).toContain('router.push(`/mpesa-import?smsFrom=${span.from}&smsTo=${span.to}` as never)');
     const importScreen = read('app/mpesa-import.tsx');
-    expect(importScreen).toContain('const params = useLocalSearchParams<{ fromSms?: string; smsFrom?: string; smsTo?: string; notSure?: string }>();');
+    expect(importScreen).toContain('const params = useLocalSearchParams<{ fromSms?: string; smsFrom?: string; smsTo?: string; missing?: string }>();');
     expect(importScreen).toContain('void readMpesaSms(params.smsFrom, params.smsTo).then((result) => {');
   });
 });
@@ -178,21 +178,25 @@ describe('Fix all', () => {
     const { fixConfirmation } = await import('../mpesaLiveBalance');
     const { title, message } = fixConfirmation({ move: ['A'], redate: [{ id: 1, date: '2026-01-01' }], bringIn: { count: 12, from: '2026-01-01', to: '2026-02-01', receipts: [] }, leftToCheck: 3, charges: [{ entryId: 9, amount: 7 }, { entryId: 10, amount: 13 }] }, 'Chege Mpesa');
     expect(title).toBe('Fix all of these?');
-    expect(message).toContain('Bring in 12 payments not saved anywhere, as Not sure yet');
+    expect(message).toContain("Bring in 12 payments not saved anywhere - you check each one's category before anything is saved.");
     expect(message).toContain('Move 1 saved in another account to Chege Mpesa.');
     expect(message).toContain('Give 1 entry the day of its M-Pesa message.');
     expect(message).toContain('Add 2 M-Pesa charges M-Pesa took but Jamvi never saved (KES 20 in all), each to its payment.');
     expect(message).toContain('Nothing is deleted. 3 entries in Chege Mpesa that are in none of your messages stay for you to look at');
   });
 
-  it('asks first, fixes on the server, then brings the missing days in under Not sure yet and saves them', () => {
+  it('asks first, fixes on the server, then opens the missing payments to check before saving', () => {
     const screen = read('app/mpesa-difference.tsx');
     expect(screen.indexOf('Alert.alert(title, message, [')).toBeLessThan(screen.indexOf("'/api/mpesa/difference/fix'"));
-    expect(screen).toContain('router.push(`/mpesa-import?smsFrom=${plan.bringIn.from}&smsTo=${plan.bringIn.to}&notSure=1` as never);');
+    expect(screen).toContain('router.push(`/mpesa-import?smsFrom=${plan.bringIn.from}&smsTo=${plan.bringIn.to}&missing=1` as never);');
+    // "it should not be quick to save before i align with it and use the
+    // correct categories. i want to be able to edit before save" (13 Oct 2026):
+    // each keeps Jamvi's category to check, and nothing saves without Save.
     const importScreen = read('app/mpesa-import.tsx');
-    expect(importScreen).toContain('const brought = notSureableLines(shown, current);');
-    expect(importScreen).toContain('return putUnderNotSure(brought, current);');
-    expect(importScreen).toContain('if (firstProblem) {\n      Alert.alert(\'Almost there\', `${firstProblem} Then tap Save.`);');
+    expect(importScreen).toContain("if (!shown || params.missing !== '1') return;");
+    expect(importScreen).toContain('nothing is saved until you do.');
+    expect(importScreen).not.toContain('return putUnderNotSure(brought, current);');
+    expect(importScreen).not.toContain('autoSaveNotSure');
   });
 });
 
