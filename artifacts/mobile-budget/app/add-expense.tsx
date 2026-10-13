@@ -77,6 +77,8 @@ import {
   hydrateCategoryAllocations,
   preserveExpenseSplitsForAmount,
 } from '@/lib/expenseFundingPreservation';
+import { leftToPayLine } from '@/lib/leftToPay';
+import { MONTH_NAMES } from '@/lib/dayRange';
 
 const PALETTE = ['#22c55e', '#f97316', '#8b5cf6', '#f59e0b', '#06b6d4', '#10b981', '#ec4899', '#3b82f6', '#a855f7', '#ef4444'];
 const RECURRING_BUDGET_HANDOFF_KEY = 'jamvi:recurring-budget-handoff';
@@ -2094,24 +2096,19 @@ export default function AddExpenseSheet() {
             })()}
           </Text>
         )}
-        {/* Running balance for selected category */}
-        {isAdvanced && category ? (() => {
+        {/* What is left on the category's budget after this payment - in Quick
+            as well as Detailed, and saying when it is paid in full (lib/leftToPay). */}
+        {category ? (() => {
           const preview = categoryBalancePreviews.find(
             (item) => item.category.toLowerCase() === category.toLowerCase(),
           );
           if (!preview) return null;
+          const line = leftToPayLine(preview, MONTH_NAMES[expenseMonth - 1] ?? 'this month');
+          const tint = line.tone === 'over' ? colors.destructive : line.tone === 'paid' ? colors.success : colors.primary;
           return (
-            <View style={[styles.balancePill, {
-              backgroundColor: preview.isOverBudget ? colors.destructive + '18' : colors.primary + '18',
-              borderColor: preview.isOverBudget ? colors.destructive + '55' : colors.primary + '55',
-            }]}>
-              <Feather name="bar-chart-2" size={12} color={preview.isOverBudget ? colors.destructive : colors.primary} />
-              <Text style={[styles.balancePillText, { color: preview.isOverBudget ? colors.destructive : colors.primary }]}>
-                Spent before this expense: KES {preview.spentBeforeExpense.toLocaleString()}
-                {preview.isOverBudget
-                  ? `  ·  KES ${preview.overBy.toLocaleString()} over budget after this expense`
-                  : `  ·  KES ${preview.remaining.toLocaleString()} left after this expense`}
-              </Text>
+            <View style={[styles.balancePill, { backgroundColor: tint + '18', borderColor: tint + '55' }]} testID="expense-left-to-pay">
+              <Feather name={line.tone === 'paid' ? 'check-circle' : 'bar-chart-2'} size={12} color={tint} />
+              <Text style={[styles.balancePillText, { color: tint }]}>{line.text}</Text>
             </View>
           );
         })() : null}
@@ -2237,7 +2234,9 @@ export default function AddExpenseSheet() {
                           }]}>
                             {preview.isOverBudget
                               ? `KES ${preview.overBy.toLocaleString()} over budget`
-                              : `KES ${preview.remaining.toLocaleString()} left of KES ${preview.budgetAmount.toLocaleString()}`}
+                              : preview.remaining === 0
+                                ? `Paid in full - KES ${preview.budgetAmount.toLocaleString()}`
+                                : `KES ${preview.remaining.toLocaleString()} left of KES ${preview.budgetAmount.toLocaleString()}`}
                           </Text>
                         </View>
                       ))}

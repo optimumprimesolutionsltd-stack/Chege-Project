@@ -23,6 +23,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { isoDay, longDay, monthStartIso, orderedRange } from '@/lib/dayRange';
 import { incomeTotal, leftToPlan, planWith } from '@/lib/budgetTotals';
+import { budgetRowLeft } from '@/lib/leftToPay';
 import { effectiveBudgets } from '@workspace/category-tree';
 import { CategorySearchBox } from '@/components/CategorySearchBox';
 import { onScreenOnly, useOnScreen } from '@/hooks/useOnScreen';
@@ -2175,7 +2176,7 @@ export default function BudgetScreen() {
                   </View>
                   <Text style={[styles.tierMeta, { color: colors.mutedForeground }]}>
                     Actual KES {formatKES(row.actual)} · Budget KES {formatKES(row.budget)}
-                    {isOver ? ' · Over budget' : row.budget > 0 ? ` · KES ${formatKES(row.budget - row.actual)} left` : ''}
+                    {isOver ? ' · Over budget' : row.budget > 0 ? ` · ${budgetRowLeft(row.budget, row.actual)}` : ''}
                   </Text>
                 </View>
               );
@@ -2299,8 +2300,10 @@ export default function BudgetScreen() {
                             ? 'Recurring monthly'
                             : `One-time · ${MONTHS_SHORT[(cat.activeMonth ?? month) - 1]} ${cat.activeYear ?? year}`}
                         </Text>
-                        <Text style={[styles.catRemaining, { color: isOver ? '#f87171' : colors.mutedForeground }]}>
-                          {isOver ? `KES ${formatKES(cat.spentAmount - cat.budgetAmount)} over` : `KES ${formatKES(cat.remaining)} left`}
+                        <Text style={[styles.catRemaining, { color: isOver ? '#f87171' : cat.budgetAmount > 0 && cat.spentAmount === cat.budgetAmount ? colors.primary : colors.mutedForeground }]}>
+                          {cat.budgetAmount > 0
+                            ? budgetRowLeft(cat.budgetAmount, cat.spentAmount)
+                            : isOver ? `KES ${formatKES(cat.spentAmount - cat.budgetAmount)} over` : `KES ${formatKES(cat.remaining)} left`}
                         </Text>
                         {/* A parent no longer carries a budget of its own, so
                             the figures on this row already are the branch:
