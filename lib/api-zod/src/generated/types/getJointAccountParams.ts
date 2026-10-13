@@ -29,4 +29,8 @@ before?: string;
  */
 month?: number;
 year?: number;
+/**
+ * together: a split payment comes back as one entry, its whole amount, with its parts in splitParts.
+ */
+splits?: string;
 };

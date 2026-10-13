@@ -21,7 +21,7 @@ describe('screens ask for only what they show (9 Oct 2026)', () => {
   });
 
   it('the server describes only the page, and is unchanged without one', () => {
-    expect(route).toContain('const page = pageOf(entries, { limit, before, month, year });');
+    expect(route).toContain('const page = pageOf(listed, { limit, before, month, year });');
     expect(route).toContain('const enriched = await enrichTransactions(page.rows.map(({ entry }) => entry), groupId);');
     expect(route).toContain('...(paged ? {');
   });
@@ -30,7 +30,7 @@ describe('screens ask for only what they show (9 Oct 2026)', () => {
 describe('Bank fills at once (9 Oct 2026)', () => {
   const bank = readFileSync('app/(tabs)/bank.tsx', 'utf8');
   it('shows the newest entries while the whole list is on its way, then the whole list', () => {
-    expect(bank).toContain('const firstPageParams = { ...(selectedAccountId ? { accountId: selectedAccountId } : {}), limit: BANK_FIRST_PAGE };');
+    expect(bank).toContain('const firstPageParams = { ...jointAccountParams, limit: BANK_FIRST_PAGE };');
     expect(bank).toContain('const data = fullData ?? firstPage;');
     expect(bank).toContain('testID="bank-loading-older"');
   });

@@ -94,6 +94,12 @@ export type Choice = {
    */
   notes?: string;
   /**
+   * One payment, more than one category, as Log Expense does it: "its 10,000 is not split
+   * but the category is the one that is split" (13 Oct 2026). Each part is the share of
+   * another category; `category` keeps the rest. Split once saved (categorySplitOf).
+   */
+  categoryParts?: CategoryPart[];
+  /**
    * Records this line in a budget the person manages other than the one being worked in —
    * a side hustle run as its own project, say, buying stock from and selling it back into the
    * same M-Pesa account. Chosen once per line: which budget, which of its accounts, and either
@@ -152,6 +158,30 @@ export function ownerBusinessOf(line: Pick<PreviewLine, "direction">, choice: Ch
   if (!choice) return null;
   if (choice.ownerBusinessId) return choice.ownerBusinessId;
   return line.direction === "out" && choice.businessId && !choice.category.trim() && !choice.debt ? choice.businessId : null;
+}
+
+/** The share of one payment that goes to another category (Choice.categoryParts). */
+export type CategoryPart = { category: string; amount: number };
+
+/** Money out filed under a real category - not Not sure yet, a debt or a move - can have its category split. */
+export function canSplitCategory(line: Pick<PreviewLine, "direction" | "amount">, choice: Choice | undefined): boolean {
+  if (line.direction !== "out" || !line.amount || line.amount <= 0 || !choice?.include) return false;
+  if (destinationOf(choice) !== "category" || choice.ownerBusinessId || choice.businessId) return false;
+  const category = choice.category.trim();
+  return Boolean(category) && category !== NOT_SURE_CATEGORY;
+}
+
+/**
+ * The parts to split off a line once it is saved, each with a category and an amount,
+ * or null when it is not split. The line"s own category keeps the rest, so the parts
+ * must leave some of the payment for it; parts that do not are not split at all.
+ */
+export function categorySplitOf(line: Pick<PreviewLine, "direction" | "amount">, choice: Choice | undefined): CategoryPart[] | null {
+  if (!canSplitCategory(line, choice)) return null;
+  const parts = (choice!.categoryParts ?? []).filter((part) => part.category.trim() && part.amount > 0 && part.category.trim() !== choice!.category.trim());
+  if (parts.length === 0) return null;
+  const taken = parts.reduce((sum, part) => sum + Math.round(part.amount * 100), 0);
+  return taken < Math.round((line.amount ?? 0) * 100) ? parts.map((part) => ({ category: part.category.trim(), amount: part.amount })) : null;
 }
 
 export function destinationOf(choice: Choice | undefined): Destination {

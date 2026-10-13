@@ -135,6 +135,7 @@ import { saveKnowledge } from '@/lib/knowledgeStore';
 import { TeachJamviCard, type OwnAccountAnswer } from '@/components/TeachJamviCard';
 import { BusinessSalaryQuestion } from '@/components/BusinessSalaryQuestion';
 import { FamilyNamesCard } from '@/components/FamilyNamesCard';
+import { ImportCategorySplit } from '@/components/ImportCategorySplit';
 import { FAMILY_CATEGORY, familyCategories, familyNames, fileFamilyLines, relativesBySurname, withFamily, withoutFamily } from '@/lib/family';
 import { alreadyKnown, keepAnswer, ownByNumber, ownRuleKey, suggestedCategories, teachableGroups, teachCategory, teachOwnAccount, teachSource, withOwnAccounts, type TeachGroup } from '@/lib/teachJamvi';
 import { useNamedPayees } from '@/hooks/useNamedPayees';
@@ -186,6 +187,9 @@ import {
   summarise,
   type Choice,
   type PreviewLine,
+  canSplitCategory,
+  categorySplitOf,
+  type CategoryPart,
   mergeTwins,
   twinNotes,
   twinQuestions,
@@ -2004,6 +2008,8 @@ export default function MpesaImportScreen() {
   );
   // Lines whose optional note box is open (canAddNote); a line with a note shows it anyway.
   const [noteOpen, setNoteOpen] = useState<Set<number>>(() => new Set());
+  // The line whose category is being split across more than one (components/ImportCategorySplit).
+  const [splittingLine, setSplittingLine] = useState<number | null>(null);
   const [debtFor, setDebtFor] = useState<{ index: number; partyId: number | null; kind: DebtKind | null } | null>(null);
   // Somebody not yet in Who owes who, added from the debt sheet itself.
   const [newParty, setNewParty] = useState<{ name: string; kind: 'person' | 'institution' } | null>(null);
@@ -2348,6 +2354,8 @@ export default function MpesaImportScreen() {
     const businessMarks = new Map<number, number[]>();
     // M-Pesa's own name for each entry saved under a nickname, for Search.
     const mpesaNames: MpesaName[] = [];
+    // Payments whose category was split across more than one, split once saved (categorySplitOf).
+    const categorySplits: Array<{ transactionId: number; description: string; parts: CategoryPart[] }> = [];
     // A loan still owed, or repaid - Fuliza, M-Shwari, KCB M-PESA, Hustler Fund - is a
     // debt to that lender in Who owes who: found there, or added once, and its lines linked to it.
     let saveChoices = choices;
@@ -2473,6 +2481,8 @@ export default function MpesaImportScreen() {
       if (ownerBusinessId && posted.id) businessMarks.set(ownerBusinessId, [...(businessMarks.get(ownerBusinessId) ?? []), posted.id]);
       const named = mpesaNameFor(posted.id, item.original, item.description);
       if (named) mpesaNames.push(named);
+      const splitParts = categorySplitOf(item, choice);
+      if (splitParts && posted.id !== undefined) categorySplits.push({ transactionId: posted.id, description: item.description ?? 'A payment', parts: splitParts });
       if (posted.feeFailed) result.failed.push({ what: `${item.description} charge`, why: `The entry saved, but its M-Pesa charge${item.fee ? ` of KES ${item.fee}` : ''} did not. Add it on the Bank tab as money out.` });
       result.saved += 1;
       savedIndexes.add(item.index);
@@ -2647,6 +2657,18 @@ export default function MpesaImportScreen() {
       if (keptOther !== otherRules) keepOtherRules(keptOther);
     }
     void saveDebtLinks(debtLinks);
+    // Each split payment: one entry, its category shared as chosen (api-server lib/transaction-splits).
+    for (const split of categorySplits) {
+      try {
+        await customFetch('/api/transaction-splits/split', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ transactionId: split.transactionId, parts: split.parts }),
+        });
+      } catch (error) {
+        result.failed.push({ what: `${split.description} split`, why: `Saved under one category, but not split: ${plainSaveError(error)} Open it on Bank to split it.` });
+      }
+    }
     for (const [businessId, ids] of businessMarks) {
       try {
         await ownerBusiness.mark(ids, businessId);
@@ -3825,6 +3847,26 @@ export default function MpesaImportScreen() {
                       <Feather name="chevron-down" size={16} color={colors.mutedForeground} />
                     </Pressable>
                   ) : null}
+                  {/* One payment, more than one category, as Log Expense does it ("its 10,000 is not
+                      split but the category is the one that is split", 13 Oct 2026). */}
+                  {canManageBudget && canSplitCategory(item, choice) ? (
+                    <Pressable
+                      onPress={() => setSplittingLine(item.index)}
+                      accessibilityRole="button"
+                      testID={`mpesa-line-split-${item.index}`}
+                      hitSlop={6}
+                      style={{ alignSelf: 'flex-start', paddingVertical: 4 }}
+                    >
+                      <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>
+                        {(() => {
+                          const parts = categorySplitOf(item, choice);
+                          if (!parts) return 'Split across categories';
+                          const rest = (item.amount ?? 0) - parts.reduce((sum, part) => sum + part.amount, 0);
+                          return `Split: ${[...parts.map((part) => `${part.category} ${formatExact(part.amount)}`), `${choice!.category} ${formatExact(rest)}`].join(' · ')} · change`;
+                        })()}
+                      </Text>
+                    </Pressable>
+                  ) : null}
                   {/* Quiet unless asked: a line Jamvi knows is a business's says so in a tag,
                       and the question itself only opens with More or the tag ("simplicity...
                       complications in onboarding, not usage", 9 Oct 2026). */}
@@ -4580,6 +4622,16 @@ export default function MpesaImportScreen() {
         </View>
       ) : null}
 
+      <ImportCategorySplit
+        line={(() => {
+          const item = splittingLine === null ? undefined : lines?.find((one) => one.index === splittingLine);
+          const choice = item ? choices[item.index] : undefined;
+          if (!item || !choice || !canSplitCategory(item, choice)) return null;
+          return { index: item.index, amount: item.amount ?? 0, payee: item.description ?? 'M-Pesa', category: choice.category, parts: choice.categoryParts ?? [] };
+        })()}
+        onSave={(index, parts) => setChoices((current) => ({ ...current, [index]: { ...current[index], categoryParts: parts, confirmed: true } }))}
+        onClose={() => setSplittingLine(null)}
+      />
       <Modal visible={budgetPickerOpen} animationType="slide" transparent onRequestClose={() => setBudgetPickerOpen(false)}>
         <View style={styles.sheetBackdrop}>
           <View style={[styles.sheet, { backgroundColor: colors.card, borderColor: colors.border, padding: 16, paddingBottom: 16 + Math.max(insets.bottom, 24), gap: 8 }]}>

@@ -141,6 +141,8 @@ type Tx = {
   type: string;
   amount: number;
   runningBalance?: number | null;
+  /** A split payment, shown as one: each category's share (api-server lib/transaction-splits foldSplitParts). */
+  splitParts?: { id: number; category: string | null; amount: number }[];
   description: string;
   notes?: string | null;
   madeById?: string | null;
@@ -217,7 +219,9 @@ export default function BankScreen() {
   const accountStorageKey = group?.id && user?.id ? `bank-account:${group.id}:${user.id}` : null;
   // Followed only while Bank is in view (hooks/useOnScreen): hidden behind
   // Sort them out it reloaded the whole account after every entry sorted.
-  const jointAccountParams = selectedAccountId ? { accountId: selectedAccountId } : undefined;
+  // A split payment comes back as one entry, its whole amount ("its 10,000 is not
+  // split but the category is the one that is split", 13 Oct 2026).
+  const jointAccountParams = { ...(selectedAccountId ? { accountId: selectedAccountId } : {}), splits: 'together' };
   const { data: fullData, isLoading: fullLoading, isFetching, refetch } = useGetJointAccount(
     jointAccountParams,
     { query: { queryKey: getGetJointAccountQueryKey(jointAccountParams), subscribed: onScreen } },
@@ -226,7 +230,7 @@ export default function BankScreen() {
   // in a fraction of the time, so Bank fills at once and the whole list takes
   // over when it arrives (docs/account-list-paging.md, 9 Oct 2026). Everything
   // that needs the whole history waits for it.
-  const firstPageParams = { ...(selectedAccountId ? { accountId: selectedAccountId } : {}), limit: BANK_FIRST_PAGE };
+  const firstPageParams = { ...jointAccountParams, limit: BANK_FIRST_PAGE };
   const { data: firstPage } = useGetJointAccount(
     firstPageParams,
     { query: { queryKey: getGetJointAccountQueryKey(firstPageParams), subscribed: onScreen && !fullData } },
@@ -1442,6 +1446,12 @@ export default function BankScreen() {
     }
     if (tx.bankTransferId) {
       openTransferEdit(tx, tx.bankTransferId);
+      return;
+    }
+    // A split payment, shown whole: its parts are changed or undone on the split sheet,
+    // where the whole amount and each category's share are (components/SplitSheet).
+    if (tx.splitParts) {
+      setSplitting({ id: tx.id, amount: Number(tx.amount), description: tx.description, category: tx.expenseCategory ?? null });
       return;
     }
     const type: TxType = tx.savingsGoalId
@@ -2718,7 +2728,7 @@ export default function BankScreen() {
   // withdrawal can change accounts. Requires the same access as deleting: it
   // restructures history rather than correcting today's own entry.
   const canMoveTx = (tx: Tx) =>
-    canManageAccount && tx.bankTransferId == null && tx.savingsGoalId == null && tx.expenseId == null;
+    canManageAccount && tx.bankTransferId == null && tx.savingsGoalId == null && tx.expenseId == null && !tx.splitParts;
 
   // Spending lands on a category that holds no subcategories: a category with
   // children is a heading, and its spending is theirs added up, so neither
@@ -3575,6 +3585,8 @@ export default function BankScreen() {
                       : dep && item.settlesContributorId && item.debtPartyName ? `Repaid by ${item.debtPartyName}`
                       : !dep && item.isLending ? (item.debtPartyName ? `Lent to ${item.debtPartyName}` : 'Money lent out')
                       : ownerBusiness.markedIds.has(item.id) ? businessTitle(dep ? 'in' : 'out', businessNameOf(ownerBusiness.businessIdOf(item.id)))
+                      // A split payment is titled by who was paid; its categories are listed under it.
+                      : item.splitParts ? shownDescription
                       : !dep && item.expenseCategory ? item.expenseCategory
                       : !dep && item.settlesContributorId ? (item.debtPartyName ? `Paid to ${item.debtPartyName}` : 'Debt payment')
                       : dep && item.incomeSourceId && incomeSourceNames.get(item.incomeSourceId) ? incomeSourceNames.get(item.incomeSourceId)
@@ -3601,6 +3613,11 @@ export default function BankScreen() {
                   {data?.accountName ? `${data.accountName} · ` : ''}
                   {canManageAccount ? 'Edit or delete' : canEditTransaction(item) ? 'Edit today' : ''}
                 </Text>
+                {item.splitParts ? (
+                  <Text style={[styles.txMeta, { color: colors.primary }]} testID={`bank-split-parts-${item.id}`}>
+                    Split: {item.splitParts.map((part) => `${part.category ?? 'No category'} ${formatKES(part.amount)}`).join(' · ')}
+                  </Text>
+                ) : null}
                 {/* Money in with no source is Not sure until it is sorted, and says so
                     ("not yet sorted", 8 Oct 2026). In a Shared group only money in
                     brought in from M-Pesa: members' own contributions need no source

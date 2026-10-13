@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { coversParts } from "../transaction-splits";
+import { coversParts, foldSplitParts } from "../transaction-splits";
 
 const lib = readFileSync("src/lib/transaction-splits.ts", "utf8");
 const bank = readFileSync("src/routes/joint-account.ts", "utf8");
@@ -48,5 +48,28 @@ describe("parts are entries of their own, kept apart only where codes are matche
   it("a person's covers are applied once per payment, and counted for the month even when the payment became a part itself", () => {
     expect(lib).toContain(`UNION ALL SELECT 1 FROM "covers_applied" WHERE "transaction_id" = \${id} LIMIT 1`);
     expect(lib).toContain(`FROM "covers_applied" ca`);
+  });
+});
+
+// "Its 10,000 is not split but the category is the one that is split" (13 Oct 2026):
+// on Bank a split payment is one entry again; its parts stay entries underneath.
+describe("a split payment on Bank", () => {
+  const row = (id: number, amount: number, expenseCategory: string | null, sumThroughThis: number) => ({ entry: { id, amount, expenseCategory }, sumThroughThis });
+  // Newest first, as lib/account-ledger lists them: 9857 is a part of 9854.
+  const rows = [row(9858, 200, "Food", -100), row(9857, 5000, "School fees", 100), row(9856, 90, "Bank charges", 5100), row(9854, 5000, "Rent", 5190), row(9850, 10000, null, 10190)];
+  it("shows the payment's whole amount where its newest part was, with each category's share", () => {
+    const folded = foldSplitParts(rows, new Map([[9857, 9854]]));
+    expect(folded.map((one) => one.entry.id)).toEqual([9858, 9854, 9856, 9850]);
+    expect(folded[1].entry.amount).toBe(10000);
+    expect(folded[1].sumThroughThis).toBe(100);
+    expect(folded[1].splitParts).toEqual([{ id: 9854, category: "Rent", amount: 5000 }, { id: 9857, category: "School fees", amount: 5000 }]);
+    expect(folded[0].splitParts).toBeUndefined();
+  });
+  it("leaves the list alone when nothing is split, or the payment is not in it", () => {
+    expect(foldSplitParts(rows, new Map())).toEqual(rows);
+    expect(foldSplitParts(rows, new Map([[9857, 1]])).map((one) => one.entry.amount)).toEqual([200, 5000, 90, 5000, 10000]);
+  });
+  it("only for Bank, which asks for it", () => {
+    expect(bank).toContain(`query.data.splits === "together" ? foldSplitParts(entries, await splitRoots(groupId)) : entries;`);
   });
 });

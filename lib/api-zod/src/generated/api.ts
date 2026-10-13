@@ -1164,7 +1164,8 @@ export const GetJointAccountQueryParams = zod.object({
   "limit": zod.coerce.number().int().min(getJointAccountQueryLimitMin).max(getJointAccountQueryLimitMax).optional().describe('At most this many entries, newest first (0 for the totals alone). Omitted, every entry.'),
   "before": zod.coerce.string().optional().describe('The nextCursor of the previous page.'),
   "month": zod.coerce.number().int().min(1).max(getJointAccountQueryMonthMax).optional().describe('With year, only that month\'s entries, and monthDeposits\/monthDisbursements.'),
-  "year": zod.coerce.number().int().optional()
+  "year": zod.coerce.number().int().optional(),
+  "splits": zod.coerce.string().optional().describe('together: a split payment comes back as one entry, its whole amount, with its parts in splitParts.')
 })
 
 
