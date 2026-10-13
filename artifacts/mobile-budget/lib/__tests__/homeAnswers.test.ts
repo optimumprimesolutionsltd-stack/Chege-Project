@@ -69,3 +69,18 @@ describe('the answers are on both Home screens', () => {
     expect(dash).not.toContain('label: "Bank Deposit"');
   });
 });
+
+// "how much is on my mpesa? is wrong" (13 Oct 2026): Jamvi's figure is worked
+// out from what was saved; M-Pesa's own message says what is really there.
+describe("How much is on my M-Pesa? answers with M-Pesa's own figure", () => {
+  it('uses the newest message when there is one, and says where it came from', async () => {
+    const { readFileSync } = await import('node:fs');
+    const card = readFileSync('components/HomeAnswersCard.tsx', 'utf8');
+    expect(card).toContain('homeAnswers({ balance: live ? live.balance : balance, spent, budget })');
+    expect(card).toContain('`From your M-Pesa message of ${messageTime(live.at)}`');
+    expect(card).toContain("'As recorded in Jamvi'");
+    const home = readFileSync('app/(tabs)/index.tsx', 'utf8');
+    expect(home).toContain('live={personalBudget ? liveMpesa ?? null : null}');
+    expect(home).toContain("queryKey: ['mpesa-live-balance'],");
+  });
+});

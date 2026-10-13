@@ -31,7 +31,7 @@ import { mayStartGroup } from '@/lib/groupStart';
 import { toSortTitle } from '@/lib/entriesToSort';
 import { useWaitingForYou, waitingDestination } from '@/hooks/useWaitingForYou';
 import { useQuery } from '@tanstack/react-query';
-import { canReadSms, newMpesaSms, newSmsTitle, parseSmsAuto, smsAutoKey } from '@/lib/mpesaSms';
+import { canReadSms, newMpesaSms, newSmsTitle, parseSmsAuto, readLiveMpesaBalance, smsAutoKey } from '@/lib/mpesaSms';
 import { PageScrollView } from '@/components/PageScrollReset';
 import { useAuth } from '@/lib/auth';
 import ActivityCard from '@/components/ActivityCard';
@@ -224,6 +224,20 @@ export default function DashboardScreen() {
     subscribed: onScreen,
   });
   const isSharedWorkspace = group?.isPrivate === false;
+  // M-Pesa's own balance, from the newest message on this phone, for the same
+  // question: Jamvi's figure is worked out from what was saved and is wrong
+  // whenever something is missing ("how much is on my mpesa? is wrong", 13 Oct
+  // 2026). Personal budget only - the messages are this person's own M-Pesa.
+  // Shared with the M-Pesa card's own read.
+  const personalBudget = group?.isPrivate === true;
+  const { data: liveMpesa } = useQuery({
+    queryKey: ['mpesa-live-balance'],
+    queryFn: () => readLiveMpesaBalance(),
+    enabled: personalBudget,
+    staleTime: 15_000,
+    retry: false,
+    subscribed: onScreen,
+  });
 
   const [refreshing, setRefreshing] = useState(false);
   const [askOpen, setAskOpen] = useState(false);
@@ -681,6 +695,7 @@ export default function DashboardScreen() {
               strip and the Bank accounts card each said the same again. */}
           <HomeAnswersCard
             balance={mpesaSummary?.balance}
+            live={personalBudget ? liveMpesa ?? null : null}
             accountName={mpesaSummary?.balanceAccount}
             spent={summary?.totalSpent}
             budget={summary?.totalBudget}
