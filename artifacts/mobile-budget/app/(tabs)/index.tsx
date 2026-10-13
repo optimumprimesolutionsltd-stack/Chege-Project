@@ -401,11 +401,11 @@ export default function DashboardScreen() {
       icon: 'download' as const,
       color: colors.primary,
       title: `${reconcileLeft.missing.count} M-Pesa ${reconcileLeft.missing.count === 1 ? 'payment' : 'payments'} not in Jamvi yet`,
-      hint: 'Bring them in as Not sure yet. Everything else in your M-Pesa is already in step.',
+      hint: 'Check their categories, then save them. Everything else in your M-Pesa is already in step.',
       onPress: () => {
         // Only these payments are read, not every message over their days (lib/bringInReceipts).
         setBringIn(reconcileLeft.missing!.receipts);
-        router.push(`/mpesa-import?smsFrom=${reconcileLeft.missing!.from}&smsTo=${reconcileLeft.missing!.to}&notSure=1` as never);
+        router.push(`/mpesa-import?smsFrom=${reconcileLeft.missing!.from}&smsTo=${reconcileLeft.missing!.to}&missing=1` as never);
       },
     }] : []),
     ...(reconcileLeft?.extra ? [{

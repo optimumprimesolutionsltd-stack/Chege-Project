@@ -285,7 +285,7 @@ export const hasFixes = (plan: FixPlan): boolean => plan.move.length > 0 || plan
 /** The one confirmation: what will change, and what will not. */
 export function fixConfirmation(plan: FixPlan, account: string): { title: string; message: string } {
   const parts: string[] = [];
-  if (plan.bringIn) parts.push(`Bring in ${plan.bringIn.count} payment${plan.bringIn.count === 1 ? '' : 's'} not saved anywhere, as Not sure yet - you say what each was for later, in Sort them out.`);
+  if (plan.bringIn) parts.push(`Bring in ${plan.bringIn.count} payment${plan.bringIn.count === 1 ? '' : 's'} not saved anywhere - you check each one's category before anything is saved.`);
   if (plan.move.length > 0) parts.push(`Move ${plan.move.length} saved in another account to ${account}.`);
   if (plan.charges.length > 0) {
     const total = plan.charges.reduce((sum, charge) => sum + charge.amount, 0);

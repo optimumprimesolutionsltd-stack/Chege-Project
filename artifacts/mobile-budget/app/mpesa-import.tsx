@@ -1272,10 +1272,7 @@ export default function MpesaImportScreen() {
     }
   };
   // Opened from Home's "new M-Pesa messages": everything since Jamvi last looked.
-  const params = useLocalSearchParams<{ fromSms?: string; smsFrom?: string; smsTo?: string; notSure?: string }>();
-  // Opened by "Fix all" on Find the difference: what is read is put under Not
-  // sure yet and saved straight away - the person confirmed it there.
-  const [autoSaveNotSure, setAutoSaveNotSure] = useState(false);
+  const params = useLocalSearchParams<{ fromSms?: string; smsFrom?: string; smsTo?: string; missing?: string }>();
   // Opened from "Find the difference" for the days where Jamvi and M-Pesa parted:
   // those days' messages, read straight away, with what is already saved marked.
   const openedForRange = React.useRef(false);
@@ -1298,19 +1295,21 @@ export default function MpesaImportScreen() {
         return;
       }
       return readSmsMessages(onlyWanted(result.messages, codes)).then((shown) => {
-        if (!shown || params.notSure !== '1') return;
+        if (!shown || params.missing !== '1') return;
         // Nothing on these days is Jamvi's to save by itself: said so, rather
         // than a save of nothing ("0 entries saved").
         if (!shown.some(isRecordable)) {
           Alert.alert('Nothing to bring in', 'Every message on these days is already saved, or is one Jamvi does not save by itself (each says why below). Go back and tap Check again.');
           return;
         }
-        setChoices((current) => {
-          const brought = notSureableLines(shown, current);
-          broughtInRef.current = brought.length;
-          return putUnderNotSure(brought, current);
-        });
-        setAutoSaveNotSure(true);
+        // Shown to check, never saved straight away: each keeps Jamvi's
+        // category for the person to put right first ("it should not be quick
+        // to save before i align with it and use the correct categories. i
+        // want to be able to edit before save", 13 Oct 2026). Not sure yet is
+        // still there for any they cannot place, one at a time or all at once.
+        const brought = shown.filter(isRecordable).length;
+        broughtInRef.current = brought;
+        setStatementNote(`${brought.toLocaleString('en-KE')} ${brought === 1 ? 'payment' : 'payments'} M-Pesa had and Jamvi did not. Check the category on each one and change any that are wrong, then tap Save - nothing is saved until you do.`);
       });
     }).catch((error: unknown) => Alert.alert('Could not read your messages', plainSaveError(error)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2326,20 +2325,6 @@ export default function MpesaImportScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resumeSave, lines, accountId, saving]);
 
-  // "Fix all": once the lines are under Not sure yet, saved without another
-  // tap. Something that still needs a choice (the charges' category, say) stops
-  // it and says so, and the list stays here to finish by hand.
-  useEffect(() => {
-    if (!autoSaveNotSure || !lines || !accountId || saving) return;
-    setAutoSaveNotSure(false);
-    if (firstProblem) {
-      Alert.alert('Almost there', `${firstProblem} Then tap Save.`);
-      return;
-    }
-    void saveLines();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoSaveNotSure, lines, accountId, saving, choices]);
-
   // `resumeJob`: a save already running on the server, from before Jamvi was
   // closed, followed to its end instead of being started again.
   const saveLines = async (resumeJob?: number) => {
@@ -2800,30 +2785,54 @@ export default function MpesaImportScreen() {
             )}
           </View>
         ) : null}
-        {broughtInRef.current !== null && outcome.saved > 0 ? (
+        {broughtInRef.current !== null && outcome.saved > 0 ? (() => {
           // The job from Waiting for you, finished: said plainly, with the one
           // thing left and the way to it ("it needs to fix everything ... and
-          // not have it look incomplete", 11 Oct 2026).
-          <>
-            <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.primary, gap: 6 }]} testID="mpesa-brought-in">
-              <Text style={[styles.lineTitle, { color: colors.foreground }]}>{`All ${outcome.saved.toLocaleString('en-KE')} missing ${outcome.saved === 1 ? 'payment is' : 'payments are'} in`}</Text>
-              <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0 }]}>
-                {`What M-Pesa had and Jamvi did not is saved, under Not sure yet. Say what each one was in Sort them out - one tap each, and the same for a payee's others in one more.`}
-              </Text>
-            </View>
-            <Pressable
-              onPress={() => router.replace('/sort-entries' as never)}
-              style={[styles.primary, { backgroundColor: colors.primary }]}
-              accessibilityRole="button"
-              testID="mpesa-brought-in-sort"
-            >
-              <Text style={styles.primaryText}>Sort them out now</Text>
-            </Pressable>
-            <Pressable onPress={() => router.replace('/(tabs)' as never)} style={styles.secondary} accessibilityRole="button" testID="mpesa-brought-in-home">
-              <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>Back to Home - sort them later</Text>
-            </Pressable>
-          </>
-        ) : (
+          // not have it look incomplete", 11 Oct 2026). Each was checked before
+          // saving, so Sort them out is offered only for any left Not sure yet.
+          const unsaved = recordable.filter((item) => !isConfirmedToSave(item, choices[item.index])).length;
+          const notSure = recordable.filter((item) => isConfirmedToSave(item, choices[item.index]) && item.direction === 'out' && isNotSure(choices[item.index]?.category)).length;
+          const total = outcome.saved + unsaved;
+          return (
+            <>
+              <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.primary, gap: 6 }]} testID="mpesa-brought-in">
+                <Text style={[styles.lineTitle, { color: colors.foreground }]}>
+                  {unsaved === 0
+                    ? `All ${outcome.saved.toLocaleString('en-KE')} missing ${outcome.saved === 1 ? 'payment is' : 'payments are'} in`
+                    : `${outcome.saved.toLocaleString('en-KE')} of ${total.toLocaleString('en-KE')} missing payments are in`}
+                </Text>
+                <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 0 }]}>
+                  {[
+                    notSure > 0
+                      ? `${notSure.toLocaleString('en-KE')} ${notSure === 1 ? 'is' : 'are'} under Not sure yet - say what each was in Sort them out.`
+                      : 'Each is saved under the category you checked.',
+                    unsaved > 0 ? `The ${unsaved.toLocaleString('en-KE')} you did not save come back on Home, to bring in when you are ready.` : '',
+                  ].filter(Boolean).join(' ')}
+                </Text>
+              </View>
+              {notSure > 0 ? (
+                <Pressable
+                  onPress={() => router.replace('/sort-entries' as never)}
+                  style={[styles.primary, { backgroundColor: colors.primary }]}
+                  accessibilityRole="button"
+                  testID="mpesa-brought-in-sort"
+                >
+                  <Text style={styles.primaryText}>Sort them out now</Text>
+                </Pressable>
+              ) : null}
+              <Pressable
+                onPress={() => router.replace('/(tabs)' as never)}
+                style={notSure > 0 ? styles.secondary : [styles.primary, { backgroundColor: colors.primary }]}
+                accessibilityRole="button"
+                testID="mpesa-brought-in-home"
+              >
+                <Text style={notSure > 0 ? { color: colors.primary, fontFamily: 'Inter_600SemiBold' } : styles.primaryText}>
+                  {notSure > 0 ? 'Back to Home - sort them later' : 'Back to Home'}
+                </Text>
+              </Pressable>
+            </>
+          );
+        })() : (
           <Pressable
             onPress={() => router.replace('/(tabs)/bank')}
             style={[styles.primary, { backgroundColor: colors.primary }]}
