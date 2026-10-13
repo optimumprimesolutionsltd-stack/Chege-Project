@@ -1187,28 +1187,51 @@ router.post("/joint-account/disbursement", async (req, res): Promise<void> => {
     ? await refundCategoryFor(db, groupId, date, amount)
     : null;
 
-  const [tx] = await db
-    .insert(jointAccountTxTable)
-    .values({
-      groupId,
-      accountId,
-      type: "disbursement",
-      amount: isRefund ? -Math.abs(amount) : amount,
-      mpesaReceipt: parsed.data.mpesaReceipt ?? null,
-      // Description is a supporting note. When omitted, retain a meaningful
-      // non-null value while reports remain anchored on expenseCategory.
-      description: description || expenseCategory || (isRefund ? "Refund" : isLending ? "Lent out" : "Debt payment"),
-      notes: parsed.data.notes?.trim() || null,
-      date,
-      madeById,
-      expenseCategory: expenseCategory ?? refundCategory,
-      isLending,
-      settlesContributorId: paidPartyId ?? null,
-      chargeForTransactionId: chargeParentId ?? null,
-    })
-    .returning();
+  const saved = await db.transaction(async (trx) => {
+    // One charge per payment. A charge carries no M-Pesa code, so a save tried
+    // again after its answer was lost (the phone's lib/saveWhileAway, the
+    // server's own import job) was never refused as already recorded - it saved
+    // the charge a second time: seven payments had theirs twice (13 Oct 2026).
+    // The payment is locked while this looks, so a retry that arrives while the
+    // first request is still running waits for it and finds its charge.
+    if (chargeParentId !== undefined) {
+      await trx
+        .select({ id: jointAccountTxTable.id })
+        .from(jointAccountTxTable)
+        .where(and(eq(jointAccountTxTable.id, chargeParentId), eq(jointAccountTxTable.groupId, groupId)))
+        .for("update");
+      const [existing] = await trx
+        .select()
+        .from(jointAccountTxTable)
+        .where(and(eq(jointAccountTxTable.chargeForTransactionId, chargeParentId), eq(jointAccountTxTable.groupId, groupId)))
+        .limit(1);
+      if (existing) return { tx: existing, already: true };
+    }
+    const [tx] = await trx
+      .insert(jointAccountTxTable)
+      .values({
+        groupId,
+        accountId,
+        type: "disbursement",
+        amount: isRefund ? -Math.abs(amount) : amount,
+        mpesaReceipt: parsed.data.mpesaReceipt ?? null,
+        // Description is a supporting note. When omitted, retain a meaningful
+        // non-null value while reports remain anchored on expenseCategory.
+        description: description || expenseCategory || (isRefund ? "Refund" : isLending ? "Lent out" : "Debt payment"),
+        notes: parsed.data.notes?.trim() || null,
+        date,
+        madeById,
+        expenseCategory: expenseCategory ?? refundCategory,
+        isLending,
+        settlesContributorId: paidPartyId ?? null,
+        chargeForTransactionId: chargeParentId ?? null,
+      })
+      .returning();
+    return { tx, already: false };
+  });
 
-  res.status(201).json(await enrichTx(tx, groupId));
+  // The charge it already has, answered as saved: the save that asked again carries on.
+  res.status(saved.already ? 200 : 201).json(await enrichTx(saved.tx, groupId));
 });
 
 async function createSavingsTransfer(
