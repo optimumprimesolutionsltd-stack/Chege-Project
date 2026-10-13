@@ -3610,11 +3610,14 @@ export default function BankScreen() {
                   // Money from your business is sorted - it is your own money, not income - as Sort them out already reads it
                   // ("already sorted, why does it still show?", 8 Oct 2026).
                   && !ownerBusiness.markedIds.has(item.id) ? (
+                  // Opens this very entry to edit, not the whole Sort them out list: "when i
+                  // press the not sure yet, it takes me exactly to that entry" (13 Oct 2026).
+                  // Somebody who cannot edit it still gets Sort them out.
                   <Pressable
-                    onPress={() => router.push('/sort-entries' as never)}
+                    onPress={() => (canEditTransaction(item) ? openEdit(item) : router.push('/sort-entries' as never))}
                     hitSlop={6}
                     accessibilityRole="button"
-                    accessibilityLabel="Not sure where this came from. Sort it out"
+                    accessibilityLabel="Not sure where this came from. Open it to sort it out"
                     testID={`bank-not-sure-${item.id}`}
                     style={{ alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999, backgroundColor: '#f59e0b22' }}
                   >

@@ -22,10 +22,11 @@ describe('Bank tab months', () => {
 
 // "Not yet sorted" (8 Oct 2026): money in with no source says Not sure on Bank.
 describe('money in with no source on Bank', () => {
-  it('is tagged Not sure, and the tag opens Sort them out', () => {
+  it('is tagged Not sure, and the tag opens that entry to edit', () => {
     const bank = readFileSync('app/(tabs)/bank.tsx', 'utf8');
     expect(bank).toContain('testID={`bank-not-sure-${item.id}`}');
-    expect(bank).toContain("onPress={() => router.push('/sort-entries' as never)}");
+    // "When i press the not sure yet, it takes me exactly to that entry" (13 Oct 2026).
+    expect(bank).toContain("onPress={() => (canEditTransaction(item) ? openEdit(item) : router.push('/sort-entries' as never))}");
     // In a Shared group only money in brought in from M-Pesa ("should also apply to shared budget too").
     expect(bank).toContain('{dep && (!isSharedWorkspace || (item.mpesaReceipt && !(item.contributorSplits ?? []).length)) && !item.incomeSourceId');
   });
