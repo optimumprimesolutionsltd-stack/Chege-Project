@@ -2,8 +2,8 @@ import { Router } from "express";
 import { inMonthOf } from "../lib/month-range";
 import { db } from "@workspace/db";
 import { inPersonalAccount, isInBusinessAccount, businessAccountIds } from "../lib/business-accounts";
-import { businessCostLink, businessStreamIds, isBusinessSale, ownerIncomeBusinessIds, profitBusinessIds } from "../lib/business-streams";
-import { isOwnerBusinessMoneySql } from "../lib/owner-business-money";
+import { businessCostLink, businessStreamIds, isBusinessSale, ownerIncomeBusinessIds, profitBusinessIds, salaryBusinessIds, salaryBusinessOf } from "../lib/business-streams";
+import { isOwnerBusinessMoneySql, ownerBusinessReady } from "../lib/owner-business-money";
 import {
   expensesTable,
   expenseCategoryAllocationsTable,
@@ -1290,7 +1290,8 @@ async function loadIncomeLedger(groupId: number, from: string, to: string, searc
              t.date::text AS date,
              t.description,
              t.amount::float8 AS amount,
-             t.income_source_id AS "incomeSourceId",
+             -- A salary from your business is filed under that business, as its salary.
+             COALESCE(${personal ? salaryBusinessOf(sql`t.id`, sql`t.income_source_id`, ownerBusinessReady()) : sql`NULL::integer`}, t.income_source_id) AS "incomeSourceId",
              COALESCE(maker.preferred_name, maker.first_name) AS "makerName",
              account.name AS "accountName",
              CASE
@@ -1298,6 +1299,9 @@ async function loadIncomeLedger(groupId: number, from: string, to: string, searc
                WHEN t.is_borrowing THEN 'borrowed'
                WHEN t.settles_contributor_id IS NOT NULL THEN 'repaid'
                WHEN t.transfer_direction = 'from_savings' THEN 'from_savings'
+               -- The salary your business pays you is your income, in your own
+               -- account ("ujenzi pays me a salary", 15 Oct 2026).
+               WHEN ${personal ? sql`${salaryBusinessOf(sql`t.id`, sql`t.income_source_id`, ownerBusinessReady())} IS NOT NULL AND NOT ${isInBusinessAccount(sql`t.account_id`)}` : sql`false`} THEN 'income'
                -- Your own money taken from your business (lib/owner-business).
                WHEN ${isOwnerBusinessMoneySql(sql`t.id`)} THEN 'owner'
                -- The business's own account: its sales, not your income - except
@@ -1335,6 +1339,8 @@ async function loadIncomeLedger(groupId: number, from: string, to: string, searc
     `),
     db.execute(sql`SELECT id, name FROM income_sources WHERE group_id = ${groupId}`),
   ]);
+  // A business that pays you a salary shows as "<business> salary".
+  const salaries = new Set(personal ? await salaryBusinessIds(groupId) : []);
   // An income stream is income, nothing taken off it: costs are a business's,
   // in the Business report (lib/business-streams) - except a business its owner
   // lives on, whose sales are income here and whose costs come off them, so
@@ -1346,7 +1352,7 @@ async function loadIncomeLedger(groupId: number, from: string, to: string, searc
     to,
     deposits: deposits.rows as IncomeDepositRow[],
     splits: splits.rows as IncomeSplitRow[],
-    streamNames: new Map((streams.rows as { id: number; name: string }[]).map((row) => [Number(row.id), row.name])),
+    streamNames: new Map((streams.rows as { id: number; name: string }[]).map((row) => [Number(row.id), salaries.has(Number(row.id)) ? `${row.name} salary` : row.name])),
     costsByStream,
   });
 }
