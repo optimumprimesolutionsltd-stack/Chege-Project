@@ -36,11 +36,11 @@ export const unansweredBusinesses = <B extends SalaryBusiness>(list: readonly B[
 /** What the answer means for the person's figures, in a sentence. */
 export function salaryAnswerHint(business: SalaryBusiness): string {
   if (!business.countsProfit) {
-    if (business.paysSalary === true) return `Your salary is your income. The rest of ${business.name}'s money only passes through.`;
+    if (business.paysSalary === true) return `Your salary is your income - file your pay under your ${business.name} salary. The rest of its money only passes through.`;
     if (business.paysSalary === false) return `Nothing from ${business.name} counts as your income: its money only passes through.`;
     return `Until you say, nothing from ${business.name} counts as your income.`;
   }
-  if (business.paysSalary === true) return `Your salary is your income. ${business.name}'s profit stays in its Business report.`;
+  if (business.paysSalary === true) return `Your salary is your income - file your pay under your ${business.name} salary. ${business.name}'s profit stays in its Business report.`;
   if (business.paysSalary === false) return `${business.name}'s profit - sales less costs - counts as your income.`;
   return `Until you say, ${business.name}'s profit stays in its Business report and out of your income.`;
 }

@@ -90,6 +90,8 @@ export function useBusinesses() {
       ...cached,
       businesses: (cached.businesses ?? []).map((one) => (one.id === incomeSourceId ? { ...one, paysSalary } : one)),
     }));
+    // A salary answer makes its salary stream on the server: show it in every picker.
+    if (paysSalary) void queryClient.invalidateQueries({ queryKey: ['income-sources'] });
     refresh();
   }, [queryClient, refresh]);
 

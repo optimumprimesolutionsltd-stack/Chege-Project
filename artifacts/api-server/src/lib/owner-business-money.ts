@@ -1,7 +1,6 @@
 import { db } from "@workspace/db";
 import { sql, type SQL } from "drizzle-orm";
 import { logger } from "./logger";
-import { businessStreamsReady } from "./business-streams";
 
 /**
  * Money between you and your own business: owner's drawings and money put in.
@@ -60,19 +59,6 @@ export async function ensureOwnerBusiness(): Promise<void> {
 export function notOwnerBusinessMoney(id: SQL | unknown): SQL {
   if (!ready) return sql``;
   return sql`AND NOT EXISTS (SELECT 1 FROM owner_business_money obm WHERE obm.transaction_id = ${id})`;
-}
-
-/**
- * The condition income figures add (through notAReversal): not money from the
- * owner's business - except a salary from a business that pays one, which is
- * the owner's income (lib/business-streams salaryBusinessOf). Sorting lists
- * keep notOwnerBusinessMoney: a salary marked so needs no sorting either.
- */
-export function notOwnerDrawings(id: SQL | unknown): SQL {
-  if (!ready) return sql``;
-  if (!businessStreamsReady()) return notOwnerBusinessMoney(id);
-  return sql`AND NOT EXISTS (SELECT 1 FROM owner_business_money obm WHERE obm.transaction_id = ${id}
-    AND NOT EXISTS (SELECT 1 FROM business_streams bs WHERE bs.income_source_id = obm.income_source_id AND bs.pays_salary IS TRUE))`;
 }
 
 /** True, in SQL, for an entry marked as money between the owner and their business. */
