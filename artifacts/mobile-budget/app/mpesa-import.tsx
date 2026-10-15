@@ -109,6 +109,7 @@ import { OWN_VALUE, parseStoredRules, payeeKey, payeeName, referenceOf, ruleLabe
 import { saveDebtLinks } from '@/lib/debtReversal';
 import { mpesaNameFor, saveMpesaNames, type MpesaName } from '@/lib/mpesaNames';
 import { isLapsedRefusal, lapsedSaveMessage } from '@/lib/lapsedSave';
+import { IN_APP_PAYMENTS } from '@/lib/inAppPayments';
 import { useEntitlements } from '@/hooks/useEntitlements';
 import { useUndoHistory } from '@/hooks/useUndoHistory';
 import { UndoDeleteBar, useUndoableDelete } from '@/components/UndoDeleteBar';
@@ -750,14 +751,16 @@ export default function MpesaImportScreen() {
           <Text style={[styles.lineTitle, { color: colors.foreground, flex: 1 }]}>{words.title}</Text>
         </View>
         <Text style={[styles.hint, { color: colors.mutedForeground }]}>{words.body}</Text>
-        <Pressable
-          onPress={() => router.push('/subscription')}
-          style={[styles.primary, { backgroundColor: colors.primary, marginTop: 10 }]}
-          accessibilityRole="button"
-          testID="mpesa-save-lapsed-pay"
-        >
-          <Text style={styles.primaryText}>{words.action}</Text>
-        </Pressable>
+        {IN_APP_PAYMENTS ? (
+          <Pressable
+            onPress={() => router.push('/subscription')}
+            style={[styles.primary, { backgroundColor: colors.primary, marginTop: 10 }]}
+            accessibilityRole="button"
+            testID="mpesa-save-lapsed-pay"
+          >
+            <Text style={styles.primaryText}>{words.action}</Text>
+          </Pressable>
+        ) : null}
       </View>
     );
   };

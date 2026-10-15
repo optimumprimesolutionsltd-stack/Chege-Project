@@ -11,6 +11,7 @@ import { daysUntil, formatDeadline } from '@/lib/subscription-status';
 import { recordPlanChoice, type PlanChoice } from '@/lib/planChoice';
 import { usePrices } from '@/hooks/usePrices';
 import { kesLabel } from '@/lib/pricing';
+import { IN_APP_PAYMENTS } from '@/lib/inAppPayments';
 
 /**
  * Compulsory, once per account: Jamvi is paid, so somebody on the free trial
@@ -63,8 +64,10 @@ export default function PlanChoiceScreen() {
       </View>
 
       <Text style={[styles.body, { color: colors.mutedForeground }]}>
-        Jamvi is a paid app. Until then everything is free to try. After that it is{' '}
-        {kesLabel(prices.monthly)} a month or {kesLabel(prices.annual)} a year — one subscription covers your Personal budget and every group you are in.
+        Jamvi is a paid app. Until then everything is free to try.{' '}
+        {IN_APP_PAYMENTS
+          ? `After that it is ${kesLabel(prices.monthly)} a month or ${kesLabel(prices.annual)} a year — one subscription covers your Personal budget and every group you are in.`
+          : 'After that one subscription covers your Personal budget and every group you are in.'}{' '}
         Nothing is ever deleted if you do not pay; recording just goes read-only until you do.
       </Text>
 
@@ -79,7 +82,7 @@ export default function PlanChoiceScreen() {
           {busy === 'trial' ? <ActivityIndicator color={colors.primaryForeground} /> : null}
           <Text style={[styles.btnText, { color: colors.primaryForeground }]}>Continue with my free trial</Text>
         </Pressable>
-        <Pressable
+        {IN_APP_PAYMENTS ? <Pressable
           testID="plan-choice-pay"
           accessibilityRole="button"
           onPress={() => void choose('pay')}
@@ -88,7 +91,7 @@ export default function PlanChoiceScreen() {
         >
           {busy === 'pay' ? <ActivityIndicator color={colors.primary} /> : null}
           <Text style={[styles.btnText, { color: colors.primary }]}>Pay now with M-Pesa</Text>
-        </Pressable>
+        </Pressable> : null}
       </View>
     </View>
   );

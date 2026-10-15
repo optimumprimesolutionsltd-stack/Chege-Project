@@ -25,6 +25,7 @@ import { clearQueryClientCache } from '@/lib/queryPersist';
 import { makeSharedConfirmation, settleAfterConversion } from '@/lib/budgetConversion';
 import { workspaceBudgetName } from '@/lib/workspaceIdentity';
 import { SHARED_GROUP_KINDS, type SharedGroupKind } from '@/lib/groupKinds';
+import { IN_APP_PAYMENTS } from '@/lib/inAppPayments';
 import {
   handoverCandidates,
   handoverSteps,
@@ -127,8 +128,9 @@ export default function BudgetHandoverScreen() {
     if (!groupKind || trimmedName.length < 2) return;
     if (entitlements && !mayStartGroup(entitlements)) {
       Alert.alert('Subscription needed', START_GROUP_NEEDS_SUBSCRIPTION, [
-        { text: 'Not now', style: 'cancel' },
-        { text: 'Subscribe', onPress: () => router.push('/subscription') },
+        ...(IN_APP_PAYMENTS
+          ? [{ text: 'Not now', style: 'cancel' as const }, { text: 'Subscribe', onPress: () => router.push('/subscription') }]
+          : [{ text: 'OK' }]),
       ]);
       return;
     }

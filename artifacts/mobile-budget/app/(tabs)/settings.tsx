@@ -45,6 +45,7 @@ import { SubcategorySuggestions } from '@/components/SubcategorySuggestions';
 import { useAppearance, type Appearance } from '@/hooks/useAppearance';
 import { useEntitlements } from '@/hooks/useEntitlements';
 import { statusChip } from '@/lib/subscription-status';
+import { IN_APP_PAYMENTS } from '@/lib/inAppPayments';
 import { handleLapsedError } from '@/lib/lapsedError';
 import { mayStartGroup, START_GROUP_NEEDS_SUBSCRIPTION } from '@/lib/groupStart';
 import { PageScrollView } from '@/components/PageScrollReset';
@@ -579,8 +580,9 @@ export default function SettingsScreen() {
   function openCreateGroup() {
     if (entitlements && !mayStartGroup(entitlements)) {
       Alert.alert('Subscription needed', START_GROUP_NEEDS_SUBSCRIPTION, [
-        { text: 'Not now', style: 'cancel' },
-        { text: 'Subscribe', onPress: () => router.push('/subscription') },
+        ...(IN_APP_PAYMENTS
+          ? [{ text: 'Not now', style: 'cancel' as const }, { text: 'Subscribe', onPress: () => router.push('/subscription') }]
+          : [{ text: 'OK' }]),
       ]);
       return;
     }
@@ -591,8 +593,9 @@ export default function SettingsScreen() {
   function openConvertToShared() {
     if (entitlements && !mayStartGroup(entitlements)) {
       Alert.alert('Subscription needed', START_GROUP_NEEDS_SUBSCRIPTION, [
-        { text: 'Not now', style: 'cancel' },
-        { text: 'Subscribe', onPress: () => router.push('/subscription') },
+        ...(IN_APP_PAYMENTS
+          ? [{ text: 'Not now', style: 'cancel' as const }, { text: 'Subscribe', onPress: () => router.push('/subscription') }]
+          : [{ text: 'OK' }]),
       ]);
       return;
     }

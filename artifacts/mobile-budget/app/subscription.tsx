@@ -19,6 +19,7 @@ import { useColors } from '@/hooks/useColors';
 import { useEntitlements, MEMBER_ENTITLEMENTS_KEY } from '@/hooks/useEntitlements';
 import { formatDeadline, statusLine } from '@/lib/subscription-status';
 import { usePrices } from '@/hooks/usePrices';
+import { IN_APP_PAYMENTS } from '@/lib/inAppPayments';
 
 const FEATURES = [
   'Your personal budget, income and expenses',
@@ -156,7 +157,9 @@ export default function SubscriptionScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <Text style={[styles.intro, { color: colors.mutedForeground }]}>
-          One price covers your own budget and every group you are part of.
+          {IN_APP_PAYMENTS
+            ? 'One price covers your own budget and every group you are part of.'
+            : 'One subscription covers your own budget and every group you are part of.'}
         </Text>
 
         {isLoading ? (
@@ -173,7 +176,8 @@ export default function SubscriptionScreen() {
           </View>
         ) : null}
 
-        <View style={[styles.card, { borderColor: colors.border, backgroundColor: colors.card }]}>
+        {/* The Play build only shows where things stand: no prices, no M-Pesa prompt (lib/playStore). */}
+        {IN_APP_PAYMENTS ? <View style={[styles.card, { borderColor: colors.border, backgroundColor: colors.card }]}>
           <Text style={[styles.cardTitle, { color: colors.foreground }]}>{isActive ? 'Renew early' : 'Subscribe'}</Text>
           <Text style={[styles.cardBody, { color: colors.mutedForeground }]}>
             {isActive
@@ -263,7 +267,7 @@ export default function SubscriptionScreen() {
               Enter your M-Pesa PIN on your phone. This screen updates on its own.
             </Text>
           ) : null}
-        </View>
+        </View> : null}
 
         <View style={[styles.card, { borderColor: colors.border, backgroundColor: colors.card }]}>
           <Text style={[styles.cardTitle, { color: colors.foreground }]}>What your subscription covers</Text>

@@ -1,5 +1,6 @@
 import { Alert } from 'react-native';
 import { router } from 'expo-router';
+import { IN_APP_PAYMENTS } from './inAppPayments';
 
 /**
  * The server returns 402 with a read-only message when a lapsed member tries
@@ -19,8 +20,9 @@ export function handleLapsedError(error: unknown): boolean {
     'This is read-only because your Jamvi subscription has lapsed. Nothing has been removed.';
 
   Alert.alert('Subscription needed', message, [
-    { text: 'Not now', style: 'cancel' },
-    { text: 'Subscribe', onPress: () => router.push('/subscription') },
+    ...(IN_APP_PAYMENTS
+      ? [{ text: 'Not now', style: 'cancel' as const }, { text: 'Subscribe', onPress: () => router.push('/subscription') }]
+      : [{ text: 'OK' }]),
   ]);
   return true;
 }
