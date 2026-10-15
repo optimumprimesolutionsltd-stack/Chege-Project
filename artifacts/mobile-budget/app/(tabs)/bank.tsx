@@ -2184,8 +2184,14 @@ export default function BankScreen() {
     // 12 Oct 2026). Choosing one of its costs keeps it a cost of the business.
     const pickedBusinessId = toBusinessId ?? (txType === 'disbursement' && forBusinessId !== null && !expenseCategory.trim() &&
       withdrawDest !== 'party' && withdrawDest !== 'lend' && withdrawDest !== 'savings' ? forBusinessId : null);
-    const leavesBusiness = editingBusinessMoney && pickedBusinessId === null && txType === 'disbursement' && expenseCategory.trim() !== '' &&
-      withdrawDest !== 'party' && withdrawDest !== 'lend' && withdrawDest !== 'savings';
+    // Any other answer takes it off the business: a category, paying or lending
+    // to a person, savings, or money in from elsewhere. Only a category used to,
+    // so "To Ujenzi" changed to paying Hermda stayed Ujenzi's (15 Oct 2026).
+    const leavesBusiness = editingBusinessMoney && pickedBusinessId === null && (
+      txType === 'deposit'
+      || withdrawDest === 'party' || withdrawDest === 'lend' || withdrawDest === 'savings'
+      || (txType === 'disbursement' && expenseCategory.trim() !== '')
+    );
     const toBusiness = (txType === 'disbursement' || txType === 'deposit') && pickedBusinessId !== null;
     const businessMoney = (editingBusinessMoney && !leavesBusiness) || toBusiness;
     if (businessMoney) {
