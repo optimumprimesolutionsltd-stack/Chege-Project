@@ -84,3 +84,16 @@ describe("How much is on my M-Pesa? answers with M-Pesa's own figure", () => {
     expect(home).toContain("queryKey: ['mpesa-live-balance'],");
   });
 });
+
+// "the jamvi mpesa balance is not actual ... 2027 is the correct figure" (15 Oct
+// 2026): Bank's Balance now on the M-Pesa account said 204.65, Jamvi's own sum.
+describe("Bank's M-Pesa account shows M-Pesa's own balance", () => {
+  it('uses the newest message on the budget M-Pesa account, and says so', async () => {
+    const { readFileSync } = await import('node:fs');
+    const bank = readFileSync('app/(tabs)/bank.tsx', 'utf8');
+    expect(bank).toContain("queryKey: ['mpesa-live-balance'],");
+    expect(bank).toContain('mpesaSummary?.balanceAccountId === selectedAccount.id');
+    expect(bank).toContain('periodSummary ? periodSummary.closing : liveBalance ? liveBalance.balance : data?.balance');
+    expect(bank).toContain('From your M-Pesa message of {messageTime(liveBalance.at)}');
+  });
+});

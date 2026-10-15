@@ -102,6 +102,8 @@ import { matchesSearch } from '@/lib/bankSearch';
 import { workspaceBudgetName } from '@/lib/workspaceIdentity';
 import { formatDisplayDate } from '@/lib/displayFormat';
 import { confirmNotAlreadyFromMpesa } from '@/lib/alreadyFromMpesa';
+import { readLiveMpesaBalance } from '@/lib/mpesaSms';
+import { messageTime } from '@/lib/mpesaLiveBalance';
 
 /**
  * Where the last bank-charge category is kept.
@@ -503,6 +505,31 @@ export default function BankScreen() {
   const selectedAccount = accounts.find((account) => account.id === selectedAccountId)
     ?? accounts[0];
   const hasBankAccounts = accounts.length > 0;
+  // M-Pesa's own balance, from the newest message on this phone, for the budget's
+  // M-Pesa account: Jamvi's figure (opening balance plus every saved entry) is
+  // wrong whenever a payment is missing or saved twice ("the jamvi mpesa balance
+  // is not actual ... 2027 is the correct figure", 15 Oct 2026 - Bank said
+  // 204.65). Same reads as Home's answer and M-Pesa card; Personal budget only,
+  // since the messages are this person's own M-Pesa.
+  const personalBudget = group?.isPrivate === true;
+  const { data: mpesaSummary } = useQuery<{ balanceAccountId?: number | null }>({
+    queryKey: ['mpesa-summary', group?.id ?? null],
+    queryFn: () => customFetch<{ balanceAccountId?: number | null }>('/api/mpesa/summary'),
+    enabled: personalBudget,
+    staleTime: 60_000,
+    subscribed: onScreen,
+  });
+  const { data: liveMpesa } = useQuery({
+    queryKey: ['mpesa-live-balance'],
+    queryFn: () => readLiveMpesaBalance(),
+    enabled: personalBudget,
+    staleTime: 15_000,
+    retry: false,
+    subscribed: onScreen,
+  });
+  const liveBalance = personalBudget && liveMpesa && selectedAccount && mpesaSummary?.balanceAccountId === selectedAccount.id
+    ? liveMpesa
+    : null;
 
   useEffect(() => {
     if (!accountStorageKey) return;
@@ -3241,7 +3268,10 @@ export default function BankScreen() {
           ) : (
             <>
               <Text style={styles.balanceLabel}>Balance now</Text>
-              <Text style={styles.balance} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>KES {formatKES(periodSummary ? periodSummary.closing : data?.balance)}</Text>
+              <Text style={[styles.balance, liveBalance && !periodSummary ? { marginBottom: 2 } : null]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>KES {formatKES(periodSummary ? periodSummary.closing : liveBalance ? liveBalance.balance : data?.balance)}</Text>
+              {liveBalance && !periodSummary ? (
+                <Text style={styles.liveBalanceSource} numberOfLines={1} testID="bank-live-balance-source">From your M-Pesa message of {messageTime(liveBalance.at)}</Text>
+              ) : null}
               <View style={styles.statsRow}>
                 <View style={styles.statItem}>
                   <Feather name="arrow-down-circle" size={14} color="#4ade80" />
@@ -4118,7 +4148,7 @@ export default function BankScreen() {
                           {selectedAccount?.name ?? 'Selected account'} current balance
                         </Text>
                         <Text style={[styles.transactionBalanceValue, { color: colors.foreground }]}>
-                          KES {formatKES(data.balance)}
+                          KES {formatKES(liveBalance ? liveBalance.balance : data.balance)}
                         </Text>
                       </View>
                       {projectedBalance !== null ? (
@@ -4546,7 +4576,7 @@ export default function BankScreen() {
                   <TextInput style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted }]} placeholder="e.g. Move operating funds" placeholderTextColor={colors.mutedForeground} value={description} onChangeText={setDescription} maxLength={200} testID="bank-to-bank-narration" />
                   {selectedAccount && bankTransferDestinationId && parsedOutgoingAmount !== null && parsedOutgoingAmount > 0 && (
                     <Text style={[styles.managerGuidance, { color: colors.mutedForeground }]} testID="bank-transfer-preview">
-                      {selectedAccount.name}: KES {formatKES(data?.balance)} → KES {formatKES((data?.balance ?? 0) - parsedOutgoingAmount)}. {accounts.find((candidate) => candidate.id === bankTransferDestinationId)?.name} receives KES {formatKES(parsedOutgoingAmount)}.
+                      {selectedAccount.name}: KES {formatKES(liveBalance ? liveBalance.balance : data?.balance)} → KES {formatKES((liveBalance ? liveBalance.balance : data?.balance ?? 0) - parsedOutgoingAmount)}. {accounts.find((candidate) => candidate.id === bankTransferDestinationId)?.name} receives KES {formatKES(parsedOutgoingAmount)}.
                     </Text>
                   )}
                 </>
@@ -6521,6 +6551,12 @@ const styles = StyleSheet.create({
     color: '#f7faf6',
     fontFamily: 'Inter_700Bold',
     marginBottom: 20,
+  },
+  liveBalanceSource: {
+    fontSize: 11,
+    color: '#7aaa8a',
+    fontFamily: 'Inter_400Regular',
+    marginBottom: 18,
   },
   negativeBalanceWarning: {
     marginTop: 10,

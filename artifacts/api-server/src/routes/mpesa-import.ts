@@ -396,6 +396,8 @@ router.get("/mpesa/summary", async (req, res): Promise<void> => {
     moneyOut: totals?.moneyOut ?? 0,
     balance: balance?.balance ?? null,
     balanceAccount: balance?.accountName ?? null,
+    // Which account that is, so Bank can show M-Pesa's own balance on it.
+    balanceAccountId: balance?.accountId ?? null,
   });
 });
 
