@@ -19,6 +19,7 @@ const conflict = () => new (ApiError as unknown as new (status: number) => Error
 import { applyMobileOnboardingToWorkspace, setUpBusiness } from '../onboarding-api';
 import {
   businessNameFromDraft,
+  BUSINESS_PAY_CHOICES,
   businessFlagsFor,
   businessNamesFromDraft,
   costsBusinessName,
@@ -166,11 +167,21 @@ describe('the business question in onboarding', () => {
   it('asks how each business pays, and stores the answer the way My businesses does', () => {
     expect(businessFlagsFor('profit')).toEqual({ business: true, countsProfit: true, paysSalary: false });
     expect(businessFlagsFor('salary')).toEqual({ business: true, countsProfit: true, paysSalary: true });
-    expect(businessFlagsFor('passThrough')).toEqual({ business: true, countsProfit: false, paysSalary: null });
+    // "Optimum and ujenzi" pay a salary but are not tracked (15 Oct 2026): their own answer.
+    expect(businessFlagsFor('salaryOnly')).toEqual({ business: true, countsProfit: false, paysSalary: true });
+    // Takes nothing from it - answered, so it is never asked about a salary again.
+    expect(businessFlagsFor('passThrough')).toEqual({ business: true, countsProfit: false, paysSalary: false });
     // Unanswered leaves it to be asked later, as before.
     expect(businessFlagsFor(null)).toEqual({ business: true });
     // Kept across a resumed draft; nonsense reads as unanswered.
     expect(normalizeOnboardingDraft({ ...draft(), businessPay: ['salary', 'nope', 'passThrough'] })?.businessPay).toEqual(['salary', null, 'passThrough']);
+    expect(normalizeOnboardingDraft({ ...draft(), businessPay: ['salaryOnly'] })?.businessPay).toEqual(['salaryOnly']);
+    // Each answer says the rule it stands for, so it is plain from onboarding.
+    const said = Object.fromEntries(BUSINESS_PAY_CHOICES.map((choice) => [choice.pay, choice.description]));
+    expect(said.salary).toContain('Your salary is your income');
+    expect(said.salaryOnly).toContain('Only your salary is your income');
+    expect(said.passThrough).not.toContain('salary');
+    expect(costsBusinessName(draft({ moreBusinessNames: ['Ujenzi'], businessPay: ['salaryOnly', 'profit'] }))).toBe('Ujenzi');
     expect(normalizeOnboardingDraft(draft())?.businessPay).toEqual([]);
   });
 
@@ -188,7 +199,7 @@ describe('the business question in onboarding', () => {
     await setUpBusiness({ draft: several, userId: 'u1' });
 
     expect(callsTo('PUT', '/api/businesses/').map(([url, init]) => [url, JSON.parse(init.body)])).toEqual([
-      ['/api/businesses/55', { business: true, countsProfit: false, paysSalary: null }],
+      ['/api/businesses/55', { business: true, countsProfit: false, paysSalary: false }],
       ['/api/businesses/56', { business: true, countsProfit: true, paysSalary: false }],
       ['/api/businesses/57', { business: true, countsProfit: true, paysSalary: true }],
     ]);

@@ -530,6 +530,13 @@ export default function BankScreen() {
   const liveBalance = personalBudget && liveMpesa && selectedAccount && mpesaSummary?.balanceAccountId === selectedAccount.id
     ? liveMpesa
     : null;
+  // Each entry's balance, worked out from what was saved, moved by the same gap
+  // as Balance now, so the newest reads what M-Pesa's own message says ("why is
+  // the balance here not 1737.48", 15 Oct 2026). The gap itself is a payment
+  // or opening balance missing from Jamvi - Find the difference finds it.
+  const balanceShift = liveBalance && typeof data?.balance === 'number'
+    ? Math.round((liveBalance.balance - data.balance) * 100) / 100
+    : 0;
 
   useEffect(() => {
     if (!accountStorageKey) return;
@@ -3694,7 +3701,7 @@ export default function BankScreen() {
                     style={[styles.txMeta, { color: colors.mutedForeground, textAlign: 'right' }]}
                     testID={`bank-running-balance-${item.id}`}
                   >
-                    Balance KES {formatKES(item.runningBalance)}
+                    Balance KES {formatKES(item.runningBalance + balanceShift)}
                   </Text>
                 )}
                 {!editing && (

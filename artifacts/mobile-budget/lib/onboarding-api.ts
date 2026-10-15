@@ -8,6 +8,7 @@ import {
   businessFlagsFor,
   businessesFromDraft,
   costsBusinessName,
+  paysSalaryPay,
   salaryIncomeName,
   categoryPriority,
   onboardingSubcategoriesFor,
@@ -209,7 +210,7 @@ export async function setUpBusiness({
     if (name === costsName) costsId = incomeSourceId;
 
     // Paid a salary: the salary is the income that reaches the budget.
-    if (pay === "salary") {
+    if (paysSalaryPay(pay)) {
       const salary = salaryIncomeName(name);
       try {
         await customFetch("/api/income-sources", {

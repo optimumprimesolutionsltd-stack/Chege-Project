@@ -59,7 +59,9 @@ import {
   businessNamesFromDraft,
   businessesFromDraft,
   costsBusinessName,
+  paysSalaryPay,
   salaryIncomeName,
+  tracksProfitPay,
   BUSINESS_PAY_CHOICES,
   type BusinessPay,
   MAX_ONBOARDING_BUSINESSES,
@@ -893,7 +895,7 @@ function MobileOnboardingFlow({
   const businessName = businessNameFromDraft(draft);
   const businessNames = businessNamesFromDraft(draft);
   const costsName = costsBusinessName(draft);
-  const profitBusinessName = businessesFromDraft(draft).find((business) => business.pay !== 'passThrough')?.name ?? null;
+  const profitBusinessName = businessesFromDraft(draft).find((business) => business.pay == null || tracksProfitPay(business.pay))?.name ?? null;
   // "How does it pay you?" under each business's name: answered here, the
   // Business screen never has to ask whether it pays a salary.
   const setBusinessPay = (box: number, pay: BusinessPay) => updateDraft((current) => {
@@ -1306,16 +1308,16 @@ function MobileOnboardingFlow({
               hustle's profit - what it makes after its costs - or the salary
               a business pays. Money that is not the person's brings nothing. */}
           {businessesFromDraft(draft).filter((business) => business.pay !== 'passThrough').map(({ name, pay, box: index }) => {
-            const key = pay === 'salary' ? salaryIncomeName(name) : name;
+            const key = paysSalaryPay(pay) ? salaryIncomeName(name) : name;
             return (
               <View key={key} style={[styles.incomeAmountRow, { backgroundColor: colors.card, borderColor: colors.primary }]}>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.amountLabel, { color: colors.foreground }]} numberOfLines={1}>{key}</Text>
-                  <Text style={[styles.choiceDescription, { color: colors.mutedForeground }]}>{pay === 'salary' ? `Your pay from ${name} · a month (optional)` : 'Expected profit · a month, after its costs (optional)'}</Text>
+                  <Text style={[styles.choiceDescription, { color: colors.mutedForeground }]}>{paysSalaryPay(pay) ? `Your pay from ${name} · a month (optional)` : 'Expected profit · a month, after its costs (optional)'}</Text>
                 </View>
                 <View style={styles.amountInputWrap}>
                   <Text style={[styles.currency, { color: colors.mutedForeground }]}>KES</Text>
-                  <TextInput testID={pay === 'salary' ? `onboarding-business-salary-${index}` : index === 0 ? 'onboarding-business-sales' : `onboarding-business-sales-${index}`} keyboardType="decimal-pad" value={draft.incomeAmounts[key] ?? ''} onChangeText={(value) => setDraftValue('incomeAmounts', { ...draft.incomeAmounts, [key]: value.replace(/[^0-9.]/g, '') })} placeholder="0" placeholderTextColor={colors.mutedForeground} style={[styles.amountInput, { borderColor: colors.border, color: colors.foreground }]} />
+                  <TextInput testID={paysSalaryPay(pay) ? `onboarding-business-salary-${index}` : index === 0 ? 'onboarding-business-sales' : `onboarding-business-sales-${index}`} keyboardType="decimal-pad" value={draft.incomeAmounts[key] ?? ''} onChangeText={(value) => setDraftValue('incomeAmounts', { ...draft.incomeAmounts, [key]: value.replace(/[^0-9.]/g, '') })} placeholder="0" placeholderTextColor={colors.mutedForeground} style={[styles.amountInput, { borderColor: colors.border, color: colors.foreground }]} />
                 </View>
               </View>
             );
