@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it } from "vitest";
 import { sql } from "drizzle-orm";
-import { businessCostLink, isBusinessSale, notBusinessSale, setBusinessStreamsReadyForTests } from "../business-streams";
+import { businessCostLink, isBusinessSale, notBusinessSale, salaryBusinessOf, setBusinessStreamsReadyForTests } from "../business-streams";
+import { notOwnerDrawings, setOwnerBusinessReadyForTests } from "../owner-business-money";
 import { notAReversal } from "../reversal-links";
 
 const chunks = (fragment: unknown) => JSON.stringify((fragment as { queryChunks: unknown[] }).queryChunks);
@@ -110,5 +111,37 @@ describe("a business its owner lives on: its profit is their income", () => {
 
   it("only with its profit counted and no salary drawn", () => {
     expect(streams).toContain("business.countsProfit && business.paysSalary === false");
+  });
+});
+
+// "dahanak and ujenzi salary are not there ... ujenzi pays me a salary ...
+// dahanak should also pay me a salary as well as optimum" (15 Oct 2026): the
+// salary was left out of All income as "from your business" or as its sales.
+describe("a business that pays its owner a salary: the salary is their income", () => {
+  afterEach(() => setOwnerBusinessReadyForTests(false));
+
+  it("money filed under it in a personal account is the salary, not its sales", () => {
+    setBusinessStreamsReadyForTests(true);
+    expect(chunks(isBusinessSale(sql`t.income_source_id`))).toContain("bs.pays_salary IS TRUE");
+    expect(chunks(notBusinessSale(sql`t.id`))).toContain("bs.pays_salary IS TRUE");
+  });
+
+  it("money marked as from it counts in every income figure; drawings from the others still do not", () => {
+    setOwnerBusinessReadyForTests(true);
+    setBusinessStreamsReadyForTests(true);
+    const income = chunks(notAReversal(sql`t.id`));
+    expect(income).toContain("owner_business_money obm");
+    expect(income).toContain("bs.income_source_id = obm.income_source_id AND bs.pays_salary IS TRUE");
+    // Before business_streams exists, every drawing stays out, as before.
+    setBusinessStreamsReadyForTests(false);
+    expect(chunks(notOwnerDrawings(sql`t.id`))).not.toContain("business_streams");
+  });
+
+  it("All income lists it as \"<business> salary\", only from the owner's own accounts", () => {
+    setBusinessStreamsReadyForTests(true);
+    expect(chunks(salaryBusinessOf(sql`t.id`, sql`t.income_source_id`, true))).toContain("owner_business_money obm JOIN business_streams bs");
+    expect(chunks(salaryBusinessOf(sql`t.id`, sql`t.income_source_id`, false))).not.toContain("owner_business_money");
+    expect(dashboard).toContain("IS NOT NULL AND NOT ${isInBusinessAccount(sql`t.account_id`)}` : sql`false`} THEN 'income'");
+    expect(dashboard).toContain("salaries.has(Number(row.id)) ? `${row.name} salary` : row.name");
   });
 });

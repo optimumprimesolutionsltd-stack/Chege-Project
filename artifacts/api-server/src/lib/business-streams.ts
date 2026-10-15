@@ -89,6 +89,34 @@ export async function ownerIncomeBusinessIds(groupId: number): Promise<number[]>
 /** In SQL, for a business_streams row `bs`: a business whose profit is its owner's income. */
 const ownerIncome = (): SQL => sql`(bs.counts_profit AND bs.pays_salary IS FALSE)`;
 
+/**
+ * In SQL, for a business_streams row `bs`: a business that pays its owner a
+ * salary. What it pays into the owner's own accounts is that salary - their
+ * income - not its sales ("ujenzi pays me a salary ... dahanak should also pay
+ * me a salary as well as optimum", 15 Oct 2026). Its sales are what lands in
+ * its own accounts (lib/business-accounts), which stay out of personal income.
+ */
+const paysOwnerSalary = (): SQL => sql`(bs.pays_salary IS TRUE)`;
+
+/** The businesses that pay their owner a salary. */
+export async function salaryBusinessIds(groupId: number): Promise<number[]> {
+  return (await businessStreams(groupId)).filter((business) => business.paysSalary === true).map((business) => business.id);
+}
+
+/**
+ * The business paying the owner a salary with this money in, or NULL: an entry
+ * filed under the business, or marked as money from it (owner_business_money).
+ * `ownerMarked` says whether owner_business_money exists to look in.
+ */
+export function salaryBusinessOf(transactionId: SQL | unknown, incomeSourceId: SQL | unknown, ownerMarked: boolean): SQL {
+  if (!ready) return sql`NULL::integer`;
+  const marked = ownerMarked
+    ? sql`(SELECT obm.income_source_id FROM owner_business_money obm JOIN business_streams bs ON bs.income_source_id = obm.income_source_id
+            WHERE obm.transaction_id = ${transactionId} AND ${paysOwnerSalary()})`
+    : sql`NULL::integer`;
+  return sql`COALESCE((SELECT bs.income_source_id FROM business_streams bs WHERE bs.income_source_id = ${incomeSourceId} AND ${paysOwnerSalary()}), ${marked})`;
+}
+
 /** The businesses with a Business report: those whose profit is counted. */
 export async function profitBusinessIds(groupId: number): Promise<number[]> {
   return (await businessStreams(groupId)).filter((business) => business.countsProfit).map((business) => business.id);
@@ -129,15 +157,16 @@ export function businessCostLink(groupId: number, link: SQL | unknown): SQL {
 /**
  * True, in SQL, for money in filed under one of the businesses: its sales, kept
  * out of personal income. Not a business its owner lives on (ownerIncome):
- * those sales are the owner's income, less the business's costs.
+ * those sales are the owner's income, less the business's costs. Nor one that
+ * pays its owner a salary (paysOwnerSalary): what it pays them is that salary.
  */
 export function isBusinessSale(incomeSourceId: SQL | unknown): SQL {
   if (!ready) return sql`false`;
-  return sql`EXISTS (SELECT 1 FROM business_streams bs WHERE bs.income_source_id = ${incomeSourceId} AND NOT ${ownerIncome()})`;
+  return sql`EXISTS (SELECT 1 FROM business_streams bs WHERE bs.income_source_id = ${incomeSourceId} AND NOT ${ownerIncome()} AND NOT ${paysOwnerSalary()})`;
 }
 
 /** The condition every income figure adds through notAReversal: not a business's sales. */
 export function notBusinessSale(transactionId: SQL | unknown): SQL {
   if (!ready) return sql``;
-  return sql` AND NOT EXISTS (SELECT 1 FROM joint_account_transactions st JOIN business_streams bs ON bs.income_source_id = st.income_source_id WHERE st.id = ${transactionId} AND NOT ${ownerIncome()})`;
+  return sql` AND NOT EXISTS (SELECT 1 FROM joint_account_transactions st JOIN business_streams bs ON bs.income_source_id = st.income_source_id WHERE st.id = ${transactionId} AND NOT ${ownerIncome()} AND NOT ${paysOwnerSalary()})`;
 }
