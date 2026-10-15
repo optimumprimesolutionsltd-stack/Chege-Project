@@ -11,10 +11,16 @@ describe('a business is never an income stream', () => {
   const bank = read('app/(tabs)/bank.tsx');
   const named = read('app/named-accounts.tsx');
 
-  it('My businesses lists businesses only - no income streams, no "Make it a business"', () => {
+  // Its list is businesses only. Since 15 Oct 2026 income streams are offered
+  // beside it, apart, to make one a business in a tap ("i thought be energy
+  // should auto populate itself") - never made one without that tap
+  // (lib/businessSuggestions).
+  it('My businesses lists businesses only; income streams are only offered, apart, for a tap', () => {
     expect(screen).not.toContain('Make it a business');
-    expect(screen).not.toContain('/api/income-sources');
     expect(screen).toContain('businesses.list.map((business) =>');
+    expect(screen).toContain('testID="businesses-suggestions"');
+    expect(screen.match(/setBusiness\([a-z.]+, true\)/g)).toEqual(['setBusiness(id, true)']);
+    expect(screen).toContain('onPress={() => void makeBusiness(stream.id)}');
   });
 
   it('nothing falls back to "a stream with costs is a business"', () => {
