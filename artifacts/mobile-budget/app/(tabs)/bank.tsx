@@ -102,7 +102,11 @@ import { matchesSearch } from '@/lib/bankSearch';
 import { workspaceBudgetName } from '@/lib/workspaceIdentity';
 import { formatDisplayDate } from '@/lib/displayFormat';
 import { confirmNotAlreadyFromMpesa } from '@/lib/alreadyFromMpesa';
-import { readLiveMpesaBalance } from '@/lib/mpesaSms';
+import { canReadSms, readLiveMpesaBalance } from '@/lib/mpesaSms';
+import { bankGapLines } from '@/lib/bankMpesaGap';
+import { setBringIn } from '@/lib/bringInReceipts';
+import { useAutoReconcile } from '@/hooks/useAutoReconcile';
+import { useWaitingForYou } from '@/hooks/useWaitingForYou';
 import { messageTime } from '@/lib/mpesaLiveBalance';
 
 /**
@@ -537,6 +541,14 @@ export default function BankScreen() {
   const balanceShift = liveBalance && typeof data?.balance === 'number'
     ? Math.round((liveBalance.balance - data.balance) * 100) / 100
     : 0;
+  // What that gap is, said under Balance now with a tap to the review list, so
+  // a payment missing from the list is never hidden by the moved balances
+  // ("i cant see latest payment yet its balanced?", 15 Oct 2026; lib/bankMpesaGap).
+  // Same reads as Home's Waiting for you; only beside M-Pesa's own balance.
+  const reconcileLeft = useAutoReconcile(group?.id, personalBudget && liveBalance != null, onScreen);
+  const { newSmsCount, recheckSms } = useWaitingForYou();
+  useFocusEffect(useCallback(() => { if (personalBudget && canReadSms()) void recheckSms(); }, [personalBudget, recheckSms]));
+  const gapLines = liveBalance ? bankGapLines({ newSmsCount, left: reconcileLeft, gap: balanceShift }) : [];
 
   useEffect(() => {
     if (!accountStorageKey) return;
@@ -3284,6 +3296,27 @@ export default function BankScreen() {
               <Text style={[styles.balance, liveBalance && !periodSummary ? { marginBottom: 2 } : null]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>KES {formatKES(periodSummary ? periodSummary.closing : liveBalance ? liveBalance.balance : data?.balance)}</Text>
               {liveBalance && !periodSummary ? (
                 <Text style={styles.liveBalanceSource} numberOfLines={1} testID="bank-live-balance-source">From your M-Pesa message of {messageTime(liveBalance.at)}</Text>
+              ) : null}
+              {liveBalance && !periodSummary && gapLines.length > 0 ? (
+                <View style={styles.gapLines}>
+                  {gapLines.map((line) => (
+                    <TouchableOpacity
+                      key={line.testID}
+                      testID={line.testID}
+                      style={styles.gapLine}
+                      activeOpacity={0.75}
+                      onPress={() => {
+                        // Only these payments are read, not every message over their days (lib/bringInReceipts).
+                        if (line.kind === 'missing' && line.missing.receipts) setBringIn(line.missing.receipts);
+                        router.push(line.href as never);
+                      }}
+                    >
+                      <Feather name={line.kind === 'difference' ? 'search' : 'download'} size={13} color="#fbbf24" />
+                      <Text style={styles.gapLineText} numberOfLines={1}>{line.title}</Text>
+                      <Text style={styles.gapLineAction}>{line.kind === 'difference' ? 'Find it' : 'Check them'}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
               ) : null}
               <View style={styles.statsRow}>
                 <View style={styles.statItem}>
@@ -6570,6 +6603,31 @@ const styles = StyleSheet.create({
     color: '#7aaa8a',
     fontFamily: 'Inter_400Regular',
     marginBottom: 18,
+  },
+  gapLines: {
+    marginTop: -10,
+    marginBottom: 16,
+    gap: 6,
+  },
+  gapLine: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 6,
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    backgroundColor: 'rgba(251, 191, 36, 0.12)',
+  },
+  gapLineText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#f7faf6',
+    fontFamily: 'Inter_500Medium',
+  },
+  gapLineAction: {
+    fontSize: 12,
+    color: '#fbbf24',
+    fontFamily: 'Inter_600SemiBold',
   },
   negativeBalanceWarning: {
     marginTop: 10,
