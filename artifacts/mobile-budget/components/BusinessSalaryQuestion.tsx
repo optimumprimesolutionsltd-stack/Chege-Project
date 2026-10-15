@@ -4,7 +4,7 @@ import { Feather } from '@expo/vector-icons';
 
 import { useColors } from '@/hooks/useColors';
 import { useBusinesses } from '@/hooks/useBusinesses';
-import { SALARY_ANSWERS, unansweredBusinesses } from '@/lib/businessSalary';
+import { salaryAnswers, unansweredBusinesses } from '@/lib/businessSalary';
 
 /**
  * "Do you pay yourself a salary from Ujenzi?" - one business at a time, each
@@ -37,10 +37,12 @@ export function BusinessSalaryQuestion() {
       </View>
       <Text style={[styles.question, { color: colors.foreground }]}>Do you pay yourself a salary from {business.name}?</Text>
       <Text style={[styles.hint, { color: colors.mutedForeground }]}>
-        If you do, your salary is your income and {business.name}'s profit stays in its own report. If you live on its profit, the profit is your income.
+        {business.countsProfit
+          ? `If you do, your salary is your income and ${business.name}'s profit stays in its own report. If you live on its profit, the profit is your income.`
+          : `If you do, your salary is your income. If not, nothing from ${business.name} counts as your income: its money only passes through.`}
       </Text>
       <View style={styles.answers}>
-        {saving ? <ActivityIndicator color={colors.primary} /> : SALARY_ANSWERS.map((one) => (
+        {saving ? <ActivityIndicator color={colors.primary} /> : salaryAnswers(business).map((one) => (
           <Pressable
             key={one.label}
             onPress={() => void answer(one.paysSalary)}
