@@ -12,7 +12,20 @@ Google will ask for is here, in the order it is asked. Nothing has been submitte
 | [app-content.md](app-content.md) | The other App content forms: ads, rating, audience, app access, financial features, account deletion |
 | [signing-and-release.md](signing-and-release.md) | Keeping the APK's signing key, the build, version numbers, and how updates keep working |
 
-## Decide first: how a Play user pays
+## Decided: no buying in the Play build (15 Oct 2026)
+
+**Option 2 below was chosen.** People pay on jamvi.co.ke (or in the APK); the Play build has no
+M-Pesa form, no prices and no Subscribe buttons, and its Subscription screen only shows where
+the trial or subscription stands (#781). It knows it is the Play build from its update channel,
+`play` - see [signing-and-release.md](signing-and-release.md).
+
+Option 3 is also out: on 15 Oct 2026 Chrome let the message-reading APK download again, but
+Android then refused to install it - *"App blocked to protect your device"*. That is Play
+Protect's fraud protection in Kenya, which blocks any app that asks for SMS when it is installed
+from outside Play, with no "install anyway". Only Play, with the SMS declaration approved, gets
+SMS reading onto people's phones.
+
+### How it was decided
 
 Google Play requires its own billing for anything sold inside an app from the Play Store -
 subscriptions included, and the policy names "financial management software" as an example.
@@ -77,5 +90,5 @@ Nothing below depends on the choice except the payment screens, so the rest can 
 - **Which AI provider** Ask Jamvi uses in production (Render: `ASK_JAMVI_API_URL`, or the
   managed `AI_INTEGRATIONS_OPENAI_*`). The privacy page says "an AI model provider"; it should
   name it, and Data safety lists it as a service provider.
-- **The payment decision** above.
+- ~~The payment decision~~ - decided: no buying in the Play build (#781).
 - **Who owns the Google account** the Play developer account is made on.

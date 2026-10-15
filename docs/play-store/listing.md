@@ -43,8 +43,8 @@ Free for 14 days, then a monthly subscription. Made in Kenya by Optimum Prime So
 ```
 
 Before submitting, check the trial length and price against the app (`jamvi-pricing-model`,
-`TRIAL_DAYS`) and against the payment decision in [README.md](README.md): if Play Billing is
-not used, the last line must not mention paying at all.
+`TRIAL_DAYS`). Play Billing is not used (#781), so the listing must never say where or how to
+pay - "then a monthly subscription" is as far as it goes.
 
 ## Category and contact
 

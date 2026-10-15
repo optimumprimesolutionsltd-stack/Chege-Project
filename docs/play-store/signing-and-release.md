@@ -44,7 +44,7 @@ cd artifacts/mobile-budget
 npx eas build -p android --profile play
 ```
 
-The `play` profile builds an app bundle (.aab), channel **production**, with
+The `play` profile builds an app bundle (.aab), channel **play**, with
 `JAMVI_PLAY_STORE=1` - SMS reading left out until Google approves the declaration. For the
 second release remove that line from eas.json's `play` profile and build again. Upload the
 .aab in Play Console › Production › Create new release (or `eas submit -p android` once a
@@ -52,12 +52,22 @@ service account is set up).
 
 ## What happens to updates
 
-- **In-app updates go on exactly as now.** The Play build is on the production channel and
-  runtime 1.0.0, so every update published with `eas update` (preview, then republished to
-  production) reaches it the same way it reaches the APK - no Play review. Play allows this
+- **Once, before the first Play build**, point the `play` channel at the production branch:
+
+  ```
+  npx eas channel:create play
+  npx eas channel:edit play --branch production
+  ```
+
+- **In-app updates then go on exactly as now.** The Play build is on the `play` channel, which
+  reads the production branch, at runtime 1.0.0 - so every update published with `eas update`
+  (preview, then republished to production) reaches it the same way it reaches the APK, with
+  no extra publish and no Play review. The channel is also how the app knows it is the Play
+  build and hides every payment screen (lib/playStore.ts): an update replaces the app's
+  config but never its channel. Play allows this
   because only the JavaScript changes; the app installed from Play stays the same.
 - **Native changes** - a new phone ability, a new permission, an Expo SDK upgrade - need a new
   build: raise versionCode, `eas build --profile play`, upload, and Google reviews it (usually
   hours, at times a day or two). Build the APKs from the same commit so all three stay alike.
-- Keep publishing to **both** channels as today: APK users read preview, Play users read
-  production.
+- Keep publishing to **both** branches as today: APK users read preview, Play users read
+  production (through the `play` channel).

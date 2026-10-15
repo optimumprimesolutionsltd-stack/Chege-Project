@@ -25,7 +25,7 @@ Every row: **Shared: No.**
 |---|---|---|---|---|
 | Personal info › Name | Yes | Required (from Google sign-in) | No | Account management, App functionality |
 | Personal info › Email address | Yes | Required | No | Account management, App functionality (invitations, deletion code) |
-| Personal info › Phone number | Yes | Optional (only to pay the subscription by M-Pesa) | No | App functionality (payment prompt) |
+| Personal info › Phone number | No (Play build) | - | - | The M-Pesa number for paying is only asked on the website and the APK; the Play build has no payment screen (#781). Numbers inside saved M-Pesa entries are covered below |
 | Financial info › Purchase history | Yes | Optional (subscribers) | No | Account management |
 | Financial info › Other financial info | Yes | Required (it is the app: entries, budgets, accounts, debts) | No | App functionality |
 | Messages › SMS or MMS | Yes | Optional (only if the person allows reading) | **Yes** - read into a list, not stored; only the entries saved are kept, as Financial info | App functionality |
@@ -42,7 +42,7 @@ Financial info, not a separate type.
 
 ## Before submitting
 
-- If Play Billing is added (see [README.md](README.md)), Google handles that payment; Purchase
-  history stays as is.
+- Play Billing is not used: the Play build takes no payment (#781). Purchase history stays as
+  is - subscribers' status still comes from the server.
 - Name the AI provider in the privacy page once confirmed (Render settings).
 - Check Ask Jamvi: are questions stored anywhere? Set the Ephemeral column from the answer.

@@ -7,12 +7,12 @@ Play Console › Policy › App content. Each must be finished before the first 
 | **Privacy policy** | https://jamvi.co.ke/privacy |
 | **Ads** | No, the app contains no ads |
 | **App access** | All or some functionality is restricted - give a reviewer account (below) |
-| **Content rating** | Questionnaire, category *All other app types*: no violence, sexual content, profanity, drugs, gambling; users can interact (Shared groups with people they invite); shares location: no; digital purchases: yes (if Play Billing is used). Expect *Everyone / 3+* |
+| **Content rating** | Questionnaire, category *All other app types*: no violence, sexual content, profanity, drugs, gambling; users can interact (Shared groups with people they invite); shares location: no; digital purchases: no (the Play build sells nothing, #781). Expect *Everyone / 3+* |
 | **Target audience** | 18 and over (it manages money and takes payment) |
 | **News app** | No |
 | **Data safety** | [data-safety.md](data-safety.md) |
 | **Government app** | No |
-| **Financial features** | Yes: *Personal finance - budgeting, expense tracking*. It does not lend, bank, trade, hold funds, move money or offer crypto. Payments in the app are only for its own subscription |
+| **Financial features** | Yes: *Personal finance - budgeting, expense tracking*. It does not lend, bank, trade, hold funds, move money or offer crypto. The Play build takes no payment at all; the subscription is paid on jamvi.co.ke (#781) |
 | **Health** | No |
 | **Advertising ID** | No. Jamvi has no advertising or analytics SDK; sign-in opens Google in the browser, not Play services |
 | **Account deletion** | In the app: Settings › App › Delete account. Web: https://jamvi.co.ke/privacy#delete-account |
