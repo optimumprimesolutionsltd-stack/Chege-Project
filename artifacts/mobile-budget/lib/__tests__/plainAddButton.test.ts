@@ -8,11 +8,11 @@ const read = (p: string) => readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
 describe('the phone footer says it in plain words', () => {
   const fab = read('components/GlobalFAB.tsx');
 
-  it('asks I spent, Bank, Save, Budget', () => {
-    expect(fab).toContain("label: 'I spent'");
-    expect(fab).toContain("label: 'Bank'");
-    expect(fab).toContain("label: 'Save'");
-    expect(fab).toContain("label: 'Budget'");
+  // One + in place of the four-button bar (15 Oct 2026).
+  it('one + that asks I spent, Bring in M-Pesa, Money in or out, Move money, Save', () => {
+    expect(fab).toContain('testID="global-add"');
+    for (const label of ['I spent', 'Bring in M-Pesa', 'Save']) expect(fab).toContain(`label: '${label}'`);
+    expect(fab).not.toContain("label: 'Budget'");
   });
 
   it('offers Money in, Money out and Move money instead of Deposit, Withdraw and Transfer', () => {
@@ -25,8 +25,7 @@ describe('the phone footer says it in plain words', () => {
   });
 
   it('keeps stable test ids that do not depend on the wording', () => {
-    expect(fab).toContain('testID={`global-footer-${action.id}`}');
-    expect(fab).toContain('testID={`global-banking-${action.id}`}');
+    expect(fab).toContain('testID={`global-add-${action.id}`}');
   });
 });
 

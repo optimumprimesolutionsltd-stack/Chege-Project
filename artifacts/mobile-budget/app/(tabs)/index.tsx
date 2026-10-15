@@ -563,7 +563,9 @@ export default function DashboardScreen() {
                 <Text style={styles.greeting}>{greeting}</Text>
               )}
             </View>
-            <Pressable onPress={() => router.push('/(tabs)/settings')} hitSlop={10} accessibilityLabel="Open settings">
+            {/* Your picture opens everything that is not a tab - Goals, Debt,
+                Business, Search, Settings - now the bar is three tabs (lib/tabPlan). */}
+            <Pressable onPress={() => router.push('/(tabs)/more')} hitSlop={10} accessibilityLabel="Open the menu: goals, debt, businesses, search, settings" testID="home-avatar-menu">
               <ProfileAvatar
                 user={user}
                 size={34}
@@ -706,7 +708,7 @@ export default function DashboardScreen() {
             <Pressable
               accessibilityRole="alert"
               testID="overview-negative-bank-balance-warning"
-              onPress={() => router.push('/(tabs)/bank')}
+              onPress={() => router.push('/(tabs)/money')}
               style={styles.negativeBankBalanceWarning}
             >
               <View style={styles.negativeBankBalanceWarningTitle}>
@@ -742,7 +744,7 @@ export default function DashboardScreen() {
                   testID="home-create-first-budget"
                   accessibilityRole="button"
                   accessibilityLabel="Set up your first budget"
-                  onPress={() => router.push('/(tabs)/budget')}
+                  onPress={() => router.push('/(tabs)/plan?view=budget')}
                   style={({ pressed }) => [
                     styles.groupCtaButton,
                     { backgroundColor: colors.primary, opacity: pressed ? 0.82 : 1 },
@@ -780,7 +782,7 @@ export default function DashboardScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Recent activity</Text>
-            <Pressable onPress={() => router.push('/(tabs)/history')}>
+            <Pressable onPress={() => router.push('/(tabs)/money?view=activity')}>
               <Text style={[styles.seeAll, { color: colors.secondary }]}>See all</Text>
             </Pressable>
           </View>

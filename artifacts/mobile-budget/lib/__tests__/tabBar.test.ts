@@ -3,36 +3,46 @@ import { describe, expect, it } from 'vitest';
 
 const read = (p: string) => readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
 
-// The five-tab bar (lib/tabPlan, 10 Oct 2026): nothing removed or renamed.
-describe('the tab bar is built from the plan, in both layouts', () => {
+// Three tabs (lib/tabPlan, 15 Oct 2026): nothing removed, every route still works.
+describe('the tab bar is Home, Money, Plan, in both layouts', () => {
   const layout = read('app/(tabs)/_layout.tsx');
   it('one bar for everybody: the Simple view switch is gone', () => {
     expect(layout).toContain('visibleTabs({ isShared, showBudget, showDebt, showReports })');
     expect(existsSync('hooks/useSimpleView.ts')).toBe(false);
   });
-  it('Goals, Search and Debt are routes without a tab, so every link to them still works', () => {
-    expect(layout).toContain("{has('goals') && (");
+  it('Money and Plan are tabs; Activity, Bank, Goals, Search and Debt are routes without one', () => {
+    expect(layout).toContain('<NativeTabs.Trigger name="money">');
+    expect(layout).toContain('<NativeTabs.Trigger name="plan">');
+    expect(layout).toContain('<Tabs.Screen name="history" options={{ href: null }} />');
     expect(layout).toContain("options={has('goals')");
     expect(layout).toContain("!has('search')");
     expect(layout).toContain("options={has('debt')");
-    // Bank and Settings were never tabs.
     expect(layout).toContain('<Tabs.Screen name="bank"     options={{ href: null }} />');
+  });
+  it('Money switches Accounts and All activity; Plan switches Budget and Reports, Contributions first in a group', () => {
+    const money = read('app/(tabs)/money.tsx');
+    expect(money).toContain("{view === 'activity' ? <HistoryScreen /> : <BankScreen />}");
+    const plan = read('app/(tabs)/plan.tsx');
+    expect(plan).toContain("...(isShared ? [{ key: 'contributions', label: 'Contributions' }] : []),");
+    expect(plan).toContain("...(showReports ? [{ key: 'reports', label: 'Reports' }] : []),");
+    // Shown in the header every one of those screens already has.
+    expect(read('components/WorkspaceIdentityRow.tsx')).toContain('<TabSwitchSlot tone={tone} />');
   });
 });
 
-describe('More reaches everything the bar leaves out, each with a one-line reason', () => {
+describe('your picture on Home opens everything the bar leaves out', () => {
   const more = read('app/(tabs)/more.tsx');
-  it('lists Bank, Goals, Search, Who owes who, Debt and Settings', () => {
-    for (const route of ['/(tabs)/bank', '/(tabs)/goals', '/(tabs)/search', '/parties', '/(tabs)/debt', '/(tabs)/settings', '/help', '/mpesa-import']) {
+  it('lists Goals, Search, Who owes who, Debt and Settings, with a way back', () => {
+    for (const route of ['/(tabs)/goals', '/(tabs)/search', '/parties', '/(tabs)/debt', '/(tabs)/settings', '/help', '/mpesa-import']) {
       expect(more).toContain(`'${route}'`);
     }
     expect(more).toContain('hint:');
-    expect(more).not.toContain('Simple view');
+    expect(more).toContain('testID="more-back"');
+    expect(read('app/(tabs)/index.tsx')).toContain("router.push('/(tabs)/more')");
   });
-  it('a group\'s Budget is under More, since Contributions has its tab', () => {
-    expect(more).toContain('show: isShared && showBudget,');
-    expect(more).not.toContain("key: 'contributions'");
-    expect(more).not.toContain("key: 'reports'");
+  it('Bank and Budget are not repeated there - they are the Money and Plan tabs', () => {
+    expect(more).toContain('// On the Money tab now (lib/tabPlan).');
+    expect(more).toContain('// On the Plan tab now, beside Contributions (lib/tabPlan).');
   });
 });
 

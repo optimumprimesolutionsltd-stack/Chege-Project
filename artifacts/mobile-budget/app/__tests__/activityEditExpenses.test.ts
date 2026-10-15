@@ -19,7 +19,7 @@ describe('Edit on Activity expenses', () => {
     expect(history).toContain('testID="history-expense-edit-bar"');
     expect(history).toContain("position: 'absolute', left: 12, right: 12, bottom: 8");
     expect(history).toContain('setQuickBarHidden(editingExpenses);');
-    expect(fab).toContain('if (hidden && !arranging) return null;');
+    expect(fab).toContain('if (hidden) return null;');
     expect(history).not.toContain('ListFooterComponent={\n              expEditor.editing');
   });
 

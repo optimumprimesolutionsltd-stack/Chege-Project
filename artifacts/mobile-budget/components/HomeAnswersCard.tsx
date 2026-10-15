@@ -52,7 +52,7 @@ export function HomeAnswersCard({
       testID="home-answers"
     >
       <Pressable
-        onPress={() => router.push('/(tabs)/bank')}
+        onPress={() => router.push('/(tabs)/money')}
         accessibilityRole="button"
         accessibilityLabel="How much is on my M-Pesa? Open my bank"
         style={styles.row}
@@ -103,7 +103,7 @@ export function HomeAnswersCard({
       <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
       <Pressable
-        onPress={() => router.push('/(tabs)/budget')}
+        onPress={() => router.push('/(tabs)/plan?view=budget')}
         accessibilityRole="button"
         accessibilityLabel={`Am I on track? ${hidden ? '' : answers.track.text}`}
         style={styles.row}
