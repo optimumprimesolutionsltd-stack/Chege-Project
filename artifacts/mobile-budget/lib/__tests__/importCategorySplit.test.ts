@@ -39,7 +39,7 @@ describe('one M-Pesa payment, more than one category', () => {
 
   it('shows on Bank as one payment with its categories under it', () => {
     const bank = readFileSync('app/(tabs)/bank.tsx', 'utf8');
-    expect(bank).toContain("splits: 'together'");
+    expect(bank).toContain('joinSplitRows(');
     expect(bank).toContain('testID={`bank-split-parts-${item.id}`}');
     expect(bank).toContain('if (tx.splitParts) {');
   });

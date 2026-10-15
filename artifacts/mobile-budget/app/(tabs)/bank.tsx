@@ -43,6 +43,7 @@ import { parseStoredRules, payeeKey, payeeName, referenceOf, ruleCategory, rules
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSourceCorrection } from '@/hooks/useSourceCorrection';
 import { SplitSheet } from '@/components/SplitSheet';
+import { joinSplitRows } from '@/lib/splitRows';
 import { useColors } from '@/hooks/useColors';
 import { UndoDeleteBar, useUndoableDelete } from '@/components/UndoDeleteBar';
 import { deletedLabel } from '@/lib/undoDelete';
@@ -141,8 +142,10 @@ type Tx = {
   type: string;
   amount: number;
   runningBalance?: number | null;
-  /** A split payment, shown as one: each category's share (api-server lib/transaction-splits foldSplitParts). */
+  /** A split payment, shown as one: each category's share (lib/splitRows). */
   splitParts?: { id: number; category: string | null; amount: number }[];
+  /** For a part of a split payment: its payment's id. */
+  splitOf?: number | null;
   description: string;
   notes?: string | null;
   madeById?: string | null;
@@ -219,9 +222,9 @@ export default function BankScreen() {
   const accountStorageKey = group?.id && user?.id ? `bank-account:${group.id}:${user.id}` : null;
   // Followed only while Bank is in view (hooks/useOnScreen): hidden behind
   // Sort them out it reloaded the whole account after every entry sorted.
-  // A split payment comes back as one entry, its whole amount ("its 10,000 is not
-  // split but the category is the one that is split", 13 Oct 2026).
-  const jointAccountParams = { ...(selectedAccountId ? { accountId: selectedAccountId } : {}), splits: 'together' };
+  // The same list the import and the other screens read, so what they save shows
+  // here at once; a split payment is joined into one entry below (lib/splitRows).
+  const jointAccountParams = selectedAccountId ? { accountId: selectedAccountId } : undefined;
   const { data: fullData, isLoading: fullLoading, isFetching, refetch } = useGetJointAccount(
     jointAccountParams,
     { query: { queryKey: getGetJointAccountQueryKey(jointAccountParams), subscribed: onScreen } },
@@ -230,7 +233,7 @@ export default function BankScreen() {
   // in a fraction of the time, so Bank fills at once and the whole list takes
   // over when it arrives (docs/account-list-paging.md, 9 Oct 2026). Everything
   // that needs the whole history waits for it.
-  const firstPageParams = { ...jointAccountParams, limit: BANK_FIRST_PAGE };
+  const firstPageParams = { ...(selectedAccountId ? { accountId: selectedAccountId } : {}), limit: BANK_FIRST_PAGE };
   const { data: firstPage } = useGetJointAccount(
     firstPageParams,
     { query: { queryKey: getGetJointAccountQueryKey(firstPageParams), subscribed: onScreen && !fullData } },
@@ -2644,7 +2647,7 @@ export default function BankScreen() {
   };
 
   // A delete waiting for Undo is already out of the list.
-  const transactions: Tx[] = (data?.transactions ?? []).filter((tx) => !undoable.isHidden(`tx:${tx.id}`));
+  const transactions: Tx[] = joinSplitRows((data?.transactions ?? []) as Tx[]).filter((tx) => !undoable.isHidden(`tx:${tx.id}`));
   // Money between you and your own business: marked as it arrives, titled for it (lib/ownerBusiness).
   useAutoMarkBusiness(data?.transactions);
   // A period narrows the list and the figures to those dates. "All time"
