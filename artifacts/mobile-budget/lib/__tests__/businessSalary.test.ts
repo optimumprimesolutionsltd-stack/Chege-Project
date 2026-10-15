@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { SALARY_ANSWERS, salaryAnswerHint, unansweredBusinesses } from '../businessSalary';
+import { SALARY_ANSWERS, salaryAnswerHint, salaryAnswers, unansweredBusinesses } from '../businessSalary';
 
 // "If a business's profit is tracked, its profit counts as an income stream" (9 Oct 2026),
 // asked once per business so a salary and the profit it came from are never both income.
@@ -9,13 +9,25 @@ describe('do you pay yourself a salary from it?', () => {
   const duka = { id: 2, name: 'Duka', countsProfit: true, paysSalary: false };
   const passing = { id: 3, name: 'Chama float', countsProfit: false, paysSalary: null };
 
-  it('is asked only of a business whose profit counts and nobody has answered', () => {
-    expect(unansweredBusinesses([ujenzi, duka, passing]).map((one) => one.name)).toEqual(['Ujenzi']);
+  // "optimum and ujenzi dont have that part" (15 Oct 2026): a business whose
+  // money only passes through can still pay a salary.
+  it('is asked of every business nobody has answered for, profit counted or not', () => {
+    expect(unansweredBusinesses([ujenzi, duka, passing]).map((one) => one.name)).toEqual(['Ujenzi', 'Chama float']);
     expect(unansweredBusinesses([{ id: 4, name: 'New', countsProfit: true }])).toHaveLength(1);
   });
 
   it('has two answers: a salary, or living on the profit', () => {
     expect(SALARY_ANSWERS.map((one) => one.paysSalary)).toEqual([true, false]);
+  });
+
+  it('offers living on the profit only when the profit is counted', () => {
+    expect(salaryAnswers(ujenzi).map((one) => one.label)).toEqual(['Yes, a salary', 'No, I live on its profit']);
+    expect(salaryAnswers(passing).map((one) => one.label)).toEqual(['Yes, a salary', 'No']);
+    expect(salaryAnswerHint({ ...passing, paysSalary: true })).toContain('Your salary is your income');
+    expect(salaryAnswerHint({ ...passing, paysSalary: false })).toContain('Nothing from Chama float counts as your income');
+    const page = readFileSync('app/businesses.tsx', 'utf8');
+    expect(page).toContain('{salaryAnswers(business).map((answer) => {');
+    expect(page).not.toContain('{business.countsProfit ? (');
   });
 
   it('says what each answer means for the figures', () => {

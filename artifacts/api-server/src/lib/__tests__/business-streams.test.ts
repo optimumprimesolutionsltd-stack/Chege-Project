@@ -142,6 +142,8 @@ describe("a business that pays its owner a salary: the salary is their income", 
     expect(chunks(salaryBusinessOf(sql`t.id`, sql`t.income_source_id`, true))).toContain("owner_business_money obm JOIN business_streams bs");
     expect(chunks(salaryBusinessOf(sql`t.id`, sql`t.income_source_id`, false))).not.toContain("owner_business_money");
     expect(dashboard).toContain("IS NOT NULL AND NOT ${isInBusinessAccount(sql`t.account_id`)}` : sql`false`} THEN 'income'");
-    expect(dashboard).toContain("salaries.has(Number(row.id)) ? `${row.name} salary` : row.name");
+    expect(dashboard).toContain("salaries.has(Number(row.id)) ? salaryStreamName(row.name) : row.name");
+    // The stream onboarding made for the salary takes the business's money too: one line.
+    expect(dashboard).toContain("other.name.trim().toLowerCase() === salaryStreamName(row.name).toLowerCase()");
   });
 });

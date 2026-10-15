@@ -25,7 +25,7 @@ import { useColors } from '@/hooks/useColors';
 import { PageScrollView } from '@/components/PageScrollReset';
 import { useBusinesses } from '@/hooks/useBusinesses';
 import { BusinessCostCategories } from '@/components/BusinessCostCategories';
-import { SALARY_ANSWERS, salaryAnswerHint } from '@/lib/businessSalary';
+import { salaryAnswers, salaryAnswerHint } from '@/lib/businessSalary';
 
 export default function BusinessesScreen() {
   const colors = useColors();
@@ -113,11 +113,13 @@ export default function BusinessesScreen() {
               </View>
               <Switch value={business.countsProfit} onValueChange={(on) => setCounts(business.id, on)} testID={`business-counts-profit-${business.id}`} />
             </View>
-            {business.countsProfit ? (
-              <View style={{ gap: 6 }} testID={`business-pays-salary-${business.id}`}>
+            {/* Every business, profit counted or not: one whose money only passes
+                through can still pay you a salary ("optimum and ujenzi dont have
+                that part", 15 Oct 2026). */}
+            <View style={{ gap: 6 }} testID={`business-pays-salary-${business.id}`}>
                 <Text style={{ color: colors.foreground, fontSize: 13, fontFamily: 'Inter_600SemiBold' }}>Do you pay yourself a salary from it?</Text>
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                  {SALARY_ANSWERS.map((answer) => {
+                  {salaryAnswers(business).map((answer) => {
                     const on = business.paysSalary === answer.paysSalary;
                     return (
                       <Pressable
@@ -134,8 +136,7 @@ export default function BusinessesScreen() {
                   })}
                 </View>
                 <Text style={{ color: colors.mutedForeground, fontSize: 12, lineHeight: 17 }}>{salaryAnswerHint(business)}</Text>
-              </View>
-            ) : null}
+            </View>
             <Pressable onPress={() => setCostsFor({ id: business.id, name: business.name })} accessibilityRole="button" testID={`business-cost-categories-${business.id}`}
               style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <Feather name="link-2" size={14} color={colors.primary} />

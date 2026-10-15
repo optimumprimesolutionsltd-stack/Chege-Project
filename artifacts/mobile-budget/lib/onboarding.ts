@@ -173,14 +173,29 @@ export type MobileOnboardingDraft = {
  * - profit: a side hustle they live on; its profit is their income.
  * - salary: it pays them a salary; the salary is their income, the profit
  *   stays in its Business report.
- * - passThrough: its money only passes through their M-Pesa; no Business report.
+ * - salaryOnly: it pays them a salary, and the rest of its money is not
+ *   theirs - the salary is their income, nothing else from it is, no report
+ *   ("optimum and ujenzi" pay a salary but are not tracked, 15 Oct 2026).
+ * - passThrough: its money only passes through their M-Pesa and none of it is
+ *   theirs; no Business report.
+ *
+ * The rule each answer stands for is said in its description, so it is plain
+ * from onboarding: a salary is always income, a business's own money never is
+ * unless the person lives on its profit.
  */
-export type BusinessPay = "profit" | "salary" | "passThrough";
+export type BusinessPay = "profit" | "salary" | "salaryOnly" | "passThrough";
+
+/** Whether the business pays the person a salary: an income stream "<name> salary" is made for it. */
+export const paysSalaryPay = (pay: BusinessPay | null | undefined): boolean => pay === "salary" || pay === "salaryOnly";
+
+/** Whether the business's sales and costs are tracked here, with a Business report. */
+export const tracksProfitPay = (pay: BusinessPay | null | undefined): boolean => pay === "profit" || pay === "salary";
 
 export const BUSINESS_PAY_CHOICES: ReadonlyArray<{ pay: BusinessPay; title: string; description: string }> = [
   { pay: "profit", title: "I live on its profit", description: "A side hustle. What it makes - sales less its costs - counts as your income." },
-  { pay: "salary", title: "It pays me a salary", description: "Your salary is your income. Its profit stays in its own report." },
-  { pay: "passThrough", title: "Its money is not mine", description: "Its customers pay you and you pay its bills - you run it for the owner, or only take a salary. Jamvi keeps that money out of your income and spending, and shows no profit for it." },
+  { pay: "salary", title: "It pays me a salary", description: "Your salary is your income. Its sales, costs and profit stay in its own report, out of your income." },
+  { pay: "salaryOnly", title: "It pays me a salary - the rest is not mine", description: "Only your salary is your income. Its other money passes through your M-Pesa and stays out of your income and spending, with no report." },
+  { pay: "passThrough", title: "Its money is not mine", description: "You run it for someone else and take nothing from it. All its money stays out of your income and spending, with no report." },
 ];
 
 /**
@@ -199,7 +214,9 @@ export function salaryIncomeName(business: string): string {
 export function businessFlagsFor(pay: BusinessPay | null): { business: true; countsProfit?: boolean; paysSalary?: boolean | null } {
   if (pay === "profit") return { business: true, countsProfit: true, paysSalary: false };
   if (pay === "salary") return { business: true, countsProfit: true, paysSalary: true };
-  if (pay === "passThrough") return { business: true, countsProfit: false, paysSalary: null };
+  if (pay === "salaryOnly") return { business: true, countsProfit: false, paysSalary: true };
+  // Takes nothing from it: answered, so the salary question is never asked again.
+  if (pay === "passThrough") return { business: true, countsProfit: false, paysSalary: false };
   return { business: true };
 }
 
@@ -316,7 +333,7 @@ export function businessNamesFromDraft(draft: Parameters<typeof businessesFromDr
  */
 export function costsBusinessName(draft: Parameters<typeof businessesFromDraft>[0]): string | null {
   const businesses = businessesFromDraft(draft);
-  return (businesses.find((business) => business.pay !== "passThrough") ?? businesses[0])?.name ?? null;
+  return (businesses.find((business) => business.pay == null || tracksProfitPay(business.pay)) ?? businesses[0])?.name ?? null;
 }
 
 const ONBOARDING_CATEGORY_ALIASES: Record<string, string> = {
@@ -788,7 +805,7 @@ export function normalizeOnboardingDraft(value: unknown): MobileOnboardingDraft 
       ? raw.moreBusinessNames.filter((item): item is string => typeof item === "string").map((item) => item.slice(0, 80)).slice(0, MAX_ONBOARDING_BUSINESSES - 1)
       : [],
     businessPay: Array.isArray(raw.businessPay)
-      ? raw.businessPay.slice(0, MAX_ONBOARDING_BUSINESSES).map((item) => (item === "profit" || item === "salary" || item === "passThrough" ? item : null))
+      ? raw.businessPay.slice(0, MAX_ONBOARDING_BUSINESSES).map((item) => (item === "profit" || item === "salary" || item === "salaryOnly" || item === "passThrough" ? item : null))
       : [],
   };
 }

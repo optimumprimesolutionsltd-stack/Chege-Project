@@ -95,5 +95,8 @@ describe("Bank's M-Pesa account shows M-Pesa's own balance", () => {
     expect(bank).toContain('mpesaSummary?.balanceAccountId === selectedAccount.id');
     expect(bank).toContain('periodSummary ? periodSummary.closing : liveBalance ? liveBalance.balance : data?.balance');
     expect(bank).toContain('From your M-Pesa message of {messageTime(liveBalance.at)}');
+    // "why is the balance here not 1737.48": each entry's balance moves by the same gap.
+    expect(bank).toContain('Balance KES {formatKES(item.runningBalance + balanceShift)}');
+    expect(bank).toContain('Math.round((liveBalance.balance - data.balance) * 100) / 100');
   });
 });

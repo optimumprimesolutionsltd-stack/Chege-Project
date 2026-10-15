@@ -21,7 +21,7 @@ import { payeeKey, withRule, withSourceRule, type PayeeRules } from "@/lib/payee
 import { readCachedRules, saveRules, syncRules } from "@/lib/rules-store";
 import { incomeAnswers, keepAnswer, savedGroups, suggestedCategories, type SavedGroup } from "@/lib/teach-jamvi";
 import { displayName, FAMILY_CATEGORY, familyCategories, familyNames, relativesBySurname, withFamily, withoutFamily } from "@/lib/family";
-import { SALARY_ANSWERS, salaryAnswerHint, unansweredBusinesses, type SalaryBusiness } from "@/lib/business-salary";
+import { salaryAnswerHint, salaryAnswers, unansweredBusinesses, type SalaryBusiness } from "@/lib/business-salary";
 import { plainSaveError } from "@/lib/save-retry";
 
 /**
@@ -165,7 +165,7 @@ export default function TeachJamviPage() {
           <p className="font-semibold">Do you pay yourself a salary from {askSalary.name}?</p>
           <p className="text-sm text-muted-foreground">{salaryAnswerHint(askSalary)}</p>
           <div className="flex flex-wrap gap-2">
-            {SALARY_ANSWERS.map((answer) => chip(answer.label, () => void answerSalary(askSalary, answer.paysSalary), `teach-salary-${answer.paysSalary ? "yes" : "no"}`))}
+            {salaryAnswers(askSalary).map((answer) => chip(answer.label, () => void answerSalary(askSalary, answer.paysSalary), `teach-salary-${answer.paysSalary ? "yes" : "no"}`))}
           </div>
         </CardContent></Card>
       ) : null}
