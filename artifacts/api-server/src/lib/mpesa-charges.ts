@@ -6,7 +6,7 @@ import type { DbOrTransaction } from "./account-deletion";
  * "Fix all" on Find the difference: an M-Pesa charge the balance shows was
  * taken but never saved, added to its payment in the M-Pesa account - filed as
  * the budget's other M-Pesa charges are, on the payment's day. Only to a
- * payment there with an M-Pesa code that is not itself a charge.
+ * payment there with an M-Pesa code that is not itself a charge, and has none yet.
  */
 export async function addMissingCharges(
   tx: DbOrTransaction,
@@ -36,6 +36,13 @@ export async function addMissingCharges(
       ))
       .limit(1);
     if (!payment) continue;
+    // One charge per payment: one it has already is never added to (routes/joint-account, 13 Oct 2026).
+    const [has] = await tx
+      .select({ id: jointAccountTxTable.id })
+      .from(jointAccountTxTable)
+      .where(and(eq(jointAccountTxTable.groupId, groupId), eq(jointAccountTxTable.chargeForTransactionId, payment.id)))
+      .limit(1);
+    if (has) continue;
     await tx.insert(jointAccountTxTable).values({
       groupId,
       accountId,

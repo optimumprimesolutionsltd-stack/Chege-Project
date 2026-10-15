@@ -115,6 +115,8 @@ beforeEach(() => {
   // account exist.
   mockedDb.select.mockImplementation(() => makeSelectChainWith([{ id: 1 }]));
   mockedDb.query.usersTable.findFirst.mockResolvedValue(undefined);
+  // The payment is saved in a transaction (one charge per payment); it runs on the same mock.
+  mockedDb.transaction.mockImplementation(async (work: (trx: unknown) => unknown) => work(mockedDb));
 });
 
 type Inserted = { expenseCategory: string | null; settlesContributorId: number | null; description: string; isLending: boolean };
