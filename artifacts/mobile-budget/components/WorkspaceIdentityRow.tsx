@@ -1,6 +1,7 @@
 import React from 'react';
 import { Feather } from '@expo/vector-icons';
 import { Image, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { TabSwitchSlot } from '@/components/TabSwitch';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/lib/auth';
 import { workspaceNameTextStyle } from '@/lib/workspaceIdentity';
@@ -27,7 +28,7 @@ export function WorkspaceIdentityRow({
 }) {
   const colors = useColors();
   const { user } = useAuth();
-  if (!group) return null;
+  if (!group) return <TabSwitchSlot tone={tone} />;
 
   const isShared = group.isPrivate === false;
   const accentColor = colors.brandTeal;
@@ -46,6 +47,7 @@ export function WorkspaceIdentityRow({
   const isDark = tone === 'dark';
 
   return (
+    <>
     <View style={[styles.row, style]}>
       {photoUrl ? (
         <Image
@@ -74,6 +76,8 @@ export function WorkspaceIdentityRow({
         </Text>
       </View>
     </View>
+    <TabSwitchSlot tone={tone} />
+    </>
   );
 }
 

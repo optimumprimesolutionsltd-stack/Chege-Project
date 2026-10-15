@@ -42,12 +42,11 @@ describe('where it is used', () => {
     expect(home).toContain('testID="overview-arrange"');
   });
 
-  it('the quick-action bar shows the first four arranged, and opens Arrange on a long press or from More', () => {
+  it('the quick-action bar is gone: one + adds anything, and More no longer arranges it', () => {
     const bar = readFileSync('components/GlobalFAB.tsx', 'utf8');
     const more = readFileSync('app/(tabs)/more.tsx', 'utf8');
-    expect(bar).toContain('const shownActions = arrange(MAIN_ACTIONS, arrangement).slice(0, QUICK_ACTION_SLOTS);');
-    expect(bar).toContain('onLongPress={() => { setBankingOpen(false); setArranging(true); }}');
-    expect(more).toContain('onPress={openQuickActionsArranger}');
+    expect(bar).not.toContain('QUICK_ACTION_SLOTS');
+    expect(more).not.toContain('openQuickActionsArranger');
   });
 });
 

@@ -1,5 +1,7 @@
 export type TabName =
   | 'index'
+  | 'money'
+  | 'plan'
   | 'history'
   | 'budget'
   | 'goals'
@@ -17,26 +19,18 @@ export type TabFlags = {
 };
 
 /**
- * Which tabs are on the bar: five, for everybody.
+ * Which tabs are on the bar: three, for everybody - Home, Money, Plan.
  *
- * The full bar had grown to eight (Home, Activity, Budget, Goals, Search,
- * Reports, Debt, More), too many for a phone and confusing for anyone new.
- * "Cut the bar to 5 tabs: Home, Activity, Budget, Reports, More" (10 Oct 2026),
- * Reports on it because Reports is where a person lives once the M-Pesa reading
- * does the filing. A shared group's third tab is Contributions, which is what a
- * group checks most; its Budget is under More.
+ * Five (Home, Activity, Budget, Reports, More) with a four-button bar floating
+ * above them was still nine buttons, Budget twice: "the tab thing with banks
+ * reports etc is exhausting" (15 Oct 2026). Money holds your accounts and all
+ * activity, Plan holds Budget and Reports (Contributions first in a group),
+ * each chosen at the top of the tab (components/TabSwitch). Everything under
+ * More is behind your picture on Home, and one + adds anything.
  *
- * Nothing is removed: Goals, Search, Debt, Bank and Settings are under More,
- * every route still works, and Search is also an icon in Activity and Budget.
- * Budget and Reports still follow the person's Settings switches.
+ * Nothing is removed: every screen is still a route, reached from Money, Plan,
+ * your picture, the + and the links that went there before.
  */
-export function visibleTabs(flags: TabFlags): TabName[] {
-  const { isShared, showBudget, showReports } = flags;
-  return [
-    'index',
-    'history',
-    ...(isShared ? (['contributions'] as const) : showBudget ? (['budget'] as const) : []),
-    ...(showReports ? (['reports'] as const) : []),
-    'more',
-  ];
+export function visibleTabs(_flags: TabFlags): TabName[] {
+  return ['index', 'money', 'plan'];
 }

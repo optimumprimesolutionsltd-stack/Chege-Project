@@ -1,4 +1,3 @@
-import { openQuickActionsArranger } from '@/lib/layoutPrefs';
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
@@ -25,7 +24,7 @@ type Item = {
  */
 export default function MoreScreen() {
   const colors = useColors();
-  const { isShared, showBudget, showDebt } = useTabFlags();
+  const { showDebt } = useTabFlags();
   const hasBusiness = useHasBusiness();
 
   const items: Item[] = [
@@ -35,7 +34,8 @@ export default function MoreScreen() {
       title: 'Bank',
       hint: 'Put money in, take money out, and see your balance',
       href: '/(tabs)/bank',
-      show: true,
+      // On the Money tab now (lib/tabPlan).
+      show: false,
     },
     {
       key: 'goals',
@@ -51,8 +51,8 @@ export default function MoreScreen() {
       title: 'Budget',
       hint: "The group's categories and what each has left",
       href: '/(tabs)/budget',
-      // A group's bar carries Contributions in Budget's place (lib/tabPlan).
-      show: isShared && showBudget,
+      // On the Plan tab now, beside Contributions (lib/tabPlan).
+      show: false,
     },
     {
       key: 'mpesa',
@@ -115,6 +115,17 @@ export default function MoreScreen() {
 
   return (
     <PageScrollView style={{ backgroundColor: colors.background }} contentContainerStyle={styles.body}>
+      {/* Opened from your picture on Home: back goes where you were. */}
+      <Pressable
+        onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}
+        hitSlop={10}
+        accessibilityRole="button"
+        accessibilityLabel="Back"
+        testID="more-back"
+        style={{ alignSelf: 'flex-start', marginBottom: 6 }}
+      >
+        <Feather name="arrow-left" size={22} color={colors.foreground} />
+      </Pressable>
       <Text style={[styles.title, { color: colors.foreground }]}>More</Text>
       <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>Everything else, one tap away</Text>
 
@@ -142,23 +153,7 @@ export default function MoreScreen() {
           ))}
       </View>
 
-      <Pressable
-        onPress={openQuickActionsArranger}
-        accessibilityRole="button"
-        testID="more-arrange-quick-actions"
-        style={[styles.card, styles.switchRow, { backgroundColor: colors.card, borderColor: colors.border }]}
-      >
-        <View style={[styles.iconBox, { backgroundColor: colors.muted }]}>
-          <Feather name="sliders" size={20} color={colors.primary} />
-        </View>
-        <View style={styles.rowText}>
-          <Text style={[styles.rowTitle, { color: colors.foreground }]}>Arrange your quick actions</Text>
-          <Text style={[styles.rowHint, { color: colors.mutedForeground }]}>
-            Choose the four buttons in the bar above the tabs, and their order. You can also hold any of them.
-          </Text>
-        </View>
-        <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
-      </Pressable>
+      {/* The quick-action bar is gone: one + adds anything (components/GlobalFAB). */}
 
     </PageScrollView>
   );

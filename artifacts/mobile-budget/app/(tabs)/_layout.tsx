@@ -16,9 +16,9 @@ import { useWaitingForYou, waitingBadge } from '@/hooks/useWaitingForYou';
 import { visibleTabs, type TabName } from '@/lib/tabPlan';
 
 // iOS 26+: NativeTabs with liquid glass support.
-// Five tabs (lib/tabPlan): Home, Activity, Budget (Contributions in a shared
-// group), Reports, More. Goals, Search, Debt, Bank and Settings are routes with
-// no tab, reached from More, headers and Home cards.
+// Three tabs (lib/tabPlan): Home, Money, Plan. Activity, Bank, Budget,
+// Contributions, Reports, Goals, Search, Debt, More and Settings are routes
+// with no tab, reached from Money, Plan, your picture on Home and the +.
 function NativeTabLayout({ visible }: { visible: TabName[] }) {
   const has = (name: TabName) => visible.includes(name);
   return (
@@ -27,52 +27,14 @@ function NativeTabLayout({ visible }: { visible: TabName[] }) {
         <Icon sf={{ default: 'house', selected: 'house.fill' }} />
         <Label>Home</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="history">
-        <Icon sf={{ default: 'clock', selected: 'clock.fill' }} />
-        <Label>Activity</Label>
+      <NativeTabs.Trigger name="money">
+        <Icon sf={{ default: 'creditcard', selected: 'creditcard.fill' }} />
+        <Label>Money</Label>
       </NativeTabs.Trigger>
-{has('budget') && (
-              <NativeTabs.Trigger name="budget">
-        <Icon sf={{ default: 'chart.bar', selected: 'chart.bar.fill' }} />
-        <Label>Budget</Label>
+      <NativeTabs.Trigger name="plan">
+        <Icon sf={{ default: 'chart.pie', selected: 'chart.pie.fill' }} />
+        <Label>Plan</Label>
       </NativeTabs.Trigger>
-      )}
-      {has('contributions') && (
-        <NativeTabs.Trigger name="contributions">
-          <Icon sf={{ default: 'arrow.down.circle', selected: 'arrow.down.circle.fill' }} />
-          <Label>Contributions</Label>
-        </NativeTabs.Trigger>
-      )}
-      {has('goals') && (
-        <NativeTabs.Trigger name="goals">
-          <Icon sf={{ default: 'target', selected: 'target' }} />
-          <Label>Goals</Label>
-        </NativeTabs.Trigger>
-      )}
-      {has('search') && (
-        <NativeTabs.Trigger name="search">
-          <Icon sf={{ default: 'magnifyingglass', selected: 'magnifyingglass' }} />
-          <Label>Search</Label>
-        </NativeTabs.Trigger>
-      )}
-      {has('reports') && (
-        <NativeTabs.Trigger name="reports">
-          <Icon sf={{ default: 'chart.pie', selected: 'chart.pie.fill' }} />
-          <Label>Reports</Label>
-        </NativeTabs.Trigger>
-      )}
-      {has('debt') && (
-        <NativeTabs.Trigger name="debt">
-          <Icon sf={{ default: 'chart.line.downtrend.xyaxis', selected: 'chart.line.downtrend.xyaxis' }} />
-          <Label>Debt</Label>
-        </NativeTabs.Trigger>
-      )}
-      {has('more') && (
-        <NativeTabs.Trigger name="more">
-          <Icon sf={{ default: 'ellipsis.circle', selected: 'ellipsis.circle.fill' }} />
-          <Label>More</Label>
-        </NativeTabs.Trigger>
-      )}
     </NativeTabs>
   );
 }
@@ -125,7 +87,7 @@ function ClassicTabLayout({ visible }: { visible: TabName[] }) {
             ),
       }}
     >
-      {/* ── 5 visible tabs ── */}
+      {/* ── 3 visible tabs: Home, Money, Plan (lib/tabPlan) ── */}
       <Tabs.Screen
         name="index"
         options={{
@@ -141,17 +103,30 @@ function ClassicTabLayout({ visible }: { visible: TabName[] }) {
         }}
       />
       <Tabs.Screen
-        name="history"
+        name="money"
         options={{
-          title: 'Activity',
+          title: 'Money',
           tabBarIcon: ({ color }) =>
             isIOS ? (
-              <SymbolView name="clock.fill" tintColor={color} size={24} />
+              <SymbolView name="creditcard.fill" tintColor={color} size={24} />
             ) : (
-              <Feather name="activity" size={22} color={color} />
+              <Feather name="credit-card" size={22} color={color} />
             ),
         }}
       />
+      <Tabs.Screen
+        name="plan"
+        options={{
+          title: 'Plan',
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="chart.pie.fill" tintColor={color} size={24} />
+            ) : (
+              <Feather name="pie-chart" size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen name="history" options={{ href: null }} />
       <Tabs.Screen
         name="budget"
         options={has('budget')

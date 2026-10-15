@@ -39,13 +39,11 @@ describe('debt has a home screen presence', () => {
 });
 
 describe('debt has its own tab, but only once it exists', () => {
-  it('registers the tab in both layouts', () => {
-    expect(tabs).toContain('<NativeTabs.Trigger name="debt">');
+  it('is a route in the layout, opened from your picture on Home', () => {
     expect(tabs).toContain('name="debt"');
   });
 
-  it('is never a tab now (the five-tab bar, 10 Oct 2026): it is under More, only once there is debt', () => {
-    expect(tabs).toContain("{has('debt') && (");
+  it('is never a tab (Home, Money, Plan since 15 Oct 2026): it is under More, only once there is debt', () => {
     expect(tabs).toContain("options={has('debt')");
     expect(readFileSync('lib/tabPlan.ts', 'utf8')).not.toContain("'debt'] as const");
     expect(readFileSync('app/(tabs)/more.tsx', 'utf8')).toContain('show: showDebt,');

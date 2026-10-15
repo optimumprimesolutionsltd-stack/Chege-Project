@@ -41,10 +41,10 @@ describe('the Import M-Pesa screen', () => {
 });
 
 describe('the screen can be reached', () => {
-  it('from the bank actions in the footer', () => {
+  it('from the + on every tab', () => {
     const fab = read('components/GlobalFAB.tsx');
     expect(fab).toContain("route: '/mpesa-import'");
-    expect(fab).toContain("label: 'Import M-Pesa'");
+    expect(fab).toContain("label: 'Bring in M-Pesa'");
   });
   it('from More', () => {
     expect(read('app/(tabs)/more.tsx')).toContain("href: '/mpesa-import'");

@@ -7,9 +7,12 @@ import { visibleTabs } from '@/lib/tabPlan';
 describe('a shared group has Reports and Search on the phone', () => {
   it('gets the Reports tab, as a Personal budget does', () => {
     expect(readFileSync('hooks/useTabFlags.ts', 'utf8')).toContain('const showReports = true;');
+    // Reports and Contributions are both in a group's Plan tab (app/(tabs)/plan.tsx).
     const shared = visibleTabs({ isShared: true, showBudget: true, showDebt: false, showReports: true });
-    expect(shared).toContain('reports');
-    expect(shared).toContain('contributions');
+    expect(shared).toContain('plan');
+    const plan = readFileSync('app/(tabs)/plan.tsx', 'utf8');
+    expect(plan).toContain("key: 'reports'");
+    expect(plan).toContain("key: 'contributions'");
   });
 
   it('keeps the bar to the size a Personal budget has, with Search under More', () => {
