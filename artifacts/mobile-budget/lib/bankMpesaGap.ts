@@ -1,5 +1,4 @@
 import type { Leftover } from '@/lib/reconcileLeftover';
-import { newSmsTitle } from '@/lib/mpesaSms';
 
 /**
  * What Bank says under M-Pesa's own Balance now when Jamvi is behind it.
@@ -20,6 +19,9 @@ export type BankGapLine =
   | { kind: 'missing'; testID: string; title: string; href: string; missing: NonNullable<Leftover['missing']> }
   | { kind: 'difference'; testID: string; title: string; href: string };
 
+// Same words as Home's card (newSmsTitle in lib/mpesaSms, which tests cannot load).
+export const newMessagesTitle = (count: number): string => `${count} new M-Pesa ${count === 1 ? 'message' : 'messages'}`;
+
 export const missingPaymentsTitle = (count: number): string =>
   `${count} M-Pesa ${count === 1 ? 'payment' : 'payments'} not in Jamvi yet`;
 
@@ -30,7 +32,7 @@ export function bankGapLines({ newSmsCount, left, gap }: {
 }): BankGapLine[] {
   const lines: BankGapLine[] = [];
   if (newSmsCount > 0) {
-    lines.push({ kind: 'new-sms', testID: 'bank-new-sms', title: newSmsTitle(newSmsCount), href: '/mpesa-import?fromSms=new' });
+    lines.push({ kind: 'new-sms', testID: 'bank-new-sms', title: newMessagesTitle(newSmsCount), href: '/mpesa-import?fromSms=new' });
   }
   const missing = left?.missing;
   if (missing?.count) {
