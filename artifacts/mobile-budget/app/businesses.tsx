@@ -26,6 +26,9 @@ import { PageScrollView } from '@/components/PageScrollReset';
 import { useBusinesses } from '@/hooks/useBusinesses';
 import { BusinessCostCategories } from '@/components/BusinessCostCategories';
 import { salaryAnswers, salaryAnswerHint } from '@/lib/businessSalary';
+import { businessSuggestions } from '@/lib/businessSuggestions';
+import { useQuery } from '@tanstack/react-query';
+import { customFetch } from '@workspace/api-client-react';
 
 export default function BusinessesScreen() {
   const colors = useColors();
@@ -35,6 +38,27 @@ export default function BusinessesScreen() {
   const [working, setWorking] = useState(false);
   // Its cost categories, ticked several at a time (components/BusinessCostCategories).
   const [costsFor, setCostsFor] = useState<{ id: number; name: string } | null>(null);
+
+  // Income streams that may be one of your businesses, made one in a tap
+  // (lib/businessSuggestions): "be energy should appear in the list of my
+  // businesses" (15 Oct 2026).
+  const { data: streams = [] } = useQuery({
+    queryKey: ['income-sources', '__group__'],
+    queryFn: () => customFetch<Array<{ id: number; name: string }>>('/api/income-sources'),
+    staleTime: 60_000,
+  });
+  const suggestions = businessSuggestions(streams, businesses.list);
+  const [making, setMaking] = useState<number | null>(null);
+  const makeBusiness = async (id: number) => {
+    setMaking(id);
+    try {
+      await businesses.setBusiness(id, true);
+    } catch (error) {
+      Alert.alert('Could not add that business', error instanceof Error ? error.message : 'Please try again.');
+    } finally {
+      setMaking(null);
+    }
+  };
 
   const add = async () => {
     const typed = name.trim();
@@ -81,6 +105,29 @@ export default function BusinessesScreen() {
           {working ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontFamily: 'Inter_700Bold' }}>Add</Text>}
         </Pressable>
       </View>
+
+      {suggestions.length > 0 ? (
+        <View style={{ gap: 8 }} testID="businesses-suggestions">
+          <Text style={{ color: colors.foreground, fontSize: 13, fontFamily: 'Inter_600SemiBold' }}>Is one of these your business?</Text>
+          <Text style={{ color: colors.mutedForeground, fontSize: 12, lineHeight: 17 }}>Your income streams. Tap one to make it a business - its entries come with it.</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {suggestions.map((stream) => (
+              <Pressable
+                key={stream.id}
+                onPress={() => void makeBusiness(stream.id)}
+                disabled={making !== null}
+                accessibilityRole="button"
+                accessibilityLabel={`Make ${stream.name} a business`}
+                testID={`businesses-suggestion-${stream.id}`}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.muted, opacity: making !== null && making !== stream.id ? 0.5 : 1 }}
+              >
+                {making === stream.id ? <ActivityIndicator size="small" color={colors.primary} /> : <Feather name="plus" size={14} color={colors.primary} />}
+                <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>{stream.name}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      ) : null}
 
       <View style={{ gap: 8 }}>
         {businesses.list.length === 0 ? (
