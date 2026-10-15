@@ -775,7 +775,7 @@ function TrialNote({ colors }: { colors: MobileColorPalette }) {
     >
       <Feather name="gift" size={16} color={colors.primary} style={{ marginTop: 1 }} />
       <View style={{ flex: 1 }}>
-        <Text style={[styles.trialNoteTitle, { color: colors.foreground }]}>Free for your first 14 days</Text>
+        <Text style={[styles.trialNoteTitle, { color: colors.foreground }]}>Free for your first 3 months</Text>
         <Text style={[styles.trialNoteText, { color: colors.mutedForeground }]}>
           Then {kesLabel(prices.monthly)}/month or {kesLabel(prices.annual)}/year — one subscription covers your Personal budget and every group.
           Nothing is ever deleted if you don't subscribe; recording just goes read-only until you do.
@@ -1376,7 +1376,7 @@ function MobileOnboardingFlow({
         {/* The trial note above scrolls out of sight; this stays by the button.
             "No where in the app it shows me I am on trial" (5 Oct 2026). */}
         <Text testID="onboarding-trial-line" style={{ color: colors.mutedForeground, fontSize: 12, textAlign: 'center', fontFamily: 'Inter_600SemiBold' }}>
-          Free trial: 14 days free, then {kesLabel(prices.monthly)} a month or {kesLabel(prices.annual)} a year.
+          Free trial: 3 months free, then {kesLabel(prices.monthly)} a month or {kesLabel(prices.annual)} a year.
         </Text>
         <SwitchAccountLink color={colors.mutedForeground} testID="onboarding-switch-account" />
       </ScrollView>

@@ -120,7 +120,7 @@ export default function InvitePage() {
               <div className="flex gap-3">
                 <Gift className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
                 <p className="text-sm leading-relaxed text-muted-foreground">
-                  <strong className="text-foreground">Free for your first 14 days.</strong> Then {kesLabel(prices.monthly)}/month or {kesLabel(prices.annual)}/year — one subscription covers your own Personal budget and every group you're in. Nothing is ever deleted if you don&rsquo;t subscribe; recording just goes read-only until you do.
+                  <strong className="text-foreground">Free for your first 3 months.</strong> Then {kesLabel(prices.monthly)}/month or {kesLabel(prices.annual)}/year — one subscription covers your own Personal budget and every group you're in. Nothing is ever deleted if you don&rsquo;t subscribe; recording just goes read-only until you do.
                 </p>
               </div>
             </div>

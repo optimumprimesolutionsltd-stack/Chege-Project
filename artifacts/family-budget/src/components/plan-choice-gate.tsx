@@ -58,7 +58,7 @@ export function PlanChoiceGate({ children }: { children: ReactNode }) {
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Before you start</p>
         <h1 className="mt-2 font-display text-3xl font-bold text-foreground">Jamvi is a paid app</h1>
         <p className="mt-3 leading-relaxed text-muted-foreground">
-          Try everything free{daysLeft !== null && daysLeft > 0 ? ` for ${daysLeft} days` : " for your first 14 days"}. After that it is
+          Try everything free{daysLeft !== null && daysLeft > 0 ? ` for ${daysLeft} days` : " for your first 3 months"}. After that it is
           {kesLabel(prices.monthly)} a month or {kesLabel(prices.annual)} a year — one subscription covers your Personal budget and every group you are in.
           Nothing is ever deleted if you stop; recording just goes read-only.
         </p>

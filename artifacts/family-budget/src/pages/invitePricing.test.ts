@@ -14,7 +14,7 @@ const joinPage = readFileSync(new URL("./join-group.tsx", import.meta.url), "utf
 // pay."
 describe("a member joining through a link is told the app is paid, up front", () => {
   it("says so on the email-invitation accept page", () => {
-    expect(invitePage).toContain("Free for your first 14 days");
+    expect(invitePage).toContain("Free for your first 3 months");
     expect(invitePage).toContain("kesLabel(prices.monthly)}/month");
   });
 
@@ -23,11 +23,11 @@ describe("a member joining through a link is told the app is paid, up front", ()
     const viewBranch = joinPage.slice(joinPage.indexOf("View-only invitation"), memberBranchStart);
     const memberBranch = joinPage.slice(memberBranchStart);
 
-    expect(memberBranch).toContain("Free for your first 14 days");
+    expect(memberBranch).toContain("Free for your first 3 months");
     expect(memberBranch).toContain("kesLabel(prices.monthly)}/month");
     // The view-only link is free by design (view-links.ts) — it must never
     // pick up a pricing note meant for people who can actually record.
-    expect(viewBranch).not.toContain("Free for your first 14 days");
+    expect(viewBranch).not.toContain("Free for your first 3 months");
     expect(viewBranch).toContain("It is free");
   });
 });

@@ -55,8 +55,8 @@ describe("the Jamvi package", () => {
     expect(JAMVI_PACKAGE).not.toHaveProperty("memberLimit");
   });
 
-  it("trials for two weeks", () => {
-    expect(TRIAL_DAYS).toBe(14);
+  it("trials for three months", () => {
+    expect(TRIAL_DAYS).toBe(90);
     expect(JAMVI_PACKAGE.trialDays).toBe(TRIAL_DAYS);
     expect(GRACE_DAYS).toBe(7);
   });

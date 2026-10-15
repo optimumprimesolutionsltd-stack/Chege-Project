@@ -43,7 +43,7 @@ export type SubscriptionStatus =
   (typeof SUBSCRIPTION_STATUS)[keyof typeof SUBSCRIPTION_STATUS];
 
 /** How long a new member has full access before being asked to pay. */
-export const TRIAL_DAYS = 14;
+export const TRIAL_DAYS = 90;
 
 /** Days after a missed payment before access drops to read-only. Long enough
  *  that a failed M-Pesa deduction is not punished as if it were a decision. */
