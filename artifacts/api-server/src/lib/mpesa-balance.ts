@@ -17,8 +17,18 @@ export function pickMpesaAccount(
   accounts: ReadonlyArray<{ id: number; name: string }>,
   codesByAccount: ReadonlyMap<number, number>,
 ): number | null {
-  const named = accounts.find((account) => MPESA_NAME.test(account.name));
-  if (named) return named.id;
+  // Several can be named so - a person's own and each business's ("Chege
+  // Mpesa", "Optimum Mpesa", "Ujenzi Mpesa"): the one the M-Pesa entries are
+  // on is the person's own line, not whichever was listed first (15 Oct 2026).
+  const named = accounts.filter((account) => MPESA_NAME.test(account.name));
+  if (named.length > 0) return mostCodes(named, codesByAccount) ?? named[0].id;
+  return mostCodes(accounts, codesByAccount);
+}
+
+function mostCodes(
+  accounts: ReadonlyArray<{ id: number }>,
+  codesByAccount: ReadonlyMap<number, number>,
+): number | null {
   let best: number | null = null;
   let most = 0;
   for (const account of accounts) {
@@ -33,7 +43,8 @@ export async function findMpesaAccount(groupId: number): Promise<{ id: number; n
   const accounts = await db
     .select({ id: bankAccountsTable.id, name: bankAccountsTable.name, openingBalance: bankAccountsTable.openingBalance })
     .from(bankAccountsTable)
-    .where(eq(bankAccountsTable.groupId, groupId));
+    .where(eq(bankAccountsTable.groupId, groupId))
+    .orderBy(bankAccountsTable.id);
   if (accounts.length === 0) return null;
   const counts = await db
     .select({ accountId: jointAccountTxTable.accountId, count: sql<number>`count(*)::int` })
@@ -45,7 +56,7 @@ export async function findMpesaAccount(groupId: number): Promise<{ id: number; n
   return account ? { id: account.id, name: account.name, openingBalance: Number(account.openingBalance) } : null;
 }
 
-export async function mpesaBalance(groupId: number, today: string): Promise<{ accountName: string; balance: number } | null> {
+export async function mpesaBalance(groupId: number, today: string): Promise<{ accountId: number; accountName: string; balance: number } | null> {
   const account = await findMpesaAccount(groupId);
   if (!account) return null;
   const [sums] = await db
@@ -56,7 +67,7 @@ export async function mpesaBalance(groupId: number, today: string): Promise<{ ac
     .from(jointAccountTxTable)
     .where(and(eq(jointAccountTxTable.groupId, groupId), eq(jointAccountTxTable.accountId, account.id), lte(jointAccountTxTable.date, today)));
   const balance = Math.round((account.openingBalance + (sums?.moneyIn ?? 0) - (sums?.moneyOut ?? 0)) * 100) / 100;
-  return { accountName: account.name, balance };
+  return { accountId: account.id, accountName: account.name, balance };
 }
 
 /** Today in Kenya, as the Bank tab counts it. */

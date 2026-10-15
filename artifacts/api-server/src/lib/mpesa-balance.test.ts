@@ -15,6 +15,19 @@ describe("the M-Pesa balance on the Home card", () => {
     expect(pickMpesaAccount(unnamed, new Map())).toBeNull();
   });
 
+  // "the jamvi mpesa balance is not actual" (15 Oct 2026): three accounts named
+  // Mpesa, and the first listed was taken, not the person's own line.
+  it("of several named M-Pesa, takes the one the M-Pesa entries are on", () => {
+    const three = [{ id: 1, name: "Optimum Mpesa" }, { id: 2, name: "Chege Mpesa" }, { id: 3, name: "Ujenzi Mpesa" }, { id: 4, name: "Equity" }];
+    expect(pickMpesaAccount(three, new Map([[1, 3], [2, 189], [4, 500]]))).toBe(2);
+    expect(pickMpesaAccount(three, new Map())).toBe(1);
+  });
+
+  it("tells Bank which account it is", () => {
+    const route = readFileSync("src/routes/mpesa-import.ts", "utf8");
+    expect(route).toContain("balanceAccountId: balance?.accountId ?? null,");
+  });
+
   it("counts up to today in Kenya, and the summary returns it", () => {
     expect(nairobiToday(new Date("2026-10-03T22:30:00Z"))).toBe("2026-10-04");
     const route = readFileSync("src/routes/mpesa-import.ts", "utf8");
