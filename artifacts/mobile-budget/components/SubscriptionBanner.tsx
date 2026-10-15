@@ -6,6 +6,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
 import { useEntitlements } from '@/hooks/useEntitlements';
 import { bannerLine } from '@/lib/subscription-status';
+import { IN_APP_PAYMENTS } from '@/lib/inAppPayments';
+import { withoutPayPrompt } from '@/lib/playStore';
 
 /**
  * A slim strip above the tabs whenever the subscription is worth knowing
@@ -24,8 +26,10 @@ export function SubscriptionBanner() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { data: entitlements } = useEntitlements();
-  const line = bannerLine(entitlements);
-  if (!line) return null;
+  const found = bannerLine(entitlements);
+  if (!found) return null;
+  // The Play build cannot pay here, so the strip does not say "Tap to subscribe".
+  const line = IN_APP_PAYMENTS ? found : { ...found, text: withoutPayPrompt(found.text) };
 
   const warn = line.tone === 'warn';
   const bg = warn ? `${colors.warning}1F` : `${colors.primary}14`;

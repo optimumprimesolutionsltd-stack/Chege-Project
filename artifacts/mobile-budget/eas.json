@@ -32,7 +32,7 @@
       }
     },
     "play": {
-      "channel": "production",
+      "channel": "play",
       "android": {
         "buildType": "app-bundle",
         "env": {
