@@ -192,7 +192,7 @@ export const GUIDES: readonly Guide[] = [
     slug: "/guides/what-jamvi-actually-costs",
     title: "What a Chama Actually Pays for Jamvi",
     description:
-      "Jamvi's pricing explained plainly: why the chama itself is never billed, what the 14-day trial covers, and what a lapsed subscription does and does not lock you out of.",
+      "Jamvi's pricing explained plainly: why the chama itself is never billed, what the 3-month trial covers, and what a lapsed subscription does and does not lock you out of.",
     label: "What Jamvi costs",
     readingMinutes: 4,
     updated: "2026-09-13",
@@ -208,9 +208,9 @@ export const GUIDES: readonly Guide[] = [
         ],
       },
       {
-        heading: "Fourteen days free, no card, no commitment",
+        heading: "Three months free, no card, no commitment",
         body: [
-          "Every new account starts with fourteen days of full access — record contributions, add expenses, invite the group, download a report — before Jamvi asks for anything. There is no card on file during that period and nothing is charged automatically when it ends.",
+          "Every new account starts with three months of full access — record contributions, add expenses, invite the group, download a report — before Jamvi asks for anything. There is no card on file during that period and nothing is charged automatically when it ends.",
           "When the trial does end, paying is one M-Pesa prompt: enter a Safaricom number in the app, a genuine Safaricom prompt reaches that phone, and a PIN entered there finishes it. Jamvi never sees or asks for the PIN itself.",
         ],
       },
@@ -230,7 +230,7 @@ export const GUIDES: readonly Guide[] = [
       },
     ],
     takeaway:
-      "One person pays for their own access, not the chama for its group. Fourteen days are free, nothing is ever deleted, and the only thing a lapsed subscription switches off is adding something new.",
+      "One person pays for their own access, not the chama for its group. Three months are free, nothing is ever deleted, and the only thing a lapsed subscription switches off is adding something new.",
     related: {
       slug: "/pricing",
       label: "See Jamvi's pricing",

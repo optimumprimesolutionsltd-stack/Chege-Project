@@ -35,7 +35,7 @@ export default function PlanChoiceScreen() {
   const firstName = (user?.firstName ?? '').trim().split(/\s+/)[0];
   const trialLine = daysLeft !== null && daysLeft > 0
     ? `Your free trial ends ${endsOn ? `on ${endsOn}` : 'soon'} - ${daysLeft === 1 ? 'tomorrow' : `in ${daysLeft} days`}.`
-    : 'Your free trial ends 14 days after you joined.';
+    : 'Your free trial ends 3 months after you joined.';
 
   const choose = async (choice: PlanChoice) => {
     if (!user?.id || busy) return;

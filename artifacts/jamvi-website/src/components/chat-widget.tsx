@@ -184,7 +184,7 @@ export function ChatWidget() {
             href={JAMVI_APP_PATH}
             className="border-t-2 border-foreground/10 px-4 py-2.5 text-center text-sm font-bold text-primary hover:underline shrink-0"
           >
-            Start free for 14 days
+            Start free for 3 months
           </a>
         </div>
       )}
