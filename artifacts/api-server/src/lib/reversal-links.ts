@@ -2,7 +2,7 @@ import { db } from "@workspace/db";
 import { sql, type SQL } from "drizzle-orm";
 import { logger } from "./logger";
 import { TAKEN_BACK_PREFIX } from "./mpesa-parser/import";
-import { notOwnerDrawings } from "./owner-business-money";
+import { notOwnerBusinessMoney } from "./owner-business-money";
 import { notInBusinessAccount } from "./business-accounts";
 import { notBusinessSale } from "./business-streams";
 
@@ -58,7 +58,7 @@ export function notAReversal(depositId: SQL | unknown): SQL {
   // money from the owner's own business (lib/owner-business), which is not
   // income either and needs leaving out of the same figures.
   // ...and money in one of the business's own accounts (lib/business-accounts).
-  const filedAsMoneyBack = sql`${notOwnerDrawings(depositId)}${notInBusinessAccount(depositId)}${notBusinessSale(depositId)} AND NOT EXISTS (SELECT 1 FROM joint_account_transactions mb WHERE mb.id = ${depositId} AND mb.description ILIKE ${MONEY_BACK_PATTERN})
+  const filedAsMoneyBack = sql`${notOwnerBusinessMoney(depositId)}${notInBusinessAccount(depositId)}${notBusinessSale(depositId)} AND NOT EXISTS (SELECT 1 FROM joint_account_transactions mb WHERE mb.id = ${depositId} AND mb.description ILIKE ${MONEY_BACK_PATTERN})
     AND NOT EXISTS (SELECT 1 FROM joint_account_transactions rc JOIN joint_account_transactions tb
       ON tb.group_id = rc.group_id AND tb.type = 'disbursement' AND tb.description = ${TAKEN_BACK_PREFIX} || rc.mpesa_receipt
       WHERE rc.id = ${depositId} AND rc.mpesa_receipt IS NOT NULL)`;

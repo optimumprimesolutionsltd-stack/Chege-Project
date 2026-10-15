@@ -2,8 +2,8 @@ import { Router } from "express";
 import { inMonthOf } from "../lib/month-range";
 import { db } from "@workspace/db";
 import { inPersonalAccount, isInBusinessAccount, businessAccountIds } from "../lib/business-accounts";
-import { businessCostLink, businessStreamIds, isBusinessSale, ownerIncomeBusinessIds, profitBusinessIds, salaryBusinessIds, salaryBusinessOf } from "../lib/business-streams";
-import { isOwnerBusinessMoneySql, ownerBusinessReady } from "../lib/owner-business-money";
+import { businessCostLink, businessStreamIds, isBusinessSale, ownerIncomeBusinessIds, profitBusinessIds } from "../lib/business-streams";
+import { isOwnerBusinessMoneySql } from "../lib/owner-business-money";
 import {
   expensesTable,
   expenseCategoryAllocationsTable,
@@ -1275,12 +1275,6 @@ router.get("/dashboard/income-ledger", async (req, res): Promise<void> => {
   res.json(await loadIncomeLedger(groupId, from, to, search));
 });
 
-/** "Ujenzi Distributors salary" for Ujenzi Distributors Ltd: as mobile lib/onboarding salaryIncomeName names it. */
-export function salaryStreamName(business: string): string {
-  const name = business.trim().replace(/[\s,.]+(ltd|limited|plc|llc|inc|co|company)\.?$/i, "").trim() || business.trim();
-  return `${name.slice(0, 73).trim()} salary`;
-}
-
 /**
  * All income for a group between two days: what the income ledger shows, and
  * what the business statements take their sales from, so the two agree.
@@ -1296,8 +1290,7 @@ async function loadIncomeLedger(groupId: number, from: string, to: string, searc
              t.date::text AS date,
              t.description,
              t.amount::float8 AS amount,
-             -- A salary from your business is filed under that business, as its salary.
-             COALESCE(${personal ? salaryBusinessOf(sql`t.id`, sql`t.income_source_id`, ownerBusinessReady()) : sql`NULL::integer`}, t.income_source_id) AS "incomeSourceId",
+             t.income_source_id AS "incomeSourceId",
              COALESCE(maker.preferred_name, maker.first_name) AS "makerName",
              account.name AS "accountName",
              CASE
@@ -1305,9 +1298,6 @@ async function loadIncomeLedger(groupId: number, from: string, to: string, searc
                WHEN t.is_borrowing THEN 'borrowed'
                WHEN t.settles_contributor_id IS NOT NULL THEN 'repaid'
                WHEN t.transfer_direction = 'from_savings' THEN 'from_savings'
-               -- The salary your business pays you is your income, in your own
-               -- account ("ujenzi pays me a salary", 15 Oct 2026).
-               WHEN ${personal ? sql`${salaryBusinessOf(sql`t.id`, sql`t.income_source_id`, ownerBusinessReady())} IS NOT NULL AND NOT ${isInBusinessAccount(sql`t.account_id`)}` : sql`false`} THEN 'income'
                -- Your own money taken from your business (lib/owner-business).
                WHEN ${isOwnerBusinessMoneySql(sql`t.id`)} THEN 'owner'
                -- The business's own account: its sales, not your income - except
@@ -1345,21 +1335,6 @@ async function loadIncomeLedger(groupId: number, from: string, to: string, searc
     `),
     db.execute(sql`SELECT id, name FROM income_sources WHERE group_id = ${groupId}`),
   ]);
-  // A business that pays you a salary shows as "<business> salary" - the same
-  // stream onboarding makes for it (mobile lib/onboarding salaryIncomeName), so
-  // money filed there and money marked as from the business are one line.
-  const salaries = new Set(personal ? await salaryBusinessIds(groupId) : []);
-  const sourceRows = streams.rows as { id: number; name: string }[];
-  const salaryStreamOf = new Map<number, number>();
-  for (const row of sourceRows) {
-    if (!salaries.has(Number(row.id))) continue;
-    const named = sourceRows.find((other) => other.name.trim().toLowerCase() === salaryStreamName(row.name).toLowerCase());
-    if (named) salaryStreamOf.set(Number(row.id), Number(named.id));
-  }
-  const depositRows = (deposits.rows as IncomeDepositRow[]).map((row) => {
-    const into = row.incomeSourceId == null ? undefined : salaryStreamOf.get(Number(row.incomeSourceId));
-    return into === undefined ? row : { ...row, incomeSourceId: into };
-  });
   // An income stream is income, nothing taken off it: costs are a business's,
   // in the Business report (lib/business-streams) - except a business its owner
   // lives on, whose sales are income here and whose costs come off them, so
@@ -1369,9 +1344,9 @@ async function loadIncomeLedger(groupId: number, from: string, to: string, searc
   return buildIncomeLedger({
     from,
     to,
-    deposits: depositRows,
+    deposits: deposits.rows as IncomeDepositRow[],
     splits: splits.rows as IncomeSplitRow[],
-    streamNames: new Map(sourceRows.map((row) => [Number(row.id), salaries.has(Number(row.id)) ? salaryStreamName(row.name) : row.name])),
+    streamNames: new Map((streams.rows as { id: number; name: string }[]).map((row) => [Number(row.id), row.name])),
     costsByStream,
   });
 }

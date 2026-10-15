@@ -1,8 +1,7 @@
 import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it } from "vitest";
 import { sql } from "drizzle-orm";
-import { businessCostLink, isBusinessSale, notBusinessSale, salaryBusinessOf, setBusinessStreamsReadyForTests } from "../business-streams";
-import { notOwnerDrawings, setOwnerBusinessReadyForTests } from "../owner-business-money";
+import { businessCostLink, isBusinessSale, notBusinessSale, salaryStreamName, setBusinessStreamsReadyForTests } from "../business-streams";
 import { notAReversal } from "../reversal-links";
 
 const chunks = (fragment: unknown) => JSON.stringify((fragment as { queryChunks: unknown[] }).queryChunks);
@@ -114,36 +113,29 @@ describe("a business its owner lives on: its profit is their income", () => {
   });
 });
 
-// "dahanak and ujenzi salary are not there ... ujenzi pays me a salary ...
-// dahanak should also pay me a salary as well as optimum" (15 Oct 2026): the
-// salary was left out of All income as "from your business" or as its sales.
-describe("a business that pays its owner a salary: the salary is their income", () => {
-  afterEach(() => setOwnerBusinessReadyForTests(false));
+// "why does the app put any money received from ujenzi as salary. user should
+// specifically receive salary as salary - not just any incoming money" (15 Oct 2026).
+describe("a business's salary is only what is filed as the salary", () => {
+  const streams = readFileSync("src/lib/business-streams.ts", "utf8");
+  const businesses = readFileSync("src/routes/businesses.ts", "utf8");
+  const owner = readFileSync("src/lib/owner-business-money.ts", "utf8");
 
-  it("money filed under it in a personal account is the salary, not its sales", () => {
-    setBusinessStreamsReadyForTests(true);
-    expect(chunks(isBusinessSale(sql`t.income_source_id`))).toContain("bs.pays_salary IS TRUE");
-    expect(chunks(notBusinessSale(sql`t.id`))).toContain("bs.pays_salary IS TRUE");
+  it("names the salary stream as onboarding does", () => {
+    expect(salaryStreamName("Ujenzi Distributors Ltd")).toBe("Ujenzi Distributors salary");
+    expect(salaryStreamName("Dahanak Ventures")).toBe("Dahanak Ventures salary");
   });
 
-  it("money marked as from it counts in every income figure; drawings from the others still do not", () => {
-    setOwnerBusinessReadyForTests(true);
-    setBusinessStreamsReadyForTests(true);
-    const income = chunks(notAReversal(sql`t.id`));
-    expect(income).toContain("owner_business_money obm");
-    expect(income).toContain("bs.income_source_id = obm.income_source_id AND bs.pays_salary IS TRUE");
-    // Before business_streams exists, every drawing stays out, as before.
-    setBusinessStreamsReadyForTests(false);
-    expect(chunks(notOwnerDrawings(sql`t.id`))).not.toContain("business_streams");
+  it("makes that stream when a business pays a salary, and for those answered before", () => {
+    expect(businesses).toContain("parsed.data.business && parsed.data.paysSalary === true ? await ensureSalaryStream(groupId, incomeSourceId) : null");
+    expect(businesses).toContain("if (business.paysSalary === true) await ensureSalaryStream(groupId, business.id).catch(() => null);");
+    expect(streams).toContain('lower(trim("name")) = lower(${name})');
   });
 
-  it("All income lists it as \"<business> salary\", only from the owner's own accounts", () => {
+  it("never counts other money from the business as the salary", () => {
     setBusinessStreamsReadyForTests(true);
-    expect(chunks(salaryBusinessOf(sql`t.id`, sql`t.income_source_id`, true))).toContain("owner_business_money obm JOIN business_streams bs");
-    expect(chunks(salaryBusinessOf(sql`t.id`, sql`t.income_source_id`, false))).not.toContain("owner_business_money");
-    expect(dashboard).toContain("IS NOT NULL AND NOT ${isInBusinessAccount(sql`t.account_id`)}` : sql`false`} THEN 'income'");
-    expect(dashboard).toContain("salaries.has(Number(row.id)) ? salaryStreamName(row.name) : row.name");
-    // The stream onboarding made for the salary takes the business's money too: one line.
-    expect(dashboard).toContain("other.name.trim().toLowerCase() === salaryStreamName(row.name).toLowerCase()");
+    expect(chunks(isBusinessSale(sql`t.income_source_id`))).not.toContain("pays_salary IS TRUE");
+    expect(chunks(notBusinessSale(sql`t.id`))).not.toContain("pays_salary IS TRUE");
+    expect(owner).not.toContain("notOwnerDrawings");
+    expect(dashboard).not.toContain("salaryBusinessOf");
   });
 });
