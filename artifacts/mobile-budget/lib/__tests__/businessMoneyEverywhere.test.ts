@@ -40,7 +40,9 @@ describe('an import line with one of my businesses', () => {
 describe('money in from one of my businesses on Bank', () => {
   it('is a choice under What kind of money is this?, and saves the same way as money out', () => {
     const bank = read('app', '(tabs)', 'bank.tsx');
-    expect(bank).toContain("FROM ONE OF MY BUSINESSES - DIRECTOR'S MONEY");
+    // One row of business chips since "there is repetition here" (16 Oct 2026).
+    expect(bank).toContain("DIRECTOR'S MONEY FROM");
+    expect(bank).toContain('testID="bank-deposit-director-row"');
     expect(bank).toContain("const toBusiness = (txType === 'disbursement' || txType === 'deposit') && pickedBusinessId !== null;");
     expect(bank).toContain(") : txType === 'disbursement' || txType === 'deposit' ? null : (");
   });

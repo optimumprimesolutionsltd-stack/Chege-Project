@@ -10,7 +10,11 @@ describe('Money in: salary from one of your businesses', () => {
     expect(bank).toContain("one.paysSalary === true && typeof one.salaryStreamId === 'number'");
     expect(bank).toContain('testID={`bank-deposit-salary-from-${business.id}`}');
     expect(bank).toContain('setIncomeSourceId(business.salaryStreamId);');
-    expect(bank).toContain('Salary from {business.name}');
+    // One row of chips under MY SALARY FROM, not a line per business (16 Oct 2026).
+    expect(bank).toContain('MY SALARY FROM');
+    expect(bank).toContain('testID="bank-deposit-salary-row"');
+    // Who is this for? stays away once it is salary: the business is already named.
+    expect(bank).toContain('toBusinessId === null && !salaryChosen && !repayingParty && !isBorrowing ? (');
   });
 
   it('says so once chosen', () => {
