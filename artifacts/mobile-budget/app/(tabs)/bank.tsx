@@ -29,7 +29,7 @@ import { isNotSure } from '@/lib/entriesToSort';
 import { LISTS_AN_EDIT_CHANGES, withSavedRow } from '@/lib/showSavedEdit';
 import { PassThroughPair, type PairEntry } from '@/components/PassThroughPair';
 import { onScreenOnly, useOnScreen } from '@/hooks/useOnScreen';
-import { leftToPayLine, previewFor } from '@/lib/leftToPay';
+import { budgetFundingLine, leftToPayLine, previewFor } from '@/lib/leftToPay';
 import { useAutoMarkBusiness, useOwnerBusiness } from '@/hooks/useOwnerBusiness';
 import { useBusinessAccounts } from '@/hooks/useBusinessAccounts';
 import { saveRules } from '@/lib/rulesStore';
@@ -82,6 +82,8 @@ import {
   useGetGroup,
   useGetJointAccounts,
   useGetDashboardCategoryBreakdown,
+  useGetDashboardSummary,
+  useGetDashboardIncomeLedger,
   useCreateJointAccount,
   useUpdateJointAccount,
   useDeleteJointAccount,
@@ -540,6 +542,9 @@ export default function BankScreen() {
   // The month's budget per category for the entry being typed (moneyOutLeft).
   const entryMonth = { month: Number(date.slice(5, 7)) || new Date().getMonth() + 1, year: Number(date.slice(0, 4)) || new Date().getFullYear() };
   const { data: entryBreakdown = [] } = useGetDashboardCategoryBreakdown(entryMonth, live);
+  // And the month's budget and money in so far, for Money in (moneyInFunding).
+  const { data: entrySummary } = useGetDashboardSummary(entryMonth, live);
+  const { data: entryIncome } = useGetDashboardIncomeLedger(entryMonth, live);
   const liveBalance = personalBudget && liveMpesa && selectedAccount && mpesaSummary?.balanceAccountId === selectedAccount.id
     ? liveMpesa
     : null;
@@ -2760,6 +2765,11 @@ export default function BankScreen() {
   // What is left on the chosen category's budget after this money out, as Log
   // Expense says it (lib/leftToPay): "would also want to see pending balance as
   // per budget when entries are being made" (16 Oct 2026). The entry's own month.
+  // Money in against the month's budget: how much more has to come in to cover it.
+  const moneyInFunding = (() => {
+    if (!modalVisible || txType !== 'deposit' || editingTransactionId !== null || notIncome || toBusinessId !== null || forBusinessId !== null) return null;
+    return budgetFundingLine(entrySummary?.totalBudget, entryIncome?.total, parseBankAmount(amount) ?? 0, new Date(entryMonth.year, entryMonth.month - 1, 1).toLocaleString('en-GB', { month: 'long' }));
+  })();
   const moneyOutLeft = (() => {
     if (!modalVisible || txType !== 'disbursement' || editingTransactionId !== null || withdrawDest === 'party' || withdrawDest === 'lend' || withdrawDest === 'savings') return null;
     const name = expenseCategory.trim().toLowerCase();
@@ -5309,6 +5319,17 @@ export default function BankScreen() {
                 </>
               )}
 
+              {moneyInFunding ? (
+                <View
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, borderWidth: 1, alignSelf: 'flex-start',
+                    borderColor: (moneyInFunding.tone === 'paid' ? colors.success : colors.primary) + '55',
+                    backgroundColor: (moneyInFunding.tone === 'paid' ? colors.success : colors.primary) + '18' }}
+                  testID="bank-money-in-funding"
+                >
+                  <Feather name={moneyInFunding.tone === 'paid' ? 'check-circle' : 'bar-chart-2'} size={12} color={moneyInFunding.tone === 'paid' ? colors.success : colors.primary} />
+                  <Text style={{ flexShrink: 1, fontSize: 12, fontFamily: 'Inter_600SemiBold', color: moneyInFunding.tone === 'paid' ? colors.success : colors.primary }}>{moneyInFunding.text}</Text>
+                </View>
+              ) : null}
               {/* Split across income streams: salary and something else in one payment. */}
               {isDeposit && !notIncome && editingTransactionId === null && singleDepositorId && incomeSourceId !== null && forBusinessId === null && toBusinessId === null ? (
                 <View style={{ gap: 8, marginTop: 6 }} testID="bank-deposit-stream-split">
