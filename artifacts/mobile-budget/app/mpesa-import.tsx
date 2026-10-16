@@ -47,6 +47,7 @@ import {
   getGetJointAccountsQueryKey,
   useGetMembers,
   useGetWorkspaces,
+  ApiError,
   useSelectWorkspace,
   type Workspace,
 } from '@workspace/api-client-react';
@@ -197,6 +198,8 @@ import {
   untickElsewhere,
   withTwins,
   importCorrections,
+  groupContributionDeposit,
+  mayBeGroupContribution,
 } from '@/lib/mpesaImport';
 import { findSavingsGoal, ledgersToMake, loanOf, productNote, productOf, savingsNeeded, savingsOf, withSavingsAccounts, type LenderId, type SavingsAccountId } from '@/lib/mpesaProducts';
 
@@ -893,6 +896,22 @@ export default function MpesaImportScreen() {
     (workspace) => workspace.id !== group?.id && (workspace.role === 'owner' || workspace.role === 'admin'),
   );
   const [otherBudgetOptions, setOtherBudgetOptions] = useState<Record<number, OtherBudgetOptions>>({});
+  // The groups this person is in, any role: from a Personal budget, a payment to
+  // one of them can also be recorded there as their contribution (alsoContribution).
+  const myGroups = group?.isPrivate === true ? (workspaces as Workspace[]).filter((workspace) => !workspace.isPrivate) : [];
+  const chooseContributionGroup = async (index: number, target: Workspace | null) => {
+    if (!target) {
+      setChoices((current) => ({ ...current, [index]: { ...current[index], alsoContribution: null } }));
+      return;
+    }
+    const options = await loadOtherBudgetOptions(target.id);
+    const accountId = options?.accounts[0]?.id;
+    if (!accountId) {
+      if (options) Alert.alert('No account in that group', `${target.name} has no account to record contributions in yet. Its owner can add one on Bank.`);
+      return;
+    }
+    setChoices((current) => ({ ...current, [index]: { ...current[index], alsoContribution: { groupId: target.id, groupName: target.name, accountId } } }));
+  };
   const [loadingOtherBudget, setLoadingOtherBudget] = useState<number | null>(null);
   const loadOtherBudgetOptions = async (groupId: number): Promise<OtherBudgetOptions | null> => {
     const cached = otherBudgetOptions[groupId];
@@ -2702,6 +2721,28 @@ export default function MpesaImportScreen() {
     }
     // Jamvi's suggestions the person changed, with nothing that says whose -
     // the weekly report's list of what the M-Pesa reading files wrongly.
+    // Payments that were also the person's contribution to a group: recorded
+    // there under their name. A code the group already has is refused (409), so
+    // a treasurer who typed it in first is never doubled.
+    if (user?.id) {
+      const contributions = lines
+        .filter((item) => savedIndexes.has(item.index))
+        .map((item) => groupContributionDeposit(item, saveChoices[item.index], user.id))
+        .filter((deposit): deposit is NonNullable<typeof deposit> => deposit !== null);
+      if (contributions.length > 0) {
+        void Promise.allSettled(contributions.map((deposit) => customFetch('/api/joint-account/deposit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-jamvi-workspace': String(deposit.groupId) },
+          body: JSON.stringify(deposit.body),
+        }))).then((results) => {
+          const recorded = results.filter((result) => result.status === 'fulfilled').length;
+          const refused = results.filter((result) => result.status === 'rejected' && !(result.reason instanceof ApiError && result.reason.status === 409)).length;
+          if (refused > 0) {
+            Alert.alert('Some contributions were not recorded', `${recorded} recorded in your group${recorded === 1 ? '' : 's'}; ${refused} could not be. Ask the group's treasurer to add ${refused === 1 ? 'it' : 'them'}.`);
+          }
+        });
+      }
+    }
     const corrections = importCorrections(lines.filter((item) => savedIndexes.has(item.index)), saveChoices);
     if (corrections.length > 0) {
       void customFetch('/api/mpesa/corrections', {
@@ -3920,6 +3961,42 @@ export default function MpesaImportScreen() {
                         ? `Saved as ${business}'s. Jamvi will not remember this payee for it.`
                         : `The payee's other lines here follow. After Save, Jamvi remembers this payee for ${business}.`}
                     />
+                  ) : null}
+                  {/* Also the person's contribution to one of their groups: recorded there
+                      too, under their name, so the treasurer does not type it again
+                      (lib/mpesaImport groupContributionDeposit). */}
+                  {myGroups.length > 0 && choice && mayBeGroupContribution(item, choice) ? (
+                    choice.alsoContribution ? (
+                      <Pressable
+                        onPress={() => void chooseContributionGroup(item.index, null)}
+                        accessibilityRole="button"
+                        testID={`mpesa-line-contribution-${item.index}`}
+                        hitSlop={6}
+                        style={{ alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, backgroundColor: `${colors.primary}1a` }}
+                      >
+                        <Feather name="users" size={11} color={colors.primary} />
+                        <Text style={{ color: colors.primary, fontSize: 12, fontFamily: 'Inter_600SemiBold' }}>
+                          Also your contribution to {choice.alsoContribution.groupName} · change
+                        </Text>
+                      </Pressable>
+                    ) : (
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 }} testID={`mpesa-line-contribution-pick-${item.index}`}>
+                        <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>Also my contribution to:</Text>
+                        {myGroups.map((target) => (
+                          <Pressable
+                            key={target.id}
+                            onPress={() => void chooseContributionGroup(item.index, target)}
+                            disabled={loadingOtherBudget !== null}
+                            accessibilityRole="button"
+                            testID={`mpesa-line-contribution-${item.index}-${target.id}`}
+                            hitSlop={4}
+                            style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, borderWidth: 1, borderColor: colors.border }}
+                          >
+                            <Text style={{ color: colors.foreground, fontSize: 12, fontFamily: 'Inter_600SemiBold' }}>{target.name}</Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    )
                   ) : null}
                   {/* Money with one of the person's own businesses, in one tap: the director's
                       money - no category, no lending or paying back ("change too", 12 Oct 2026). */}
