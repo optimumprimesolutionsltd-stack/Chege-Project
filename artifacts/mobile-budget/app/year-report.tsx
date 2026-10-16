@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -31,8 +31,9 @@ export default function YearReportScreen() {
   const today = { year: now.getFullYear(), month: now.getMonth() + 1 };
   const [year, setYear] = useState(today.year);
   const [opened, setOpened] = useState<Set<string>>(new Set());
-  // The frozen month row follows the figures sideways (see the grid below).
-  const monthRow = useRef<ScrollView>(null);
+  // The frozen month row follows the figures sideways (see the grid below):
+  // moved by the figures' own scroll, on the native side, so it cannot lag.
+  const scrollX = useRef(new Animated.Value(0)).current;
   const months = useMemo(() => yearMonths(year, today), [year, today.year, today.month]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The whole year in one request (api-server /dashboard/year): every month from
@@ -136,8 +137,12 @@ export default function YearReportScreen() {
             <View style={[styles.cell, styles.headCell, { width: NAME_WIDTH, alignItems: 'flex-start', paddingLeft: 16, borderColor: colors.border }]}>
               <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold', fontSize: 12 }}>{year}</Text>
             </View>
-            <ScrollView ref={monthRow} horizontal scrollEnabled={false} showsHorizontalScrollIndicator={false}>
-              <View style={{ flexDirection: 'row' }}>
+            {/* A second ScrollView kept in step by scrollTo fell a column behind
+                after a fling on Android and drew over the names, so October's
+                figures sat under "Year" (16 Oct 2026). Now the row slides with the
+                figures' scroll position and is clipped to its own space. */}
+            <View style={{ flex: 1, overflow: 'hidden' }}>
+              <Animated.View style={{ flexDirection: 'row', transform: [{ translateX: Animated.multiply(scrollX, -1) }] }}>
                 {grid.months.map((month) => (
                   <View key={month.month} style={[styles.cell, styles.headCell, { borderColor: colors.border }]}>
                     <Text style={{ color: colors.foreground, fontFamily: 'Inter_700Bold', fontSize: 13 }}>{month.label}</Text>
@@ -147,8 +152,8 @@ export default function YearReportScreen() {
                 <View style={[styles.cell, styles.headCell, { borderColor: colors.border, width: CELL_WIDTH + 12 }]}>
                   <Text style={{ color: colors.foreground, fontFamily: 'Inter_700Bold', fontSize: 13 }}>Year</Text>
                 </View>
-              </View>
-            </ScrollView>
+              </Animated.View>
+            </View>
           </View>
           <View style={{ flexDirection: 'row' }}>
             {/* Names stay put while the months scroll. */}
@@ -180,11 +185,11 @@ export default function YearReportScreen() {
                 </Pressable>
               ))}
             </View>
-            <ScrollView
+            <Animated.ScrollView
               horizontal
               showsHorizontalScrollIndicator
               scrollEventThrottle={16}
-              onScroll={(event) => monthRow.current?.scrollTo({ x: event.nativeEvent.contentOffset.x, animated: false })}
+              onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], { useNativeDriver: true })}
             >
               <View>
                 {lines.map((line) => (
@@ -224,7 +229,7 @@ export default function YearReportScreen() {
                   </View>
                 ))}
               </View>
-            </ScrollView>
+            </Animated.ScrollView>
           </View>
           {grid.income.length === 0 && grid.spending.length === 0 ? (
             <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 20 }]}>Nothing recorded in {year} yet.</Text>
