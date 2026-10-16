@@ -1,7 +1,8 @@
 import { Router } from "express";
 import { z } from "zod";
 import { getActiveGroupId, requireGroupManager } from "../lib/activeGroup";
-import { businessStreams, businessStreamsReady, ensureSalaryStream, setBusinessStream } from "../lib/business-streams";
+import { businessStreams, businessStreamsReady, setBusinessStream } from "../lib/business-streams";
+import { findOrMakeSalaryStream, foldDuplicateSalaryStreams } from "../lib/salary-streams";
 import { combineIncomeSources } from "../lib/combine-income-sources";
 
 const router = Router();
@@ -14,8 +15,10 @@ router.get("/businesses", async (req, res): Promise<void> => {
   // Each business that pays a salary has its salary stream to file pay under -
   // businesses answered before the stream was made get it here.
   for (const business of businesses) {
-    if (business.paysSalary === true) await ensureSalaryStream(groupId, business.id).catch(() => null);
+    if (business.paysSalary === true) await findOrMakeSalaryStream(groupId, business.id).catch(() => null);
   }
+  // Two salary streams for one business, from before it looked for yours by more than its exact name: one again.
+  await foldDuplicateSalaryStreams(groupId).catch(() => 0);
   res.json({ ready: businessStreamsReady(), incomeSourceIds: businesses.map((business) => business.id), businesses });
 });
 
@@ -42,7 +45,7 @@ router.put("/businesses/:incomeSourceId", async (req, res): Promise<void> => {
     return;
   }
   // Pays you a salary: its salary stream is there to file your pay under.
-  const salaryStream = parsed.data.business && parsed.data.paysSalary === true ? await ensureSalaryStream(groupId, incomeSourceId) : null;
+  const salaryStream = parsed.data.business && parsed.data.paysSalary === true ? await findOrMakeSalaryStream(groupId, incomeSourceId) : null;
   res.json({
     ...(salaryStream ? { salaryStream } : {}),
     incomeSourceId,

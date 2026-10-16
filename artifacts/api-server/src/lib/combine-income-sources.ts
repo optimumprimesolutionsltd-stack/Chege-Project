@@ -39,29 +39,43 @@ export async function combineIncomeSources(groupId: number, fromId: number, into
     if (!into.business) return { ok: false as const, status: 400 as const, error: "Money can only be combined into one of your businesses." };
     if (from.business) return { ok: false as const, status: 400 as const, error: "That is a business of its own. Choose an income stream that is not one." };
 
-    const moved = await trx.execute(sql`
-      UPDATE "joint_account_transactions" SET "income_source_id" = ${intoId}
-       WHERE "income_source_id" = ${fromId} AND "group_id" = ${groupId}`);
-    await trx.execute(sql`UPDATE "joint_account_deposit_splits" SET "income_source_id" = ${intoId} WHERE "income_source_id" = ${fromId}`);
-    await trx.execute(sql`UPDATE "expenses" SET "income_source_id" = ${intoId} WHERE "income_source_id" = ${fromId}`);
-    await trx.execute(sql`UPDATE "expense_income_splits" SET "income_source_id" = ${intoId} WHERE "income_source_id" = ${fromId}`);
-    await trx.execute(sql`UPDATE "budget_categories" SET "reduces_income_source_id" = ${intoId} WHERE "reduces_income_source_id" = ${fromId}`);
-    if (businessAccountsReady()) {
-      await trx.execute(sql`UPDATE "business_bank_accounts" SET "income_source_id" = ${intoId} WHERE "income_source_id" = ${fromId}`);
-    }
-    if (ownerBusinessReady()) {
-      await trx.execute(sql`UPDATE "owner_business_money" SET "income_source_id" = ${intoId} WHERE "income_source_id" = ${fromId} AND "group_id" = ${groupId}`);
-    }
-    if (entriesToSortReady()) {
-      await trx.execute(sql`UPDATE "entries_to_check" SET "income_source_id" = ${intoId} WHERE "income_source_id" = ${fromId} AND "group_id" = ${groupId}`);
-    }
-    if (payeeRulesReady()) {
-      // Payers remembered for the stream ('src:...' rules) now go to the business.
-      await trx.execute(sql`
-        UPDATE "payee_rules" SET "value" = ${String(intoId)}, "updated_at" = now()
-         WHERE "group_id" = ${groupId} AND "key" LIKE 'src:%' AND "value" = ${String(fromId)}`);
-    }
-    await trx.execute(sql`DELETE FROM "income_sources" WHERE "id" = ${fromId} AND "group_id" = ${groupId}`);
-    return { ok: true as const, moved: moved.rowCount ?? 0 };
+    const moved = await moveIncomeSource(trx, groupId, fromId, intoId);
+    return { ok: true as const, moved };
   });
+}
+
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/**
+ * Everything that names one income stream moved onto another, then the first
+ * deleted: money in, money spent from it, splits, cost categories, business
+ * accounts, entries waiting to be checked and the payers Jamvi remembers for it.
+ * Returns how many entries moved. Used by combining into a business and by
+ * folding a second salary stream into the first (lib/salary-streams).
+ */
+export async function moveIncomeSource(trx: Tx, groupId: number, fromId: number, intoId: number): Promise<number> {
+  const moved = await trx.execute(sql`
+    UPDATE "joint_account_transactions" SET "income_source_id" = ${intoId}
+     WHERE "income_source_id" = ${fromId} AND "group_id" = ${groupId}`);
+  await trx.execute(sql`UPDATE "joint_account_deposit_splits" SET "income_source_id" = ${intoId} WHERE "income_source_id" = ${fromId}`);
+  await trx.execute(sql`UPDATE "expenses" SET "income_source_id" = ${intoId} WHERE "income_source_id" = ${fromId}`);
+  await trx.execute(sql`UPDATE "expense_income_splits" SET "income_source_id" = ${intoId} WHERE "income_source_id" = ${fromId}`);
+  await trx.execute(sql`UPDATE "budget_categories" SET "reduces_income_source_id" = ${intoId} WHERE "reduces_income_source_id" = ${fromId}`);
+  if (businessAccountsReady()) {
+    await trx.execute(sql`UPDATE "business_bank_accounts" SET "income_source_id" = ${intoId} WHERE "income_source_id" = ${fromId}`);
+  }
+  if (ownerBusinessReady()) {
+    await trx.execute(sql`UPDATE "owner_business_money" SET "income_source_id" = ${intoId} WHERE "income_source_id" = ${fromId} AND "group_id" = ${groupId}`);
+  }
+  if (entriesToSortReady()) {
+    await trx.execute(sql`UPDATE "entries_to_check" SET "income_source_id" = ${intoId} WHERE "income_source_id" = ${fromId} AND "group_id" = ${groupId}`);
+  }
+  if (payeeRulesReady()) {
+    // Payers remembered for the stream ('src:...' rules) now go to the business.
+    await trx.execute(sql`
+      UPDATE "payee_rules" SET "value" = ${String(intoId)}, "updated_at" = now()
+       WHERE "group_id" = ${groupId} AND "key" LIKE 'src:%' AND "value" = ${String(fromId)}`);
+  }
+  await trx.execute(sql`DELETE FROM "income_sources" WHERE "id" = ${fromId} AND "group_id" = ${groupId}`);
+  return moved.rowCount ?? 0;
 }

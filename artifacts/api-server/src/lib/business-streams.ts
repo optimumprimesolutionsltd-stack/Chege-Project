@@ -96,29 +96,6 @@ export function salaryStreamName(business: string): string {
   return `${name.slice(0, 73).trim()} salary`;
 }
 
-/**
- * A business that pays its owner a salary gets that salary's own income
- * stream, made if it is not there yet. Only money filed under it is the
- * salary: "user should specifically receive salary as salary - not just any
- * incoming money" (15 Oct 2026). Money otherwise from the business stays
- * the director's money or its sales. Returns the stream, or null.
- */
-export async function ensureSalaryStream(groupId: number, businessId: number): Promise<{ id: number; name: string } | null> {
-  const found = await db.execute(sql`SELECT "name", "user_id" AS "userId" FROM "income_sources" WHERE "id" = ${businessId} AND "group_id" = ${groupId} LIMIT 1`);
-  const business = found.rows[0] as { name: string; userId: string } | undefined;
-  if (!business) return null;
-  const name = salaryStreamName(String(business.name));
-  const existing = await db.execute(sql`SELECT "id", "name" FROM "income_sources" WHERE "group_id" = ${groupId} AND lower(trim("name")) = lower(${name}) LIMIT 1`);
-  const row = existing.rows[0] as { id: number; name: string } | undefined;
-  if (row) return { id: Number(row.id), name: String(row.name) };
-  const made = await db.execute(sql`
-    INSERT INTO "income_sources" ("group_id", "user_id", "name", "is_main", "expected_monthly_amount")
-    VALUES (${groupId}, ${business.userId}, ${name}, false, 0)
-    RETURNING "id", "name"`);
-  const created = made.rows[0] as { id: number; name: string } | undefined;
-  return created ? { id: Number(created.id), name: String(created.name) } : null;
-}
-
 /** In SQL, for a business_streams row `bs`: a business whose profit is its owner's income. */
 const ownerIncome = (): SQL => sql`(bs.counts_profit AND bs.pays_salary IS FALSE)`;
 
