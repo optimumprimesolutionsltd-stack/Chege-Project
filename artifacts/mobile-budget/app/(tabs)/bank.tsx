@@ -385,6 +385,10 @@ export default function BankScreen() {
   const [depositorIds, setDepositorIds] = useState<string[]>([]);
   const [depositorAmounts, setDepositorAmounts] = useState<Record<string, string>>({});
   const [incomeSourceId, setIncomeSourceId] = useState<number | null>(null);
+  // One payment in, split across income streams - "salary and something else"
+  // (16 Oct 2026). Each part names a stream and an amount; what is left stays on
+  // the stream chosen above. Saved as that person's portions, one per stream.
+  const [streamSplits, setStreamSplits] = useState<Array<{ incomeSourceId: number | null; amount: string }>>([]);
   const [depositSourceKind, setDepositSourceKind] = useState<'income_source' | 'other' | null>(null);
 
   // ── Withdrawal payer state ─────────────────────────────────────────────────
@@ -663,6 +667,12 @@ export default function BankScreen() {
     const added = allIncomeSources.filter((src) => addedBusinessIds.includes(src.id) && !businesses.ids.has(src.id)).map((src) => ({ id: src.id, name: src.name }));
     return [...listed, ...added];
   }, [allIncomeSources, addedBusinessIds, businesses.list, businesses.ids]);
+  // The businesses that pay you a salary, each with the stream it is filed under.
+  const salaryBusinesses = useMemo(
+    () => businesses.list.filter((one): one is typeof one & { salaryStreamId: number } => one.paysSalary === true && typeof one.salaryStreamId === 'number'),
+    [businesses.list],
+  );
+  const salaryChosen = salaryBusinesses.find((one) => one.salaryStreamId === incomeSourceId) ?? null;
   /** A marked entry's business by name; the one set up first when it has none. */
   const businessNameOf = (id: number | undefined): string =>
     (id === undefined ? undefined : whoForBusinesses.find((one) => one.id === id)?.name) ?? ownerBusiness.business.name;
@@ -762,6 +772,7 @@ export default function BankScreen() {
     setShowDatePicker(false);
     setDepositorIds(!isSharedWorkspace && user?.id ? [user.id] : (!canManageShared && user?.id ? [user.id] : []));
     setDepositorAmounts({});
+    setStreamSplits([]);
     setIncomeSourceId(null);
     setDepositSourceKind(null);
     setWithdrawerId(!isSharedWorkspace ? user?.id ?? null : null);
@@ -1065,6 +1076,7 @@ export default function BankScreen() {
     // categories and never total.
     setShowChargeCategoryPicker(false);
     setDepositorAmounts({});
+    setStreamSplits([]);
   };
 
   /**
@@ -1952,6 +1964,7 @@ export default function BankScreen() {
     }
     setDepositorIds([]);
     setDepositorAmounts({});
+    setStreamSplits([]);
     setIncomeSourceId(null);
     setDepositSourceKind(null);
   };
@@ -2552,7 +2565,38 @@ export default function BankScreen() {
         } else {
           // Single named depositor
           const singleId = validDepositorIds[0];
-          createdPostingId = (await createDeposit({
+          // Split across income streams: the person's portions, one per stream,
+          // the rest on the stream chosen above.
+          const parts = streamSplits.filter((row) => row.incomeSourceId !== null && (parseBankAmount(row.amount) ?? 0) > 0);
+          if (streamSplits.length > 0 && !notIncome && incomeSourceId !== null) {
+            if (parts.length !== streamSplits.length) {
+              Alert.alert('Finish the split', 'Choose a stream and an amount for each part, or remove the parts you do not need.');
+              setSubmitting(false);
+              return;
+            }
+            const partCents = parts.reduce((sum, row) => sum + toCents(parseBankAmount(row.amount) ?? 0), 0);
+            const restCents = toCents(parsed) - partCents;
+            if (restCents <= 0) {
+              Alert.alert('Amounts do not add up', `The parts come to more than the KES ${parsed.toLocaleString()} that came in. Leave some on the first stream.`);
+              setSubmitting(false);
+              return;
+            }
+            createdPostingId = (await createDeposit({
+              data: {
+                amount: parsed,
+                description: description.trim(),
+                notes: notes.trim() || undefined,
+                date,
+                contributorSplits: [
+                  { userId: singleId, amount: restCents / 100, incomeSourceId },
+                  ...parts.map((row) => ({ userId: singleId, amount: parseBankAmount(row.amount) ?? 0, incomeSourceId: row.incomeSourceId as number })),
+                ],
+                sourceKind: 'income_source',
+                ...(appliesTo ? { appliesToMonth: appliesTo.month, appliesToYear: appliesTo.year } : {}),
+                accountId: selectedAccountId ?? undefined,
+              },
+            }))?.id;
+          } else createdPostingId = (await createDeposit({
             data: {
               amount: parsed,
               description: description.trim(),
@@ -4751,6 +4795,8 @@ export default function BankScreen() {
                     <Text style={{ flex: 1, color: toBusinessId !== null || repayingParty || isBorrowing ? colors.foreground : colors.mutedForeground, fontFamily: 'Inter_400Regular' }}>
                       {toBusinessId !== null
                         ? `From ${businessNameOf(toBusinessId)} - director's money`
+                        : salaryChosen
+                        ? `Salary from ${salaryChosen.name}`
                         : repayingParty
                         ? `${repayingParty.name} repaying you`
                         : borrowTarget?.kind === 'debt'
@@ -4774,6 +4820,35 @@ export default function BankScreen() {
                           Ordinary money in
                         </Text>
                       </TouchableOpacity>
+                      {/* Your salary from one of your businesses: income, filed under that
+                          business's salary stream ("in money in, why cant i see the option of
+                          salary?", 16 Oct 2026). Only what is filed there counts as salary. */}
+                      {salaryBusinesses.length > 0 ? (
+                        <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, paddingTop: 8, marginTop: 4 }}>
+                          <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold', fontSize: 12, paddingHorizontal: 10, paddingBottom: 4 }}>
+                            MY SALARY
+                          </Text>
+                          {salaryBusinesses.map((business) => (
+                            <TouchableOpacity
+                              key={`salary-from-${business.id}`}
+                              style={styles.categoryOption}
+                              onPress={() => {
+                                setToBusinessId(null);
+                                setRepayingPartyId(null);
+                                setBorrowTarget(null);
+                                setForBusinessId(null);
+                                setIncomeSourceId(business.salaryStreamId);
+                                setDepositSourceKind('income_source');
+                                if (depositorIds.length === 0 && user?.id) setDepositorIds([user.id]);
+                                setShowRepayPicker(false);
+                              }}
+                              testID={`bank-deposit-salary-from-${business.id}`}
+                            >
+                              <Text style={{ color: colors.dropdownForeground, fontFamily: 'Inter_400Regular' }}>Salary from {business.name}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      ) : null}
                       {/* Money from one of the person's businesses: the director's money, in one
                           tap - not income, not a loan ("yes", 12 Oct 2026, after money out got it). */}
                       {whoForBusinesses.length > 0 ? (
@@ -5214,6 +5289,65 @@ export default function BankScreen() {
                   )}
                 </>
               )}
+
+              {/* Split across income streams: salary and something else in one payment. */}
+              {isDeposit && !notIncome && editingTransactionId === null && singleDepositorId && incomeSourceId !== null && forBusinessId === null && toBusinessId === null ? (
+                <View style={{ gap: 8, marginTop: 6 }} testID="bank-deposit-stream-split">
+                  {streamSplits.map((part, index) => (
+                    <View key={index} style={{ gap: 6, borderWidth: 1, borderColor: colors.border, borderRadius: 8, padding: 8 }}>
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                        {depositSources.filter((src) => !businesses.ids.has(src.id) && src.id !== incomeSourceId).map((src) => {
+                          const on = part.incomeSourceId === src.id;
+                          return (
+                            <TouchableOpacity
+                              key={src.id}
+                              onPress={() => setStreamSplits((current) => current.map((row, at) => (at === index ? { ...row, incomeSourceId: src.id } : row)))}
+                              style={[styles.memberPill, { backgroundColor: on ? '#6366f1' : colors.muted, borderColor: on ? '#6366f1' : colors.border }]}
+                              testID={`bank-deposit-split-stream-${index}-${src.id}`}
+                            >
+                              <Text style={[styles.memberPillText, { color: on ? '#fff' : colors.foreground }]}>{src.name}</Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <TextInput
+                          style={{ flex: 1, height: 42, borderRadius: 6, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, paddingHorizontal: 12, fontSize: 16, color: colors.foreground, fontFamily: 'Inter_400Regular' }}
+                          keyboardType="decimal-pad"
+                          placeholder="Amount"
+                          placeholderTextColor={colors.mutedForeground}
+                          value={part.amount}
+                          onChangeText={(value) => setStreamSplits((current) => current.map((row, at) => (at === index ? { ...row, amount: value } : row)))}
+                          testID={`bank-deposit-split-amount-${index}`}
+                        />
+                        <TouchableOpacity onPress={() => setStreamSplits((current) => current.filter((_, at) => at !== index))} hitSlop={8} accessibilityLabel="Remove this part" testID={`bank-deposit-split-remove-${index}`}>
+                          <Feather name="x" size={18} color={colors.mutedForeground} />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ))}
+                  {streamSplits.length > 0 ? (
+                    <Text style={{ color: colors.mutedForeground, fontSize: 12, fontFamily: 'Inter_400Regular' }} testID="bank-deposit-split-rest">
+                      {(() => {
+                        const total = parseBankAmount(amount) ?? 0;
+                        const parts = streamSplits.reduce((sum, row) => sum + (parseBankAmount(row.amount) ?? 0), 0);
+                        const mainName = depositSources.find((src) => src.id === incomeSourceId)?.name ?? 'the stream above';
+                        return `The rest, KES ${formatKES(Math.max(0, total - parts))}, stays on ${mainName}.`;
+                      })()}
+                    </Text>
+                  ) : null}
+                  <TouchableOpacity
+                    onPress={() => setStreamSplits((current) => [...current, { incomeSourceId: null, amount: '' }])}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' }}
+                    testID="bank-deposit-split-add"
+                  >
+                    <Feather name="git-branch" size={14} color={colors.primary} />
+                    <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>
+                      {streamSplits.length === 0 ? 'Split it - part of this was something else' : 'Add another part'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
 
               {/* ── Withdrawal payer (disbursements only) ── A Shared group's question:
                   in a Personal budget it is always the person, set when the form

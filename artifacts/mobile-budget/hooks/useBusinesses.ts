@@ -4,7 +4,14 @@ import { customFetch } from '@workspace/api-client-react';
 import { useAuth } from '@/lib/auth';
 
 /** paysSalary: "Do you pay yourself a salary from it?" - null until asked (lib/businessSalary). */
-export type Business = { id: number; name: string; countsProfit: boolean; paysSalary?: boolean | null };
+export type Business = {
+  id: number;
+  name: string;
+  countsProfit: boolean;
+  paysSalary?: boolean | null;
+  /** Where its salary is filed, when it pays one (api-server lib/salary-streams). */
+  salaryStreamId?: number | null;
+};
 type Named = { ready: boolean; incomeSourceIds: number[]; businesses?: Business[] };
 
 /**
@@ -91,7 +98,11 @@ export function useBusinesses() {
       businesses: (cached.businesses ?? []).map((one) => (one.id === incomeSourceId ? { ...one, paysSalary } : one)),
     }));
     // A salary answer makes its salary stream on the server: show it in every picker.
-    if (paysSalary) void queryClient.invalidateQueries({ queryKey: ['income-sources'] });
+    if (paysSalary) {
+      void queryClient.invalidateQueries({ queryKey: ['income-sources'] });
+      // And its salary stream's id, for Money in's "Salary from ...".
+      void queryClient.invalidateQueries({ queryKey: ['businesses'] });
+    }
     refresh();
   }, [queryClient, refresh]);
 

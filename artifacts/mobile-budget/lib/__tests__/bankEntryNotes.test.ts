@@ -18,7 +18,8 @@ describe('the Notes field on the Bank tab', () => {
   });
 
   it('is sent when saving a deposit or a withdrawal, new or edited', () => {
-    expect((bank.match(/notes: notes\.trim\(\) \|\| undefined,/g) ?? []).length).toBe(4);
+    // Five since money in can be split across income streams (16 Oct 2026).
+    expect((bank.match(/notes: notes\.trim\(\) \|\| undefined,/g) ?? []).length).toBe(5);
     expect(bank).toContain('notes: notes.trim() || null,');
   });
 
