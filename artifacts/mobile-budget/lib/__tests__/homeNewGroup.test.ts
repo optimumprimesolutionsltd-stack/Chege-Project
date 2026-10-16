@@ -15,10 +15,13 @@ describe('starting a group from Home', () => {
     expect(mayStartGroup(undefined)).toBe(false);
   });
 
-  it('puts a New group shortcut on the phone Home that opens the create form', () => {
+  // "Sell the chama angle as an option" (16 Oct 2026): offered at the foot of Home.
+  it('offers starting a group on the phone Home, opening the create form', () => {
     const home = readFileSync('app/(tabs)/index.tsx', 'utf8');
-    expect(home).toContain("route: '/(tabs)/settings?openCreateGroup=1'");
-    expect(home).toContain('...(mayStartGroup(entitlements) ? [NEW_GROUP_SHORTCUT] : []),');
+    const chama = readFileSync('components/ChamaCard.tsx', 'utf8');
+    expect(home).toContain('canStartGroup={mayStartGroup(entitlements)}');
+    expect(chama).toContain("router.push('/(tabs)/settings?openCreateGroup=1' as never)");
+    expect(chama).toContain('testID="home-chama-start"');
     const settings = readFileSync('app/(tabs)/settings.tsx', 'utf8');
     expect(settings).toContain("if (params.openCreateGroup !== '1') return;");
     expect(settings).toContain('onPress={openCreateGroup}');

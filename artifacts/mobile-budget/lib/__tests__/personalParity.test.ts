@@ -5,14 +5,12 @@ const home = readFileSync('app/(tabs)/index.tsx', 'utf8');
 
 // "Align everything in a shared group to be in Personal."
 describe('a Personal budget has what a shared group has on Home', () => {
-  it('shows the areas card, for any workspace, worded for a budget', () => {
-    expect(home).toContain("const baseShortcuts = isSharedWorkspace ? SHARED_OVERVIEW_SHORTCUTS : PERSONAL_OVERVIEW_SHORTCUTS;");
-    expect(home).toContain("{isSharedWorkspace ? 'Your group areas' : 'Your budget areas'}");
-  });
-
-  it('leaves only the group contributions out of Personal, and offers the M-Pesa import in both', () => {
-    expect(home).toContain("SHARED_OVERVIEW_SHORTCUTS.filter((shortcut) => shortcut.label !== 'Contributions')");
-    expect(home).toContain("label: 'M-Pesa',        color: '#3CDD62', bg: '#0D3428', route: '/mpesa-import'");
+  // The areas grid repeated the tabs, the + and your picture: gone from Home for
+  // everybody (16 Oct 2026). The chama is offered instead, at the foot.
+  it('has no areas grid, for any workspace, and offers the chama at the foot', () => {
+    expect(home).not.toContain('Your budget areas');
+    expect(home).not.toContain('SHARED_OVERVIEW_SHORTCUTS');
+    expect(home).toContain('<ChamaCard canStartGroup={mayStartGroup(entitlements)} canInvite={canManageAccess} onScreen={onScreen} currentId={group?.id ?? null} />');
   });
 
   it('shows the month at a glance for any workspace', () => {

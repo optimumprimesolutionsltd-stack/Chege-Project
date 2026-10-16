@@ -24,7 +24,8 @@ describe('Who owes who from the entries', () => {
 
 // "Bring the Debt tab to the Home screen too."
 describe('Debt on Home', () => {
-  it('is one of the group areas', () => {
-    expect(readFileSync('app/(tabs)/index.tsx', 'utf8')).toContain("label: 'Debt',        color: '#F87171', bg: '#3A1212', route: '/(tabs)/debt'");
+  // The areas grid is gone from Home (16 Oct 2026): Debt is behind your picture.
+  it('is behind your picture on Home', () => {
+    expect(readFileSync('app/(tabs)/more.tsx', 'utf8')).toContain("href: '/(tabs)/debt'");
   });
 });

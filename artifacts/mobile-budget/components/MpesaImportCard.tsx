@@ -8,8 +8,6 @@ import { useQuery } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
 import { customFetch, useGetGroup } from '@workspace/api-client-react';
 import { mpesaCardKey, rememberMpesaCard, shouldShowMpesaCard } from '@/lib/mpesaCard';
-import { readLiveMpesaBalance } from '@/lib/mpesaSms';
-import { balanceComparison, kes, messageTime } from '@/lib/mpesaLiveBalance';
 
 /**
  * Your M-Pesa, first thing on Home and always there.
@@ -73,36 +71,12 @@ export function MpesaImportCard() {
     retry: 2,
   });
 
-  // M-Pesa's own figure, from the newest message on this phone. Looked at again
-  // each time Home is shown, so a payment made a minute ago is already in it.
-  // Personal budget only: the messages are this person's own M-Pesa, which a
-  // group's account (a chama's, a church's) has nothing to do with.
-  const personal = group?.isPrivate === true;
-  const { data: liveRead, refetch: refetchLive } = useQuery({
-    queryKey: ['mpesa-live-balance'],
-    queryFn: () => readLiveMpesaBalance(),
-    enabled: personal,
-    staleTime: 15_000,
-    retry: false,
-  });
   useFocusEffect(useCallback(() => {
-    if (personal) void refetchLive();
     if (groupId !== null) void refetchSummary();
-  }, [personal, refetchLive, groupId, refetchSummary]));
-  const live = personal ? liveRead ?? null : null;
-  const comparison = live && summary?.balance != null ? balanceComparison(live.balance, summary.balance, summary.balanceAccount) : null;
+  }, [groupId, refetchSummary]));
 
   const monthName = MONTHS[(summary?.month ?? new Date().getMonth() + 1) - 1];
   const showIntro = introOpen && !summary?.imported;
-  // Named for what they count: every entry that came into or left M-Pesa,
-  // savings, transfers and repayments too - not what was spent, which Home's
-  // "Spent on your budget" answers ("why the difference", 5 Oct 2026).
-  const figures = [
-    { label: 'Into M-Pesa', value: summary ? kes(summary.moneyIn) : '…' },
-    { label: 'Left M-Pesa', value: summary ? kes(summary.moneyOut) : '…' },
-    { label: 'Entries', value: summary ? String(summary.entries) : '…' },
-  ];
-
   return (
     <View style={[styles.card, { backgroundColor: colors.background, borderColor: colors.foreground }]} testID="mpesa-home-card">
       <View style={styles.weave}>
@@ -126,49 +100,12 @@ export function MpesaImportCard() {
               A statement is read on this phone and never uploaded.
             </Text>
           </>
-        ) : (
-          <>
-          {live ? (
-            <View style={styles.balanceRow} testID="mpesa-home-card-live-balance">
-              <Text style={[styles.figureLabel, { color: colors.mutedForeground }]}>M-Pesa balance now</Text>
-              <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.balanceValue, { color: colors.foreground }]}>{kes(live.balance)}</Text>
-              <Text style={[styles.figureLabel, { color: colors.mutedForeground }]}>From your M-Pesa message of {messageTime(live.at)}</Text>
-              {/* Only when the two agree: a difference is fixed by itself, and what
-                  is left for the person is in Home's Waiting for you (lib/autoReconcile). */}
-              {comparison?.agrees ? (
-                <Text
-                  testID="mpesa-home-card-balance-comparison"
-                  style={[styles.comparison, { color: comparison.agrees ? colors.primary : '#B45309', borderColor: comparison.agrees ? colors.border : '#F59E0B' }]}
-                >
-                  {comparison.text}
-                </Text>
-              ) : null}
-              {/* Find the difference runs by itself now (lib/autoReconcile): no button. */}
-            </View>
-          ) : summary?.balance != null ? (
-            <View style={styles.balanceRow} testID="mpesa-home-card-balance">
-              <Text style={[styles.figureLabel, { color: colors.mutedForeground }]}>
-                {summary.balanceAccount ? `${summary.balanceAccount} balance in Jamvi` : 'M-Pesa balance in Jamvi'}
-              </Text>
-              <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.balanceValue, { color: colors.foreground }]}>{kes(summary.balance)}</Text>
-              <Text style={[styles.figureLabel, { color: colors.mutedForeground }]}>Check it matches your M-Pesa app. If not, import the statement to find the difference.</Text>
-            </View>
-          ) : null}
-          <View style={[styles.figures, { borderTopColor: colors.border }]}>
-            {figures.map((figure) => (
-              <View key={figure.label} style={styles.figure}>
-                <Text style={[styles.figureLabel, { color: colors.mutedForeground }]}>{figure.label}</Text>
-                <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.figureValue, { color: colors.foreground }]}>
-                  {figure.value}
-                </Text>
-              </View>
-            ))}
-          </View>
-          <Text style={[styles.figureLabel, { color: colors.mutedForeground, marginTop: 6 }]} testID="mpesa-home-card-figures-note">
-            All money in and out of M-Pesa, savings, transfers and repayments included. What you spent is below, under Spent on your budget.
-          </Text>
-          </>
-        )}
+        ) : null}
+        {/* The balance is said once on Home, in "How much is on my M-Pesa?"
+            (HomeAnswersCard): this card said it again, with money in, money out
+            and an entry count ("still feel the homepage is a lot ... two places
+            showing mpesa balance", 16 Oct 2026). It keeps what only it does -
+            bringing in more M-Pesa. Reports has the month's totals. */}
 
         {!showIntro && summary && summary.entries === 0 ? (
           <Text style={[styles.body, { color: colors.mutedForeground }]}>
@@ -213,11 +150,6 @@ export function MpesaImportCard() {
 }
 
 const styles = StyleSheet.create({
-  balanceRow: { gap: 2, paddingBottom: 4 },
-  balanceValue: { fontSize: 26, fontFamily: 'Inter_700Bold' },
-  findDifference: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', borderWidth: 1, borderRadius: 4, paddingHorizontal: 12, paddingVertical: 8, marginTop: 8 },
-  findDifferenceText: { fontFamily: 'Inter_700Bold', fontSize: 13 },
-  comparison: { fontFamily: 'Inter_400Regular', fontSize: 12, lineHeight: 17, marginTop: 6, borderWidth: 1, borderRadius: 4, padding: 8 },
   card: { borderWidth: 2, borderRadius: 6, overflow: 'hidden', shadowColor: '#D9663B', shadowOffset: { width: 5, height: 5 }, shadowOpacity: 1, shadowRadius: 0, elevation: 6 },
   weave: { flexDirection: 'row', height: 6 },
   inner: { padding: 16, gap: 12 },
@@ -226,10 +158,6 @@ const styles = StyleSheet.create({
   latest: { fontFamily: 'Inter_400Regular', fontSize: 12 },
   title: { fontFamily: 'Inter_700Bold', fontSize: 20, lineHeight: 24 },
   body: { fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 20 },
-  figures: { flexDirection: 'row', gap: 10, borderTopWidth: 1, borderStyle: 'dashed', paddingTop: 12 },
-  figure: { flex: 1, minWidth: 0 },
-  figureLabel: { fontFamily: 'Inter_400Regular', fontSize: 12 },
-  figureValue: { fontFamily: 'Inter_700Bold', fontSize: 18, marginTop: 2 },
   primary: { flexDirection: 'row', gap: 8, borderRadius: 4, paddingVertical: 14, alignItems: 'center', justifyContent: 'center' },
   primaryText: { fontFamily: 'Inter_700Bold', fontSize: 15 },
   later: { alignSelf: 'center', paddingVertical: 2 },

@@ -11,7 +11,8 @@ const card = readFileSync('components/DebtSummaryCard.tsx', 'utf8');
 // loan.
 describe('debt has a home screen presence', () => {
   it('renders a debt card on Home', () => {
-    expect(home).toContain('<DebtSummaryCard canTrackDebt={canManageBudget} />');
+    // Only once there is a debt: Home no longer asks you to start tracking one (16 Oct 2026).
+    expect(home).toContain('<DebtSummaryCard canTrackDebt={false} />');
     expect(home).toContain("import { DebtSummaryCard } from '@/components/DebtSummaryCard';");
   });
 
