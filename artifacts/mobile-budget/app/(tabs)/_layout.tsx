@@ -13,13 +13,13 @@ import { GlobalFAB } from '@/components/GlobalFAB';
 import { SubscriptionBanner } from '@/components/SubscriptionBanner';
 import { useTabFlags } from '@/hooks/useTabFlags';
 import { useWaitingForYou, waitingBadge } from '@/hooks/useWaitingForYou';
-import { visibleTabs, type TabName } from '@/lib/tabPlan';
+import { planTitleFor, visibleTabs, type TabName } from '@/lib/tabPlan';
 
 // iOS 26+: NativeTabs with liquid glass support.
 // Three tabs (lib/tabPlan): Home, Money, Plan. Activity, Bank, Budget,
 // Contributions, Reports, Goals, Search, Debt, More and Settings are routes
 // with no tab, reached from Money, Plan, your picture on Home and the +.
-function NativeTabLayout({ visible, shared }: { visible: TabName[]; shared: boolean }) {
+function NativeTabLayout({ visible, shared, planTitle }: { visible: TabName[]; shared: boolean; planTitle: string }) {
   const has = (name: TabName) => visible.includes(name);
   return (
     <NativeTabs>
@@ -33,13 +33,13 @@ function NativeTabLayout({ visible, shared }: { visible: TabName[]; shared: bool
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="plan">
         <Icon sf={shared ? { default: 'person.3', selected: 'person.3.fill' } : { default: 'chart.pie', selected: 'chart.pie.fill' }} />
-        <Label>{shared ? 'Contributions' : 'Reports'}</Label>
+        <Label>{planTitle}</Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );
 }
 
-function ClassicTabLayout({ visible, shared }: { visible: TabName[]; shared: boolean }) {
+function ClassicTabLayout({ visible, shared, planTitle }: { visible: TabName[]; shared: boolean; planTitle: string }) {
   const homeBadge = waitingBadge(useWaitingForYou().total);
   const has = (name: TabName) => visible.includes(name);
   const colors = useColors();
@@ -117,10 +117,8 @@ function ClassicTabLayout({ visible, shared }: { visible: TabName[]; shared: boo
       <Tabs.Screen
         name="plan"
         options={{
-          // Called Reports, and opens on it: Reports is where a person lives
-          // once the M-Pesa reading does the filing (16 Oct 2026). In a chama
-          // it is Contributions: who has paid is what everyone opens it for.
-          title: shared ? 'Contributions' : 'Reports',
+          // planTitleFor (lib/tabPlan) names it after what is inside.
+          title: planTitle,
           tabBarIcon: ({ color }) =>
             isIOS ? (
               <SymbolView name="chart.pie.fill" tintColor={color} size={24} />
@@ -246,6 +244,7 @@ export default function TabLayout() {
   const colors = useColors();
   const { group, isShared, showReports, showDebt, showBudget } = useTabFlags();
   const visible = visibleTabs({ isShared, showBudget, showDebt, showReports });
+  const planTitle = planTitleFor({ isShared, showBudget });
   // The shared and personal layouts have a different set of tabs (Contributions
   // vs Search). A native tab bar does not reliably add or drop a trigger when
   // this flips after the group query resolves, so remount the navigator on the
@@ -266,7 +265,7 @@ export default function TabLayout() {
       <View style={{ flex: 1, backgroundColor: colors.card }}>
         <SubscriptionBanner />
         <View style={{ flex: 1 }}>
-          <NativeTabLayout key={layoutKey} visible={visible} shared={isShared} />
+          <NativeTabLayout key={layoutKey} visible={visible} shared={isShared} planTitle={planTitle} />
         </View>
         <GlobalFAB />
       </View>
@@ -276,7 +275,7 @@ export default function TabLayout() {
     <View style={{ flex: 1, backgroundColor: colors.card }}>
       <SubscriptionBanner />
       <View style={{ flex: 1 }}>
-        <ClassicTabLayout key={layoutKey} visible={visible} shared={isShared} />
+        <ClassicTabLayout key={layoutKey} visible={visible} shared={isShared} planTitle={planTitle} />
       </View>
       <GlobalFAB />
     </View>

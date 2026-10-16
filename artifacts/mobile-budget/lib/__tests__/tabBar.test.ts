@@ -1,5 +1,6 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { planTitleFor } from '../tabPlan';
 
 const read = (p: string) => readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
 
@@ -19,19 +20,28 @@ describe('the tab bar is Home, Money, Plan, in both layouts', () => {
     expect(layout).toContain("options={has('debt')");
     expect(layout).toContain('<Tabs.Screen name="bank"     options={{ href: null }} />');
   });
-  it('Money switches Accounts and All activity; the Reports tab opens on Reports, with Contributions and Budget beside it', () => {
+  it('Money switches Accounts and All activity; the Budget & Reports tab opens on the Budget, with Reports beside it', () => {
     const money = read('app/(tabs)/money.tsx');
     expect(money).toContain("{view === 'activity' ? <HistoryScreen /> : <BankScreen />}");
     const plan = read('app/(tabs)/plan.tsx');
     expect(plan).toContain("...(isShared ? [{ key: 'contributions', label: 'Contributions' }] : []),");
     expect(plan).toContain("...(showReports ? [{ key: 'reports', label: 'Reports' }] : []),");
-    // In a chama it opens on Contributions, and is called that; otherwise Reports first.
-    expect(plan.indexOf("key: 'contributions'")).toBeLessThan(plan.indexOf("key: 'reports'"));
-    expect(plan.indexOf("key: 'reports'")).toBeLessThan(plan.indexOf("key: 'budget'"));
-    expect(layout).toContain("<Label>{shared ? 'Contributions' : 'Reports'}</Label>");
-    expect(layout).toContain("title: shared ? 'Contributions' : 'Reports',");
+    // In a chama it opens on Contributions, and is called that; otherwise the
+    // Budget first, as the tab's name ("Budget & Reports") puts it.
+    expect(plan.indexOf("key: 'contributions'")).toBeLessThan(plan.indexOf("key: 'budget'"));
+    expect(plan.indexOf("key: 'budget'")).toBeLessThan(plan.indexOf("key: 'reports'"));
+    expect(layout).toContain('<Label>{planTitle}</Label>');
+    expect(layout).toContain('title: planTitle,');
     // Shown in the header every one of those screens already has.
     expect(read('components/WorkspaceIdentityRow.tsx')).toContain('<TabSwitchSlot tone={tone} />');
+  });
+});
+
+describe('the third tab says Budget whenever the Budget is in it', () => {
+  it('Budget & Reports, Reports with no budget, Contributions in a chama', () => {
+    expect(planTitleFor({ isShared: false, showBudget: true })).toBe('Budget & Reports');
+    expect(planTitleFor({ isShared: false, showBudget: false })).toBe('Reports');
+    expect(planTitleFor({ isShared: true, showBudget: true })).toBe('Contributions');
   });
 });
 
@@ -45,9 +55,12 @@ describe('your picture on Home opens everything the bar leaves out', () => {
     expect(more).toContain('testID="more-back"');
     expect(read('app/(tabs)/index.tsx')).toContain("router.push('/(tabs)/more')");
   });
-  it('Bank and Budget are not repeated there - they are the Money and Plan tabs', () => {
+  it('Bank is not repeated there - it is the Money tab', () => {
     expect(more).toContain('// On the Money tab now (lib/tabPlan).');
-    expect(more).toContain('// On the Reports tab now, beside Contributions (lib/tabPlan).');
+  });
+  it('Budget is there too, first, opening the Budget & Reports tab on the Budget', () => {
+    expect(more).toContain("'/(tabs)/plan?view=budget'");
+    expect(more.indexOf("key: 'budget'")).toBeLessThan(more.indexOf("key: 'bank'"));
   });
 });
 
