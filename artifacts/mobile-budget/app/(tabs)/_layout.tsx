@@ -19,7 +19,7 @@ import { visibleTabs, type TabName } from '@/lib/tabPlan';
 // Three tabs (lib/tabPlan): Home, Money, Plan. Activity, Bank, Budget,
 // Contributions, Reports, Goals, Search, Debt, More and Settings are routes
 // with no tab, reached from Money, Plan, your picture on Home and the +.
-function NativeTabLayout({ visible }: { visible: TabName[] }) {
+function NativeTabLayout({ visible, shared }: { visible: TabName[]; shared: boolean }) {
   const has = (name: TabName) => visible.includes(name);
   return (
     <NativeTabs>
@@ -32,14 +32,14 @@ function NativeTabLayout({ visible }: { visible: TabName[] }) {
         <Label>Money</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="plan">
-        <Icon sf={{ default: 'chart.pie', selected: 'chart.pie.fill' }} />
-        <Label>Reports</Label>
+        <Icon sf={shared ? { default: 'person.3', selected: 'person.3.fill' } : { default: 'chart.pie', selected: 'chart.pie.fill' }} />
+        <Label>{shared ? 'Contributions' : 'Reports'}</Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );
 }
 
-function ClassicTabLayout({ visible }: { visible: TabName[] }) {
+function ClassicTabLayout({ visible, shared }: { visible: TabName[]; shared: boolean }) {
   const homeBadge = waitingBadge(useWaitingForYou().total);
   const has = (name: TabName) => visible.includes(name);
   const colors = useColors();
@@ -118,8 +118,9 @@ function ClassicTabLayout({ visible }: { visible: TabName[] }) {
         name="plan"
         options={{
           // Called Reports, and opens on it: Reports is where a person lives
-          // once the M-Pesa reading does the filing (16 Oct 2026).
-          title: 'Reports',
+          // once the M-Pesa reading does the filing (16 Oct 2026). In a chama
+          // it is Contributions: who has paid is what everyone opens it for.
+          title: shared ? 'Contributions' : 'Reports',
           tabBarIcon: ({ color }) =>
             isIOS ? (
               <SymbolView name="chart.pie.fill" tintColor={color} size={24} />
@@ -265,7 +266,7 @@ export default function TabLayout() {
       <View style={{ flex: 1, backgroundColor: colors.card }}>
         <SubscriptionBanner />
         <View style={{ flex: 1 }}>
-          <NativeTabLayout key={layoutKey} visible={visible} />
+          <NativeTabLayout key={layoutKey} visible={visible} shared={isShared} />
         </View>
         <GlobalFAB />
       </View>
@@ -275,7 +276,7 @@ export default function TabLayout() {
     <View style={{ flex: 1, backgroundColor: colors.card }}>
       <SubscriptionBanner />
       <View style={{ flex: 1 }}>
-        <ClassicTabLayout key={layoutKey} visible={visible} />
+        <ClassicTabLayout key={layoutKey} visible={visible} shared={isShared} />
       </View>
       <GlobalFAB />
     </View>

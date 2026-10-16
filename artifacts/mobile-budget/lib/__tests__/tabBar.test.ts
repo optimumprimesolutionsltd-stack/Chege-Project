@@ -20,16 +20,16 @@ describe('the tab bar is Home, Money, Plan, in both layouts', () => {
     expect(layout).toContain('<Tabs.Screen name="bank"     options={{ href: null }} />');
   });
   it('Money switches Accounts and All activity; the Reports tab opens on Reports, with Contributions and Budget beside it', () => {
-    expect(layout).toContain('<Label>Reports</Label>');
-    expect(layout).toContain("title: 'Reports',");
     const money = read('app/(tabs)/money.tsx');
     expect(money).toContain("{view === 'activity' ? <HistoryScreen /> : <BankScreen />}");
     const plan = read('app/(tabs)/plan.tsx');
     expect(plan).toContain("...(isShared ? [{ key: 'contributions', label: 'Contributions' }] : []),");
     expect(plan).toContain("...(showReports ? [{ key: 'reports', label: 'Reports' }] : []),");
-    // Reports first, so the tab opens on it.
-    expect(plan.indexOf("key: 'reports'")).toBeLessThan(plan.indexOf("key: 'contributions'"));
+    // In a chama it opens on Contributions, and is called that; otherwise Reports first.
+    expect(plan.indexOf("key: 'contributions'")).toBeLessThan(plan.indexOf("key: 'reports'"));
     expect(plan.indexOf("key: 'reports'")).toBeLessThan(plan.indexOf("key: 'budget'"));
+    expect(layout).toContain("<Label>{shared ? 'Contributions' : 'Reports'}</Label>");
+    expect(layout).toContain("title: shared ? 'Contributions' : 'Reports',");
     // Shown in the header every one of those screens already has.
     expect(read('components/WorkspaceIdentityRow.tsx')).toContain('<TabSwitchSlot tone={tone} />');
   });

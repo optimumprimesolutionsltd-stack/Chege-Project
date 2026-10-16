@@ -16,12 +16,13 @@ import ReportsScreen from './reports';
 export default function PlanScreen() {
   const { isShared, showBudget, showReports } = useTabFlags();
   const { view: askedView } = useLocalSearchParams<{ view?: string }>();
-  // Reports first: "i think we can change the tab at the footer with reports
-  // tab" (16 Oct 2026) - the tab is called Reports and opens on it; a group's
-  // Contributions and the Budget are one tap away at the top.
+  // Reports first in a Personal budget: "i think we can change the tab at the
+  // footer with reports tab" (16 Oct 2026). In a chama, Contributions first -
+  // who has paid is what every member opens it for - and the tab is called
+  // that; Reports and the Budget are one tap away at the top.
   const options = useMemo(() => [
-    ...(showReports ? [{ key: 'reports', label: 'Reports' }] : []),
     ...(isShared ? [{ key: 'contributions', label: 'Contributions' }] : []),
+    ...(showReports ? [{ key: 'reports', label: 'Reports' }] : []),
     ...(showBudget ? [{ key: 'budget', label: 'Budget' }] : []),
   ], [isShared, showBudget, showReports]);
   const [view, setView] = useState(askedView ?? '');
