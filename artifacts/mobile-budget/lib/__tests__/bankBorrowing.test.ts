@@ -21,8 +21,9 @@ describe('a deposit can be money you borrowed', () => {
   it('offers to borrow from anybody, not only somebody already owed', () => {
     // owedParties is the withdraw side's list. You can borrow from somebody
     // who currently owes you, and from somebody with no balance either way.
-    const section = bank.slice(bank.indexOf('BORROWED — NOT INCOME'), bank.indexOf('testID="bank-borrow-unspecified"'));
-    expect(section).toContain('{parties.map((party) => (');
+    // Every party but Fuliza, which Safaricom lends and takes back itself (16 Oct 2026).
+    const section = bank.slice(bank.indexOf('BORROWED FROM - NOT INCOME'), bank.indexOf('testID="bank-borrow-unspecified"'));
+    expect(section).toContain('{parties.filter((party) => notFuliza(party.name)).map((party) => (');
     expect(section).not.toContain('owedParties.map');
   });
 
@@ -61,7 +62,7 @@ describe('it cannot be both at once', () => {
   });
 
   it('clears the repayment when borrowing is chosen', () => {
-    const section = bank.slice(bank.indexOf('BORROWED — NOT INCOME'));
+    const section = bank.slice(bank.indexOf('BORROWED FROM - NOT INCOME'));
     expect((section.match(/setRepayingPartyId\(null\); setBorrowTarget\(\{/g) ?? []).length).toBe(3);
   });
 
@@ -203,7 +204,7 @@ describe('both sides ask the same question the same way', () => {
 
   it('groups lending under what it is, as borrowing is', () => {
     expect(bank).toContain('LENT — NOT SPENDING');
-    expect(bank).toContain('BORROWED — NOT INCOME');
+    expect(bank).toContain('BORROWED FROM - NOT INCOME');
   });
 
   it('says what each answer means rather than assuming', () => {
@@ -299,5 +300,20 @@ describe('an edit does not demand what it cannot restore', () => {
   it('still asks on a new posting, where the answer is knowable', () => {
     expect(bank).toContain("Alert.alert('Who are you lending to?'");
     expect(bank).toContain("Alert.alert('Who are you paying?'");
+  });
+});
+
+// "This place looks left out. Also fuliza should not be seen here as its an
+// automatic deduction and addition from safaricom" (16 Oct 2026).
+describe('repaid and borrowed on money in', () => {
+  it('are rows of chips under bold headings, like the rest', () => {
+    expect(bank).toContain('testID="bank-deposit-repaid-row"');
+    expect(bank).toContain('testID="bank-deposit-borrowed-row"');
+    expect(bank).toContain('REPAID TO ME BY');
+  });
+
+  it('never offer Fuliza, and only somebody who owes you repays', () => {
+    expect(bank).toContain('const notFuliza = (name: string) => !/fuliza/i.test(name);');
+    expect(bank).toContain('const repayingChoices = owingParties.filter((party) => (party.owedToUs ?? 0) > 0 && notFuliza(party.name));');
   });
 });

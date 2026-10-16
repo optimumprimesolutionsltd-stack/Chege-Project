@@ -743,6 +743,11 @@ export default function BankScreen() {
   const owedParties = parties;
   const selectedParty = parties.find((party) => party.id === withdrawPartyId) ?? null;
   const owingParties = parties;
+  // Fuliza is Safaricom's own, lent and taken back by itself: never offered as a
+  // lender or a repayer on Money in (16 Oct 2026).
+  const notFuliza = (name: string) => !/fuliza/i.test(name);
+  // Only somebody who owes you money can be repaying it.
+  const repayingChoices = owingParties.filter((party) => (party.owedToUs ?? 0) > 0 && notFuliza(party.name));
   const repayingParty = parties.find((party) => party.id === repayingPartyId) ?? null;
   const lentToParty =
     withdrawDest === 'lend' && withdrawPartyId !== null
@@ -4919,62 +4924,57 @@ export default function BankScreen() {
                           </View>
                         </View>
                       ) : null}
-                      {owingParties.map((party) => (
-                        <TouchableOpacity
-                          key={`owing-party-${party.id}`}
-                          style={[styles.categoryOption, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }]}
-                          onPress={() => { setRepayingPartyId(party.id); setBorrowTarget(null); setToBusinessId(null); setShowRepayPicker(false); }}
-                          testID={`bank-repayment-party-${party.id}`}
-                        >
-                          <Text style={{ color: colors.dropdownForeground, fontFamily: 'Inter_400Regular', flexShrink: 1 }}>
-                            {party.name}
-                          </Text>
-                          <Text style={{ color: colors.dropdownMutedForeground, fontFamily: 'Inter_400Regular', fontSize: 12 }}>
-                            owes you KES {formatKES(party.owedToUs ?? 0)}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                      {/* Borrowed money: the same deposit, the opposite
-                          meaning. Naming what it was borrowed against is
-                          optional — it is not income either way — but naming
-                          it means the balance can be offered afterwards. */}
-                      <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, paddingTop: 8, marginTop: 4 }}>
-                        <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold', fontSize: 12, paddingHorizontal: 10, paddingBottom: 4 }}>
-                          BORROWED — NOT INCOME
-                        </Text>
-                        {trackedDebts.map((debt) => (
-                          <TouchableOpacity
-                            key={`borrow-debt-${debt.id}`}
-                            style={[styles.categoryOption, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }]}
-                            onPress={() => { setRepayingPartyId(null); setBorrowTarget({ kind: 'debt', name: debt.name }); setToBusinessId(null); setShowRepayPicker(false); }}
-                            testID={`bank-borrow-debt-${debt.id}`}
-                          >
-                            <Text style={{ color: colors.dropdownForeground, fontFamily: 'Inter_400Regular', flexShrink: 1 }}>
-                              Borrowed — {debt.name}
-                            </Text>
-                            <Text style={{ color: colors.dropdownMutedForeground, fontFamily: 'Inter_400Regular', fontSize: 12 }}>
-                              owe KES {formatKES(debt.debtBalance ?? 0)}
-                            </Text>
-                          </TouchableOpacity>
-                        ))}
-                        {parties.map((party) => (
-                          <TouchableOpacity
-                            key={`borrow-party-${party.id}`}
-                            style={styles.categoryOption}
-                            onPress={() => { setRepayingPartyId(null); setBorrowTarget({ kind: 'party', id: party.id }); setToBusinessId(null); setShowRepayPicker(false); }}
-                            testID={`bank-borrow-party-${party.id}`}
-                          >
-                            <Text style={{ color: colors.dropdownForeground, fontFamily: 'Inter_400Regular' }}>
-                              Borrowed from {party.name}
-                            </Text>
-                          </TouchableOpacity>
-                        ))}
+                      {/* Repaid and borrowed as rows like the rest, and never Fuliza: Safaricom
+                          lends and takes it back by itself, and the import files it ("fuliza
+                          should not be seen here as its an automatic deduction and addition
+                          from safaricom", 16 Oct 2026). Only somebody who owes you repays. */}
+                      {repayingChoices.length > 0 ? (
+                        <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, paddingTop: 8, marginTop: 4, paddingHorizontal: 10, gap: 6 }} testID="bank-deposit-repaid-row">
+                          <Text style={{ color: colors.foreground, fontFamily: 'Inter_700Bold', fontSize: 13, letterSpacing: 0.3 }}>REPAID TO ME BY</Text>
+                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                            {repayingChoices.map((party) => (
+                              <TouchableOpacity
+                                key={`owing-party-${party.id}`}
+                                style={[styles.memberPill, { backgroundColor: colors.muted, borderColor: colors.border }]}
+                                onPress={() => { setRepayingPartyId(party.id); setBorrowTarget(null); setToBusinessId(null); setShowRepayPicker(false); }}
+                                testID={`bank-repayment-party-${party.id}`}
+                              >
+                                <Text style={[styles.memberPillText, { color: colors.foreground }]}>{party.name} · KES {formatKES(party.owedToUs ?? 0)}</Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                        </View>
+                      ) : null}
+                      <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, paddingTop: 8, marginTop: 4, paddingHorizontal: 10, gap: 6 }} testID="bank-deposit-borrowed-row">
+                        <Text style={{ color: colors.foreground, fontFamily: 'Inter_700Bold', fontSize: 13, letterSpacing: 0.3 }}>BORROWED FROM - NOT INCOME</Text>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                          {trackedDebts.filter((debt) => notFuliza(debt.name)).map((debt) => (
+                            <TouchableOpacity
+                              key={`borrow-debt-${debt.id}`}
+                              style={[styles.memberPill, { backgroundColor: colors.muted, borderColor: colors.border }]}
+                              onPress={() => { setRepayingPartyId(null); setBorrowTarget({ kind: 'debt', name: debt.name }); setToBusinessId(null); setShowRepayPicker(false); }}
+                              testID={`bank-borrow-debt-${debt.id}`}
+                            >
+                              <Text style={[styles.memberPillText, { color: colors.foreground }]}>{debt.name} · owe KES {formatKES(debt.debtBalance ?? 0)}</Text>
+                            </TouchableOpacity>
+                          ))}
+                          {parties.filter((party) => notFuliza(party.name)).map((party) => (
+                            <TouchableOpacity
+                              key={`borrow-party-${party.id}`}
+                              style={[styles.memberPill, { backgroundColor: colors.muted, borderColor: colors.border }]}
+                              onPress={() => { setRepayingPartyId(null); setBorrowTarget({ kind: 'party', id: party.id }); setToBusinessId(null); setShowRepayPicker(false); }}
+                              testID={`bank-borrow-party-${party.id}`}
+                            >
+                              <Text style={[styles.memberPillText, { color: colors.foreground }]}>{party.name}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
                         {/* Naming the lender has to be possible here: this
                             is the only place borrowing is recorded, and a
                             lender nobody can add is a lender nobody has. */}
                         <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, padding: 10, gap: 8 }} testID="bank-add-lender-form">
-                          <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold', fontSize: 12 }}>
-                            WHO LENT IT TO YOU? ADD THEM
+                          <Text style={{ color: colors.foreground, fontFamily: 'Inter_700Bold', fontSize: 13, letterSpacing: 0.3 }}>
+                            SOMEBODY ELSE LENT IT? ADD THEM
                           </Text>
                           <View style={{ flexDirection: 'row', gap: 8 }}>
                             <TextInput
