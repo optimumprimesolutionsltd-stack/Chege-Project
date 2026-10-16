@@ -12,10 +12,10 @@ import { mpesaCardKey, rememberMpesaCard, shouldShowMpesaCard } from '@/lib/mpes
 /**
  * Your M-Pesa, first thing on Home and always there.
  *
- * M-Pesa is what people open Jamvi for, so Home leads with it: what came in
- * and went out through M-Pesa this month, when it was last brought in, and one
- * tap to bring more in. Before the first import it carries the short
- * explanation instead of figures; "Not now" folds that explanation away but
+ * M-Pesa is what people open Jamvi for, so Home leads with it: when it was
+ * last brought in, and one tap to bring more in - the balance itself is in
+ * "How much is on my M-Pesa?" just above. Before the first import it carries
+ * the short explanation; "Not now" folds that explanation away but
  * leaves the panel and its button in place.
  */
 
