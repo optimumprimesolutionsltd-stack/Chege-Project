@@ -125,10 +125,11 @@ describe("a business's salary is only what is filed as the salary", () => {
     expect(salaryStreamName("Dahanak Ventures")).toBe("Dahanak Ventures salary");
   });
 
-  it("makes that stream when a business pays a salary, and for those answered before", () => {
-    expect(businesses).toContain("parsed.data.business && parsed.data.paysSalary === true ? await ensureSalaryStream(groupId, incomeSourceId) : null");
-    expect(businesses).toContain("if (business.paysSalary === true) await ensureSalaryStream(groupId, business.id).catch(() => null);");
-    expect(streams).toContain('lower(trim("name")) = lower(${name})');
+  it("finds or makes that stream when a business pays a salary, and folds a second one into the first", () => {
+    expect(businesses).toContain("parsed.data.business && parsed.data.paysSalary === true ? await findOrMakeSalaryStream(groupId, incomeSourceId) : null");
+    expect(businesses).toContain("if (business.paysSalary === true) await findOrMakeSalaryStream(groupId, business.id).catch(() => null);");
+    expect(businesses).toContain("await foldDuplicateSalaryStreams(groupId).catch(() => 0);");
+    expect(streams).not.toContain("ensureSalaryStream");
   });
 
   it("never counts other money from the business as the salary", () => {
