@@ -30,7 +30,12 @@ describe('Year at a glance', () => {
 
   it('the month row stays frozen at the top while the rows scroll (9 Oct 2026)', () => {
     expect(phone).toContain('stickyHeaderIndices={[0]}');
-    expect(phone).toContain('monthRow.current?.scrollTo({ x: event.nativeEvent.contentOffset.x, animated: false })');
+    // The month row slides with the figures' own scroll, natively, clipped -
+    // never a second ScrollView chasing it (it fell a column behind, 16 Oct 2026).
+    expect(phone).toContain("onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], { useNativeDriver: true })}");
+    expect(phone).toContain("transform: [{ translateX: Animated.multiply(scrollX, -1) }]");
+    expect(phone).toContain("<View style={{ flex: 1, overflow: 'hidden' }}>");
+    expect(phone).not.toContain('monthRow');
     expect(web).toContain('<thead className="sticky top-0 z-20 bg-card">');
   });
 });
