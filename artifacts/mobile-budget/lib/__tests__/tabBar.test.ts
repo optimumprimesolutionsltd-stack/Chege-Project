@@ -19,12 +19,17 @@ describe('the tab bar is Home, Money, Plan, in both layouts', () => {
     expect(layout).toContain("options={has('debt')");
     expect(layout).toContain('<Tabs.Screen name="bank"     options={{ href: null }} />');
   });
-  it('Money switches Accounts and All activity; Plan switches Budget and Reports, Contributions first in a group', () => {
+  it('Money switches Accounts and All activity; the Reports tab opens on Reports, with Contributions and Budget beside it', () => {
+    expect(layout).toContain('<Label>Reports</Label>');
+    expect(layout).toContain("title: 'Reports',");
     const money = read('app/(tabs)/money.tsx');
     expect(money).toContain("{view === 'activity' ? <HistoryScreen /> : <BankScreen />}");
     const plan = read('app/(tabs)/plan.tsx');
     expect(plan).toContain("...(isShared ? [{ key: 'contributions', label: 'Contributions' }] : []),");
     expect(plan).toContain("...(showReports ? [{ key: 'reports', label: 'Reports' }] : []),");
+    // Reports first, so the tab opens on it.
+    expect(plan.indexOf("key: 'reports'")).toBeLessThan(plan.indexOf("key: 'contributions'"));
+    expect(plan.indexOf("key: 'reports'")).toBeLessThan(plan.indexOf("key: 'budget'"));
     // Shown in the header every one of those screens already has.
     expect(read('components/WorkspaceIdentityRow.tsx')).toContain('<TabSwitchSlot tone={tone} />');
   });
@@ -42,7 +47,7 @@ describe('your picture on Home opens everything the bar leaves out', () => {
   });
   it('Bank and Budget are not repeated there - they are the Money and Plan tabs', () => {
     expect(more).toContain('// On the Money tab now (lib/tabPlan).');
-    expect(more).toContain('// On the Plan tab now, beside Contributions (lib/tabPlan).');
+    expect(more).toContain('// On the Reports tab now, beside Contributions (lib/tabPlan).');
   });
 });
 

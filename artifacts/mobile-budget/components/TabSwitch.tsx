@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 
 /**
- * The switch at the top of the Money and Plan tabs: "the tab thing with banks
+ * The switch at the top of the Money and Reports tabs: "the tab thing with banks
  * reports etc is exhausting" (15 Oct 2026). Three tabs - Home, Money, Plan -
  * each holding screens that already existed, chosen here rather than from
  * the tab bar: Money is Accounts or All activity, Plan is Budget or Reports
