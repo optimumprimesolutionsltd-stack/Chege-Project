@@ -55,9 +55,12 @@ describe('your picture on Home opens everything the bar leaves out', () => {
     expect(more).toContain('testID="more-back"');
     expect(read('app/(tabs)/index.tsx')).toContain("router.push('/(tabs)/more')");
   });
-  it('Bank and Budget are not repeated there - they are the Money and Plan tabs', () => {
+  it('Bank is not repeated there - it is the Money tab', () => {
     expect(more).toContain('// On the Money tab now (lib/tabPlan).');
-    expect(more).toContain('// On the Reports tab now, beside Contributions (lib/tabPlan).');
+  });
+  it('Budget is there too, first, opening the Budget & Reports tab on the Budget', () => {
+    expect(more).toContain("'/(tabs)/plan?view=budget'");
+    expect(more.indexOf("key: 'budget'")).toBeLessThan(more.indexOf("key: 'bank'"));
   });
 });
 

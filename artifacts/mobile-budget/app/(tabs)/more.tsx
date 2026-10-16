@@ -24,10 +24,21 @@ type Item = {
  */
 export default function MoreScreen() {
   const colors = useColors();
-  const { showDebt } = useTabFlags();
+  const { showDebt, showBudget } = useTabFlags();
   const hasBusiness = useHasBusiness();
 
   const items: Item[] = [
+    {
+      key: 'budget',
+      icon: 'bar-chart-2',
+      title: 'Budget',
+      hint: 'Your categories, what each has left, and changing them',
+      // Also on the Budget & Reports tab (lib/tabPlan), and here too, first:
+      // people could not find it, and it is used all the time (16 Oct 2026).
+      // Opens the tab on the Budget, so the tab bar shows where it lives.
+      href: (showBudget ? '/(tabs)/plan?view=budget' : '/(tabs)/budget') as Href,
+      show: true,
+    },
     {
       key: 'bank',
       icon: 'briefcase',
@@ -44,15 +55,6 @@ export default function MoreScreen() {
       hint: 'Savings goals and what you have put towards them',
       href: '/(tabs)/goals',
       show: true,
-    },
-    {
-      key: 'budget',
-      icon: 'bar-chart-2',
-      title: 'Budget',
-      hint: "The group's categories and what each has left",
-      href: '/(tabs)/budget',
-      // On the Reports tab now, beside Contributions (lib/tabPlan).
-      show: false,
     },
     {
       key: 'mpesa',
