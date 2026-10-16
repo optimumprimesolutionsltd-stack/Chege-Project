@@ -93,10 +93,12 @@ describe("Bank's M-Pesa account shows M-Pesa's own balance", () => {
     const bank = readFileSync('app/(tabs)/bank.tsx', 'utf8');
     expect(bank).toContain("queryKey: ['mpesa-live-balance'],");
     expect(bank).toContain('mpesaSummary?.balanceAccountId === selectedAccount.id');
-    expect(bank).toContain('periodSummary ? periodSummary.closing : liveBalance ? liveBalance.balance : data?.balance');
     expect(bank).toContain('From your M-Pesa message of {messageTime(liveBalance.at)}');
     // "why is the balance here not 1737.48": each entry's balance moves by the same gap.
     expect(bank).toContain('Balance KES {formatKES(item.runningBalance + balanceShift)}');
     expect(bank).toContain('Math.round((liveBalance.balance - data.balance) * 100) / 100');
+    // "Why is balance now off the actual balance?" (16 Oct 2026): a month's figures move by the same gap.
+    expect(bank).toContain('periodSummary ? periodSummary.closing + balanceShift : liveBalance ? liveBalance.balance : data?.balance');
+    expect(bank).toContain('periodSummary ? periodSummary.opening + balanceShift : data?.openingBalance');
   });
 });

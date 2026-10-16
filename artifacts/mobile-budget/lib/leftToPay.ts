@@ -46,3 +46,24 @@ export function budgetRowLeft(budget: number, spent: number): string {
   if (spent === budget) return 'Fully paid';
   return `${kes(budget - spent)} left`;
 }
+
+
+/**
+ * The same preview for one payment typed anywhere - Money out on Bank as well
+ * as Log Expense: "would also want to see pending balance as per budget when
+ * entries are being made" (16 Oct 2026). Null when the category has no budget.
+ */
+export function previewFor(category: string, amount: number, budgetAmount: number | null | undefined, spentAmount: number | null | undefined): BalancePreview | null {
+  const budget = Number(budgetAmount ?? 0);
+  if (!category.trim() || !(amount > 0) || !(budget > 0)) return null;
+  const spent = Number(spentAmount ?? 0);
+  const after = Math.round((budget - spent - amount) * 100) / 100;
+  return {
+    category: category.trim(),
+    budgetAmount: budget,
+    spentBeforeExpense: spent,
+    remaining: Math.max(0, after),
+    overBy: Math.max(0, -after),
+    isOverBudget: after < 0,
+  };
+}

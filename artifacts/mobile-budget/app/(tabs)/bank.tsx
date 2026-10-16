@@ -29,6 +29,7 @@ import { isNotSure } from '@/lib/entriesToSort';
 import { LISTS_AN_EDIT_CHANGES, withSavedRow } from '@/lib/showSavedEdit';
 import { PassThroughPair, type PairEntry } from '@/components/PassThroughPair';
 import { onScreenOnly, useOnScreen } from '@/hooks/useOnScreen';
+import { leftToPayLine, previewFor } from '@/lib/leftToPay';
 import { useAutoMarkBusiness, useOwnerBusiness } from '@/hooks/useOwnerBusiness';
 import { useBusinessAccounts } from '@/hooks/useBusinessAccounts';
 import { saveRules } from '@/lib/rulesStore';
@@ -80,6 +81,7 @@ import {
   useUpdateJointAccountOpeningBalance,
   useGetGroup,
   useGetJointAccounts,
+  useGetDashboardCategoryBreakdown,
   useCreateJointAccount,
   useUpdateJointAccount,
   useDeleteJointAccount,
@@ -535,6 +537,9 @@ export default function BankScreen() {
     retry: false,
     subscribed: onScreen,
   });
+  // The month's budget per category for the entry being typed (moneyOutLeft).
+  const entryMonth = { month: Number(date.slice(5, 7)) || new Date().getMonth() + 1, year: Number(date.slice(0, 4)) || new Date().getFullYear() };
+  const { data: entryBreakdown = [] } = useGetDashboardCategoryBreakdown(entryMonth, live);
   const liveBalance = personalBudget && liveMpesa && selectedAccount && mpesaSummary?.balanceAccountId === selectedAccount.id
     ? liveMpesa
     : null;
@@ -542,6 +547,10 @@ export default function BankScreen() {
   // as Balance now, so the newest reads what M-Pesa's own message says ("why is
   // the balance here not 1737.48", 15 Oct 2026). The gap itself is a payment
   // or opening balance missing from Jamvi - Find the difference finds it.
+  // A month's opening and closing too ("why is balance now off the actual
+  // balance?", 16 Oct 2026: October said -585.35, starting at -3,790.77, on an
+  // M-Pesa that cannot go below nothing) - so this month's closing is M-Pesa's
+  // own figure, and every month lines up with it.
   const balanceShift = liveBalance && typeof data?.balance === 'number'
     ? Math.round((liveBalance.balance - data.balance) * 100) / 100
     : 0;
@@ -2748,6 +2757,16 @@ export default function BankScreen() {
   const period = periodFor(periodPreset, nairobiToday(), { from: periodFrom, to: periodTo });
   // A period's figures need every entry in it: worked out once the whole list is here.
   const periodSummary = fullData && period ? summarisePeriod(fullData as never, period) : null;
+  // What is left on the chosen category's budget after this money out, as Log
+  // Expense says it (lib/leftToPay): "would also want to see pending balance as
+  // per budget when entries are being made" (16 Oct 2026). The entry's own month.
+  const moneyOutLeft = (() => {
+    if (!modalVisible || txType !== 'disbursement' || editingTransactionId !== null || withdrawDest === 'party' || withdrawDest === 'lend' || withdrawDest === 'savings') return null;
+    const name = expenseCategory.trim().toLowerCase();
+    const row = (entryBreakdown as Array<{ category: string; budgetAmount?: number | null; spentAmount?: number | null }>).find((item) => item.category.toLowerCase() === name);
+    const preview = row ? previewFor(row.category, parseBankAmount(amount) ?? 0, row.budgetAmount, row.spentAmount) : null;
+    return preview ? leftToPayLine(preview, new Date(entryMonth.year, entryMonth.month - 1, 1).toLocaleString('en-GB', { month: 'long' })) : null;
+  })();
   const shownTransactions = period ? transactions.filter((tx) => inPeriod(tx, period)) : transactions;
   // Search narrows the list only; the period's figures stay the period's
   // (lib/bankSearch, "put a search button", 7 Oct 2026).
@@ -3337,7 +3356,7 @@ export default function BankScreen() {
           ) : (
             <>
               <Text style={styles.balanceLabel}>Balance now</Text>
-              <Text style={[styles.balance, liveBalance && !periodSummary ? { marginBottom: 2 } : null]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>KES {formatKES(periodSummary ? periodSummary.closing : liveBalance ? liveBalance.balance : data?.balance)}</Text>
+              <Text style={[styles.balance, liveBalance && !periodSummary ? { marginBottom: 2 } : null]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>KES {formatKES(periodSummary ? periodSummary.closing + balanceShift : liveBalance ? liveBalance.balance : data?.balance)}</Text>
               {liveBalance && !periodSummary ? (
                 <Text style={styles.liveBalanceSource} numberOfLines={1} testID="bank-live-balance-source">From your M-Pesa message of {messageTime(liveBalance.at)}</Text>
               ) : null}
@@ -3388,7 +3407,7 @@ export default function BankScreen() {
               <View style={styles.openingBalanceRow}>
                 <View>
                   <Text style={styles.openingBalanceLabel}>{periodSummary ? 'Balance at the start' : 'Starting balance'}</Text>
-                   <Text style={styles.openingBalanceValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>KES {formatKES(periodSummary ? periodSummary.opening : data?.openingBalance)}</Text>
+                   <Text style={styles.openingBalanceValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>KES {formatKES(periodSummary ? periodSummary.opening + balanceShift : data?.openingBalance)}</Text>
                   {periodSummary && period ? (
                     <Text style={styles.openingBalanceDate}>
                       {formatDisplayDate(period.from)} to {formatDisplayDate(period.to)}
@@ -5926,6 +5945,17 @@ export default function BankScreen() {
                       color={colors.mutedForeground}
                     />
                   </TouchableOpacity>
+                  {moneyOutLeft ? (
+                    <View
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, borderWidth: 1, alignSelf: 'flex-start',
+                        borderColor: (moneyOutLeft.tone === 'over' ? colors.destructive : moneyOutLeft.tone === 'paid' ? colors.success : colors.primary) + '55',
+                        backgroundColor: (moneyOutLeft.tone === 'over' ? colors.destructive : moneyOutLeft.tone === 'paid' ? colors.success : colors.primary) + '18' }}
+                      testID="bank-money-out-left"
+                    >
+                      <Feather name={moneyOutLeft.tone === 'paid' ? 'check-circle' : 'bar-chart-2'} size={12} color={moneyOutLeft.tone === 'over' ? colors.destructive : moneyOutLeft.tone === 'paid' ? colors.success : colors.primary} />
+                      <Text style={{ flexShrink: 1, fontSize: 12, fontFamily: 'Inter_600SemiBold', color: moneyOutLeft.tone === 'over' ? colors.destructive : moneyOutLeft.tone === 'paid' ? colors.success : colors.primary }}>{moneyOutLeft.text}</Text>
+                    </View>
+                  ) : null}
                   {paymentFiledAsCharge ? (
                     <Text style={{ color: '#f59e0b', fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 4 }} testID="bank-category-is-charge-warning">
                       This whole payment is filed under {expenseCategory.trim()}, the same as bank fees, so all of it counts
