@@ -39,7 +39,7 @@ Invite family or a partner to a shared group. Groups cost nothing extra.
 PRIVATE BY DESIGN
 Jamvi never moves money and never asks for your M-Pesa PIN. It reads only M-Pesa's messages, only with your permission, and keeps only the entries you save.
 
-Free for 14 days, then a monthly subscription. Made in Kenya by Optimum Prime Solutions.
+Free for your first 3 months, then a subscription. Made in Kenya by Optimum Prime Solutions.
 ```
 
 Before submitting, check the trial length and price against the app (`jamvi-pricing-model`,
