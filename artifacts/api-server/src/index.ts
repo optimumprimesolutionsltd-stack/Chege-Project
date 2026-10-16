@@ -24,6 +24,8 @@ import { sql } from "drizzle-orm";
 import { assertExternalProductionConfiguration } from "./lib/productionConfig";
 import { ensureSubscriptionPlanCatalogue } from "./lib/subscription-catalog";
 import { runSubscriptionLifecycle } from "./lib/subscription-reminders";
+import { sendUsageReport } from "./lib/usage-report";
+import { ensureImportCorrections } from "./lib/import-corrections";
 import { runAccountDeletions, sendAccountDeletionReminders } from "./lib/account-deletion";
 import { ensureReversalLinks } from "./lib/reversal-links";
 import { convertMoneyBackToRefunds } from "./lib/refunds";
@@ -100,6 +102,7 @@ async function startServer() {
   void ensureCategoryPlaces();
   void ensureRemovedReceipts();
   void ensurePayeeRules();
+  void ensureImportCorrections();
   void ensureBudgetKnowledge();
   void ensureStandardCategories();
   void ensureEveryBudgetHasAnAccount();
@@ -169,6 +172,22 @@ cronSchedule(
       logger.info(result, "Subscription lifecycle run complete");
     } catch (err) {
       logger.error({ err }, "Subscription lifecycle run failed");
+    }
+  },
+  { timezone: "Africa/Nairobi" },
+);
+
+// ── Weekly usage report — Mondays at 08:00 ──────────────────────────────
+// Counts from what the budgets already hold, and the M-Pesa suggestions people
+// changed (lib/usage-report), emailed to info@ so the launch can be judged.
+cronSchedule(
+  "0 8 * * 1",
+  async () => {
+    try {
+      const report = await sendUsageReport();
+      logger.info({ weekStart: report.weekStart, signups: report.signups }, "Weekly usage report sent");
+    } catch (err) {
+      logger.error({ err }, "Weekly usage report failed");
     }
   },
   { timezone: "Africa/Nairobi" },

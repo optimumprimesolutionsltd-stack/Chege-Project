@@ -52,6 +52,7 @@ const pageContent = {
         heading: "Cookies and sessions",
         paragraphs: [
           "Jamvi uses essential cookies and session information to keep you signed in, protect requests, and remember the service state needed for the application to work. Jamvi does not use advertising cookies to track you across unrelated websites.",
+          "To improve Jamvi, it counts how it is used each week (sign-ups, budgets used, M-Pesa entries brought in), and when you change the category it suggested for an M-Pesa payment it keeps the kind of payment, the business it went to (a till, paybill or bank - never a person's name), what it suggested and what you chose. None of this identifies you or your budget, and it is never shared or sold.",
         ],
       },
       {

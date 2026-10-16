@@ -82,6 +82,7 @@ import {
   twinQuestions,
   untickElsewhere,
   withTwins,
+  importCorrections,
 } from "@/lib/mpesa-import";
 import { findSavingsGoal, ledgersToMake, loanOf, productNote, productOf, savingsNeeded, savingsOf, withSavingsAccounts, type LenderId, type SavingsAccountId } from "@/lib/mpesa-products";
 import {
@@ -1456,6 +1457,17 @@ export default function MpesaImportPage() {
           body: JSON.stringify({ transactionIds: ids }),
         }).catch(() => {});
       }
+    }
+    // Jamvi's suggestions the person changed, with nothing that says whose -
+    // the weekly report's list of what the M-Pesa reading files wrongly.
+    const corrections = importCorrections(lines.filter((item) => savedIndexes.has(item.index)), saveChoices);
+    if (corrections.length > 0) {
+      void fetch("/api/mpesa/corrections", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ corrections }),
+      }).catch(() => {});
     }
     void saveMpesaNames(mpesaNames);
     void offerBalanceChanges(lines.filter((item) => savedIndexes.has(item.index)), saveChoices, saveParties);
