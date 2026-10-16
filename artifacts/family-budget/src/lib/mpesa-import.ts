@@ -126,6 +126,14 @@ export type Choice = {
    */
   otherBudgetAuto?: boolean;
   /**
+   * In a Personal budget: this payment is also the person"s contribution to one
+   * of their groups, so it is recorded there too, under their name on its
+   * who-has-paid list ("how do you differentiate my salary and business profits
+   * from chama money ... so we fix the issue", 16 Oct 2026). The line itself
+   * stays in this budget, under its category: the money did leave the person.
+   */
+  alsoContribution?: { groupId: number; groupName: string; accountId: number } | null;
+  /**
    * "Who is this for?" answered on the line (lib/importBusiness): one of My
    * businesses, or null for Personal. Left out, the line"s business is read
    * from its category or income source.
@@ -1450,4 +1458,38 @@ export function importCorrections(lines: readonly PreviewLine[], choices: Record
     });
   }
   return out;
+}
+
+
+/** Money out that may be the person"s contribution to a group: paid to a chama-like payee, or filed under a chama category. */
+export function mayBeGroupContribution(line: Pick<PreviewLine, "direction" | "description">, choice: Choice | undefined): boolean {
+  if (line.direction !== "out" || !choice?.include || destinationOf(choice) !== "category") return false;
+  const category = choice.category.toLowerCase();
+  return GROUP_PAYEE.test(line.description ?? "") || GROUP_CATEGORY_WORDS.some((word) => category.includes(word));
+}
+
+/**
+ * The deposit that records a saved line as the person"s contribution in the
+ * group they picked (api-server POST /joint-account/deposit, sent to that
+ * group): their own money in, under their name. The same M-Pesa code keeps a
+ * treasurer"s own entry of it from counting twice - the group refuses it.
+ */
+export function groupContributionDeposit(
+  line: Pick<PreviewLine, "amount" | "date" | "description" | "receipt">,
+  choice: Choice | undefined,
+  userId: string,
+): { groupId: number; body: Record<string, unknown> } | null {
+  const target = choice?.alsoContribution;
+  if (!target || !line.amount || line.amount <= 0 || !line.date) return null;
+  return {
+    groupId: target.groupId,
+    body: {
+      amount: line.amount,
+      description: `Contribution${line.description ? ` - ${line.description}` : ""}`.slice(0, 200),
+      date: line.date.slice(0, 10),
+      accountId: target.accountId,
+      contributorSplits: [{ userId, amount: line.amount }],
+      ...(line.receipt ? { mpesaReceipt: line.receipt } : {}),
+    },
+  };
 }
