@@ -1,6 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { customFetch, useGetGroup } from '@workspace/api-client-react';
+import { useGroupMpesaSource } from '@/hooks/useGroupMpesaSource';
+import { smsAllowedIn } from '@/lib/groupMpesa';
 import { useAuth } from '@/lib/auth';
 import type { EntryToSort } from '@/lib/entriesToSort';
 import { canReadSms, newMpesaSms, parseSmsAuto, smsAutoKey } from '@/lib/mpesaSms';
@@ -23,19 +25,23 @@ export function useWaitingForYou() {
     staleTime: 60_000,
     retry: false,
   });
+  // The phone's messages count only where they belong: the Personal budget, or a
+  // group run on this person's own line (lib/groupMpesa).
+  const { source } = useGroupMpesaSource();
+  const smsHere = smsAllowedIn(group, source, user?.id);
   const newSms = useQuery<number>({
-    queryKey: ['new-mpesa-sms', user?.id],
+    queryKey: ['new-mpesa-sms', user?.id, group?.id ?? null, smsHere],
     queryFn: async () => {
       const auto = parseSmsAuto(await AsyncStorage.getItem(smsAutoKey(user?.id)).catch(() => null));
       if (!auto.on) return 0;
       return (await newMpesaSms(auto.since))?.messages.length ?? 0;
     },
-    enabled: canReadSms(),
+    enabled: canReadSms() && smsHere,
     staleTime: 30_000,
     retry: false,
   });
   const toSortCount = toSort.data?.entries.length ?? 0;
-  const newSmsCount = newSms.data ?? 0;
+  const newSmsCount = smsHere ? newSms.data ?? 0 : 0;
   const total = waitingTotal({ toSortCount, newSmsCount, canAct: canActOnWaiting(group) });
   // The entries themselves too: Home offers Teach Jamvi when regulars are among them.
   return { toSortCount, newSmsCount, total, recheckSms: newSms.refetch, toSortEntries: toSort.data?.entries };

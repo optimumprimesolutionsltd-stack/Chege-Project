@@ -291,3 +291,16 @@ export function resolveDirections(rows: readonly StatementRow[]): StatementRow[]
     return row;
   });
 }
+
+/**
+ * Whose line a statement is: its "Customer Name" and "Mobile Number", printed
+ * at the top of the first page of an M-Pesa statement. Used to warn when a
+ * statement brought into a group is not the group's own line (mobile
+ * lib/groupMpesa wrongLineWarning). Nulls when the page does not say.
+ */
+export function statementHolder(pages: readonly (readonly TextItem[])[]): { name: string | null; phone: string | null } {
+  const first = (pages[0] ?? []).map((item) => item.str).join(' ').replace(/\s+/g, ' ');
+  const phone = first.match(/Mobile\s*Number\s*:?\s*(\+?\d[\d\s]{8,14}\d)/i)?.[1]?.replace(/\s/g, '') ?? null;
+  const name = first.match(/Customer\s*Name\s*:?\s*([A-Za-z][A-Za-z .'-]{1,60}?)\s+(?:Mobile|Email|Statement|Date)/i)?.[1]?.trim() ?? null;
+  return { name, phone };
+}

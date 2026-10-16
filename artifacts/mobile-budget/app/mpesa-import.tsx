@@ -126,9 +126,12 @@ import { fromStatementStart, keepUpSince, startPresets } from '@/lib/mpesaFirstS
 import { shownFileName } from '@/lib/shownFileName';
 import { readPercent } from '@/lib/statementProgress';
 import { balanceAtEndOf, dayBefore, missingInJamvi, notOnStatement, withoutRecordedFuliza, type RecordedRow, fulizaChargeOverlap, fulizaCharges, fulizaOwedBefore, reconcile, statementLines, type StatementReading } from '@/lib/statementImport';
-import { checkRunningBalance, readStatementRows, resolveDirections } from '@/lib/statementTable';
+import { checkRunningBalance, readStatementRows, resolveDirections, statementHolder } from '@/lib/statementTable';
 import type { ReaderMessage } from '@/lib/statementReaderHtml';
 import { fetchOtherBudgetOptions, type OtherBudgetOptions } from '@/lib/otherBudgetOptions';
+import { useGroupMpesaSource } from '@/hooks/useGroupMpesaSource';
+import { smsAllowedIn, wrongLineWarning } from '@/lib/groupMpesa';
+import { GroupMpesaQuestion } from '@/components/GroupMpesaQuestion';
 import { WhoIsThisFor } from '@/components/WhoIsThisFor';
 import { useBusinesses } from '@/hooks/useBusinesses';
 import { useBusinessAccounts } from '@/hooks/useBusinessAccounts';
@@ -1154,7 +1157,13 @@ export default function MpesaImportScreen() {
   // Reading M-Pesa's messages straight from the phone (lib/mpesaSms): Android,
   // in a build that carries it. The texts are kept here only so a line can be
   // matched back to its message; they are never saved.
-  const smsReadable = canReadSms();
+  // Never this phone's own messages in a group that does not run on this phone's
+  // line (lib/groupMpesa): "my worry is the app importing users mpesa when it may
+  // not be what the group is using" (16 Oct 2026). A statement still can be.
+  const groupMpesa = useGroupMpesaSource();
+  const smsHere = smsAllowedIn(group, groupMpesa.source, user?.id);
+  const smsReadable = canReadSms() && smsHere;
+  const [lineWarning, setLineWarning] = useState<string | null>(null);
   // The first time - nothing brought in from M-Pesa in this budget yet - the
   // screen leads with one statement from a day the person chooses, and the
   // other ways in wait one tap away (lib/mpesaFirstStart).
@@ -1343,7 +1352,7 @@ export default function MpesaImportScreen() {
   }, [params.smsFrom, params.smsTo]);
   const openedForNew = React.useRef(false);
   useEffect(() => {
-    if (params.fromSms !== 'new' || openedForNew.current || !smsAuto.on || lines) return;
+    if (params.fromSms !== 'new' || openedForNew.current || !smsAuto.on || lines || !smsHere) return;
     openedForNew.current = true;
     void newMpesaSms(smsAuto.since).then(async (found) => {
       if (!found) return;
@@ -1511,6 +1520,8 @@ export default function MpesaImportScreen() {
         if (result.message === READER_STOPPED) throw new Error(READER_STOPPED);
         throw new Error('Jamvi could not open this file. Is it the M-Pesa statement PDF?');
       }
+      // A statement that is not this group's line: said before anything is saved.
+      setLineWarning(isShared ? wrongLineWarning(group?.name || 'This group', groupMpesa.source, statementHolder(result.pages).phone) : null);
       const allRows = resolveDirections(readStatementRows(result.pages));
       if (allRows.length === 0) throw new Error('Jamvi could not find the payments in this file. Is it the M-Pesa statement PDF?');
       // The first time, only from the day chosen (lib/mpesaFirstStart).
@@ -3126,6 +3137,16 @@ export default function MpesaImportScreen() {
               </>
             ) : null}
             {firstRun && !otherWays ? null : (<>
+            {/* Which M-Pesa this group uses, asked once (lib/groupMpesa), and why this
+                phone's own messages are not offered here when they are not the group's. */}
+            {isShared ? <GroupMpesaQuestion canManage={canManageBudget} /> : null}
+            {isShared && canReadSms() && !smsHere && !groupMpesa.unanswered ? (
+              <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]} testID="mpesa-group-no-sms">
+                <Text style={[styles.hint, { color: colors.foreground, marginTop: 0 }]}>
+                  Your phone's M-Pesa messages are not read into {group?.name || 'this group'} - its money is not on your line. Bring in the group's own M-Pesa statement instead.
+                </Text>
+              </View>
+            ) : null}
             {/* The easiest way in, so it leads when this phone can do it. */}
             {smsReadable ? (
               <View style={[styles.card, styles.leadCard, { backgroundColor: colors.card, borderColor: colors.foreground }]} testID="mpesa-sms">
@@ -3289,6 +3310,11 @@ export default function MpesaImportScreen() {
                 <Text style={[styles.hint, { color: colors.foreground, marginTop: 0 }]}>
                   You are a member of this group, so you can record money that came in, but not payments out, moves between accounts or savings. Those are left unticked. A group owner or admin can record them.
                 </Text>
+              </View>
+            ) : null}
+            {lineWarning ? (
+              <View style={[styles.card, { backgroundColor: colors.card, borderColor: '#F59E0B' }]} testID="mpesa-wrong-line">
+                <Text style={[styles.hint, { color: colors.foreground, marginTop: 0 }]}>{lineWarning}</Text>
               </View>
             ) : null}
             {statementNote ? (

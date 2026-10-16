@@ -26,6 +26,7 @@ import { ensureSubscriptionPlanCatalogue } from "./lib/subscription-catalog";
 import { runSubscriptionLifecycle } from "./lib/subscription-reminders";
 import { sendUsageReport } from "./lib/usage-report";
 import { ensureImportCorrections } from "./lib/import-corrections";
+import { ensureGroupMpesaSource } from "./lib/group-mpesa-source";
 import { runAccountDeletions, sendAccountDeletionReminders } from "./lib/account-deletion";
 import { ensureReversalLinks } from "./lib/reversal-links";
 import { convertMoneyBackToRefunds } from "./lib/refunds";
@@ -103,6 +104,7 @@ async function startServer() {
   void ensureRemovedReceipts();
   void ensurePayeeRules();
   void ensureImportCorrections();
+  void ensureGroupMpesaSource();
   void ensureBudgetKnowledge();
   void ensureStandardCategories();
   void ensureEveryBudgetHasAnAccount();
