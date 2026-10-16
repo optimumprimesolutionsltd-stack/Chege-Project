@@ -33,7 +33,7 @@ function NativeTabLayout({ visible }: { visible: TabName[] }) {
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="plan">
         <Icon sf={{ default: 'chart.pie', selected: 'chart.pie.fill' }} />
-        <Label>Plan</Label>
+        <Label>Reports</Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );
@@ -117,7 +117,9 @@ function ClassicTabLayout({ visible }: { visible: TabName[] }) {
       <Tabs.Screen
         name="plan"
         options={{
-          title: 'Plan',
+          // Called Reports, and opens on it: Reports is where a person lives
+          // once the M-Pesa reading does the filing (16 Oct 2026).
+          title: 'Reports',
           tabBarIcon: ({ color }) =>
             isIOS ? (
               <SymbolView name="chart.pie.fill" tintColor={color} size={24} />

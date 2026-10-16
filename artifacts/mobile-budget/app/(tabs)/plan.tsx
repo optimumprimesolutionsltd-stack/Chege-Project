@@ -16,10 +16,13 @@ import ReportsScreen from './reports';
 export default function PlanScreen() {
   const { isShared, showBudget, showReports } = useTabFlags();
   const { view: askedView } = useLocalSearchParams<{ view?: string }>();
+  // Reports first: "i think we can change the tab at the footer with reports
+  // tab" (16 Oct 2026) - the tab is called Reports and opens on it; a group's
+  // Contributions and the Budget are one tap away at the top.
   const options = useMemo(() => [
+    ...(showReports ? [{ key: 'reports', label: 'Reports' }] : []),
     ...(isShared ? [{ key: 'contributions', label: 'Contributions' }] : []),
     ...(showBudget ? [{ key: 'budget', label: 'Budget' }] : []),
-    ...(showReports ? [{ key: 'reports', label: 'Reports' }] : []),
   ], [isShared, showBudget, showReports]);
   const [view, setView] = useState(askedView ?? '');
   // The first one there, until one is picked; a choice that went away falls back.

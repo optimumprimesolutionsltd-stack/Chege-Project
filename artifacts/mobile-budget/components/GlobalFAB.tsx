@@ -10,7 +10,7 @@ import { useQuickBarHidden } from '@/lib/layoutPrefs';
  * One + for adding anything, in place of the four-button bar that floated
  * above the tabs: "the tab thing with banks reports etc is exhausting" (15 Oct
  * 2026). The bar and the tabs were nine buttons with Budget twice; Budget and
- * Reports are the Plan tab now, Bank and Activity the Money tab, and every way
+ * Reports are the Reports tab now, Bank and Activity the Money tab, and every way
  * to add money - spent, in, out, moved, saved, brought in from M-Pesa - is here.
  */
 const ADD_ACTIONS = [

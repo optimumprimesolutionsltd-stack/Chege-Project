@@ -51,7 +51,7 @@ export default function MoreScreen() {
       title: 'Budget',
       hint: "The group's categories and what each has left",
       href: '/(tabs)/budget',
-      // On the Plan tab now, beside Contributions (lib/tabPlan).
+      // On the Reports tab now, beside Contributions (lib/tabPlan).
       show: false,
     },
     {
