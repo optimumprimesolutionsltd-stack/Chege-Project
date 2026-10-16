@@ -4800,19 +4800,9 @@ export default function BankScreen() {
               {/* Somebody paying back what they owe. Kept above who deposited
                   it, because the answer changes what the money means: a
                   repayment is not income, so no income source is asked for. */}
-              {isDeposit && editingTransactionId !== null && !editingTransfer && !editingBusinessMoney && toBusinessId === null && !salaryChosen && !repayingParty && !isBorrowing ? (
-                <WhoIsThisFor
-                  direction="in"
-                  businesses={whoForBusinesses}
-                  businessId={forBusinessId}
-                  onBusiness={chooseWhoFor}
-                  costs={[]}
-                  category=""
-                  onCategory={() => {}}
-                  onAddCost={async () => {}}
-                  onAddBusiness={addWhoForBusiness}
-                />
-              ) : null}
+              {/* No Who is this for? on money in: the kind-of-money question below says
+                  it all - salary, a business's sales, director's money, a repayment, a
+                  loan ("who is this for? tab is not needed then", 16 Oct 2026). */}
               {isDeposit ? (
                 <>
                   <Text style={[styles.label, { color: colors.mutedForeground }]}>What kind of money is this?</Text>
@@ -4821,11 +4811,13 @@ export default function BankScreen() {
                     onPress={() => setShowRepayPicker((open) => !open)}
                     testID="bank-repayment-picker"
                   >
-                    <Text style={{ flex: 1, color: toBusinessId !== null || repayingParty || isBorrowing ? colors.foreground : colors.mutedForeground, fontFamily: 'Inter_400Regular' }}>
+                    <Text style={{ flex: 1, color: toBusinessId !== null || salaryChosen || forBusinessId !== null || repayingParty || isBorrowing ? colors.foreground : colors.mutedForeground, fontFamily: 'Inter_400Regular' }}>
                       {toBusinessId !== null
                         ? `From ${businessNameOf(toBusinessId)} - director's money`
                         : salaryChosen
                         ? `Salary from ${salaryChosen.name}`
+                        : forBusinessId !== null
+                        ? `${businessNameOf(forBusinessId)} - its sales`
                         : repayingParty
                         ? `${repayingParty.name} repaying you`
                         : borrowTarget?.kind === 'debt'
@@ -4842,7 +4834,7 @@ export default function BankScreen() {
                     <View style={[styles.categoryDropdown, { borderColor: colors.dropdownBorder, backgroundColor: colors.dropdownBackground }]}>
                       <TouchableOpacity
                         style={styles.categoryOption}
-                        onPress={() => { setRepayingPartyId(null); setBorrowTarget(null); setToBusinessId(null); setShowRepayPicker(false); }}
+                        onPress={() => { setRepayingPartyId(null); setBorrowTarget(null); setToBusinessId(null); if (forBusinessId !== null) chooseWhoFor(null); setShowRepayPicker(false); }}
                         testID="bank-repayment-none"
                       >
                         <Text style={{ color: colors.dropdownForeground, fontFamily: 'Inter_400Regular' }}>
@@ -4854,7 +4846,7 @@ export default function BankScreen() {
                           salary?", 16 Oct 2026). Only what is filed there counts as salary. */}
                       {salaryBusinesses.length > 0 ? (
                         <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, paddingTop: 8, marginTop: 4, paddingHorizontal: 10, gap: 6 }} testID="bank-deposit-salary-row">
-                          <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold', fontSize: 12 }}>MY SALARY FROM</Text>
+                          <Text style={{ color: colors.foreground, fontFamily: 'Inter_700Bold', fontSize: 13, letterSpacing: 0.3 }}>MY SALARY FROM</Text>
                           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
                             {salaryBusinesses.map((business) => (
                               <TouchableOpacity
@@ -4881,8 +4873,31 @@ export default function BankScreen() {
                       {/* Money from one of the person's businesses: the director's money, in one
                           tap - not income, not a loan ("yes", 12 Oct 2026, after money out got it). */}
                       {whoForBusinesses.length > 0 ? (
+                        <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, paddingTop: 8, marginTop: 4, paddingHorizontal: 10, gap: 6 }} testID="bank-deposit-sales-row">
+                          <Text style={{ color: colors.foreground, fontFamily: 'Inter_700Bold', fontSize: 13, letterSpacing: 0.3 }}>BUSINESS SALES FOR</Text>
+                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                            {whoForBusinesses.map((business) => (
+                              <TouchableOpacity
+                                key={`sales-for-${business.id}`}
+                                style={[styles.memberPill, { backgroundColor: colors.muted, borderColor: colors.border }]}
+                                onPress={() => {
+                                  setToBusinessId(null);
+                                  setRepayingPartyId(null);
+                                  setBorrowTarget(null);
+                                  chooseWhoFor(business.id);
+                                  setShowRepayPicker(false);
+                                }}
+                                testID={`bank-deposit-sales-for-${business.id}`}
+                              >
+                                <Text style={[styles.memberPillText, { color: colors.foreground }]}>{business.name}</Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                        </View>
+                      ) : null}
+                      {whoForBusinesses.length > 0 ? (
                         <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, paddingTop: 8, marginTop: 4, paddingHorizontal: 10, gap: 6 }} testID="bank-deposit-director-row">
-                          <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold', fontSize: 12 }}>DIRECTOR'S MONEY FROM</Text>
+                          <Text style={{ color: colors.foreground, fontFamily: 'Inter_700Bold', fontSize: 13, letterSpacing: 0.3 }}>DIRECTOR'S MONEY FROM</Text>
                           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
                             {whoForBusinesses.map((business) => (
                               <TouchableOpacity

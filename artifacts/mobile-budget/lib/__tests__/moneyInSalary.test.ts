@@ -13,8 +13,8 @@ describe('Money in: salary from one of your businesses', () => {
     // One row of chips under MY SALARY FROM, not a line per business (16 Oct 2026).
     expect(bank).toContain('MY SALARY FROM');
     expect(bank).toContain('testID="bank-deposit-salary-row"');
-    // Who is this for? stays away once it is salary: the business is already named.
-    expect(bank).toContain('toBusinessId === null && !salaryChosen && !repayingParty && !isBorrowing ? (');
+    // One question on money in: no Who is this for? beside it (16 Oct 2026).
+    expect(bank).toContain("No Who is this for? on money in");
   });
 
   it('says so once chosen', () => {
