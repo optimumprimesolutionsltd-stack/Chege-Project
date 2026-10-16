@@ -4800,7 +4800,7 @@ export default function BankScreen() {
               {/* Somebody paying back what they owe. Kept above who deposited
                   it, because the answer changes what the money means: a
                   repayment is not income, so no income source is asked for. */}
-              {isDeposit && editingTransactionId !== null && !editingTransfer && !editingBusinessMoney && toBusinessId === null && !repayingParty && !isBorrowing ? (
+              {isDeposit && editingTransactionId !== null && !editingTransfer && !editingBusinessMoney && toBusinessId === null && !salaryChosen && !repayingParty && !isBorrowing ? (
                 <WhoIsThisFor
                   direction="in"
                   businesses={whoForBusinesses}
@@ -4853,55 +4853,55 @@ export default function BankScreen() {
                           business's salary stream ("in money in, why cant i see the option of
                           salary?", 16 Oct 2026). Only what is filed there counts as salary. */}
                       {salaryBusinesses.length > 0 ? (
-                        <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, paddingTop: 8, marginTop: 4 }}>
-                          <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold', fontSize: 12, paddingHorizontal: 10, paddingBottom: 4 }}>
-                            MY SALARY
-                          </Text>
-                          {salaryBusinesses.map((business) => (
-                            <TouchableOpacity
-                              key={`salary-from-${business.id}`}
-                              style={styles.categoryOption}
-                              onPress={() => {
-                                setToBusinessId(null);
-                                setRepayingPartyId(null);
-                                setBorrowTarget(null);
-                                setForBusinessId(null);
-                                setIncomeSourceId(business.salaryStreamId);
-                                setDepositSourceKind('income_source');
-                                if (depositorIds.length === 0 && user?.id) setDepositorIds([user.id]);
-                                setShowRepayPicker(false);
-                              }}
-                              testID={`bank-deposit-salary-from-${business.id}`}
-                            >
-                              <Text style={{ color: colors.dropdownForeground, fontFamily: 'Inter_400Regular' }}>Salary from {business.name}</Text>
-                            </TouchableOpacity>
-                          ))}
+                        <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, paddingTop: 8, marginTop: 4, paddingHorizontal: 10, gap: 6 }} testID="bank-deposit-salary-row">
+                          <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold', fontSize: 12 }}>MY SALARY FROM</Text>
+                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                            {salaryBusinesses.map((business) => (
+                              <TouchableOpacity
+                                key={`salary-from-${business.id}`}
+                                style={[styles.memberPill, { backgroundColor: colors.muted, borderColor: colors.border }]}
+                                onPress={() => {
+                                  setToBusinessId(null);
+                                  setRepayingPartyId(null);
+                                  setBorrowTarget(null);
+                                  setForBusinessId(null);
+                                  setIncomeSourceId(business.salaryStreamId);
+                                  setDepositSourceKind('income_source');
+                                  if (depositorIds.length === 0 && user?.id) setDepositorIds([user.id]);
+                                  setShowRepayPicker(false);
+                                }}
+                                testID={`bank-deposit-salary-from-${business.id}`}
+                              >
+                                <Text style={[styles.memberPillText, { color: colors.foreground }]}>{business.name}</Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
                         </View>
                       ) : null}
                       {/* Money from one of the person's businesses: the director's money, in one
                           tap - not income, not a loan ("yes", 12 Oct 2026, after money out got it). */}
                       {whoForBusinesses.length > 0 ? (
-                        <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, paddingTop: 8, marginTop: 4 }}>
-                          <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold', fontSize: 12, paddingHorizontal: 10, paddingBottom: 4 }}>
-                            FROM ONE OF MY BUSINESSES - DIRECTOR'S MONEY
-                          </Text>
-                          {whoForBusinesses.map((business) => (
-                            <TouchableOpacity
-                              key={`from-business-${business.id}`}
-                              style={styles.categoryOption}
-                              onPress={() => {
-                                setToBusinessId(business.id);
-                                setRepayingPartyId(null);
-                                setBorrowTarget(null);
-                                setIncomeSourceId(null);
-                                setForBusinessId(null);
-                                setShowRepayPicker(false);
-                              }}
-                              testID={`bank-deposit-from-business-${business.id}`}
-                            >
-                              <Text style={{ color: colors.dropdownForeground, fontFamily: 'Inter_400Regular' }}>{business.name}</Text>
-                            </TouchableOpacity>
-                          ))}
+                        <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, paddingTop: 8, marginTop: 4, paddingHorizontal: 10, gap: 6 }} testID="bank-deposit-director-row">
+                          <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold', fontSize: 12 }}>DIRECTOR'S MONEY FROM</Text>
+                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                            {whoForBusinesses.map((business) => (
+                              <TouchableOpacity
+                                key={`from-business-${business.id}`}
+                                style={[styles.memberPill, { backgroundColor: colors.muted, borderColor: colors.border }]}
+                                onPress={() => {
+                                  setToBusinessId(business.id);
+                                  setRepayingPartyId(null);
+                                  setBorrowTarget(null);
+                                  setIncomeSourceId(null);
+                                  setForBusinessId(null);
+                                  setShowRepayPicker(false);
+                                }}
+                                testID={`bank-deposit-from-business-${business.id}`}
+                              >
+                                <Text style={[styles.memberPillText, { color: colors.foreground }]}>{business.name}</Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
                         </View>
                       ) : null}
                       {owingParties.map((party) => (
