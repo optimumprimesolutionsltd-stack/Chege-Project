@@ -45,11 +45,11 @@ export function FamilyNamesCard({
       setSaving(false);
     }
   };
-  // One family category: added at once. Several: which one, asked next.
+  // Each person gets their own line under Family support (lib/familyPeople): added
+  // at once, nothing to choose ("subcategories are the people", 10 Oct 2026).
   const choose = (name: string) => {
     if (!name.trim()) return;
-    if (choices.length === 1) void add(name.trim(), choices[0]);
-    else setPending(name.trim());
+    void add(name.trim(), choices[0]);
   };
 
   const chip = (label: string, onPress: () => void, testID: string, icon?: keyof typeof Feather.glyphMap) => (
@@ -68,7 +68,7 @@ export function FamilyNamesCard({
       </View>
       <Text style={[styles.lead, { color: colors.foreground }]}>Who do you send money to in your family?</Text>
       <Text style={[styles.hint, { color: colors.mutedForeground }]}>
-        Money to them counts as family support, never shopping. Write each name as it shows in your M-Pesa messages.
+        Each gets their own line under Family support, so you see what goes to whom. Write each name as it shows in your M-Pesa messages.
       </Text>
 
       {kept.length > 0 ? (
