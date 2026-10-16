@@ -65,6 +65,7 @@ export default function Privacy() {
         <li><strong>To provide the service</strong> — showing your records to you and to the group members you share them with. Basis: performance of our contract with you.</li>
         <li><strong>To send necessary email</strong> — group invitations and the monthly digest. Basis: performance of our contract, and your consent for anything optional.</li>
         <li><strong>To keep Jamvi secure and working</strong> — diagnosing faults, preventing abuse. Basis: our legitimate interest in a service that functions.</li>
+        <li><strong>To improve Jamvi</strong> — a weekly count of how Jamvi is used (sign-ups, how many budgets were used, how many M-Pesa entries came in), and, when you change the category Jamvi suggested for an M-Pesa payment, the kind of payment, the business it went to (a till, paybill or bank, never a person's name), what Jamvi suggested and what you chose. These are kept with nothing that identifies you or your budget, and only Jamvi sees them. Basis: our legitimate interest in M-Pesa reading that files your payments correctly.</li>
         <li><strong>To meet legal obligations</strong> where we have them.</li>
       </ul>
       <p>

@@ -63,7 +63,8 @@ describe('choosing by hand', () => {
     expect(start[0]).toMatchObject({ category: 'Not sure yet', auto: true });
     const next = chooseCategory(lines, start, 0, 'Groceries');
     // Chosen by hand, it is remembered unless the person unticks it.
-    expect(next[0]).toEqual({ include: true, category: 'Groceries', auto: false, remember: true });
+    // What Jamvi first suggested stays with it, for the weekly corrections list (importCorrections).
+    expect(next[0]).toEqual({ include: true, category: 'Groceries', auto: false, remember: true, suggested: 'Not sure yet' });
   });
 
   it("gives the same payee's empty lines the same category, without touching a line already chosen or another payee", () => {

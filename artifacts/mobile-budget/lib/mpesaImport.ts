@@ -53,6 +53,11 @@ export type Choice = {
   category: string;
   auto?: boolean;
   /**
+   * What Jamvi first filed it under, kept when the person changes it, so the
+   * import can say which suggestions people correct (importCorrections).
+   */
+  suggested?: string;
+  /**
    * The person has looked at this line and kept it as it is - Jamvi's suggestion
    * included. A long statement is worked through over days, and only lines the
    * person has confirmed or changed are saved.
@@ -416,6 +421,7 @@ export function initialChoices(
       include: isRecordable(line) && !line.elsewhere && !line.removedBefore && (canRecordOut || (line.direction !== 'out' && !savingsOf(line))),
       category: suggested,
       auto: suggested !== '',
+      ...(suggested ? { suggested } : {}),
       ...(filedByJamvi(line, suggested) ? { confirmed: true } : {}),
     };
     if (line.direction === 'in') {
@@ -576,6 +582,7 @@ export function refreshSuggestions(
       ...current,
       category: suggested,
       auto: suggested !== '',
+      ...(suggested ? { suggested } : {}),
       ...(untouched && filedByJamvi(line, suggested) ? { confirmed: true } : {}),
     };
   }
@@ -1407,3 +1414,40 @@ export function alreadyFromMpesaMessage(entries: ReadonlyArray<{ description: st
   return { title: 'Already in from M-Pesa?', message: lines.join('\n') };
 }
 
+
+
+/** The kind of payee a till, paybill or bank is: its name says nothing about a person. */
+const BUSINESS_PAYEE = /paybill|till|buy[_ ]?goods|pay[_ ]?bill|merchant|bank/i;
+
+export type ImportCorrection = {
+  direction: 'in' | 'out';
+  type: string | null;
+  /** The business's name - only for a till, paybill or bank, never a person's. */
+  payee: string | null;
+  suggested: string;
+  chosen: string;
+};
+
+/**
+ * The lines saved under another category than the one Jamvi suggested: "where
+ * the M-Pesa reading files things wrongly" (16 Oct 2026). Sent after a save
+ * with nothing that says whose they were (api-server routes/import-corrections).
+ */
+export function importCorrections(lines: readonly PreviewLine[], choices: Record<number, Choice>): ImportCorrection[] {
+  const out: ImportCorrection[] = [];
+  for (const line of lines) {
+    const choice = choices[line.index];
+    if (!choice?.include || !choice.suggested || !line.direction) continue;
+    const chosen = choice.category.trim();
+    if (!chosen || chosen === choice.suggested || destinationOf(choice) !== 'category') continue;
+    const business = BUSINESS_PAYEE.test(line.type ?? '');
+    out.push({
+      direction: line.direction,
+      type: line.type,
+      payee: business ? (line.description ?? '').trim().slice(0, 80) || null : null,
+      suggested: choice.suggested,
+      chosen: chosen.slice(0, 80),
+    });
+  }
+  return out;
+}
