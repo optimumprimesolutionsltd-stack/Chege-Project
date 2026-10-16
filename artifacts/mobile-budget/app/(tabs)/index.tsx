@@ -39,6 +39,7 @@ import { ProfileAvatar } from '@/components/ProfileAvatar';
 import { WorkspaceSetupGuide } from '@/components/WorkspaceSetupGuide';
 import { DashboardAnnouncement } from '@/components/DashboardAnnouncement';
 import { ChamaCard } from '@/components/ChamaCard';
+import { GroupMpesaQuestion } from '@/components/GroupMpesaQuestion';
 import { workspaceNameTextStyle } from '@/lib/workspaceIdentity';
 import { noAnswerFromServer } from '@/lib/workspace';
 import { getExpenseEditHref } from '@/lib/expenseEditLink';
@@ -632,6 +633,8 @@ export default function DashboardScreen() {
 
           {/* Each business asked once: a salary from it, or its profit is your income (lib/businessSalary). */}
           {canManageBudget ? <View style={{ marginHorizontal: 16, marginTop: 12 }}><BusinessSalaryQuestion /></View> : null}
+          {/* A shared group says once which M-Pesa it uses, so no member's own is read into it (lib/groupMpesa). */}
+          {isSharedWorkspace ? <GroupMpesaQuestion canManage={canManageBudget} /> : null}
           {/* One income stream per source of money (lib/combineIncome), asked once each. */}
           {canManageBudget ? <View style={{ marginHorizontal: 16 }}><CombineIncomeQuestion /></View> : null}
           {canManageBudget ? <View style={{ marginHorizontal: 16 }}><CombineCategoriesQuestion /></View> : null}
