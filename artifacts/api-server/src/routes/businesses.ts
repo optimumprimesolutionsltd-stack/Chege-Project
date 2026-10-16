@@ -12,14 +12,17 @@ router.get("/businesses", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
   const businesses = await businessStreams(groupId);
-  // Each business that pays a salary has its salary stream to file pay under -
-  // businesses answered before the stream was made get it here.
-  for (const business of businesses) {
-    if (business.paysSalary === true) await findOrMakeSalaryStream(groupId, business.id).catch(() => null);
-  }
   // Two salary streams for one business, from before it looked for yours by more than its exact name: one again.
   await foldDuplicateSalaryStreams(groupId).catch(() => 0);
-  res.json({ ready: businessStreamsReady(), incomeSourceIds: businesses.map((business) => business.id), businesses });
+  // Each business that pays a salary has its salary stream to file pay under -
+  // businesses answered before the stream was made get it here - and says which
+  // it is, so Money in can offer "Salary from Ujenzi" ("in money in, why cant i
+  // see the option of salary?", 16 Oct 2026).
+  const withSalary = await Promise.all(businesses.map(async (business) => ({
+    ...business,
+    salaryStreamId: business.paysSalary === true ? (await findOrMakeSalaryStream(groupId, business.id).catch(() => null))?.id ?? null : null,
+  })));
+  res.json({ ready: businessStreamsReady(), incomeSourceIds: businesses.map((business) => business.id), businesses: withSalary });
 });
 
 // paysSalary: "Do you pay yourself a salary from it?" - null puts it back to not asked.

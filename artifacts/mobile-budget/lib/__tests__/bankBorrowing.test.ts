@@ -67,8 +67,9 @@ describe('it cannot be both at once', () => {
 
   it('clears between postings in a sitting', () => {
     // Otherwise the next line in the same sitting is a loan too.
-    // Five: both reset paths, the two options that clear it by choice, and money from one of my businesses.
-    expect((bank.match(/setBorrowTarget\(null\);/g) ?? []).length).toBe(5);
+    // Six: both reset paths, the two options that clear it by choice, money from one of
+    // my businesses, and salary from one of them (16 Oct 2026).
+    expect((bank.match(/setBorrowTarget\(null\);/g) ?? []).length).toBe(6);
   });
 });
 
