@@ -22,3 +22,21 @@ describe('what is left on the budget, for any payment being typed', () => {
     expect(bank).toContain("if (!modalVisible || txType !== 'disbursement' || editingTransactionId !== null");
   });
 });
+
+// "Can i also see balance to fulfill a budget in money in" (16 Oct 2026).
+describe('Money in against the month\'s budget', () => {
+  it('says how much more has to come in, or that it is covered', async () => {
+    const { budgetFundingLine } = await import('../leftToPay');
+    expect(budgetFundingLine(120000, 60000, 20000, 'October')!.text).toBe("After this, KES 40,000 more to come in to cover October's budget of KES 120,000 (KES 80,000 in so far).");
+    expect(budgetFundingLine(120000, 100000, 20000, 'October')!.text).toBe("This covers October's budget of KES 120,000 in full.");
+    expect(budgetFundingLine(120000, 110000, 20000, 'October')!.text).toBe("This covers October's budget of KES 120,000, with KES 10,000 to spare.");
+    expect(budgetFundingLine(0, 0, 20000, 'October')).toBeNull();
+  });
+
+  it('is on new money in that is income, from the entry month', () => {
+    const bank = readFileSync('app/(tabs)/bank.tsx', 'utf8');
+    expect(bank).toContain('const { data: entryIncome } = useGetDashboardIncomeLedger(entryMonth, live);');
+    expect(bank).toContain('testID="bank-money-in-funding"');
+    expect(bank).toContain("if (!modalVisible || txType !== 'deposit' || editingTransactionId !== null || notIncome || toBusinessId !== null || forBusinessId !== null) return null;");
+  });
+});

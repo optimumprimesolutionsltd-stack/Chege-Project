@@ -67,3 +67,23 @@ export function previewFor(category: string, amount: number, budgetAmount: numbe
     isOverBudget: after < 0,
   };
 }
+
+
+/**
+ * Money in against the month's budget: how much more has to come in to cover
+ * it once this is saved - "can i also see balance to fulfill a budget in money
+ * in" (16 Oct 2026), the income side of leftToPayLine. Null with no budget or
+ * no amount yet.
+ */
+export function budgetFundingLine(totalBudget: number | null | undefined, receivedSoFar: number | null | undefined, amount: number, monthName: string): LeftToPay | null {
+  const budget = Number(totalBudget ?? 0);
+  if (!(budget > 0) || !(amount > 0)) return null;
+  const after = Math.round((Number(receivedSoFar ?? 0) + amount) * 100) / 100;
+  const short = Math.round((budget - after) * 100) / 100;
+  if (short > 0) {
+    return { tone: 'left', text: `After this, ${kes(short)} more to come in to cover ${monthName}'s budget of ${kes(budget)} (${kes(after)} in so far).` };
+  }
+  return short === 0
+    ? { tone: 'paid', text: `This covers ${monthName}'s budget of ${kes(budget)} in full.` }
+    : { tone: 'paid', text: `This covers ${monthName}'s budget of ${kes(budget)}, with ${kes(-short)} to spare.` };
+}
