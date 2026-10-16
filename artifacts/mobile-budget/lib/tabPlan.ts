@@ -40,8 +40,8 @@ export function visibleTabs(_flags: TabFlags): TabName[] {
 /**
  * The third tab's name. "Budget & Reports" whenever the Budget is in it:
  * called just Reports, people could not find the Budget - "i have struggled
- * to know where it is and its a very common feature" (16 Oct 2026). Still
- * opens on Reports. In a chama it is Contributions: who has paid is what
+ * to know where it is and its a very common feature" (16 Oct 2026). Opens
+ * on the Budget, as the name puts it first. In a chama it is Contributions: who has paid is what
  * everyone opens it for.
  */
 export function planTitleFor({ isShared, showBudget }: Pick<TabFlags, 'isShared' | 'showBudget'>): string {

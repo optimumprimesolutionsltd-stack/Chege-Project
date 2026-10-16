@@ -8,7 +8,7 @@ import ReportsScreen from './reports';
 
 /**
  * Plan: what you meant to spend and what happened, in one tab - Budget or
- * Reports, chosen at the top; a shared group's Contributions come first.
+ * Reports, chosen at the top (Budget first); a shared group's Contributions come first.
  * They were separate tabs ("the tab thing with banks reports etc is
  * exhausting", 15 Oct 2026). The screens are unchanged and still open on
  * their own for every link that goes to them.
@@ -16,14 +16,15 @@ import ReportsScreen from './reports';
 export default function PlanScreen() {
   const { isShared, showBudget, showReports } = useTabFlags();
   const { view: askedView } = useLocalSearchParams<{ view?: string }>();
-  // Reports first in a Personal budget: "i think we can change the tab at the
-  // footer with reports tab" (16 Oct 2026). In a chama, Contributions first -
+  // Budget first, in the order the tab's name says ("Budget & Reports",
+  // lib/tabPlan): "if the name budget comes first then even in the tab it
+  // should be the first" (16 Oct 2026). In a chama, Contributions first -
   // who has paid is what every member opens it for - and the tab is called
-  // that; Reports and the Budget are one tap away at the top.
+  // that; the Budget and Reports are one tap away at the top.
   const options = useMemo(() => [
     ...(isShared ? [{ key: 'contributions', label: 'Contributions' }] : []),
-    ...(showReports ? [{ key: 'reports', label: 'Reports' }] : []),
     ...(showBudget ? [{ key: 'budget', label: 'Budget' }] : []),
+    ...(showReports ? [{ key: 'reports', label: 'Reports' }] : []),
   ], [isShared, showBudget, showReports]);
   const [view, setView] = useState(askedView ?? '');
   // The first one there, until one is picked; a choice that went away falls back.
