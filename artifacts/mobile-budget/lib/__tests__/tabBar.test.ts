@@ -1,5 +1,6 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { planTitleFor } from '../tabPlan';
 
 const read = (p: string) => readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
 
@@ -28,10 +29,18 @@ describe('the tab bar is Home, Money, Plan, in both layouts', () => {
     // In a chama it opens on Contributions, and is called that; otherwise Reports first.
     expect(plan.indexOf("key: 'contributions'")).toBeLessThan(plan.indexOf("key: 'reports'"));
     expect(plan.indexOf("key: 'reports'")).toBeLessThan(plan.indexOf("key: 'budget'"));
-    expect(layout).toContain("<Label>{shared ? 'Contributions' : 'Reports'}</Label>");
-    expect(layout).toContain("title: shared ? 'Contributions' : 'Reports',");
+    expect(layout).toContain('<Label>{planTitle}</Label>');
+    expect(layout).toContain('title: planTitle,');
     // Shown in the header every one of those screens already has.
     expect(read('components/WorkspaceIdentityRow.tsx')).toContain('<TabSwitchSlot tone={tone} />');
+  });
+});
+
+describe('the third tab says Budget whenever the Budget is in it', () => {
+  it('Budget & Reports, Reports with no budget, Contributions in a chama', () => {
+    expect(planTitleFor({ isShared: false, showBudget: true })).toBe('Budget & Reports');
+    expect(planTitleFor({ isShared: false, showBudget: false })).toBe('Reports');
+    expect(planTitleFor({ isShared: true, showBudget: true })).toBe('Contributions');
   });
 });
 
