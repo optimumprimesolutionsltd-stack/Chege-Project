@@ -36,10 +36,10 @@ describe('arranging shortcuts', () => {
 });
 
 describe('where it is used', () => {
-  it('Home arranges its group areas per budget, from an Arrange link', () => {
+  it('Home has no areas to arrange any more (16 Oct 2026)', () => {
     const home = readFileSync('app/(tabs)/index.tsx', 'utf8');
-    expect(home).toContain('useArrangement(homeAreasKey(group?.id))');
-    expect(home).toContain('testID="overview-arrange"');
+    expect(home).not.toContain('useArrangement(homeAreasKey(group?.id))');
+    expect(home).not.toContain('testID="overview-arrange"');
   });
 
   it('the quick-action bar is gone: one + adds anything, and More no longer arranges it', () => {

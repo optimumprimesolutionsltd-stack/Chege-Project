@@ -37,8 +37,11 @@ describe("the M-Pesa balance on the Home card", () => {
     expect(lib).toContain("lte(jointAccountTxTable.date, today)");
   });
 
-  it("is shown on the phone and web Home cards", () => {
-    expect(readFileSync("../mobile-budget/components/MpesaImportCard.tsx", "utf8")).toContain('testID="mpesa-home-card-balance"');
+  // On the phone it is said once, in "How much is on my M-Pesa?" - the M-Pesa
+  // card no longer repeats it ("two places showing mpesa balance", 16 Oct 2026).
+  it("is shown on the phone's Home answers and the web Home card", () => {
+    expect(readFileSync("../mobile-budget/app/(tabs)/index.tsx", "utf8")).toContain("balance={mpesaSummary?.balance}");
+    expect(readFileSync("../mobile-budget/components/MpesaImportCard.tsx", "utf8")).not.toContain('testID="mpesa-home-card-balance"');
     expect(readFileSync("../family-budget/src/components/mpesa-import-card.tsx", "utf8")).toContain('data-testid="mpesa-home-card-balance"');
   });
 });

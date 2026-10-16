@@ -38,7 +38,7 @@ import ActivityCard from '@/components/ActivityCard';
 import { ProfileAvatar } from '@/components/ProfileAvatar';
 import { WorkspaceSetupGuide } from '@/components/WorkspaceSetupGuide';
 import { DashboardAnnouncement } from '@/components/DashboardAnnouncement';
-import { HomeTip } from '@/components/HomeTip';
+import { ChamaCard } from '@/components/ChamaCard';
 import { workspaceNameTextStyle } from '@/lib/workspaceIdentity';
 import { noAnswerFromServer } from '@/lib/workspace';
 import { getExpenseEditHref } from '@/lib/expenseEditLink';
@@ -106,50 +106,6 @@ function shortKES(n?: number | null): string {
   return String(Math.round(n));
 }
 
-type Shortcut = {
-  icon: keyof typeof Feather.glyphMap;
-  label: string;
-  description?: string;
-  color: string;
-  bg: string;
-  route: string;
-};
-
-const SHARED_OVERVIEW_SHORTCUTS: Shortcut[] = [
-  { icon: 'bar-chart-2', label: 'Budget',        color: '#2DD4CC', bg: '#0B343B', route: '/(tabs)/budget',        description: 'Plan spending' },
-  { icon: 'trending-up', label: 'Contributions', color: '#3CDD62', bg: '#0D3428', route: '/(tabs)/contributions', description: 'See money in' },
-  { icon: 'file-text',   label: 'Expenses',      color: '#E9B949', bg: '#392D08', route: '/(tabs)/history',       description: 'Review spending' },
-  { icon: 'target',      label: 'Goals',         color: '#6C9FE6', bg: '#0A254E', route: '/(tabs)/goals',         description: 'Track targets' },
-  { icon: 'credit-card', label: 'Bank',          color: '#14776A', bg: '#0B343B', route: '/(tabs)/bank',          description: 'Manage funds' },
-  { icon: 'pie-chart',   label: 'Reports',       color: '#6C9FE6', bg: '#0A254E', route: '/(tabs)/reports',       description: 'Understand trends' },
-  // What you owe and are owed - loans, Fuliza, people - one tap from Home.
-  { icon: 'trending-down', label: 'Debt',        color: '#F87171', bg: '#3A1212', route: '/(tabs)/debt',          description: 'What you owe' },
-  { icon: 'smartphone',  label: 'M-Pesa',        color: '#3CDD62', bg: '#0D3428', route: '/mpesa-import',         description: 'Import a statement' },
-];
-
-// A Personal budget has the same areas, less the group's contributions.
-const PERSONAL_OVERVIEW_SHORTCUTS: Shortcut[] = SHARED_OVERVIEW_SHORTCUTS.filter((shortcut) => shortcut.label !== 'Contributions');
-
-// Only reachable from Home through the setup guide's one-time "Invite a
-// member" step, which retires the moment setup is complete — leaving no way
-// back to the invite link from here at all, on a group that goes on adding
-// people long after setup is done. Owners/admins only, matching Settings'
-// own GROUP ACCESS gate; a member tapping it would land on a section that
-// does not exist for them.
-const INVITE_SHORTCUT: Shortcut = {
-  icon: 'user-plus', label: 'Invite', color: '#F97AC6', bg: '#3A0F2E',
-  route: '/(tabs)/settings?openInvite=1', description: 'Add a member',
-};
-
-// Starting a group used to be reachable only from Settings. Shown only while
-// the person's own trial or subscription is active (lib/groupStart).
-const NEW_GROUP_SHORTCUT: Shortcut = {
-  icon: 'users', label: 'New group', color: '#F59E0B', bg: '#3A2A08',
-  route: '/(tabs)/settings?openCreateGroup=1', description: 'Start a chama or club',
-};
-
-import { ArrangeSheet } from '@/components/ArrangeSheet';
-import { arrange, homeAreasKey, useArrangement } from '@/lib/layoutPrefs';
 import { duplicatesTitle } from '@/lib/possibleDuplicates';
 import { savedGroups, teachDoneKey } from '@/lib/teachJamvi';
 
@@ -306,7 +262,7 @@ export default function DashboardScreen() {
     setAskOpen(true);
   }, []);
 
-  const recentActivity = useMemo(() => (activity ?? []).slice(0, 5), [activity]);
+  const recentActivity = useMemo(() => (activity ?? []).slice(0, 3), [activity]);
 
   const greeting = useMemo(() => {
     const h = now.getHours();
@@ -331,10 +287,6 @@ export default function DashboardScreen() {
   useApplyCovers(group?.id, canManageBudget, onScreen);
   const canManageExpenses = !isSharedWorkspace || group?.role === 'owner' || group?.role === 'admin';
   const canManageAccess = isSharedWorkspace && (group?.role === 'owner' || group?.role === 'admin');
-  // The group areas in the person's own order, per budget, hidden ones left out.
-  const [areasArrangement, setAreasArrangement] = useArrangement(homeAreasKey(group?.id));
-  const [arrangingAreas, setArrangingAreas] = useState(false);
-  const baseShortcuts = isSharedWorkspace ? SHARED_OVERVIEW_SHORTCUTS : PERSONAL_OVERVIEW_SHORTCUTS;
   const { data: entitlements } = useEntitlements();
   // Entries saved as "Not sure", and new M-Pesa messages: the two things most
   // easily forgotten, so they lead Home (hooks/useWaitingForYou, shared with
@@ -381,12 +333,6 @@ export default function DashboardScreen() {
     const subscription = AppState.addEventListener('change', (state) => { if (state === 'active') void recheckSms(); });
     return () => subscription.remove();
   }, [recheckSms]);
-  const allShortcuts = [
-    ...baseShortcuts,
-    ...(canManageAccess ? [INVITE_SHORTCUT] : []),
-    ...(mayStartGroup(entitlements) ? [NEW_GROUP_SHORTCUT] : []),
-  ].map((shortcut) => ({ ...shortcut, id: shortcut.label.toLowerCase() }));
-  const overviewShortcuts = arrange(allShortcuts, areasArrangement);
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   const editableUncategorizedExpenses = (expenses as HomeExpense[])
     .filter(isUncategorizedExpense)
@@ -808,77 +754,14 @@ export default function DashboardScreen() {
             tracked it offers to start — once, dismissably — because the Debt
             tab only appears after a first debt exists. A viewer is never
             asked: they could not act on it. */}
-        <DebtSummaryCard canTrackDebt={canManageBudget} />
+        {/* Only once there is a debt: no prompt to start tracking one on Home. */}
+        <DebtSummaryCard canTrackDebt={false} />
 
-        <HomeTip />
-
-        {/* The way to every other area, at the foot of Home rather than in the
-            middle of it: the tabs reach most of them already. On a Personal
-            budget too: it was shown to groups only. New group is a tile here,
-            which is why the Personal budget's "Shared groups" card is gone. */}
-        {group && (
-          <View style={[styles.overviewNavCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Text style={[styles.overviewNavTitle, { color: colors.foreground }]}>{isSharedWorkspace ? 'Your group areas' : 'Your budget areas'}</Text>
-              <Pressable onPress={() => setArrangingAreas(true)} hitSlop={8} accessibilityRole="button" accessibilityLabel={`Arrange your ${isSharedWorkspace ? 'group' : 'budget'} areas: reorder, hide or show them`} testID="overview-arrange" style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                <Feather name="move" size={13} color={colors.primary} />
-                <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>Arrange</Text>
-              </Pressable>
-            </View>
-            <Text style={[styles.overviewNavSubtitle, { color: colors.mutedForeground }]}>
-              Tap Arrange to put them in your order or hide the ones you don't use.
-            </Text>
-            <View style={styles.overviewNavGrid}>
-              {overviewShortcuts.map((shortcut) => (
-                <Pressable
-                  key={shortcut.label}
-                  testID={`overview-shortcut-${shortcut.label.toLowerCase()}`}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Open ${shortcut.label}`}
-                  style={({ pressed }) => [
-                    styles.overviewNavButton,
-                    { backgroundColor: shortcut.bg, borderColor: colors.border, opacity: pressed ? 0.78 : 1 },
-                  ]}
-                  onPress={() => router.push(shortcut.route as any)}
-                >
-                  <Feather name={shortcut.icon} size={18} color={shortcut.color} />
-                  <Text style={[styles.overviewNavButtonText, { color: shortcut.color }]}>{shortcut.label}</Text>
-                  <Text style={[styles.overviewNavButtonDescription, { color: colors.mutedForeground }]}>{shortcut.description}</Text>
-                  <Feather name="chevron-right" size={13} color={shortcut.color} style={styles.overviewNavChevron} />
-                </Pressable>
-              ))}
-              {/* Hidden areas are not gone: this says how many and brings them back. */}
-              {overviewShortcuts.length < allShortcuts.length ? (
-                <Pressable
-                  testID="overview-shortcut-more"
-                  accessibilityRole="button"
-                  accessibilityLabel={`${allShortcuts.length - overviewShortcuts.length} more areas hidden. Open Arrange to show them.`}
-                  style={({ pressed }) => [
-                    styles.overviewNavButton,
-                    { backgroundColor: colors.muted, borderColor: colors.border, borderStyle: 'dashed', opacity: pressed ? 0.78 : 1 },
-                  ]}
-                  onPress={() => setArrangingAreas(true)}
-                >
-                  <Feather name="plus" size={18} color={colors.primary} />
-                  <Text style={[styles.overviewNavButtonText, { color: colors.primary }]}>{allShortcuts.length - overviewShortcuts.length} more</Text>
-                  <Text style={[styles.overviewNavButtonDescription, { color: colors.mutedForeground }]} numberOfLines={2}>
-                    {allShortcuts.filter((shortcut) => !overviewShortcuts.some((shown) => shown.id === shortcut.id)).map((shortcut) => shortcut.label).join(', ')}
-                  </Text>
-                </Pressable>
-              ) : null}
-            </View>
-            <ArrangeSheet
-              visible={arrangingAreas}
-              title={`Arrange your ${isSharedWorkspace ? 'group' : 'budget'} areas`}
-              hint={`Put them in the order you use them, and hide any you never open. Kept on this phone, for this ${isSharedWorkspace ? 'group' : 'budget'}.`}
-              items={allShortcuts}
-              arrangement={areasArrangement}
-              onChange={setAreasArrangement}
-              onClose={() => setArrangingAreas(false)}
-              testID="overview-arrange-sheet"
-            />
-          </View>
-        )}
+        {/* The chama, offered rather than pushed: Jamvi is a personal budget
+            first ("the app still needs to be personal - but also sell the chama
+            angle as an option", 16 Oct 2026). The areas grid that was here only
+            repeated the tabs, the + and your picture. */}
+        <ChamaCard canStartGroup={mayStartGroup(entitlements)} canInvite={canManageAccess} onScreen={onScreen} currentId={group?.id ?? null} />
       </PageScrollView>
 
       <Modal
@@ -1112,14 +995,6 @@ const styles = StyleSheet.create({
   contribFill: { height: '100%', borderRadius: 2 },
   contribSubLabel: { fontSize: 9, color: 'rgba(247,250,246,0.4)', fontFamily: 'Inter_400Regular' },
 
-  overviewNavCard: { marginHorizontal: 16, marginTop: 16, borderWidth: 1, borderRadius: 18, padding: 16 },
-  overviewNavTitle: { fontSize: 18, fontFamily: 'Inter_700Bold', marginTop: 4 },
-  overviewNavSubtitle: { fontSize: 12, lineHeight: 18, fontFamily: 'Inter_400Regular', marginTop: 5 },
-  overviewNavGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 14 },
-  overviewNavButton: { width: '47%', minWidth: 0, minHeight: 78, borderWidth: 1, borderRadius: 8, paddingHorizontal: 7, paddingVertical: 9, flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2, position: 'relative' },
-  overviewNavButtonText: { width: '100%', maxWidth: '100%', flexShrink: 1, fontSize: 11, lineHeight: 15, textAlign: 'center', fontFamily: 'Inter_600SemiBold' },
-  overviewNavButtonDescription: { width: '100%', maxWidth: '100%', flexShrink: 1, fontSize: 9, lineHeight: 12, textAlign: 'center', fontFamily: 'Inter_400Regular' },
-  overviewNavChevron: { position: 'absolute', top: 6, right: 6 },
   waitingCard: { marginHorizontal: 16, marginTop: 12, borderWidth: 1, borderRadius: 18, paddingHorizontal: 16, paddingTop: 14, paddingBottom: 4 },
   waitingRow: { flexDirection: 'row', alignItems: 'center', gap: 11, paddingVertical: 11 },
   waitingIcon: { width: 34, height: 34, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },

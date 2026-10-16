@@ -59,23 +59,24 @@ describe("Jamvi's figure beside it", () => {
   });
 });
 
-describe('the Home M-Pesa card', () => {
+// The live balance is said once on Home, in "How much is on my M-Pesa?" -
+// the M-Pesa card no longer repeats it ("two places showing mpesa balance", 16 Oct 2026).
+describe('the Home M-Pesa balance', () => {
   const card = read('components/MpesaImportCard.tsx');
-  it('leads with the live balance when the phone can read it, and keeps Jamvi’s figure otherwise', () => {
-    expect(card).toContain('testID="mpesa-home-card-live-balance"');
-    expect(card).toContain('M-Pesa balance now');
-    expect(card.indexOf('{live ? (')).toBeLessThan(card.indexOf('testID="mpesa-home-card-balance"'));
+  const home = read('app/(tabs)/index.tsx');
+  const answers = read('components/HomeAnswersCard.tsx');
+  it('is shown once, from the newest message when the phone can read it', () => {
+    expect(card).not.toContain('mpesa-home-card-live-balance');
+    expect(card).not.toContain('readLiveMpesaBalance');
+    expect(answers).toContain('`From your M-Pesa message of ${messageTime(live.at)}`');
   });
-  it('reads it again each time Home is shown', () => {
-    expect(card).toContain('if (personal) void refetchLive();');
-    // Jamvi's own figure too, and a failed load is tried again.
+  it('is read again while Home is in view, and only for a Personal budget', () => {
+    expect(home).toContain("queryKey: ['mpesa-live-balance'],");
+    expect(home).toContain('const personalBudget = group?.isPrivate === true;');
+    expect(home).toContain('live={personalBudget ? liveMpesa ?? null : null}');
+    // The card still refreshes what it shows each time Home is shown.
     expect(card).toContain('if (groupId !== null) void refetchSummary();');
     expect(card).toContain('retry: 2,');
-  });
-  it('shows it only in a Personal budget: a group\u2019s account is not this person\u2019s M-Pesa', () => {
-    expect(card).toContain('const personal = group?.isPrivate === true;');
-    expect(card).toContain('enabled: personal,');
-    expect(card).toContain('const live = personal ? liveRead ?? null : null;');
   });
   it('never asks for permission just to show it', () => {
     const sms = read('lib/mpesaSms.ts');

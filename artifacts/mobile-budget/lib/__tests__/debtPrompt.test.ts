@@ -66,7 +66,8 @@ describe('it can be put away, and got back', () => {
 
   it('is never shown to somebody who could not act on it', () => {
     expect(card).toContain('canTrackDebt = false');
-    expect(home).toContain('<DebtSummaryCard canTrackDebt={canManageBudget} />');
+    // Home shows debt only once there is some (16 Oct 2026): the prompt is not offered there.
+    expect(home).toContain('<DebtSummaryCard canTrackDebt={false} />');
   });
 
   it('survives storage that refuses to answer', () => {

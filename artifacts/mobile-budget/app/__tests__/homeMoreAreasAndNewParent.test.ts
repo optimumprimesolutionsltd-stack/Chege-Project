@@ -4,12 +4,11 @@ import { describe, expect, it } from 'vitest';
 
 const read = (path: string) => readFileSync(join(__dirname, '..', '..', path), 'utf8');
 
-describe('hidden group areas on Home', () => {
-  it('says how many are hidden and opens Arrange to bring them back', () => {
+describe('no areas grid on Home', () => {
+  it('is gone: the tabs, the + and your picture reach every area (16 Oct 2026)', () => {
     const home = read('app/(tabs)/index.tsx');
-    expect(home).toContain('{overviewShortcuts.length < allShortcuts.length ? (');
-    expect(home).toContain('testID="overview-shortcut-more"');
-    expect(home).toContain('Tap Arrange to put them in your order');
+    expect(home).not.toContain('testID="overview-shortcut-more"');
+    expect(home).not.toContain('Tap Arrange to put them in your order');
   });
 });
 

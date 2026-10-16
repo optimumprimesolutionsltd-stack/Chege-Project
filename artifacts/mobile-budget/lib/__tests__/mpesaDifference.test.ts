@@ -66,7 +66,8 @@ describe('Find the difference, on the phone', () => {
     const card = read('components/MpesaImportCard.tsx');
     // No button, and no "Jamvi is below M-Pesa" line: a difference fixes itself (lib/autoReconcile).
     expect(card).not.toContain('mpesa-home-card-find-difference');
-    expect(card).toContain('{comparison?.agrees ? (');
+    // Nor any comparison line: the card no longer shows a balance at all (16 Oct 2026).
+    expect(card).not.toContain('comparison');
     expect(card).not.toContain('Match M-Pesa');
     expect(read('app/(tabs)/index.tsx')).toContain("onPress: () => router.push('/mpesa-difference' as never),");
     const screen = read('app/mpesa-difference.tsx');
