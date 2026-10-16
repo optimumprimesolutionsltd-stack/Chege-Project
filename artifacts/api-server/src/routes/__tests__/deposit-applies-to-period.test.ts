@@ -102,9 +102,10 @@ describe("the phone offers the second date", () => {
   });
 
   it("sends it on every way a deposit can be recorded", () => {
-    // Split across depositors, joint, single, and an edit — four paths, and a
-    // period that only reached some of them would be worse than none.
-    expect((bankScreen.match(/appliesToMonth: appliesTo\.month/g) ?? []).length).toBe(4);
+    // Split across depositors, joint, single, single split across income
+    // streams (16 Oct 2026), and an edit — five paths, and a period that only
+    // reached some of them would be worse than none.
+    expect((bankScreen.match(/appliesToMonth: appliesTo\.month/g) ?? []).length).toBe(5);
   });
 
   it("reads it back when an existing deposit is opened", () => {
