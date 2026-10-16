@@ -36,8 +36,11 @@ describe('the question on an entry', () => {
   const bank = readFileSync('app/(tabs)/bank.tsx', 'utf8');
   const card = readFileSync('components/WhoIsThisFor.tsx', 'utf8');
 
-  it('is asked on money out and money in: Personal, or a business', () => {
-    expect((bank.match(/<WhoIsThisFor/g) ?? []).length).toBe(2);
+  // Money in asks What kind of money is this? alone since 16 Oct 2026 ("who is
+  // this for? tab is not needed then"): a business's sales are a row there.
+  it('is asked on money out: Personal, or a business; money in names a business under What kind', () => {
+    expect((bank.match(/<WhoIsThisFor/g) ?? []).length).toBe(1);
+    expect(bank).toContain('testID="bank-deposit-sales-row"');
     expect(card).toContain("testID={id('who-for-personal')}");
     expect(card).toContain('testID={id(`who-for-business-${one.id}`)}');
   });

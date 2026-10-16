@@ -69,7 +69,8 @@ describe('it cannot be both at once', () => {
     // Otherwise the next line in the same sitting is a loan too.
     // Six: both reset paths, the two options that clear it by choice, money from one of
     // my businesses, and salary from one of them (16 Oct 2026).
-    expect((bank.match(/setBorrowTarget\(null\);/g) ?? []).length).toBe(6);
+    // Seven since money in names a business's sales there too (16 Oct 2026).
+    expect((bank.match(/setBorrowTarget\(null\);/g) ?? []).length).toBe(7);
   });
 });
 
