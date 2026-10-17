@@ -14,7 +14,9 @@ describe('Bank accounts scrolls as one page', () => {
     const header = bank.slice(bank.indexOf('ListHeaderComponent={'), bank.indexOf('ListFooterComponent={'));
     expect(header).toContain('<LinearGradient');
     expect(header).toContain('</LinearGradient>');
-    expect(header).toContain('TRANSACTIONS');
+    // The Transactions row moved into the pinned first row (17 Oct 2026).
+    expect(bank).toContain('testID="bank-controls-bar"');
+    expect(bank).toContain('TRANSACTIONS');
   });
 
   it('no longer renders the gradient as a sibling of the list', () => {

@@ -59,7 +59,7 @@ describe("the Bank tab uses it", () => {
   it("filters the list and swaps the card's figures for the period's", () => {
     expect(bank).toContain("<BankPeriodBar");
     // The list is the period's entries, narrowed by a search when one is typed (lib/bankSearch).
-    expect(bank).toContain("data={listedTransactions}");
+    expect(bank).toContain("...listedTransactions]");
     expect(bank).toContain("? shownTransactions.filter((tx) => matchesSearch(tx as never, searched)) : shownTransactions");
     expect(bank).toContain("periodSummary ? periodSummary.closing");
     expect(bank).toContain("periodSummary ? periodSummary.totalIn");

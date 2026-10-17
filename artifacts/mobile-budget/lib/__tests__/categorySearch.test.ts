@@ -36,7 +36,7 @@ describe('filterCategoryTree', () => {
 
 describe('the search box is on every category list', () => {
   it.each([
-    ['app/(tabs)/bank.tsx', 3],
+    ['app/(tabs)/bank.tsx', 4],
     ['app/bank-day.tsx', 1],
     ['app/add-expense.tsx', 1],
     // The Edit categories list, and the By category list the scroller's search button opens.

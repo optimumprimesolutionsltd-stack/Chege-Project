@@ -8,7 +8,7 @@ const fix = readFileSync('../api-server/src/lib/borrowed-not-income.ts', 'utf8')
 // "If the money is borrowed, income source shouldnt be there" (8 Oct 2026).
 describe('borrowed money and repayments have no income source', () => {
   it('the form does not offer income streams for them, and saves none', () => {
-    expect(bank).toContain('const notIncome = isBorrowing || repayingParty !== null;');
+    expect(bank).toContain('const notIncome = isBorrowing || repayingParty !== null || moneyBackFor !== null;');
     expect(bank).toContain('{isDeposit && isSharedWorkspace && !notIncome && forBusinessId === null && (singleDepositorId || depositorIds.length === 0) && (');
     expect(bank).toContain('{ incomeSourceId: notIncome ? null : incomeSourceId }');
     expect(bank.match(/\.\.\.\(incomeSourceId && !notIncome \? \{ incomeSourceId \} : \{\}\),/g)).toHaveLength(2);

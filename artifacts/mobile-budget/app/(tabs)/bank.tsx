@@ -142,6 +142,12 @@ function formatDateTime(s?: string | null): string {
   );
 }
 
+/** Saves a payment as money back (api-server lib/refunds): a negative payment in its category. */
+const REFUND = { isRefund: true } as const;
+
+/** The pinned bar's place in Money's list: never an entry's id. */
+const BANK_CONTROLS_ROW = { id: -1 } as const;
+
 function formatBankDate(s?: string | null): string {
   return formatDisplayDate(s);
 }
@@ -389,6 +395,12 @@ export default function BankScreen() {
   const [depositorIds, setDepositorIds] = useState<string[]>([]);
   const [depositorAmounts, setDepositorAmounts] = useState<Record<string, string>>({});
   const [incomeSourceId, setIncomeSourceId] = useState<number | null>(null);
+  // Money back for a category: a friend paying back their share of a bill you
+  // paid in full, taken off that category's spending as a refund (api-server
+  // lib/refunds) - "i get refund from them to reduce that expense ... money in
+  // should have category logic too" (17 Oct 2026). null when it is not that;
+  // '' while the category is still to be chosen.
+  const [moneyBackFor, setMoneyBackFor] = useState<string | null>(null);
   // The first entry in view, for the date pinned at the top while the list
   // scrolls ("the date freeze logic should apply in banking too, both months
   // and dates", 17 Oct 2026). Shown once the header has scrolled away.
@@ -778,7 +790,7 @@ export default function BankScreen() {
   // Borrowed money and a repayment are not income, so they have no income stream:
   // the streams are not offered and none is saved ("if the money is borrowed,
   // income source shouldnt be there", 8 Oct 2026).
-  const notIncome = isBorrowing || repayingParty !== null;
+  const notIncome = isBorrowing || repayingParty !== null || moneyBackFor !== null;
 
   // The savings goal matching the current withdrawGoalId selection
   const selectedGoal = savingsGoals.find(g => g.id === withdrawGoalId) ?? null;
@@ -803,6 +815,7 @@ export default function BankScreen() {
     setShowDatePicker(false);
     setDepositorIds(!isSharedWorkspace && user?.id ? [user.id] : (!canManageShared && user?.id ? [user.id] : []));
     setDepositorAmounts({});
+    setMoneyBackFor(null);
     setStreamSplits([]);
     setIncomeSourceId(null);
     setDepositSourceKind(null);
@@ -818,7 +831,7 @@ export default function BankScreen() {
     setShowWithdrawKindPicker(false);
     setRepayingPartyId(null);
     setBorrowTarget(null);
-    setShowRepayPicker(false);
+    setMoneyBackFor(null); setShowRepayPicker(false);
     // Cleared between postings: the next line in a sitting is rarely charged
     // the same fee, and a charge carried over would be invented money out.
     setChargeAmount('');
@@ -1097,7 +1110,7 @@ export default function BankScreen() {
     setShowWithdrawKindPicker(false);
     setRepayingPartyId(null);
     setBorrowTarget(null);
-    setShowRepayPicker(false);
+    setMoneyBackFor(null); setShowRepayPicker(false);
     // Cleared between postings: the next line in a sitting is rarely charged
     // the same fee, and a charge carried over would be invented money out.
     setChargeAmount('');
@@ -1107,6 +1120,7 @@ export default function BankScreen() {
     // categories and never total.
     setShowChargeCategoryPicker(false);
     setDepositorAmounts({});
+    setMoneyBackFor(null);
     setStreamSplits([]);
   };
 
@@ -1941,7 +1955,7 @@ export default function BankScreen() {
       setNewPartyOwed('');
       setNewPartyIsInstitution(false);
       setShowPartyPicker(false);
-      setShowRepayPicker(false);
+      setMoneyBackFor(null); setShowRepayPicker(false);
     } catch (error: unknown) {
       if (!handleLapsedError(error)) {
         Alert.alert('Could not add them', error instanceof Error ? error.message : 'Please try again.');
@@ -1995,6 +2009,7 @@ export default function BankScreen() {
     }
     setDepositorIds([]);
     setDepositorAmounts({});
+    setMoneyBackFor(null);
     setStreamSplits([]);
     setIncomeSourceId(null);
     setDepositSourceKind(null);
@@ -2533,6 +2548,25 @@ export default function BankScreen() {
         if (saved?.id != null) {
           queryClient.setQueriesData({ queryKey: getGetJointAccountQueryKey() }, (cached: unknown) => withSavedRow(cached, saved));
         }
+      } else if (txType === 'deposit' && moneyBackFor !== null) {
+        if (!moneyBackFor.trim()) {
+          Alert.alert('Choose the category', 'Pick the category this money comes off - the one the bill was under.');
+          setSubmitting(false);
+          return;
+        }
+        createdPostingId = (await createDisbursement({
+          data: {
+            amount: parsed,
+            description: description.trim() || `Money back - ${moneyBackFor}`,
+            notes: notes.trim() || undefined,
+            date,
+            madeById: !isSharedWorkspace ? user?.id : validDepositorIds[0] ?? null,
+            accountId: selectedAccountId ?? undefined,
+            expenseCategory: moneyBackFor,
+            // The server's refund flag (lib/refunds): not in the generated type, accepted by the route.
+            ...REFUND,
+          },
+        }))?.id;
       } else if (txType === 'deposit') {
         const isJoint = isSharedWorkspace && validDepositorIds.length === 0;
         const isMultiDepositor = validDepositorIds.length > 1;
@@ -3173,13 +3207,17 @@ export default function BankScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
 
       <PageFlatList
-        data={listedTransactions}
+        // The period, Transactions and search pinned while the list scrolls under
+        // them ("freeze this part", 17 Oct 2026): a first row, kept while the
+        // account has any entries so the search box never jumps while typing.
+        data={transactions.length > 0 ? [BANK_CONTROLS_ROW as unknown as (typeof listedTransactions)[number], ...listedTransactions] : listedTransactions}
+        stickyHeaderIndices={transactions.length > 0 ? [1] : undefined}
         onViewableItemsChanged={onViewableRows}
         viewabilityConfig={rowViewability}
         // A thumb to drag through months of transactions, clear of the
         // floating actions and the tab bar at the bottom.
         scroller={{ top: topPad + 12, bottom: (Platform.OS === 'web' ? 100 : insets.bottom + 110) }}
-        keyExtractor={(item) => String(item.id)}
+        keyExtractor={(item) => (item.id === BANK_CONTROLS_ROW.id ? 'bank-controls' : String(item.id))}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -3602,62 +3640,16 @@ export default function BankScreen() {
             </>
           )}
         </LinearGradient>
-          <BankPeriodBar
-            preset={periodPreset}
-            onPreset={setPeriodPreset}
-            from={periodFrom}
-            to={periodTo}
-            onFrom={setPeriodFrom}
-            onTo={setPeriodTo}
-            entries={data?.transactions ?? []}
-          />
-          {transactions.length > 0 ? (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Text style={[styles.listHeader, { color: colors.mutedForeground }]}>TRANSACTIONS</Text>
-              <ListEditButton editor={txEditor} canManage={canManageAccount} />
-              {canManageAccount && !txEditor.editing ? (
-                <TouchableOpacity
-                  onPress={() => setMoveDayOpen(true)}
-                  hitSlop={8}
-                  testID="bank-move-day"
-                  accessibilityRole="button"
-                  accessibilityLabel="Move a whole day to another account"
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 6 }}
-                >
-                  <Feather name="repeat" size={12} color={colors.primary} />
-                  <Text style={{ color: colors.primary, fontSize: 12, fontFamily: 'Inter_600SemiBold' }}>Move a day</Text>
-                </TouchableOpacity>
-              ) : null}
-            </View>
-          ) : null}
-          {transactions.length > 0 ? (
-            <View style={{ gap: 4, marginBottom: 8 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 10, backgroundColor: colors.card }}>
-                <Feather name="search" size={15} color={colors.mutedForeground} />
-                <TextInput
-                  value={search}
-                  onChangeText={setSearch}
-                  autoFocus
-                  placeholder="Name, category, note, code or amount"
-                  placeholderTextColor={colors.mutedForeground}
-                  returnKeyType="search"
-                  testID="bank-search-input"
-                  style={{ flex: 1, paddingVertical: 9, color: colors.foreground, fontSize: 14 }}
-                />
-                {search ? (
-                  <Pressable onPress={() => setSearch('')} hitSlop={8} accessibilityRole="button" accessibilityLabel="Clear search" testID="bank-search-clear">
-                    <Feather name="x-circle" size={15} color={colors.mutedForeground} />
-                  </Pressable>
-                ) : null}
-              </View>
-              {searched ? (
-                <Text style={{ color: colors.mutedForeground, fontSize: 12 }} testID="bank-search-count">
-                  {listedTransactions.length === 0
-                    ? `Nothing matching "${searched}"${period ? ' in this period' : ''}.`
-                    : `${listedTransactions.length} of ${shownTransactions.length} ${shownTransactions.length === 1 ? 'entry' : 'entries'}${period ? ' in this period' : ''}`}
-                </Text>
-              ) : null}
-            </View>
+          {transactions.length === 0 ? (
+            <BankPeriodBar
+              preset={periodPreset}
+              onPreset={setPeriodPreset}
+              from={periodFrom}
+              to={periodTo}
+              onFrom={setPeriodFrom}
+              onTo={setPeriodTo}
+              entries={data?.transactions ?? []}
+            />
           ) : null}
           </>
         }
@@ -3697,6 +3689,71 @@ export default function BankScreen() {
           ) : null
         }
         renderItem={({ item }) => {
+          if (item.id === BANK_CONTROLS_ROW.id) {
+            return (
+              <View style={{ backgroundColor: colors.background, paddingTop: 6 }} testID="bank-controls-bar">
+          <BankPeriodBar
+            preset={periodPreset}
+            onPreset={setPeriodPreset}
+            from={periodFrom}
+            to={periodTo}
+            onFrom={setPeriodFrom}
+            onTo={setPeriodTo}
+            entries={data?.transactions ?? []}
+          />
+          {transactions.length > 0 ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text style={[styles.listHeader, { color: colors.mutedForeground }]}>TRANSACTIONS</Text>
+              <ListEditButton editor={txEditor} canManage={canManageAccount} />
+              {canManageAccount && !txEditor.editing ? (
+                <TouchableOpacity
+                  onPress={() => setMoveDayOpen(true)}
+                  hitSlop={8}
+                  testID="bank-move-day"
+                  accessibilityRole="button"
+                  accessibilityLabel="Move a whole day to another account"
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 6 }}
+                >
+                  <Feather name="repeat" size={12} color={colors.primary} />
+                  <Text style={{ color: colors.primary, fontSize: 12, fontFamily: 'Inter_600SemiBold' }}>Move a day</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          ) : null}
+          {transactions.length > 0 ? (
+            <View style={{ gap: 4, marginBottom: 8 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 10, backgroundColor: colors.card }}>
+                <Feather name="search" size={15} color={colors.mutedForeground} />
+                <TextInput
+                  value={search}
+                  onChangeText={setSearch}
+                  placeholder="Name, category, note, code or amount"
+                  placeholderTextColor={colors.mutedForeground}
+                  returnKeyType="search"
+                  testID="bank-search-input"
+                  style={{ flex: 1, paddingVertical: 9, color: colors.foreground, fontSize: 14 }}
+                />
+                {search ? (
+                  <Pressable onPress={() => setSearch('')} hitSlop={8} accessibilityRole="button" accessibilityLabel="Clear search" testID="bank-search-clear">
+                    <Feather name="x-circle" size={15} color={colors.mutedForeground} />
+                  </Pressable>
+                ) : null}
+              </View>
+              {searched ? (
+                <Text style={{ color: colors.mutedForeground, fontSize: 12 }} testID="bank-search-count">
+                  {listedTransactions.length === 0
+                    ? `Nothing matching "${searched}"${period ? ' in this period' : ''}.`
+                    : `${listedTransactions.length} of ${shownTransactions.length} ${shownTransactions.length === 1 ? 'entry' : 'entries'}${period ? ' in this period' : ''}`}
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
+                {shownTransactions.length === 0 && !searched ? (
+                  <Text style={{ color: colors.mutedForeground, fontSize: 13, marginBottom: 8 }} testID="bank-period-empty">No transactions in this period.</Text>
+                ) : null}
+              </View>
+            );
+          }
           const dep = item.type === 'deposit';
           // Money back that takes spending off its category (api-server lib/refunds).
           const refund = item.type === 'disbursement' && Number(item.amount) < 0;
@@ -4825,8 +4882,10 @@ export default function BankScreen() {
                     onPress={() => setShowRepayPicker((open) => !open)}
                     testID="bank-repayment-picker"
                   >
-                    <Text style={{ flex: 1, color: toBusinessId !== null || salaryChosen || forBusinessId !== null || (!isSharedWorkspace && (incomeChosen || depositSourceKind === 'other')) || repayingParty || isBorrowing ? colors.foreground : colors.mutedForeground, fontFamily: 'Inter_400Regular' }}>
-                      {toBusinessId !== null
+                    <Text style={{ flex: 1, color: moneyBackFor !== null || toBusinessId !== null || salaryChosen || forBusinessId !== null || (!isSharedWorkspace && (incomeChosen || depositSourceKind === 'other')) || repayingParty || isBorrowing ? colors.foreground : colors.mutedForeground, fontFamily: 'Inter_400Regular' }}>
+                      {moneyBackFor !== null
+                        ? moneyBackFor ? `Money back - comes off ${moneyBackFor}` : 'Money back - choose the category'
+                        : toBusinessId !== null
                         ? `From ${businessNameOf(toBusinessId)} - director's money`
                         : salaryChosen
                         ? `Salary from ${salaryChosen.name}`
@@ -4852,13 +4911,24 @@ export default function BankScreen() {
                     <View style={[styles.categoryDropdown, { borderColor: colors.dropdownBorder, backgroundColor: colors.dropdownBackground }]}>
                       <TouchableOpacity
                         style={styles.categoryOption}
-                        onPress={() => { setRepayingPartyId(null); setBorrowTarget(null); setToBusinessId(null); if (forBusinessId !== null) chooseWhoFor(null); if (!isSharedWorkspace) { setIncomeSourceId(null); setDepositSourceKind(null); } setShowRepayPicker(false); }}
+                        onPress={() => { setRepayingPartyId(null); setBorrowTarget(null); setToBusinessId(null); if (forBusinessId !== null) chooseWhoFor(null); if (!isSharedWorkspace) { setIncomeSourceId(null); setDepositSourceKind(null); } setMoneyBackFor(null); setShowRepayPicker(false); }}
                         testID="bank-repayment-none"
                       >
                         <Text style={{ color: colors.dropdownForeground, fontFamily: 'Inter_400Regular' }}>
                           Ordinary money in
                         </Text>
                       </TouchableOpacity>
+                      {/* Money back that takes it off a category: a friend's share of a bill. */}
+                      {editingTransactionId === null ? (
+                        <TouchableOpacity
+                          style={[styles.categoryOption, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }]}
+                          onPress={() => { setToBusinessId(null); setRepayingPartyId(null); setBorrowTarget(null); if (forBusinessId !== null) chooseWhoFor(null); setIncomeSourceId(null); setDepositSourceKind(null); setMoneyBackFor(''); setCategorySearch(''); setShowRepayPicker(false); }}
+                          testID="bank-deposit-money-back"
+                        >
+                          <Text style={{ color: colors.foreground, fontFamily: 'Inter_700Bold', fontSize: 13, letterSpacing: 0.3 }}>MONEY BACK FOR A CATEGORY</Text>
+                          <Text style={{ color: colors.mutedForeground, fontSize: 12, marginTop: 2 }}>Someone paying you back their share - it comes off that category's spending</Text>
+                        </TouchableOpacity>
+                      ) : null}
                       {/* Your salary from one of your businesses: income, filed under that
                           business's salary stream ("in money in, why cant i see the option of
                           salary?", 16 Oct 2026). Only what is filed there counts as salary. */}
@@ -4878,7 +4948,7 @@ export default function BankScreen() {
                                   setIncomeSourceId(business.salaryStreamId);
                                   setDepositSourceKind('income_source');
                                   if (depositorIds.length === 0 && user?.id) setDepositorIds([user.id]);
-                                  setShowRepayPicker(false);
+                                  setMoneyBackFor(null); setShowRepayPicker(false);
                                 }}
                                 testID={`bank-deposit-salary-from-${business.id}`}
                               >
@@ -4910,7 +4980,7 @@ export default function BankScreen() {
                                   setIncomeSourceId(src.id);
                                   setDepositSourceKind('income_source');
                                   if (depositorIds.length === 0 && user?.id) setDepositorIds([user.id]);
-                                  setShowRepayPicker(false);
+                                  setMoneyBackFor(null); setShowRepayPicker(false);
                                 }}
                                 testID={`bank-deposit-income-from-${src.id}`}
                               >
@@ -4926,7 +4996,7 @@ export default function BankScreen() {
                                 if (forBusinessId !== null) chooseWhoFor(null);
                                 setIncomeSourceId(null);
                                 setDepositSourceKind('other');
-                                setShowRepayPicker(false);
+                                setMoneyBackFor(null); setShowRepayPicker(false);
                               }}
                               testID="bank-deposit-income-other"
                             >
@@ -4948,7 +5018,7 @@ export default function BankScreen() {
                                   setRepayingPartyId(null);
                                   setBorrowTarget(null);
                                   chooseWhoFor(business.id);
-                                  setShowRepayPicker(false);
+                                  setMoneyBackFor(null); setShowRepayPicker(false);
                                 }}
                                 testID={`bank-deposit-sales-for-${business.id}`}
                               >
@@ -4972,7 +5042,7 @@ export default function BankScreen() {
                                   setBorrowTarget(null);
                                   setIncomeSourceId(null);
                                   setForBusinessId(null);
-                                  setShowRepayPicker(false);
+                                  setMoneyBackFor(null); setShowRepayPicker(false);
                                 }}
                                 testID={`bank-deposit-from-business-${business.id}`}
                               >
@@ -4994,7 +5064,7 @@ export default function BankScreen() {
                               <TouchableOpacity
                                 key={`owing-party-${party.id}`}
                                 style={[styles.memberPill, { backgroundColor: colors.muted, borderColor: colors.border }]}
-                                onPress={() => { setRepayingPartyId(party.id); setBorrowTarget(null); setToBusinessId(null); setShowRepayPicker(false); }}
+                                onPress={() => { setRepayingPartyId(party.id); setBorrowTarget(null); setToBusinessId(null); setMoneyBackFor(null); setShowRepayPicker(false); }}
                                 testID={`bank-repayment-party-${party.id}`}
                               >
                                 <Text style={[styles.memberPillText, { color: colors.foreground }]}>{party.name} · KES {formatKES(party.owedToUs ?? 0)}</Text>
@@ -5010,7 +5080,7 @@ export default function BankScreen() {
                             <TouchableOpacity
                               key={`borrow-debt-${debt.id}`}
                               style={[styles.memberPill, { backgroundColor: colors.muted, borderColor: colors.border }]}
-                              onPress={() => { setRepayingPartyId(null); setBorrowTarget({ kind: 'debt', name: debt.name }); setToBusinessId(null); setShowRepayPicker(false); }}
+                              onPress={() => { setRepayingPartyId(null); setBorrowTarget({ kind: 'debt', name: debt.name }); setToBusinessId(null); setMoneyBackFor(null); setShowRepayPicker(false); }}
                               testID={`bank-borrow-debt-${debt.id}`}
                             >
                               <Text style={[styles.memberPillText, { color: colors.foreground }]}>{debt.name} · owe KES {formatKES(debt.debtBalance ?? 0)}</Text>
@@ -5020,7 +5090,7 @@ export default function BankScreen() {
                             <TouchableOpacity
                               key={`borrow-party-${party.id}`}
                               style={[styles.memberPill, { backgroundColor: colors.muted, borderColor: colors.border }]}
-                              onPress={() => { setRepayingPartyId(null); setBorrowTarget({ kind: 'party', id: party.id }); setToBusinessId(null); setShowRepayPicker(false); }}
+                              onPress={() => { setRepayingPartyId(null); setBorrowTarget({ kind: 'party', id: party.id }); setToBusinessId(null); setMoneyBackFor(null); setShowRepayPicker(false); }}
                               testID={`bank-borrow-party-${party.id}`}
                             >
                               <Text style={[styles.memberPillText, { color: colors.foreground }]}>{party.name}</Text>
@@ -5093,7 +5163,7 @@ export default function BankScreen() {
                         </View>
                         <TouchableOpacity
                           style={styles.categoryOption}
-                          onPress={() => { setRepayingPartyId(null); setBorrowTarget({ kind: 'none' }); setShowRepayPicker(false); }}
+                          onPress={() => { setRepayingPartyId(null); setBorrowTarget({ kind: 'none' }); setMoneyBackFor(null); setShowRepayPicker(false); }}
                           testID="bank-borrow-unspecified"
                         >
                           <Text style={{ color: colors.dropdownForeground, fontFamily: 'Inter_400Regular' }}>
@@ -5392,6 +5462,27 @@ export default function BankScreen() {
                 </>
               )}
 
+              {isDeposit && moneyBackFor !== null ? (
+                <View style={{ gap: 8, marginTop: 8 }} testID="bank-money-back-category">
+                  <Text style={{ color: colors.foreground, fontFamily: 'Inter_700Bold', fontSize: 13, letterSpacing: 0.3 }}>WHICH CATEGORY DOES IT COME OFF?</Text>
+                  <CategorySearchBox value={categorySearch} onChange={setCategorySearch} testID="money-back-category-search" />
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                    {visibleCategoryTree.flatMap((group) => (group.children.length > 0 ? group.children : [group.name])).slice(0, 40).map((name) => {
+                      const on = moneyBackFor === name;
+                      return (
+                        <TouchableOpacity
+                          key={`money-back-${name}`}
+                          onPress={() => setMoneyBackFor(name)}
+                          style={[styles.memberPill, { backgroundColor: on ? colors.primary : colors.muted, borderColor: on ? colors.primary : colors.border }]}
+                          testID={`money-back-category-${name}`}
+                        >
+                          <Text style={[styles.memberPillText, { color: on ? colors.primaryForeground : colors.foreground }]}>{name}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              ) : null}
               {moneyInFunding ? (
                 <View
                   style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, borderWidth: 1, alignSelf: 'flex-start',

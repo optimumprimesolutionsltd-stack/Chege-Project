@@ -159,7 +159,7 @@ describe('a charge belongs to the posting it came with', () => {
 
   it('takes the id from whichever branch wrote the posting', () => {
     // Four: the group's, one person's, one person's split across income streams (16 Oct 2026), and money out.
-    expect((bank.match(/createdPostingId = \(await create/g) ?? []).length).toBe(4);
+    expect((bank.match(/createdPostingId = \(await create/g) ?? []).length).toBe(5);
   });
 
   it('is shown again when the posting is reopened', () => {
