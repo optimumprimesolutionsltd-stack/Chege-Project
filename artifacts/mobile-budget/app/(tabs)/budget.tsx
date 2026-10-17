@@ -1754,7 +1754,14 @@ export default function BudgetScreen() {
                 <Pressable onPress={nextMonth} style={styles.navBtn} hitSlop={8} disabled={isCurrentMonth}>
                   <Feather name="chevron-right" size={20} color={isCurrentMonth ? 'rgba(247,250,246,0.2)' : 'rgba(247,250,246,0.7)'} />
                 </Pressable>
-              </View>
+                {/* Finding a category: pinned with the month, so it stays in view while the
+              list scrolls under it ("search a category should be frozen too", 17 Oct 2026). */}
+          {findingCategory || categoryFind ? (
+            <View style={{ alignSelf: 'stretch', marginTop: 6 }}>
+              <CategorySearchBox value={categoryFind} onChange={setCategoryFind} autoFocus={findingCategory} testID="budget-category-find" />
+            </View>
+          ) : null}
+        </View>
         </View>
 
         {/* Income first: what the budget has to spend, before what it is spent on
@@ -2218,9 +2225,6 @@ export default function BudgetScreen() {
                 ? 'Tap a category to see its expenses. Use Edit or Remove to manage the budget.'
                 : 'Tap a category to see the expenses behind its total. Owners and admins manage category budgets.'}
             </Text>
-          ) : null}
-          {findingCategory || categoryFind ? (
-            <CategorySearchBox value={categoryFind} onChange={setCategoryFind} autoFocus={findingCategory} testID="budget-category-find" />
           ) : null}
           {findNeedle && foundBreakdown.length === 0 && foundUnused.length === 0 ? (
             <Text style={[styles.sectionHint, { color: colors.mutedForeground }]}>No category matching “{categoryFind.trim()}”.</Text>

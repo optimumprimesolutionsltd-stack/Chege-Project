@@ -36,3 +36,14 @@ describe('Sort them out', () => {
     expect(read('app/sort-entries.tsx')).toContain('decelerationRate="fast"');
   });
 });
+
+// "Search a category should be frozen too" (17 Oct 2026).
+describe('finding a category stays in view', () => {
+  it('sits in the pinned month bar on Budget and All spending', () => {
+    const budget = read('app/(tabs)/budget.tsx');
+    expect(budget.indexOf('testID="budget-category-find"')).toBeGreaterThan(budget.indexOf('testID="budget-month-bar"'));
+    expect(budget.indexOf('testID="budget-category-find"')).toBeLessThan(budget.indexOf('{/* Income first'));
+    const ledger = read('app/expense-ledger.tsx');
+    expect(ledger.indexOf('testID="expense-ledger-category-find"')).toBeLessThan(ledger.indexOf('<ScrollerScrollView'));
+  });
+});

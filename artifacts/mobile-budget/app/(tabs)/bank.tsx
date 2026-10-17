@@ -389,6 +389,15 @@ export default function BankScreen() {
   const [depositorIds, setDepositorIds] = useState<string[]>([]);
   const [depositorAmounts, setDepositorAmounts] = useState<Record<string, string>>({});
   const [incomeSourceId, setIncomeSourceId] = useState<number | null>(null);
+  // The first entry in view, for the date pinned at the top while the list
+  // scrolls ("the date freeze logic should apply in banking too, both months
+  // and dates", 17 Oct 2026). Shown once the header has scrolled away.
+  const [topRow, setTopRow] = useState<{ date: string; index: number } | null>(null);
+  const onViewableRows = useRef(({ viewableItems }: { viewableItems: Array<{ item: { date?: string | null }; index: number | null }> }) => {
+    const first = viewableItems.find((row) => row.index !== null && row.item?.date);
+    setTopRow(first ? { date: String(first.item.date), index: first.index ?? 0 } : null);
+  }).current;
+  const rowViewability = useRef({ itemVisiblePercentThreshold: 50 }).current;
   // One payment in, split across income streams - "salary and something else"
   // (16 Oct 2026). Each part names a stream and an amount; what is left stays on
   // the stream chosen above. Saved as that person's portions, one per stream.
@@ -687,6 +696,9 @@ export default function BankScreen() {
     [businesses.list],
   );
   const salaryChosen = salaryBusinesses.find((one) => one.salaryStreamId === incomeSourceId) ?? null;
+  // The person's other income streams: not a business, not a business's salary.
+  const otherIncomeStreams = depositSources.filter((src) => !businesses.ids.has(src.id) && !salaryBusinesses.some((one) => one.salaryStreamId === src.id));
+  const incomeChosen = salaryChosen ? null : otherIncomeStreams.find((src) => src.id === incomeSourceId) ?? null;
   /** A marked entry's business by name; the one set up first when it has none. */
   const businessNameOf = (id: number | undefined): string =>
     (id === undefined ? undefined : whoForBusinesses.find((one) => one.id === id)?.name) ?? ownerBusiness.business.name;
@@ -3162,6 +3174,8 @@ export default function BankScreen() {
 
       <PageFlatList
         data={listedTransactions}
+        onViewableItemsChanged={onViewableRows}
+        viewabilityConfig={rowViewability}
         // A thumb to drag through months of transactions, clear of the
         // floating actions and the tab bar at the bottom.
         scroller={{ top: topPad + 12, bottom: (Platform.OS === 'web' ? 100 : insets.bottom + 110) }}
@@ -3840,6 +3854,13 @@ export default function BankScreen() {
           );
         }}
       />
+      {topRow && topRow.index > 1 ? (
+        <View pointerEvents="none" style={{ position: 'absolute', top: topPad + 8, alignSelf: 'center', zIndex: 20, paddingHorizontal: 14, paddingVertical: 6, borderRadius: 999, backgroundColor: '#0A3833', borderWidth: 1, borderColor: '#14776A' }} testID="bank-date-pill">
+          <Text style={{ color: '#F7FAF6', fontFamily: 'Inter_700Bold', fontSize: 13 }}>
+            {formatBankDate(topRow.date)}{selectedAccount ? ` · ${selectedAccount.name}` : ''}
+          </Text>
+        </View>
+      ) : null}
 
       {/* Transaction modal */}
       <Modal
@@ -4804,13 +4825,17 @@ export default function BankScreen() {
                     onPress={() => setShowRepayPicker((open) => !open)}
                     testID="bank-repayment-picker"
                   >
-                    <Text style={{ flex: 1, color: toBusinessId !== null || salaryChosen || forBusinessId !== null || repayingParty || isBorrowing ? colors.foreground : colors.mutedForeground, fontFamily: 'Inter_400Regular' }}>
+                    <Text style={{ flex: 1, color: toBusinessId !== null || salaryChosen || forBusinessId !== null || (!isSharedWorkspace && (incomeChosen || depositSourceKind === 'other')) || repayingParty || isBorrowing ? colors.foreground : colors.mutedForeground, fontFamily: 'Inter_400Regular' }}>
                       {toBusinessId !== null
                         ? `From ${businessNameOf(toBusinessId)} - director's money`
                         : salaryChosen
                         ? `Salary from ${salaryChosen.name}`
                         : forBusinessId !== null
                         ? `${businessNameOf(forBusinessId)} - its sales`
+                        : !isSharedWorkspace && incomeChosen
+                        ? `Income from ${incomeChosen.name}`
+                        : !isSharedWorkspace && depositSourceKind === 'other'
+                        ? 'Income - something else'
                         : repayingParty
                         ? `${repayingParty.name} repaying you`
                         : borrowTarget?.kind === 'debt'
@@ -4827,7 +4852,7 @@ export default function BankScreen() {
                     <View style={[styles.categoryDropdown, { borderColor: colors.dropdownBorder, backgroundColor: colors.dropdownBackground }]}>
                       <TouchableOpacity
                         style={styles.categoryOption}
-                        onPress={() => { setRepayingPartyId(null); setBorrowTarget(null); setToBusinessId(null); if (forBusinessId !== null) chooseWhoFor(null); setShowRepayPicker(false); }}
+                        onPress={() => { setRepayingPartyId(null); setBorrowTarget(null); setToBusinessId(null); if (forBusinessId !== null) chooseWhoFor(null); if (!isSharedWorkspace) { setIncomeSourceId(null); setDepositSourceKind(null); } setShowRepayPicker(false); }}
                         testID="bank-repayment-none"
                       >
                         <Text style={{ color: colors.dropdownForeground, fontFamily: 'Inter_400Regular' }}>
@@ -4865,6 +4890,51 @@ export default function BankScreen() {
                       ) : null}
                       {/* Money from one of the person's businesses: the director's money, in one
                           tap - not income, not a loan ("yes", 12 Oct 2026, after money out got it). */}
+                      {/* In a Personal budget the income streams are a choice here, not a second
+                          question below that said one thing while this said another ("the income
+                          streams are not effective if you dont press which kind of money is this
+                          ... why are they not linked? can one be removed?", 17 Oct 2026). */}
+                      {!isSharedWorkspace ? (
+                        <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, paddingTop: 8, marginTop: 4, paddingHorizontal: 10, gap: 6 }} testID="bank-deposit-income-row">
+                          <Text style={{ color: colors.foreground, fontFamily: 'Inter_700Bold', fontSize: 13, letterSpacing: 0.3 }}>INCOME FROM</Text>
+                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                            {otherIncomeStreams.map((src) => (
+                              <TouchableOpacity
+                                key={`income-from-${src.id}`}
+                                style={[styles.memberPill, { backgroundColor: colors.muted, borderColor: colors.border }]}
+                                onPress={() => {
+                                  setToBusinessId(null);
+                                  setRepayingPartyId(null);
+                                  setBorrowTarget(null);
+                                  if (forBusinessId !== null) chooseWhoFor(null);
+                                  setIncomeSourceId(src.id);
+                                  setDepositSourceKind('income_source');
+                                  if (depositorIds.length === 0 && user?.id) setDepositorIds([user.id]);
+                                  setShowRepayPicker(false);
+                                }}
+                                testID={`bank-deposit-income-from-${src.id}`}
+                              >
+                                <Text style={[styles.memberPillText, { color: colors.foreground }]}>{src.name}</Text>
+                              </TouchableOpacity>
+                            ))}
+                            <TouchableOpacity
+                              style={[styles.memberPill, { backgroundColor: colors.muted, borderColor: colors.border }]}
+                              onPress={() => {
+                                setToBusinessId(null);
+                                setRepayingPartyId(null);
+                                setBorrowTarget(null);
+                                if (forBusinessId !== null) chooseWhoFor(null);
+                                setIncomeSourceId(null);
+                                setDepositSourceKind('other');
+                                setShowRepayPicker(false);
+                              }}
+                              testID="bank-deposit-income-other"
+                            >
+                              <Text style={[styles.memberPillText, { color: colors.foreground }]}>Something else</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      ) : null}
                       {whoForBusinesses.length > 0 ? (
                         <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, paddingTop: 8, marginTop: 4, paddingHorizontal: 10, gap: 6 }} testID="bank-deposit-sales-row">
                           <Text style={{ color: colors.foreground, fontFamily: 'Inter_700Bold', fontSize: 13, letterSpacing: 0.3 }}>BUSINESS SALES FOR</Text>
@@ -5258,7 +5328,7 @@ export default function BankScreen() {
               {/* Saved income sources are for one named depositor; the group can choose Other.
                   Not asked once Who is this for? names a business: the business is where
                   it came from ("the income streams should not be there", 9 Oct 2026). */}
-              {isDeposit && !notIncome && forBusinessId === null && (singleDepositorId || depositorIds.length === 0) && (
+              {isDeposit && isSharedWorkspace && !notIncome && forBusinessId === null && (singleDepositorId || depositorIds.length === 0) && (
                 <>
                   <Text style={[styles.label, { color: colors.mutedForeground }]}>
                     {singleDepositorId ? 'Which of their income streams?' : 'Where did this money come from?'}{' '}
