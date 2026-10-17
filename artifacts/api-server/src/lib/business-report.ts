@@ -24,8 +24,21 @@ export type BusinessCostRow = {
 };
 
 /** One entry behind a cost line, for the statement's details. */
-export type BusinessCostEntryRow = { incomeSourceId: number; category: string; date: string; description: string; amount: number };
-type Entry = { date: string; description: string; amount: number };
+export type BusinessCostEntryRow = {
+  incomeSourceId: number;
+  category: string;
+  date: string;
+  description: string;
+  amount: number;
+  /** The entry itself, to open it: an expense's id, or an M-Pesa or bank entry's. */
+  id?: number;
+  source?: "expense" | "bank";
+  accountId?: number | null;
+};
+/** One entry behind a figure; its id and source, when known, open it to edit on the phone. */
+type Entry = { date: string; description: string; amount: number; id?: number; source?: "expense" | "bank"; accountId?: number | null };
+const opener = (entry: { id?: number; source?: "expense" | "bank"; accountId?: number | null }) =>
+  entry.id != null && entry.source ? { id: entry.id, source: entry.source, ...(entry.accountId != null ? { accountId: entry.accountId } : {}) } : {};
 
 const cents = (value: number) => Math.round(value * 100) / 100;
 /** Details list at most this many entries per line, newest first, with the count of the rest. */
@@ -69,7 +82,7 @@ export function buildBusinessReport(input: {
     const entriesFor = (category: string) => {
       const all = (input.detail?.costEntries ?? [])
         .filter((entry) => entry.incomeSourceId === id && entry.category === category)
-        .map((entry) => ({ date: entry.date, description: entry.description, amount: cents(entry.amount) }))
+        .map((entry) => ({ date: entry.date, description: entry.description, amount: cents(entry.amount), ...opener(entry) }))
         .sort(newestFirst);
       return { entries: all.slice(0, DETAIL_ENTRIES), more: Math.max(0, all.length - DETAIL_ENTRIES) };
     };
@@ -103,7 +116,7 @@ export function buildBusinessReport(input: {
       ...(input.detail ? (() => {
         const sales = input.detail.salesEntries
           .filter((entry) => entry.incomeSourceId === id)
-          .map((entry) => ({ date: entry.date, description: entry.description, amount: cents(entry.amount) }))
+          .map((entry) => ({ date: entry.date, description: entry.description, amount: cents(entry.amount), ...opener(entry) }))
           .sort(newestFirst);
         const previousLines = input.detail.previous.costLines.filter((line) => line.incomeSourceId === id);
         return {
