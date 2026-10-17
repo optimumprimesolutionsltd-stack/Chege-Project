@@ -10,7 +10,7 @@ const webImport = readFileSync('../family-budget/src/pages/mpesa-import.tsx', 'u
 
 describe('a business chosen is not asked for again', () => {
   it('Bank: no income streams to pick from, and no "This is my business\'s money"', () => {
-    expect(bank).toContain('{isDeposit && !notIncome && forBusinessId === null && (singleDepositorId || depositorIds.length === 0) && (');
+    expect(bank).toContain('{isDeposit && isSharedWorkspace && !notIncome && forBusinessId === null && (singleDepositorId || depositorIds.length === 0) && (');
     expect(bank).toContain("(txType === 'deposit' || txType === 'disbursement') && (editingBusinessMoney || forBusinessId === null) ? (");
   });
 

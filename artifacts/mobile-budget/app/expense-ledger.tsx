@@ -371,6 +371,12 @@ export default function ExpenseLedgerScreen() {
           freeze ... so i know which month i am dealing with", 17 Oct 2026). */}
       <View style={{ paddingHorizontal: 16, paddingVertical: 6, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border, backgroundColor: colors.background }} testID="expense-ledger-month-bar">
         <MonthStepper from={from} to={to} onChange={(nextFrom, nextTo) => { setFrom(nextFrom); setTo(nextTo); }} testID="expense-ledger-month" />
+        {/* Finding a category: pinned with the month ("search a category should be frozen too", 17 Oct 2026). */}
+        {shownView === 'category' && (findingCategory || categoryFind) ? (
+          <View style={{ marginTop: 6 }}>
+            <CategorySearchBox value={categoryFind} onChange={setCategoryFind} autoFocus={findingCategory} testID="expense-ledger-category-find" />
+          </View>
+        ) : null}
       </View>
       <ScrollerScrollView scroller={{ top: 8, bottom: insets.bottom + 16, findCategory: openCategoryFind, beforeEnd: paged.showAll }}
         onScroll={paged.onScroll}
@@ -520,9 +526,6 @@ export default function ExpenseLedgerScreen() {
           </View>
         ) : shownView === 'category' ? (
           <>
-            {findingCategory || categoryFind ? (
-              <CategorySearchBox value={categoryFind} onChange={setCategoryFind} autoFocus={findingCategory} testID="expense-ledger-category-find" />
-            ) : null}
             {scopedCategoryGroups.length === 0 ? (
               <Text style={[styles.noteText, { color: colors.mutedForeground, marginTop: 12 }]}>No category matching “{categoryFind.trim()}”.</Text>
             ) : null}

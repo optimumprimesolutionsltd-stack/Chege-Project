@@ -44,3 +44,21 @@ describe('Money in: one payment split across income streams', () => {
     expect(bank.match(/setStreamSplits\(\[\]\);/g)?.length ?? 0).toBeGreaterThanOrEqual(3);
   });
 });
+
+// "The income streams are not effective if you dont press which kind of money is
+// this ... why are they not linked? can one be removed?" (17 Oct 2026).
+describe('Money in, Personal: one question for what the money is', () => {
+  it('lists income streams under What kind of money is this?, and drops the second question', () => {
+    expect(bank).toContain('testID="bank-deposit-income-row"');
+    expect(bank).toContain('INCOME FROM');
+    expect(bank).toContain('{isDeposit && isSharedWorkspace && !notIncome && forBusinessId === null');
+  });
+});
+
+// "The date freeze logic should apply in banking too, both months and dates" (17 Oct 2026).
+describe('Money: the date of the entries in view stays at the top', () => {
+  it('follows the first entry in view once the header has scrolled away', () => {
+    expect(bank).toContain('onViewableItemsChanged={onViewableRows}');
+    expect(bank).toContain('testID="bank-date-pill"');
+  });
+});
