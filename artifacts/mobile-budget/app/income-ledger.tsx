@@ -14,6 +14,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { linkedDay } from '@/lib/monthLink';
+import { getExpenseEditHref } from '@/lib/expenseEditLink';
+import { costsByCategory, type CostEntry } from '@/lib/streamCosts';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import {
   getDashboardMonthlyReportPdf,
@@ -164,11 +166,20 @@ export default function IncomeLedgerScreen() {
     return { ...stream, key: `s:${stream.incomeSourceId ?? 'none'}`, rows };
   }), [data?.streams, entries]);
 
+  // Any entry opens where it can be fixed, and comes back here after (17 Oct 2026):
+  // money in and M-Pesa or bank spending on Money, an expense on its own form.
+  const returnHere = encodeURIComponent(`/income-ledger?from=${rangeFrom}&to=${rangeTo}`);
+  const bankEditHref = (id: number, accountId?: number | null) =>
+    `/(tabs)/bank?editTx=${id}${accountId ? `&accountId=${accountId}` : ''}&opened=${Date.now()}&returnTo=${returnHere}`;
+  // What a business cost, one entry at a time: where a loss came from.
+  const costEntries = ((data as { costEntries?: CostEntry[] } | undefined)?.costEntries) ?? [];
+
   const renderEntry = (entry: (typeof entries)[number], index: number, share?: number) => (
-    <View
+    <Pressable
       key={entry.id}
-      accessible
-      accessibilityLabel={`${entry.description}, ${formatKES(entry.amount)} shillings on ${longDay(entry.date)}, from ${entry.streams.join(' and ')}`}
+      onPress={() => router.push(bankEditHref(entry.transactionId) as never)}
+      accessibilityRole="button"
+      accessibilityLabel={`${entry.description}, ${formatKES(entry.amount)} shillings on ${longDay(entry.date)}, from ${entry.streams.join(' and ')}. Opens it to edit.`}
       testID={`income-ledger-entry-${entry.id}`}
       style={[styles.row, index > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderColor: colors.border }]}
     >
@@ -182,7 +193,25 @@ export default function IncomeLedgerScreen() {
         </Text>
       </View>
       <Text style={[styles.rowAmount, { color: colors.foreground }]}>{formatKES(share ?? entry.amount)}</Text>
-    </View>
+    </Pressable>
+  );
+
+  const renderCost = (cost: CostEntry, index: number) => (
+    <Pressable
+      key={`${cost.source}-${cost.id}-${cost.category}`}
+      onPress={() => router.push((cost.source === 'expense' ? getExpenseEditHref({ id: cost.id, date: cost.date }) : bankEditHref(cost.id, cost.accountId)) as never)}
+      accessibilityRole="button"
+      accessibilityLabel={`${cost.description}, ${formatKES(cost.amount)} shillings on ${longDay(cost.date)}, under ${cost.category}. Opens it to edit.`}
+      testID={`income-ledger-cost-${cost.source}-${cost.id}`}
+      style={[styles.row, index > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderColor: colors.border }]}
+    >
+      <Text style={[styles.rowDate, { color: colors.mutedForeground }]}>{shortDay(cost.date)}</Text>
+      <View style={styles.rowText}>
+        <Text style={[styles.rowDesc, { color: colors.foreground }]} numberOfLines={1}>{cost.description || cost.category}</Text>
+        <Text style={[styles.rowMeta, { color: colors.mutedForeground }]} numberOfLines={1}>{cost.category}</Text>
+      </View>
+      <Text style={[styles.rowAmount, { color: '#ef4444' }]}>−{formatKES(cost.amount)}</Text>
+    </Pressable>
   );
 
   const renderGroup = (group: (typeof streamGroups)[number]) => {
@@ -219,11 +248,33 @@ export default function IncomeLedgerScreen() {
         </Pressable>
         {isOpen ? (
           <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderColor: colors.border, paddingHorizontal: 14 }}>
+            {group.costs > 0 ? (
+              <Text style={[styles.sectionHead, { color: colors.foreground }]} testID={`income-ledger-came-in-${group.key}`}>
+                CAME IN · {formatKES(group.received)}
+              </Text>
+            ) : null}
             {group.rows.length === 0 ? (
               <Text style={[styles.rowMeta, { color: colors.mutedForeground, paddingVertical: 11 }]}>
                 Nothing came in from this stream between these dates.
               </Text>
             ) : group.rows.map(({ entry, share }, index) => renderEntry(entry, index, share))}
+            {/* Where a loss came from: every cost, by category, each one opens to fix
+                ("where did the loss come from, can i edit incase there were wrong
+                entries", 17 Oct 2026). */}
+            {group.costs > 0 ? (
+              <View testID={`income-ledger-costs-${group.key}`}>
+                <Text style={[styles.sectionHead, { color: colors.foreground }]}>COSTS · −{formatKES(group.costs)}</Text>
+                {costsByCategory(costEntries, group.incomeSourceId).map((line) => (
+                  <View key={line.category}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingTop: 8 }}>
+                      <Text style={[styles.rowMeta, { color: colors.mutedForeground, fontWeight: '700' }]}>{line.category} · {line.entries.length}</Text>
+                      <Text style={[styles.rowMeta, { color: colors.mutedForeground, fontWeight: '700' }]}>−{formatKES(line.total)}</Text>
+                    </View>
+                    {line.entries.map((cost, index) => renderCost(cost, index))}
+                  </View>
+                ))}
+              </View>
+            ) : null}
           </View>
         ) : null}
       </View>
@@ -463,5 +514,6 @@ const styles = StyleSheet.create({
   rowText: { flex: 1, minWidth: 0 },
   rowDesc: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
   rowMeta: { fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: 2 },
+  sectionHead: { fontSize: 12, fontFamily: 'Inter_700Bold', letterSpacing: 0.3, paddingTop: 12, paddingBottom: 2 },
   rowAmount: { fontSize: 14, fontFamily: 'Inter_700Bold' },
 });

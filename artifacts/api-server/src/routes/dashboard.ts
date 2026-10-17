@@ -1340,15 +1340,21 @@ async function loadIncomeLedger(groupId: number, from: string, to: string, searc
   // lives on, whose sales are income here and whose costs come off them, so
   // the stream reads as its profit. A search lists receipts only.
   const costsByStream = personal && !search ? await ownerIncomeCosts(groupId, from, to) : new Map<number, number>();
+  // The entries behind those costs, one by one, so a loss can be traced to what
+  // made it and each one opened to fix ("side hustle income ... where did the
+  // loss come from, can i edit incase there were wrong entries", 17 Oct 2026).
+  const costEntries = costsByStream.size > 0
+    ? (await incomeStreamCostEntries(groupId, from, to, { personalOnly: true })).filter((row) => costsByStream.has(row.incomeSourceId))
+    : [];
 
-  return buildIncomeLedger({
+  return { ...buildIncomeLedger({
     from,
     to,
     deposits: deposits.rows as IncomeDepositRow[],
     splits: splits.rows as IncomeSplitRow[],
     streamNames: new Map((streams.rows as { id: number; name: string }[]).map((row) => [Number(row.id), row.name])),
     costsByStream,
-  });
+  }), costEntries };
 }
 
 /**
@@ -1630,7 +1636,7 @@ router.get("/dashboard/business", async (req, res): Promise<void> => {
       detail: {
         salesEntries: ledger.entries.flatMap((entry) => entry.portions
           .filter((portion) => portion.incomeSourceId != null)
-          .map((portion) => ({ incomeSourceId: Number(portion.incomeSourceId), date: entry.date, description: entry.description, amount: portion.amount }))),
+          .map((portion) => ({ incomeSourceId: Number(portion.incomeSourceId), date: entry.date, description: entry.description, amount: portion.amount, id: entry.transactionId, source: "bank" as const }))),
         costEntries,
         previous: { from: previousRange.from, to: previousRange.to, salesByStream: salesByStreamOf(previousLedger), costLines: previousCostLines },
       },
@@ -1795,7 +1801,7 @@ async function incomeStreamCostLines(groupId: number, from: string, to: string, 
  * details: the same three sources and rules as incomeStreamCostLines, one row
  * per entry, so the details always add up to the totals shown.
  */
-async function incomeStreamCostEntries(groupId: number, from: string, to: string): Promise<BusinessCostEntryRow[]> {
+async function incomeStreamCostEntries(groupId: number, from: string, to: string, { personalOnly = false }: { personalOnly?: boolean } = {}): Promise<BusinessCostEntryRow[]> {
   const result = await db.execute(sql`
     WITH cost_categories AS (
       SELECT name, reduces_income_source_id
@@ -1803,7 +1809,8 @@ async function incomeStreamCostEntries(groupId: number, from: string, to: string
       WHERE group_id = ${groupId} AND ${businessCostLink(groupId, sql`reduces_income_source_id`)}
     ),
     costs AS (
-      SELECT alloc.category, alloc.amount, expense.date::text AS date, expense.description
+      SELECT alloc.category, alloc.amount, expense.date::text AS date, expense.description,
+             expense.id AS id, 'expense' AS source, NULL::int AS "accountId"
       FROM expense_category_allocations alloc
       INNER JOIN expenses expense ON expense.id = alloc.expense_id AND expense.group_id = ${groupId}
       WHERE alloc.group_id = ${groupId}
@@ -1812,7 +1819,8 @@ async function incomeStreamCostEntries(groupId: number, from: string, to: string
 
       UNION ALL
 
-      SELECT expense.category, expense.amount, expense.date::text AS date, expense.description
+      SELECT expense.category, expense.amount, expense.date::text AS date, expense.description,
+             expense.id AS id, 'expense' AS source, NULL::int AS "accountId"
       FROM expenses expense
       WHERE expense.group_id = ${groupId}
         AND expense.date >= ${from}
@@ -1824,16 +1832,19 @@ async function incomeStreamCostEntries(groupId: number, from: string, to: string
 
       UNION ALL
 
-      SELECT tx.expense_category AS category, tx.amount, tx.date::text AS date, tx.description
+      SELECT tx.expense_category AS category, tx.amount, tx.date::text AS date, tx.description,
+             tx.id AS id, 'bank' AS source, tx.account_id AS "accountId"
       FROM joint_account_transactions tx
       WHERE tx.group_id = ${groupId}
         AND tx.type = 'disbursement'
         AND tx.expense_category IS NOT NULL
         AND tx.date >= ${from}
         AND tx.date <= ${to}
+        ${personalOnly ? inPersonalAccount(sql`tx.account_id`) : sql``}
     )
     SELECT cc.reduces_income_source_id AS "incomeSourceId", cc.name AS category,
-           costs.date, costs.description, costs.amount::float8 AS amount
+           costs.date, costs.description, costs.amount::float8 AS amount,
+           costs.id, costs.source, costs."accountId"
     FROM cost_categories cc
     INNER JOIN costs ON costs.category = cc.name
     ORDER BY costs.date DESC
@@ -1844,6 +1855,9 @@ async function incomeStreamCostEntries(groupId: number, from: string, to: string
     date: String(row.date ?? ""),
     description: typeof row.description === "string" ? row.description : "",
     amount: Number(row.amount) || 0,
+    id: Number(row.id),
+    source: row.source === "bank" ? "bank" as const : "expense" as const,
+    accountId: row.accountId == null ? null : Number(row.accountId),
   }));
 }
 

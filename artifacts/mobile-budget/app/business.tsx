@@ -8,6 +8,7 @@ import { autoLinkReversals, getGetDashboardBusinessQueryKey, useGetDashboardBusi
 import { useQueryClient } from '@tanstack/react-query';
 import { BusinessCostCategories } from '@/components/BusinessCostCategories';
 import { useColors } from '@/hooks/useColors';
+import { getExpenseEditHref } from '@/lib/expenseEditLink';
 import { ScrollerScrollView } from '@/components/PageScrollReset';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -23,7 +24,8 @@ function margin(part: number, sales: number): string | null {
   return sales > 0 ? `${Math.round((part / sales) * 100)}%` : null;
 }
 
-type Entry = { date: string; description: string; amount: number };
+/** One entry behind a figure; id and source open it to edit (api-server lib/business-report). */
+type Entry = { date: string; description: string; amount: number; id?: number; source?: 'expense' | 'bank'; accountId?: number | null };
 type Line = { category: string; amount: number; shareOfSales?: number | null; entries?: Entry[]; more?: number };
 type Figures = { sales: number; costOfGoodsSold: number; grossProfit: number; expenses: number; netProfit: number };
 /** One of the business's own bank accounts over the period (api-server businessAccountSummary). */
@@ -143,15 +145,35 @@ export default function BusinessScreen() {
     </View>
   );
 
+  // Each entry opens where it can be fixed, and comes back here after: "can i edit
+  // incase there were wrong entries ... i need that logic for businesses in
+  // reports" (17 Oct 2026). M-Pesa and bank entries on Money, expenses on their form.
+  const editHref = (entry: Entry): string | null => {
+    if (entry.id == null || !entry.source) return null;
+    if (entry.source === 'expense') return getExpenseEditHref({ id: entry.id, date: entry.date });
+    return `/(tabs)/bank?editTx=${entry.id}${entry.accountId ? `&accountId=${entry.accountId}` : ''}&opened=${Date.now()}&returnTo=${encodeURIComponent('/business')}`;
+  };
   const entryRows = (key: string, entries: Entry[], more = 0) => (
     <View testID={`business-entries-${key}`}>
-      {entries.map((entry, index) => (
-        <View key={`${key}/${index}`} style={[styles.row, styles.entryRow]}>
-          <Text style={[styles.entryDate, { color: colors.mutedForeground }]}>{shortDay(entry.date)}</Text>
-          <Text style={[styles.subLabel, { color: colors.mutedForeground }]} numberOfLines={1}>{entry.description || '—'}</Text>
-          <Text style={[styles.subAmount, { color: colors.mutedForeground }]}>{kes(entry.amount)}</Text>
-        </View>
-      ))}
+      {entries.map((entry, index) => {
+        const href = editHref(entry);
+        return (
+          <Pressable
+            key={`${key}/${index}`}
+            onPress={href ? () => router.push(href as never) : undefined}
+            disabled={!href}
+            accessibilityRole={href ? 'button' : 'text'}
+            accessibilityLabel={href ? `${entry.description || 'Entry'}, ${kes(entry.amount)}. Opens it to edit.` : undefined}
+            testID={`business-entry-${key}/${index}`}
+            style={[styles.row, styles.entryRow]}
+          >
+            <Text style={[styles.entryDate, { color: colors.mutedForeground }]}>{shortDay(entry.date)}</Text>
+            <Text style={[styles.subLabel, { color: href ? colors.foreground : colors.mutedForeground }]} numberOfLines={1}>{entry.description || '—'}</Text>
+            <Text style={[styles.subAmount, { color: colors.mutedForeground }]}>{kes(entry.amount)}</Text>
+            {href ? <Feather name="edit-2" size={11} color={colors.mutedForeground} /> : null}
+          </Pressable>
+        );
+      })}
       {more > 0 ? (
         <Text style={[styles.subLabel, styles.entryRow, { color: colors.mutedForeground }]}>and {more} more</Text>
       ) : null}
