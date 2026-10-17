@@ -1064,6 +1064,66 @@ export default function BankScreen() {
    */
   /** Whether it asked about the payer's other money in (then nothing else is asked over it). */
   const correctSource = useSourceCorrection();
+  // Money back from somebody: their other money in offered to go the same way,
+  // one by one with a tick box each - "can we have the suggestion to have all the
+  // money from a certain user pushed to that category like the way we are doing
+  // with money out- ofcourse with a manual tick box" (17 Oct 2026). Never all at
+  // once without the list (lib/reviewChanges).
+  const offerMoneyBackOthers = (entry: { id: number; description: string; category: string }) => {
+    const who = samePayeeName(entry.description);
+    if (!who) return;
+    const others = (data?.transactions ?? []).filter((row) =>
+      row.id !== entry.id && row.type === 'deposit' && row.bankTransferId == null && row.savingsGoalId == null &&
+      !row.isBorrowing && row.settlesContributorId == null && samePayeeName(row.description) === who);
+    if (others.length === 0) return;
+    const label = payeeName(entry.description).replace(/^Received from\s+/i, '') || entry.description;
+    const moveBack = async (chosen: typeof others) => {
+      let moved = 0;
+      try {
+        for (const row of chosen) {
+          await customFetch(`/api/joint-account/${row.id}/money-back`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ expenseCategory: entry.category }),
+          });
+          moved += 1;
+        }
+        Alert.alert('Money back', `${moved} from ${label} now ${moved === 1 ? 'comes' : 'come'} off ${entry.category}.`);
+      } catch (error) {
+        Alert.alert('Could not change them all', `${moved} of ${chosen.length} changed. ${error instanceof Error ? error.message : ''}`.trim());
+      } finally {
+        invalidateBalance();
+        void queryClient.invalidateQueries({ queryKey: getGetJointAccountQueryKey() });
+      }
+    };
+    Alert.alert(
+      `More from ${label}`,
+      `${others.length} other money in from ${label}. Are any of ${others.length === 1 ? 'it' : 'them'} money back for ${entry.category} too?`,
+      [
+        { text: 'No', style: 'cancel' },
+        {
+          text: `Show the ${others.length}`,
+          onPress: () => {
+            offerReview({
+              title: `${label}: which are money back for ${entry.category}?`,
+              message: `Ticked ones come off ${entry.category}'s spending instead of counting as money in. Unticked ones stay as they are.`,
+              rows: others.map((row) => ({
+                id: row.id,
+                date: row.date,
+                amount: Number(row.amount),
+                description: row.description ?? label,
+                now: row.incomeSourceId != null ? incomeSourceNames.get(row.incomeSourceId) ?? 'money in' : 'money in',
+              })),
+              actionLabel: (count) => `Make ${count} money back`,
+              change: (ids) => moveBack(others.filter((row) => ids.includes(row.id))),
+            });
+            router.push('/review-changes');
+          },
+        },
+      ],
+    );
+  };
+
   const rememberWhoFor = async (entry: { id: number; description: string; direction: 'in' | 'out'; business: number; category: string; name?: string }): Promise<boolean> => {
     const label = payeeName(entry.description).replace(/^Received from\s+/i, '') || entry.description;
     if (entry.direction === 'out') {
@@ -2500,6 +2560,8 @@ export default function BankScreen() {
         if (editing) whoFor = { id: editing.id, description: editing.description, direction: txType === 'deposit' ? 'in' : 'out', business: forBusinessId, category: expenseCategory.trim(), name: whoForPayeeName };
       }
       let sourceCorrection: { entry: { id: number; description: string; amount: number }; chosen: number } | null = null;
+      // A saved money in made money back: the same person's others offered after (offerMoneyBackOthers).
+      let moneyBackOthers: { id: number; description: string; category: string } | null = null;
       if (editingTransactionId !== null && txType === 'deposit' && !notIncome && validDepositorIds.length <= 1) {
         const editingTransaction = data?.transactions.find((transaction) => transaction.id === editingTransactionId);
         const chosen = forBusinessId ?? incomeSourceId;
@@ -2522,6 +2584,8 @@ export default function BankScreen() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ expenseCategory: moneyBackFor.trim() }),
         });
+        const turned = data?.transactions.find((transaction) => transaction.id === editingTransactionId);
+        if (turned) moneyBackOthers = { id: turned.id, description: turned.description, category: moneyBackFor.trim() };
       } else if (editingTransactionId !== null) {
         const editingTransaction = data?.transactions.find((transaction) => transaction.id === editingTransactionId);
         if (editingTransaction && txType === 'disbursement' && withdrawDest !== 'party' && withdrawDest !== 'lend' && withdrawDest !== 'savings' && !businessMoney) {
@@ -2802,7 +2866,9 @@ export default function BankScreen() {
       // Money in moved to another source than it had: if Jamvi had this payer down as
       // something else, it asks once whether that changes from now on (lib/sourceClash).
       if (sourceCorrection && !askedAboutPayer) void correctSource(sourceCorrection.entry, sourceCorrection.chosen);
-      if (samePayeeOffer) {
+      if (moneyBackOthers) {
+        offerMoneyBackOthers(moneyBackOthers);
+      } else if (samePayeeOffer) {
         offerSamePayee(samePayeeOffer);
       } else if (repaidBy) {
         offerRepaymentSettlement(repaidBy, parsed);

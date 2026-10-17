@@ -54,9 +54,9 @@ describe('reviewing a change to many entries', () => {
     expect(src).toContain("router.push('/review-changes')");
   });
 
-  it('Money offers it on both of its questions', () => {
+  it('Money offers it on each of its questions', () => {
     const bank = read('app/(tabs)/bank.tsx');
-    expect((bank.match(/offerReview\(\{/g) ?? []).length).toBe(2);
+    expect((bank.match(/offerReview\(\{/g) ?? []).length).toBe(3);
     expect(bank).toContain('text: `Show the ${offer.rows.length}`');
     expect(bank).toContain('text: `Show the ${others.length}`');
   });
