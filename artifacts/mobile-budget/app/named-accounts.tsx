@@ -19,6 +19,7 @@ import { isNotSure } from '@/lib/entriesToSort';
 import { payeeName, referenceOf } from '@/lib/payeeLearning';
 import { LISTS_AN_EDIT_CHANGES } from '@/lib/showSavedEdit';
 import { plainSaveError } from '@/lib/saveRetry';
+import { offerReview } from '@/lib/reviewChanges';
 
 type Row = {
   id: number; type: string; amount: number | string; date: string; description?: string | null; expenseCategory?: string | null;
@@ -135,38 +136,51 @@ export default function NamedAccountsScreen() {
     }
     if (found.length === 0) return;
     const total = found.reduce((sum, row) => sum + Number(row.amount), 0);
+    const fileThem = async (chosen: typeof found) => {
+      let moved = 0;
+      try {
+        for (const row of chosen) {
+          // One marked as money to the person's business (a church's KCB account caught
+          // by the business's number) is unmarked first: a marked entry keeps no category.
+          if (businessMarked.has(row.id)) await customFetch(`/api/owner-business/${row.id}`, { method: 'DELETE' });
+          await customFetch(`/api/joint-account/${row.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ amount: Number(row.amount), date: row.date, expenseCategory: to }),
+          });
+          moved += 1;
+        }
+        Alert.alert('Filed', `${moved} ${moved === 1 ? 'payment' : 'payments'} to ${label} filed under ${to}.`);
+      } catch (error) {
+        Alert.alert('Could not file them all', `${moved} of ${chosen.length} filed. ${plainSaveError(error)}`);
+      } finally {
+        void queryClient.invalidateQueries({ queryKey: getGetJointAccountQueryKey() });
+        void queryClient.invalidateQueries({ queryKey: ['owner-business'] });
+        for (const queryKey of LISTS_AN_EDIT_CHANGES) void queryClient.invalidateQueries({ queryKey });
+      }
+    };
     Alert.alert(
       `${found.length} saved ${found.length === 1 ? 'payment' : 'payments'} to ${label}`,
       `KES ${Math.round(total).toLocaleString('en-KE')} in all. File them under ${to}?`,
       [
         { text: 'Leave them', style: 'cancel' },
+        // One by one with a tick box each: only the ticked ones are filed (lib/reviewChanges, 17 Oct 2026).
+        {
+          text: `Show the ${found.length}`,
+          onPress: () => {
+            offerReview({
+              title: `${label}: which go under ${to}?`,
+              message: `Ticked ones are filed under ${to}. Unticked ones stay where they are.`,
+              rows: found.map((row) => ({ id: row.id, date: row.date, amount: Number(row.amount), description: row.description ?? label, now: row.expenseCategory || 'no category' })),
+              actionLabel: (count) => `File ${count} under ${to}`,
+              change: (ids) => fileThem(found.filter((row) => ids.includes(row.id))),
+            });
+            router.push('/review-changes');
+          },
+        },
         {
           text: `File ${found.length}`,
-          onPress: () => {
-            void (async () => {
-              let moved = 0;
-              try {
-                for (const row of found) {
-                  // One marked as money to the person's business (a church's KCB account caught
-                  // by the business's number) is unmarked first: a marked entry keeps no category.
-                  if (businessMarked.has(row.id)) await customFetch(`/api/owner-business/${row.id}`, { method: 'DELETE' });
-                  await customFetch(`/api/joint-account/${row.id}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ amount: Number(row.amount), date: row.date, expenseCategory: to }),
-                  });
-                  moved += 1;
-                }
-                Alert.alert('Filed', `${moved} ${moved === 1 ? 'payment' : 'payments'} to ${label} filed under ${to}.`);
-              } catch (error) {
-                Alert.alert('Could not file them all', `${moved} of ${found.length} filed. ${plainSaveError(error)}`);
-              } finally {
-                void queryClient.invalidateQueries({ queryKey: getGetJointAccountQueryKey() });
-                void queryClient.invalidateQueries({ queryKey: ['owner-business'] });
-                for (const queryKey of LISTS_AN_EDIT_CHANGES) void queryClient.invalidateQueries({ queryKey });
-              }
-            })();
-          },
+          onPress: () => void fileThem(found),
         },
       ],
     );

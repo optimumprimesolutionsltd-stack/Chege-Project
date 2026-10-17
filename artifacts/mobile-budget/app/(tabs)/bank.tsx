@@ -26,6 +26,7 @@ const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { markReturning } from '@/lib/lastRoute';
 import { isNotSure } from '@/lib/entriesToSort';
+import { offerReview } from '@/lib/reviewChanges';
 import { LISTS_AN_EDIT_CHANGES, withSavedRow } from '@/lib/showSavedEdit';
 import { PassThroughPair, type PairEntry } from '@/components/PassThroughPair';
 import { onScreenOnly, useOnScreen } from '@/hooks/useOnScreen';
@@ -913,7 +914,7 @@ export default function BankScreen() {
     setPairFor(entry);
   };
 
-  const offerSamePayee = (offer: { description: string; from: string; to: string; rows: Array<{ id: number; amount: number; date: string }> }) => {
+  const offerSamePayee = (offer: { description: string; from: string; to: string; rows: Array<{ id: number; amount: number; date: string; description?: string }> }) => {
     void (async () => {
       const rulesKey = rulesStorageKey(group?.id);
       const askedKey = rememberAskedKey(group?.id);
@@ -950,10 +951,10 @@ export default function BankScreen() {
         askRemember();
         return;
       }
-      const moveAll = async () => {
+      const moveAll = async (chosen: typeof offer.rows = offer.rows) => {
         let moved = 0;
         try {
-          for (const row of offer.rows) {
+          for (const row of chosen) {
             const saved = await updateTransaction({ id: row.id, data: { amount: row.amount, date: row.date, expenseCategory: offer.to } as never });
             // On the list as each one saves, not after the whole account comes back.
             if (saved?.id != null) {
@@ -966,7 +967,7 @@ export default function BankScreen() {
           await noteAsked();
           Alert.alert('Moved', `${moved} ${moved === 1 ? 'payment' : 'payments'} to ${offer.description} moved to ${offer.to}.`);
         } catch (error) {
-          Alert.alert('Could not move them all', `${moved} of ${offer.rows.length} moved. ${error instanceof Error ? error.message : ''}`.trim());
+          Alert.alert('Could not move them all', `${moved} of ${chosen.length} moved. ${error instanceof Error ? error.message : ''}`.trim());
         } finally {
           invalidateBalance();
           void queryClient.invalidateQueries({ queryKey: getGetJointAccountQueryKey() });
@@ -977,6 +978,21 @@ export default function BankScreen() {
         `${moveSummary(offer.rows)} still under ${offer.from || 'no category'}${offer.from && !isNotSure(offer.from) ? ' or Not sure yet' : ''}. Move them to ${offer.to} too? Future imports will file ${offer.description} there.`,
         [
           { text: 'Just this one', style: 'cancel', onPress: askRemember },
+          // One by one with a tick box each, so only the ticked ones move (lib/reviewChanges, 17 Oct 2026).
+          {
+            text: `Show the ${offer.rows.length}`,
+            onPress: () => {
+              offerReview({
+                title: `${offer.description}: which go under ${offer.to}?`,
+                message: `Ticked ones move to ${offer.to}, and future imports file ${offer.description} there. Unticked ones stay where they are.`,
+                rows: offer.rows.map((row) => ({ id: row.id, date: row.date, amount: row.amount, description: row.description || offer.description, now: offer.from || 'no category' })),
+                actionLabel: (count) => `Move ${count} to ${offer.to}`,
+                change: async (ids) => { await moveAll(offer.rows.filter((row) => ids.includes(row.id))); },
+                leave: askRemember,
+              });
+              router.push('/review-changes');
+            },
+          },
           { text: `Move all ${offer.rows.length}`, onPress: () => void moveAll() },
         ],
       );
@@ -1048,31 +1064,41 @@ export default function BankScreen() {
       row.bankTransferId == null && row.savingsGoalId == null && !!who && samePayeeName(row.description) === who);
     if (others.length === 0) return false;
     const business = incomeSourceNames.get(entry.business) ?? 'the business';
+    const fileOthers = async (chosen: typeof others) => {
+      let moved = 0;
+      try {
+        for (const row of chosen) {
+          const saved = await updateTransaction({ id: row.id, data: { amount: Number(row.amount), date: row.date, incomeSourceId: entry.business } as never });
+          if (saved?.id != null) queryClient.setQueriesData({ queryKey: getGetJointAccountQueryKey() }, (cached: unknown) => withSavedRow(cached, saved));
+          moved += 1;
+        }
+        Alert.alert('Filed', `${moved} from ${label} filed as ${business}'s sales.`);
+      } catch (error) {
+        Alert.alert('Could not file them all', `${moved} of ${chosen.length} filed. ${error instanceof Error ? error.message : ''}`.trim());
+      } finally {
+        invalidateBalance();
+      }
+    };
     Alert.alert(
       `More from ${label}`,
       `${others.length} other money in from ${label} has no source. File ${others.length === 1 ? 'it' : 'them'} as ${business}'s sales too?`,
       [
         { text: 'Just this one', style: 'cancel' },
+        // One by one with a tick box each, so only the ticked ones are filed (lib/reviewChanges, 17 Oct 2026).
         {
-          text: `File ${others.length}`,
+          text: `Show the ${others.length}`,
           onPress: () => {
-            void (async () => {
-              let moved = 0;
-              try {
-                for (const row of others) {
-                  const saved = await updateTransaction({ id: row.id, data: { amount: Number(row.amount), date: row.date, incomeSourceId: entry.business } as never });
-                  if (saved?.id != null) queryClient.setQueriesData({ queryKey: getGetJointAccountQueryKey() }, (cached: unknown) => withSavedRow(cached, saved));
-                  moved += 1;
-                }
-                Alert.alert('Filed', `${moved} from ${label} filed as ${business}'s sales.`);
-              } catch (error) {
-                Alert.alert('Could not file them all', `${moved} of ${others.length} filed. ${error instanceof Error ? error.message : ''}`.trim());
-              } finally {
-                invalidateBalance();
-              }
-            })();
+            offerReview({
+              title: `${label}: which are ${business}'s sales?`,
+              message: `Ticked ones are filed as ${business}'s sales. Unticked ones stay with no source.`,
+              rows: others.map((row) => ({ id: row.id, date: row.date, amount: Number(row.amount), description: row.description ?? label, now: 'no source' })),
+              actionLabel: (count) => `File ${count} as ${business}'s sales`,
+              change: (ids) => fileOthers(others.filter((row) => ids.includes(row.id))),
+            });
+            router.push('/review-changes');
           },
         },
+        { text: `File ${others.length}`, onPress: () => void fileOthers(others) },
       ],
     );
     return true;
@@ -2445,7 +2471,7 @@ export default function BankScreen() {
       let createdPostingId: number | undefined;
       // A payment moved to another category: the payee's other payments still
       // under the old one are offered to follow (lib/samePayee).
-      let samePayeeOffer: { description: string; from: string; to: string; rows: Array<{ id: number; amount: number; date: string }> } | null = null;
+      let samePayeeOffer: { description: string; from: string; to: string; rows: Array<{ id: number; amount: number; date: string; description?: string }> } | null = null;
       // Said to be one of the businesses: remembered for it after the save (rememberWhoFor).
       let whoFor: { id: number; description: string; direction: 'in' | 'out'; business: number; category: string; name?: string } | null = null;
       // A payment's business is its category's: one no business owns (Donations) is Personal,
@@ -2475,7 +2501,7 @@ export default function BankScreen() {
               description: editingTransaction.description,
               from,
               to: expenseCategory.trim(),
-              rows: rows.map((row) => ({ id: row.id, amount: Number(row.amount), date: row.date })),
+              rows: rows.map((row) => ({ id: row.id, amount: Number(row.amount), date: row.date, description: row.description ?? '' })),
             };
           }
         }
