@@ -52,3 +52,17 @@ describe('the year request gives the same figures as Reports', () => {
     expect(dashboard).toContain('for (let i = 0; i < months.length; i += 2) {');
   });
 });
+
+// "the year at a glance columns are skewed and cant tell the figures are for which month" (17 Oct 2026).
+describe('Year at a glance keeps its months with the figures', () => {
+  const screen = phone;
+
+  it('does not stretch or bounce the figures past either end', () => {
+    expect(screen).toContain('overScrollMode="never"');
+    expect(screen).toContain('bounces={false}');
+  });
+
+  it('names the months again in each band, moving with the figures', () => {
+    expect(screen).toContain('testID={`year-report-band-month-${line.key}-${month.month}`}');
+  });
+});
