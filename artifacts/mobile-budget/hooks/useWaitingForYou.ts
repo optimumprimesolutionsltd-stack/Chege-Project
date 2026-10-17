@@ -6,6 +6,7 @@ import { smsAllowedIn } from '@/lib/groupMpesa';
 import { useAuth } from '@/lib/auth';
 import type { EntryToSort } from '@/lib/entriesToSort';
 import { canReadSms, newMpesaSms, parseSmsAuto, smsAutoKey } from '@/lib/mpesaSms';
+import { backfillMpesaTimes } from '@/lib/mpesaTimes';
 
 /**
  * What is waiting for the person: entries saved as "Not sure" (any month), and
@@ -33,6 +34,8 @@ export function useWaitingForYou() {
     queryKey: ['new-mpesa-sms', user?.id, group?.id ?? null, smsHere],
     queryFn: async () => {
       const auto = parseSmsAuto(await AsyncStorage.getItem(smsAutoKey(user?.id)).catch(() => null));
+      // Times for M-Pesa entries saved before Jamvi kept them, once (lib/mpesaTimes).
+      void backfillMpesaTimes(group?.id);
       if (!auto.on) return 0;
       return (await newMpesaSms(auto.since))?.messages.length ?? 0;
     },
