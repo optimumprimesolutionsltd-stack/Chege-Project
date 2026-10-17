@@ -1576,8 +1576,12 @@ router.put("/joint-account/:id", async (req, res): Promise<void> => {
   const requestedAccountId = parsed.data.accountId === undefined ? existing.accountId : parsed.data.accountId;
   const accountId = await requireAccountId(requestedAccountId ?? undefined, groupId, res);
   if (accountId === null) return;
+  // In a Personal budget an edit that names nobody is the owner's: only they can
+  // open it, and an entry saved with no name (or under the budget it came from)
+  // refused every edit that did not repeat it - "0 of 2 filed. HTTP 403: Personal
+  // account activity must be recorded in your own name" (17 Oct 2026).
   const requestedMadeById = parsed.data.madeById === undefined
-    ? existing.madeById
+    ? (req.group?.isPrivate && req.user?.id ? req.user.id : existing.madeById)
     : parsed.data.madeById;
   const requestedAttributions = parsed.data.contributorSplits?.length
     ? parsed.data.contributorSplits.map((split) => split.userId)
