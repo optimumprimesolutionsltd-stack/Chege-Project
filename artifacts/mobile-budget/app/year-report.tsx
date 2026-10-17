@@ -188,6 +188,12 @@ export default function YearReportScreen() {
             <Animated.ScrollView
               horizontal
               showsHorizontalScrollIndicator
+              // No stretch or bounce past either end: Android stretched the figures
+              // while the month row above stood still, and the columns looked
+              // skewed ("the year at a glance columns are skewed and cant tell the
+              // figures are for which month", 17 Oct 2026).
+              overScrollMode="never"
+              bounces={false}
               scrollEventThrottle={16}
               onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], { useNativeDriver: true })}
             >
@@ -207,7 +213,13 @@ export default function YearReportScreen() {
                           testID={line.kind === 'section' ? undefined : `year-report-cell-${line.key}-${month.month}`}
                           style={[styles.cell, { borderColor: colors.border, backgroundColor: peak ? `${colors.primary}1f` : 'transparent' }]}
                         >
-                          {line.kind === 'section' ? null : (
+                          {line.kind === 'section' ? (
+                            // The months again in each band (Income, Spending), moving with
+                            // the figures, so every column is named where it is read.
+                            <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_700Bold', fontSize: 11 }} testID={`year-report-band-month-${line.key}-${month.month}`}>
+                              {month.label}
+                            </Text>
+                          ) : (
                             <Text
                               numberOfLines={1}
                               adjustsFontSizeToFit
@@ -220,7 +232,9 @@ export default function YearReportScreen() {
                       );
                     })}
                     <View style={[styles.cell, { borderColor: colors.border, width: CELL_WIDTH + 12 }]}>
-                      {line.kind === 'section' ? null : (
+                      {line.kind === 'section' ? (
+                        <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_700Bold', fontSize: 11 }}>Year</Text>
+                      ) : (
                         <Text numberOfLines={1} adjustsFontSizeToFit style={{ color: amountColor(line, line.total), fontSize: 12, fontFamily: 'Inter_700Bold' }}>
                           {cellText(line.total)}
                         </Text>
