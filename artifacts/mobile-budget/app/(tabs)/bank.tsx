@@ -146,8 +146,6 @@ function formatDateTime(s?: string | null): string {
 /** Saves a payment as money back (api-server lib/refunds): a negative payment in its category. */
 const REFUND = { isRefund: true } as const;
 
-/** The pinned bar's place in Money's list: never an entry's id. */
-const BANK_CONTROLS_ROW = { id: -1 } as const;
 
 function formatBankDate(s?: string | null): string {
   return formatDisplayDate(s);
@@ -411,6 +409,20 @@ export default function BankScreen() {
     setTopRow(first ? { date: String(first.item.date), index: first.index ?? 0 } : null);
   }).current;
   const rowViewability = useRef({ itemVisiblePercentThreshold: 50 }).current;
+  // The period, Transactions and search pinned once scrolled past ("freeze this
+  // part", 17 Oct 2026): where they end in the list, and the pinned copy's height
+  // so the date pill sits under it.
+  const controlsTop = useRef<number | null>(null);
+  const [controlsPinned, setControlsPinned] = useState(false);
+  const [pinnedHeight, setPinnedHeight] = useState(0);
+  const pinnedNow = useRef(false);
+  const onListScroll = useCallback((event: { nativeEvent: { contentOffset: { y: number } } }) => {
+    const end = controlsTop.current;
+    const pin = end !== null && event.nativeEvent.contentOffset.y > end;
+    if (pin === pinnedNow.current) return;
+    pinnedNow.current = pin;
+    setControlsPinned(pin);
+  }, []);
   // One payment in, split across income streams - "salary and something else"
   // (16 Oct 2026). Each part names a stream and an amount; what is left stays on
   // the stream chosen above. Saved as that person's portions, one per stream.
@@ -3229,21 +3241,88 @@ export default function BankScreen() {
     return selectedAccount?.name ?? 'Bank account';
   };
 
+  // The period, Transactions and search: in the list header, and pinned at the
+  // top once the list has scrolled past them (onListScroll).
+  const renderBankControls = () => (
+    <>
+    <BankPeriodBar
+      preset={periodPreset}
+      onPreset={setPeriodPreset}
+      from={periodFrom}
+      to={periodTo}
+      onFrom={setPeriodFrom}
+      onTo={setPeriodTo}
+      entries={data?.transactions ?? []}
+    />
+    {transactions.length > 0 ? (
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <Text style={[styles.listHeader, { color: colors.mutedForeground }]}>TRANSACTIONS</Text>
+        <ListEditButton editor={txEditor} canManage={canManageAccount} />
+        {canManageAccount && !txEditor.editing ? (
+          <TouchableOpacity
+            onPress={() => setMoveDayOpen(true)}
+            hitSlop={8}
+            testID="bank-move-day"
+            accessibilityRole="button"
+            accessibilityLabel="Move a whole day to another account"
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 6 }}
+          >
+            <Feather name="repeat" size={12} color={colors.primary} />
+            <Text style={{ color: colors.primary, fontSize: 12, fontFamily: 'Inter_600SemiBold' }}>Move a day</Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
+    ) : null}
+    {transactions.length > 0 ? (
+      <View style={{ gap: 4, marginBottom: 8 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 10, backgroundColor: colors.card }}>
+          <Feather name="search" size={15} color={colors.mutedForeground} />
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Name, category, note, code or amount"
+            placeholderTextColor={colors.mutedForeground}
+            returnKeyType="search"
+            testID="bank-search-input"
+            style={{ flex: 1, paddingVertical: 9, color: colors.foreground, fontSize: 14 }}
+          />
+          {search ? (
+            <Pressable onPress={() => setSearch('')} hitSlop={8} accessibilityRole="button" accessibilityLabel="Clear search" testID="bank-search-clear">
+              <Feather name="x-circle" size={15} color={colors.mutedForeground} />
+            </Pressable>
+          ) : null}
+        </View>
+        {searched ? (
+          <Text style={{ color: colors.mutedForeground, fontSize: 12 }} testID="bank-search-count">
+            {listedTransactions.length === 0
+              ? `Nothing matching "${searched}"${period ? ' in this period' : ''}.`
+              : `${listedTransactions.length} of ${shownTransactions.length} ${shownTransactions.length === 1 ? 'entry' : 'entries'}${period ? ' in this period' : ''}`}
+          </Text>
+        ) : null}
+      </View>
+    ) : null}
+          {shownTransactions.length === 0 && !searched ? (
+            <Text style={{ color: colors.mutedForeground, fontSize: 13, marginBottom: 8 }} testID="bank-period-empty">No transactions in this period.</Text>
+          ) : null}
+    </>
+  );
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
 
       <PageFlatList
-        // The period, Transactions and search pinned while the list scrolls under
-        // them ("freeze this part", 17 Oct 2026): a first row, kept while the
-        // account has any entries so the search box never jumps while typing.
-        data={transactions.length > 0 ? [BANK_CONTROLS_ROW as unknown as (typeof listedTransactions)[number], ...listedTransactions] : listedTransactions}
-        stickyHeaderIndices={transactions.length > 0 ? [1] : undefined}
+        data={listedTransactions}
+        // Past the period, Transactions and search, a copy of them is pinned at
+        // the top ("freeze this part", 17 Oct 2026). Not a sticky row: a FlatList
+        // on Android unloads rows off screen, and a sticky one closed the app.
+        onScroll={onListScroll}
+        scrollEventThrottle={32}
         onViewableItemsChanged={onViewableRows}
         viewabilityConfig={rowViewability}
         // A thumb to drag through months of transactions, clear of the
         // floating actions and the tab bar at the bottom.
         scroller={{ top: topPad + 12, bottom: (Platform.OS === 'web' ? 100 : insets.bottom + 110) }}
-        keyExtractor={(item) => (item.id === BANK_CONTROLS_ROW.id ? 'bank-controls' : String(item.id))}
+        keyExtractor={(item) => String(item.id)}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -3666,17 +3745,9 @@ export default function BankScreen() {
             </>
           )}
         </LinearGradient>
-          {transactions.length === 0 ? (
-            <BankPeriodBar
-              preset={periodPreset}
-              onPreset={setPeriodPreset}
-              from={periodFrom}
-              to={periodTo}
-              onFrom={setPeriodFrom}
-              onTo={setPeriodTo}
-              entries={data?.transactions ?? []}
-            />
-          ) : null}
+          <View onLayout={(event) => { controlsTop.current = event.nativeEvent.layout.y + event.nativeEvent.layout.height; }} testID="bank-controls-bar">
+            {renderBankControls()}
+          </View>
           </>
         }
         ListFooterComponent={
@@ -3715,71 +3786,6 @@ export default function BankScreen() {
           ) : null
         }
         renderItem={({ item }) => {
-          if (item.id === BANK_CONTROLS_ROW.id) {
-            return (
-              <View style={{ backgroundColor: colors.background, paddingTop: 6 }} testID="bank-controls-bar">
-          <BankPeriodBar
-            preset={periodPreset}
-            onPreset={setPeriodPreset}
-            from={periodFrom}
-            to={periodTo}
-            onFrom={setPeriodFrom}
-            onTo={setPeriodTo}
-            entries={data?.transactions ?? []}
-          />
-          {transactions.length > 0 ? (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Text style={[styles.listHeader, { color: colors.mutedForeground }]}>TRANSACTIONS</Text>
-              <ListEditButton editor={txEditor} canManage={canManageAccount} />
-              {canManageAccount && !txEditor.editing ? (
-                <TouchableOpacity
-                  onPress={() => setMoveDayOpen(true)}
-                  hitSlop={8}
-                  testID="bank-move-day"
-                  accessibilityRole="button"
-                  accessibilityLabel="Move a whole day to another account"
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 6 }}
-                >
-                  <Feather name="repeat" size={12} color={colors.primary} />
-                  <Text style={{ color: colors.primary, fontSize: 12, fontFamily: 'Inter_600SemiBold' }}>Move a day</Text>
-                </TouchableOpacity>
-              ) : null}
-            </View>
-          ) : null}
-          {transactions.length > 0 ? (
-            <View style={{ gap: 4, marginBottom: 8 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 10, backgroundColor: colors.card }}>
-                <Feather name="search" size={15} color={colors.mutedForeground} />
-                <TextInput
-                  value={search}
-                  onChangeText={setSearch}
-                  placeholder="Name, category, note, code or amount"
-                  placeholderTextColor={colors.mutedForeground}
-                  returnKeyType="search"
-                  testID="bank-search-input"
-                  style={{ flex: 1, paddingVertical: 9, color: colors.foreground, fontSize: 14 }}
-                />
-                {search ? (
-                  <Pressable onPress={() => setSearch('')} hitSlop={8} accessibilityRole="button" accessibilityLabel="Clear search" testID="bank-search-clear">
-                    <Feather name="x-circle" size={15} color={colors.mutedForeground} />
-                  </Pressable>
-                ) : null}
-              </View>
-              {searched ? (
-                <Text style={{ color: colors.mutedForeground, fontSize: 12 }} testID="bank-search-count">
-                  {listedTransactions.length === 0
-                    ? `Nothing matching "${searched}"${period ? ' in this period' : ''}.`
-                    : `${listedTransactions.length} of ${shownTransactions.length} ${shownTransactions.length === 1 ? 'entry' : 'entries'}${period ? ' in this period' : ''}`}
-                </Text>
-              ) : null}
-            </View>
-          ) : null}
-                {shownTransactions.length === 0 && !searched ? (
-                  <Text style={{ color: colors.mutedForeground, fontSize: 13, marginBottom: 8 }} testID="bank-period-empty">No transactions in this period.</Text>
-                ) : null}
-              </View>
-            );
-          }
           const dep = item.type === 'deposit';
           // Money back that takes spending off its category (api-server lib/refunds).
           const refund = item.type === 'disbursement' && Number(item.amount) < 0;
@@ -3937,8 +3943,17 @@ export default function BankScreen() {
           );
         }}
       />
+      {controlsPinned && transactions.length > 0 ? (
+        <View
+          onLayout={(event) => setPinnedHeight(event.nativeEvent.layout.height)}
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 15, paddingTop: topPad + 6, paddingHorizontal: 16, backgroundColor: colors.background, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border }}
+          testID="bank-controls-pinned"
+        >
+          {renderBankControls()}
+        </View>
+      ) : null}
       {topRow && topRow.index > 1 ? (
-        <View pointerEvents="none" style={{ position: 'absolute', top: topPad + 8, alignSelf: 'center', zIndex: 20, paddingHorizontal: 14, paddingVertical: 6, borderRadius: 999, backgroundColor: '#0A3833', borderWidth: 1, borderColor: '#14776A' }} testID="bank-date-pill">
+        <View pointerEvents="none" style={{ position: 'absolute', top: controlsPinned && transactions.length > 0 ? pinnedHeight + 8 : topPad + 8, alignSelf: 'center', zIndex: 20, paddingHorizontal: 14, paddingVertical: 6, borderRadius: 999, backgroundColor: '#0A3833', borderWidth: 1, borderColor: '#14776A' }} testID="bank-date-pill">
           <Text style={{ color: '#F7FAF6', fontFamily: 'Inter_700Bold', fontSize: 13 }}>
             {formatBankDate(topRow.date)}{selectedAccount ? ` · ${selectedAccount.name}` : ''}
           </Text>

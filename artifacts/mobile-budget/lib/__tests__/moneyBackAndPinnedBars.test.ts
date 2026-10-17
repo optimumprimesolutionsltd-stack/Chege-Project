@@ -43,13 +43,22 @@ describe('Money back for a category', () => {
 
 // "freeze this part" - the period chips, Transactions row and search on Money (17 Oct 2026).
 describe('pinned controls', () => {
-  it('Money pins its period, Transactions and search as the first list row', () => {
-    expect(bank).toContain('stickyHeaderIndices={transactions.length > 0 ? [1] : undefined}');
-    const row = bank.slice(bank.indexOf('if (item.id === BANK_CONTROLS_ROW.id) {'), bank.indexOf("const dep = item.type === 'deposit';"));
-    expect(row).toContain('<BankPeriodBar');
-    expect(row).toContain('TRANSACTIONS');
-    expect(row).toContain('testID="bank-search-input"');
-    expect(row).not.toContain('autoFocus');
+  // Not a sticky FlatList row: on Android that closed the app when Money opened
+  // ("when i go to banking jamvi keeps throwing me out", 17 Oct 2026).
+  it('Money keeps them in the list header and pins a copy once scrolled past', () => {
+    expect(bank).not.toContain('stickyHeaderIndices');
+    expect(bank).not.toContain('BANK_CONTROLS_ROW');
+    expect(bank).toContain('data={listedTransactions}');
+    expect(bank).toContain('onScroll={onListScroll}');
+    const controls = bank.slice(bank.indexOf('const renderBankControls = () => ('), bank.indexOf('<PageFlatList'));
+    expect(controls).toContain('<BankPeriodBar');
+    expect(controls).toContain('TRANSACTIONS');
+    expect(controls).toContain('testID="bank-search-input"');
+    expect(controls).not.toContain('autoFocus');
+    const header = bank.slice(bank.indexOf('ListHeaderComponent={'), bank.indexOf('ListFooterComponent={'));
+    expect(header).toContain('{renderBankControls()}');
+    expect(bank).toContain('testID="bank-controls-pinned"');
+    expect(bank).toContain('const pin = end !== null && event.nativeEvent.contentOffset.y > end;');
   });
 
   it.each([

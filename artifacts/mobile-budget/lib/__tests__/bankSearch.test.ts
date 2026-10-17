@@ -37,7 +37,7 @@ describe('searching the Bank list', () => {
     // Always shown since 17 Oct 2026 ("i prefer the search button being permanently there").
     expect(bank).not.toContain('testID="bank-search-toggle"');
     expect(bank).toContain('testID="bank-search-input"');
-    expect(bank).toContain('...listedTransactions]');
+    expect(bank).toContain('data={listedTransactions}');
     expect(bank).toContain('for (const tx of shownTransactions) {');
   });
 });
