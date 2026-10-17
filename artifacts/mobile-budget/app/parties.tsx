@@ -264,6 +264,19 @@ export default function PartiesScreen() {
           )}
           <Feather name="edit-2" size={14} color={colors.mutedForeground} />
         </Pressable>
+        {/* Every entry behind the figure, and what no entry explains (app/party-breakdown):
+            "why judys money is 680,100- where isit coming from" (17 Oct 2026). */}
+        {figure !== null || isBoth ? (
+          <Pressable
+            onPress={() => router.push(`/party-breakdown?id=${party.id}` as never)}
+            accessibilityRole="button"
+            testID={`parties-where-from-${party.id}`}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', marginTop: -4, marginBottom: 8, paddingHorizontal: 4 }}
+          >
+            <Feather name="list" size={12} color={colors.primary} />
+            <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 12 }}>Where does this come from?</Text>
+          </Pressable>
+        ) : null}
         {editingId === party.id ? draftForm : null}
       </View>
     );

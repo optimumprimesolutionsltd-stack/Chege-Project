@@ -402,6 +402,15 @@ export default function BankScreen() {
   // should have category logic too" (17 Oct 2026). null when it is not that;
   // '' while the category is still to be chosen.
   const [moneyBackFor, setMoneyBackFor] = useState<string | null>(null);
+  // The categories offered first for money back: the ones most paid from here lately.
+  const moneyBackSuggestions = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const tx of (data?.transactions ?? []).slice(0, 300)) {
+      const name = tx.type === 'disbursement' && Number(tx.amount) > 0 ? tx.expenseCategory?.trim() : '';
+      if (name && !isNotSure(name)) counts.set(name, (counts.get(name) ?? 0) + 1);
+    }
+    return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 5).map(([name]) => name);
+  }, [data?.transactions]);
   // The first entry in view, for the date pinned at the top while the list
   // scrolls ("the date freeze logic should apply in banking too, both months
   // and dates", 17 Oct 2026). Shown once the header has scrolled away.
@@ -2959,10 +2968,16 @@ export default function BankScreen() {
   // permanently there" (17 Oct 2026).
   const [search, setSearch] = useState('');
   const searched = useDeferredValue(search.trim());
+  // Money in only, or money out only, beside the search ("on the search button in
+  // banking can i have option of seing money in only etc", 17 Oct 2026).
+  const [showDirection, setShowDirection] = useState<'all' | 'in' | 'out'>('all');
   const listedTransactions = useMemo(
-    () => (searched ? shownTransactions.filter((tx) => matchesSearch(tx as never, searched)) : shownTransactions),
-    [shownTransactions, searched],
+    () => shownTransactions.filter((tx) =>
+      (showDirection === 'all' || (showDirection === 'in' ? tx.type === 'deposit' : tx.type === 'disbursement'))
+      && (!searched || matchesSearch(tx as never, searched))),
+    [shownTransactions, searched, showDirection],
   );
+  const listedTotal = useMemo(() => listedTransactions.reduce((sum, tx) => sum + Math.abs(Number(tx.amount) || 0), 0), [listedTransactions]);
 
   // "Withdrawn" counted spending, savings transfers and moves between your own
   // accounts as one figure. The balance falls the same way for all three, but
@@ -3378,11 +3393,28 @@ export default function BankScreen() {
             </Pressable>
           ) : null}
         </View>
-        {searched ? (
+        <View style={{ flexDirection: 'row', gap: 6 }} testID="bank-show-direction">
+          {([['all', 'All'], ['in', 'Money in'], ['out', 'Money out']] as const).map(([value, label]) => {
+            const on = showDirection === value;
+            return (
+              <Pressable
+                key={value}
+                onPress={() => setShowDirection(value)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: on }}
+                testID={`bank-show-${value}`}
+                style={{ paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999, borderWidth: 1, borderColor: on ? colors.primary : colors.border, backgroundColor: on ? `${colors.primary}22` : colors.card }}
+              >
+                <Text style={{ color: on ? colors.primary : colors.foreground, fontSize: 12, fontFamily: 'Inter_600SemiBold' }}>{label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        {searched || showDirection !== 'all' ? (
           <Text style={{ color: colors.mutedForeground, fontSize: 12 }} testID="bank-search-count">
             {listedTransactions.length === 0
-              ? `Nothing matching "${searched}"${period ? ' in this period' : ''}.`
-              : `${listedTransactions.length} of ${shownTransactions.length} ${shownTransactions.length === 1 ? 'entry' : 'entries'}${period ? ' in this period' : ''}`}
+              ? `Nothing ${searched ? `matching "${searched}"` : `as ${showDirection === 'in' ? 'money in' : 'money out'}`}${period ? ' in this period' : ''}.`
+              : `${listedTransactions.length} of ${shownTransactions.length} ${shownTransactions.length === 1 ? 'entry' : 'entries'}${period ? ' in this period' : ''}${showDirection !== 'all' ? ` · KES ${formatKES(listedTotal)} ${showDirection === 'in' ? 'in' : 'out'}` : ''}`}
           </Text>
         ) : null}
       </View>
@@ -5048,15 +5080,34 @@ export default function BankScreen() {
                         </Text>
                       </TouchableOpacity>
                       {/* Money back that takes it off a category: a friend's share of a bill.
-                          New or already saved - an M-Pesa one is usually already saved. */}
-                      <TouchableOpacity
-                        style={[styles.categoryOption, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }]}
-                        onPress={() => { setToBusinessId(null); setRepayingPartyId(null); setBorrowTarget(null); if (forBusinessId !== null) chooseWhoFor(null); setIncomeSourceId(null); setDepositSourceKind(null); setMoneyBackFor(''); setCategorySearch(''); setShowRepayPicker(false); }}
-                        testID="bank-deposit-money-back"
-                      >
-                        <Text style={{ color: colors.foreground, fontFamily: 'Inter_700Bold', fontSize: 13, letterSpacing: 0.3 }}>MONEY BACK FOR A CATEGORY</Text>
-                        <Text style={{ color: colors.mutedForeground, fontSize: 12, marginTop: 2 }}>Someone paying you back their share - it comes off that category's spending</Text>
-                      </TouchableOpacity>
+                          New or already saved - an M-Pesa one is usually already saved. A row of
+                          chips like the others, the categories most spent on first: "the money
+                          back for a category can easily be skipped as its not very clear like the
+                          others" (17 Oct 2026). */}
+                      <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, paddingTop: 8, marginTop: 4, paddingHorizontal: 10, gap: 6 }} testID="bank-deposit-money-back-row">
+                        <Text style={{ color: colors.foreground, fontFamily: 'Inter_700Bold', fontSize: 13, letterSpacing: 0.3 }}>MONEY BACK FOR</Text>
+                        <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>Someone paying you back their share of a bill - it comes off that category's spending</Text>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                          {moneyBackSuggestions.map((name) => (
+                            <TouchableOpacity
+                              key={`money-back-for-${name}`}
+                              style={[styles.memberPill, { backgroundColor: colors.muted, borderColor: colors.border }]}
+                              onPress={() => { setToBusinessId(null); setRepayingPartyId(null); setBorrowTarget(null); if (forBusinessId !== null) chooseWhoFor(null); setIncomeSourceId(null); setDepositSourceKind(null); setMoneyBackFor(name); setCategorySearch(''); setShowRepayPicker(false); }}
+                              testID={`bank-deposit-money-back-for-${name}`}
+                            >
+                              <Text style={[styles.memberPillText, { color: colors.foreground }]}>{name}</Text>
+                            </TouchableOpacity>
+                          ))}
+                          <TouchableOpacity
+                            style={[styles.memberPill, { backgroundColor: colors.muted, borderColor: colors.border, flexDirection: 'row', alignItems: 'center', gap: 4 }]}
+                            onPress={() => { setToBusinessId(null); setRepayingPartyId(null); setBorrowTarget(null); if (forBusinessId !== null) chooseWhoFor(null); setIncomeSourceId(null); setDepositSourceKind(null); setMoneyBackFor(''); setCategorySearch(''); setShowRepayPicker(false); }}
+                            testID="bank-deposit-money-back"
+                          >
+                            <Feather name="search" size={12} color={colors.foreground} />
+                            <Text style={[styles.memberPillText, { color: colors.foreground }]}>{moneyBackSuggestions.length > 0 ? 'Another category…' : 'Choose the category…'}</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
                       {/* Your salary from one of your businesses: income, filed under that
                           business's salary stream ("in money in, why cant i see the option of
                           salary?", 16 Oct 2026). Only what is filed there counts as salary. */}
