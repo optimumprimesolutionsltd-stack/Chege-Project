@@ -136,6 +136,28 @@ export default function SpendingByItemScreen() {
         </View>
       </View>
 
+      {/* The find box stays in view while the list scrolls under it ("freeze ... and any
+          other relevant one", 17 Oct 2026). */}
+      <View style={{ paddingHorizontal: 16, paddingVertical: 6, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border, backgroundColor: colors.background }} testID="spending-by-item-search-bar">
+        <View style={[styles.searchBox, { borderColor: colors.border, backgroundColor: colors.card }]}>
+          <Feather name="search" size={16} color={colors.mutedForeground} />
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Find a shop, bill or subscription"
+            placeholderTextColor={colors.mutedForeground}
+            style={[styles.searchInput, { color: colors.foreground }]}
+            autoCapitalize="none"
+            autoCorrect={false}
+            testID="spending-by-item-search"
+          />
+          {search.length > 0 ? (
+            <Pressable onPress={() => setSearch('')} hitSlop={8} accessibilityLabel="Clear the search">
+              <Feather name="x" size={16} color={colors.mutedForeground} />
+            </Pressable>
+          ) : null}
+        </View>
+      </View>
       <ScrollerScrollView scroller={{ top: 8, bottom: insets.bottom + 16 }}
         contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 32 }]}
         keyboardShouldPersistTaps="handled"
@@ -163,25 +185,6 @@ export default function SpendingByItemScreen() {
             })}
           </View>
         ) : null}
-        <View style={[styles.searchBox, { borderColor: colors.border, backgroundColor: colors.card }]}>
-          <Feather name="search" size={16} color={colors.mutedForeground} />
-          <TextInput
-            value={search}
-            onChangeText={setSearch}
-            placeholder="Find a shop, bill or subscription"
-            placeholderTextColor={colors.mutedForeground}
-            style={[styles.searchInput, { color: colors.foreground }]}
-            autoCapitalize="none"
-            autoCorrect={false}
-            testID="spending-by-item-search"
-          />
-          {search.length > 0 ? (
-            <Pressable onPress={() => setSearch('')} hitSlop={8} accessibilityLabel="Clear the search">
-              <Feather name="x" size={16} color={colors.mutedForeground} />
-            </Pressable>
-          ) : null}
-        </View>
-
         <View style={styles.presets}>
           {PRESETS.map((months) => {
             const active = !customDates && preset === months;

@@ -269,6 +269,27 @@ export default function IncomeLedgerScreen() {
           freeze ... so i know which month i am dealing with", 17 Oct 2026). */}
       <View style={{ paddingHorizontal: 16, paddingVertical: 6, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border, backgroundColor: colors.background }} testID="income-ledger-month-bar">
         <MonthStepper from={from} to={to} onChange={(nextFrom, nextTo) => { setFrom(nextFrom); setTo(nextTo); }} testID="income-ledger-month" />
+        {/* The find box pinned with the month ("find an income/category should be frozen", 17 Oct 2026). */}
+        <View style={{ marginTop: 6 }}>
+          <View style={[styles.searchBox, { borderColor: colors.border, backgroundColor: colors.card }]}>
+            <Feather name="search" size={16} color={colors.mutedForeground} />
+            <TextInput
+              value={search}
+              onChangeText={setSearch}
+              placeholder="Find income"
+              placeholderTextColor={colors.mutedForeground}
+              style={[styles.searchInput, { color: colors.foreground }]}
+              autoCapitalize="none"
+              autoCorrect={false}
+              testID="income-ledger-search"
+            />
+            {search.length > 0 ? (
+              <Pressable onPress={() => setSearch('')} hitSlop={8} accessibilityLabel="Clear the search">
+                <Feather name="x" size={16} color={colors.mutedForeground} />
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
       </View>
       <ScrollerScrollView scroller={{ top: 8, bottom: insets.bottom + 16, beforeEnd: paged.showAll }}
         onScroll={paged.onScroll}
@@ -276,25 +297,6 @@ export default function IncomeLedgerScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <View style={[styles.searchBox, { borderColor: colors.border, backgroundColor: colors.card }]}>
-          <Feather name="search" size={16} color={colors.mutedForeground} />
-          <TextInput
-            value={search}
-            onChangeText={setSearch}
-            placeholder="Find income"
-            placeholderTextColor={colors.mutedForeground}
-            style={[styles.searchInput, { color: colors.foreground }]}
-            autoCapitalize="none"
-            autoCorrect={false}
-            testID="income-ledger-search"
-          />
-          {search.length > 0 ? (
-            <Pressable onPress={() => setSearch('')} hitSlop={8} accessibilityLabel="Clear the search">
-              <Feather name="x" size={16} color={colors.mutedForeground} />
-            </Pressable>
-          ) : null}
-        </View>
-
         <View style={styles.dateRow}>
           {(['from', 'to'] as const).map((which) => (
             <Pressable
