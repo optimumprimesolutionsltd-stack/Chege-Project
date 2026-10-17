@@ -1676,7 +1676,6 @@ export default function BudgetScreen() {
           <WorkspaceIdentityRow group={group} />
           <View style={styles.headerTop}>
             <Text style={styles.headerTitle}>Budget</Text>
-            <ScreenHint light>Decide how much to spend on each thing, and see how you are doing.</ScreenHint>
             <View style={styles.headerRight}>
               <HeaderSearchButton color="#FBF7EC" testID="budget-search" />
               <HelpButton about="category" />
@@ -1699,6 +1698,8 @@ export default function BudgetScreen() {
               </View>
             </View>
           </View>
+          {/* Under the title, not squeezed beside it on a phone (17 Oct 2026). */}
+          <ScreenHint light>Decide how much to spend on each thing, and see how you are doing.</ScreenHint>
 
           {!isLoading ? (
             <Pressable
