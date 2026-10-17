@@ -818,10 +818,12 @@ router.get("/joint-account", async (req, res): Promise<void> => {
   // entry (lib/describe-transaction).
   const { limit, before, month, year } = query.data;
   const paged = limit != null || before != null || (month != null && year != null);
-  // Bank asks for a split payment as one entry; everything else, Home and
-  // Activity included, still adds up its parts by category.
+  // Each part of a split payment names its payment (splitOf), so Bank shows it
+  // as one entry on the phone (lib/splitRows) from the same list every screen
+  // shares. "together" is the older phones' way: the server joins them.
+  const rootOf = await splitRoots(groupId);
   const listed: Array<(typeof entries)[number] & { splitParts?: SplitPart[] }> =
-    query.data.splits === "together" ? foldSplitParts(entries, await splitRoots(groupId)) : entries;
+    query.data.splits === "together" ? foldSplitParts(entries, rootOf) : entries;
   const page = pageOf(listed, { limit, before, month, year });
   const enriched = await enrichTransactions(page.rows.map(({ entry }) => entry), groupId);
 
@@ -839,6 +841,7 @@ router.get("/joint-account", async (req, res): Promise<void> => {
     ...transaction,
     runningBalance: isAggregate ? null : openingBalance + page.rows[index].sumThroughThis,
     ...(page.rows[index].splitParts ? { splitParts: page.rows[index].splitParts } : {}),
+    ...(rootOf.has(transaction.id) ? { splitOf: rootOf.get(transaction.id) } : {}),
   }));
 
   res.json({

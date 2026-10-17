@@ -69,7 +69,8 @@ describe("a split payment on Bank", () => {
     expect(foldSplitParts(rows, new Map())).toEqual(rows);
     expect(foldSplitParts(rows, new Map([[9857, 1]])).map((one) => one.entry.amount)).toEqual([200, 5000, 90, 5000, 10000]);
   });
-  it("only for Bank, which asks for it", () => {
-    expect(bank).toContain(`query.data.splits === "together" ? foldSplitParts(entries, await splitRoots(groupId)) : entries;`);
+  it("joined by the server only for older phones that ask; every part names its payment for the rest", () => {
+    expect(bank).toContain(`query.data.splits === "together" ? foldSplitParts(entries, rootOf) : entries;`);
+    expect(bank).toContain("...(rootOf.has(transaction.id) ? { splitOf: rootOf.get(transaction.id) } : {}),");
   });
 });
