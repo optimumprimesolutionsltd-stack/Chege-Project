@@ -52,10 +52,10 @@ export async function ensureBusinessStreams(): Promise<void> {
     // ("if a business's profit is tracked, its profit counts as an income
     // stream", 9 Oct 2026): its sales count, less its costs (ownerIncome).
     await db.execute(sql`ALTER TABLE "business_streams" ADD COLUMN IF NOT EXISTS "pays_salary" boolean`);
-    // What its money in is: 'sales' (null reads as sales) or 'rent' - a business
-    // that earns only from rent, its money in called rental income ("why not
-    // change the name from dahanak sales to rental income and make that logic
-    // available in the app", 17 Oct 2026). Words only: it counts the same.
+    // What its money in is: 'sales' (null reads as sales), 'rent' - called rental
+    // income ("why not change the name from dahanak sales to rental income",
+    // 17 Oct 2026) - or the person's own words ("we need to have an option to add
+    // more..not just sales and rent"). Words only: it counts the same.
     await db.execute(sql`ALTER TABLE "business_streams" ADD COLUMN IF NOT EXISTS "earns_from" text`);
     ready = true;
     logger.info("Business streams are ready");
@@ -71,8 +71,18 @@ export async function businessStreamIds(groupId: number): Promise<number[]> {
 }
 
 /** This budget's businesses, and whether each one's profit is counted (a Business report) or its money only passes through. */
-export type EarnsFrom = "sales" | "rent";
-export const EARNS_FROM: readonly EarnsFrom[] = ["sales", "rent"];
+/** "sales", "rent", or the person's own words for it (at most EARNS_FROM_MAX characters). */
+export type EarnsFrom = string;
+export const EARNS_FROM_MAX = 40;
+
+/** Sales and Rent kept as their keys whatever the capitals; anything else as typed, tidied. */
+export function cleanEarnsFrom(text: string): EarnsFrom {
+  const tidy = text.trim().replace(/\s+/g, " ").slice(0, EARNS_FROM_MAX);
+  const plain = tidy.toLowerCase();
+  if (plain === "sales" || plain === "sale") return "sales";
+  if (plain === "rent" || plain === "rental income" || plain === "rents") return "rent";
+  return tidy;
+}
 
 export async function businessStreams(groupId: number): Promise<Array<{ id: number; name: string; countsProfit: boolean; paysSalary: boolean | null; earnsFrom: EarnsFrom }>> {
   if (!ready) return [];
@@ -82,7 +92,7 @@ export async function businessStreams(groupId: number): Promise<Array<{ id: numb
     WHERE bs.group_id = ${groupId}
     ORDER BY lower(src.name)`);
   return (result.rows as Array<{ id: number; name: string; countsProfit: boolean | null; paysSalary: boolean | null; earnsFrom: string | null }>)
-    .map((row) => ({ id: Number(row.id), name: String(row.name), countsProfit: row.countsProfit !== false, paysSalary: row.paysSalary ?? null, earnsFrom: row.earnsFrom === "rent" ? "rent" as const : "sales" as const }));
+    .map((row) => ({ id: Number(row.id), name: String(row.name), countsProfit: row.countsProfit !== false, paysSalary: row.paysSalary ?? null, earnsFrom: row.earnsFrom?.trim() ? cleanEarnsFrom(row.earnsFrom) : "sales" }));
 }
 
 /**

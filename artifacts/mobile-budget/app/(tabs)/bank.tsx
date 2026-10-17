@@ -27,7 +27,7 @@ import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { markReturning } from '@/lib/lastRoute';
 import { isNotSure } from '@/lib/entriesToSort';
 import { shownTime } from '@/lib/mpesaTimes';
-import { earnsOf, earnsWord, salesChipLabel, salesRowHeading } from '@/lib/businessEarns';
+import { earnsOf, earnsWord, salesRowHeading } from '@/lib/businessEarns';
 import { offerReview } from '@/lib/reviewChanges';
 import { LISTS_AN_EDIT_CHANGES, withSavedRow } from '@/lib/showSavedEdit';
 import { PassThroughPair, type PairEntry } from '@/components/PassThroughPair';
@@ -2507,7 +2507,22 @@ export default function BankScreen() {
           sourceCorrection = { entry: { id: editingTransaction.id, description: editingTransaction.description, amount: parsed }, chosen };
         }
       }
-      if (editingTransactionId !== null) {
+      if (editingTransactionId !== null && txType === 'deposit' && moneyBackFor !== null) {
+        // A saved money in that was a friend paying back their share: the same
+        // entry becomes a refund in that category, receipt and time kept
+        // (api-server POST /joint-account/:id/money-back). "where is the category
+        // logic in money in. i cant see it" (17 Oct 2026).
+        if (!moneyBackFor.trim()) {
+          Alert.alert('Choose the category', 'Pick the category this money comes off - the one the bill was under.');
+          setSubmitting(false);
+          return;
+        }
+        await customFetch(`/api/joint-account/${editingTransactionId}/money-back`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ expenseCategory: moneyBackFor.trim() }),
+        });
+      } else if (editingTransactionId !== null) {
         const editingTransaction = data?.transactions.find((transaction) => transaction.id === editingTransactionId);
         if (editingTransaction && txType === 'disbursement' && withdrawDest !== 'party' && withdrawDest !== 'lend' && withdrawDest !== 'savings' && !businessMoney) {
           const from = editingTransaction.expenseCategory ?? '';
@@ -4966,17 +4981,16 @@ export default function BankScreen() {
                           Ordinary money in
                         </Text>
                       </TouchableOpacity>
-                      {/* Money back that takes it off a category: a friend's share of a bill. */}
-                      {editingTransactionId === null ? (
-                        <TouchableOpacity
-                          style={[styles.categoryOption, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }]}
-                          onPress={() => { setToBusinessId(null); setRepayingPartyId(null); setBorrowTarget(null); if (forBusinessId !== null) chooseWhoFor(null); setIncomeSourceId(null); setDepositSourceKind(null); setMoneyBackFor(''); setCategorySearch(''); setShowRepayPicker(false); }}
-                          testID="bank-deposit-money-back"
-                        >
-                          <Text style={{ color: colors.foreground, fontFamily: 'Inter_700Bold', fontSize: 13, letterSpacing: 0.3 }}>MONEY BACK FOR A CATEGORY</Text>
-                          <Text style={{ color: colors.mutedForeground, fontSize: 12, marginTop: 2 }}>Someone paying you back their share - it comes off that category's spending</Text>
-                        </TouchableOpacity>
-                      ) : null}
+                      {/* Money back that takes it off a category: a friend's share of a bill.
+                          New or already saved - an M-Pesa one is usually already saved. */}
+                      <TouchableOpacity
+                        style={[styles.categoryOption, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }]}
+                        onPress={() => { setToBusinessId(null); setRepayingPartyId(null); setBorrowTarget(null); if (forBusinessId !== null) chooseWhoFor(null); setIncomeSourceId(null); setDepositSourceKind(null); setMoneyBackFor(''); setCategorySearch(''); setShowRepayPicker(false); }}
+                        testID="bank-deposit-money-back"
+                      >
+                        <Text style={{ color: colors.foreground, fontFamily: 'Inter_700Bold', fontSize: 13, letterSpacing: 0.3 }}>MONEY BACK FOR A CATEGORY</Text>
+                        <Text style={{ color: colors.mutedForeground, fontSize: 12, marginTop: 2 }}>Someone paying you back their share - it comes off that category's spending</Text>
+                      </TouchableOpacity>
                       {/* Your salary from one of your businesses: income, filed under that
                           business's salary stream ("in money in, why cant i see the option of
                           salary?", 16 Oct 2026). Only what is filed there counts as salary. */}
@@ -5070,7 +5084,7 @@ export default function BankScreen() {
                                 }}
                                 testID={`bank-deposit-sales-for-${business.id}`}
                               >
-                                <Text style={[styles.memberPillText, { color: colors.foreground }]}>{salesChipLabel(business, whoForBusinesses)}</Text>
+                                <Text style={[styles.memberPillText, { color: colors.foreground }]}>{business.name}</Text>
                               </TouchableOpacity>
                             ))}
                           </View>
