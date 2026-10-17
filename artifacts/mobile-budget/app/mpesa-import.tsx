@@ -99,6 +99,7 @@ import { useOwnerBusiness } from '@/hooks/useOwnerBusiness';
 import { useImportDiagnostics } from '@/lib/importDiagnostics';
 import { getImportProgress, importSaveStalled, setImportProgress, useImportProgress } from '@/lib/importProgress';
 import { clearImportStep, noteImportStep, readUnfinishedImport, type ImportStep } from '@/lib/importBreadcrumb';
+import { sendMpesaTimes, timesFromMessages, timesFromStatement, type ReceiptTime } from '@/lib/mpesaTimes';
 import { clearSavePending, hasPendingSave, markSavePending, pendingSaveJob } from '@/lib/importSaveJob';
 import { retryWhenCutOff } from '@/lib/saveWhileAway';
 import { plainReadFailure, plainSaveError, ReadRequestFailed, retrySave, withRetries } from '@/lib/saveRetry';
@@ -1126,6 +1127,7 @@ export default function MpesaImportScreen() {
     setReading(true);
     setSmsMessages(null);
     try {
+      noteTimes(timesFromMessages(pasted));
       const response = await readPreview(pasted);
       // Read fresh: a share can be read before the effect above has loaded them.
       const known = parseStoredNicknames(await AsyncStorage.getItem(nicknamesKey).catch(() => null));
@@ -1233,8 +1235,17 @@ export default function MpesaImportScreen() {
   useEffect(() => () => { aliveRef.current = false; }, []);
   // How far reading the messages has got, said on screen: a long stretch takes a while.
   const [smsProgress, setSmsProgress] = useState<{ done: number; total: number } | null>(null);
+  // The time of day of each receipt read (lib/mpesaTimes): sent as soon as it is
+  // read, which puts it on entries saved before, and again after a save.
+  const readTimes = React.useRef<ReceiptTime[]>([]);
+  const noteTimes = (times: ReceiptTime[]) => {
+    if (times.length === 0) return;
+    readTimes.current = times;
+    void sendMpesaTimes(times);
+  };
   const readSmsMessages = async (messages: string[]): Promise<PreviewLine[] | null> => {
     if (readingSmsRef.current) return null;
+    noteTimes(timesFromMessages(messages));
     if (messages.length === 0) {
       Alert.alert('No M-Pesa messages', 'There are no M-Pesa messages on this phone for those dates.');
       return null;
@@ -1526,6 +1537,7 @@ export default function MpesaImportScreen() {
       if (allRows.length === 0) throw new Error('Jamvi could not find the payments in this file. Is it the M-Pesa statement PDF?');
       // The first time, only from the day chosen (lib/mpesaFirstStart).
       const rows = firstRun ? fromStatementStart(allRows, startFrom) : allRows;
+      noteTimes(timesFromStatement(allRows));
       if (rows.length === 0) throw new Error(`Nothing on this statement is from ${longDay(startFrom)} or later. Choose an earlier day, or a statement that reaches it.`);
       firstStatementRef.current = firstRun ? { from: startFrom } : null;
       if (!checkRunningBalance(rows).ok) {
@@ -2602,6 +2614,8 @@ export default function MpesaImportScreen() {
       letScreenSleepAgain();
       // Before the bar says it is done, so this screen opened again does not take it up a second time.
       if (!lostTouch) await clearSavePending(savingFor);
+      // The times of what was just saved (lib/mpesaTimes).
+      if (readTimes.current.length > 0) void sendMpesaTimes(readTimes.current);
       // New messages taken in and saved: the next check starts after them.
       if (smsNewestRef.current !== null && result.saved + result.repeats > 0) {
         await keepSmsAuto({ on: true, since: smsNewestRef.current });

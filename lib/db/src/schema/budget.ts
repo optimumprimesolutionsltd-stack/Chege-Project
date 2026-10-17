@@ -374,6 +374,11 @@ export const jointAccountTxTable = pgTable("joint_account_transactions", {
    */
   mpesaReceipt: text("mpesa_receipt"),
   /**
+   * The time of day M-Pesa printed for it, "HH:MM" (api-server lib/mpesa-times).
+   * Null for entries typed by hand, and M-Pesa ones whose message Jamvi has not read since.
+   */
+  timeOfDay: text("time_of_day"),
+  /**
    * The party whose balance this movement settles, if it settles one.
    *
    * A repayment arriving from somebody who owed you is money you already had

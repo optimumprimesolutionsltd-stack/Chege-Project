@@ -27,6 +27,7 @@ import { runSubscriptionLifecycle } from "./lib/subscription-reminders";
 import { sendUsageReport } from "./lib/usage-report";
 import { ensureImportCorrections } from "./lib/import-corrections";
 import { ensureGroupMpesaSource } from "./lib/group-mpesa-source";
+import { ensureMpesaTimes } from "./lib/mpesa-times";
 import { runAccountDeletions, sendAccountDeletionReminders } from "./lib/account-deletion";
 import { ensureReversalLinks } from "./lib/reversal-links";
 import { convertMoneyBackToRefunds } from "./lib/refunds";
@@ -66,6 +67,11 @@ async function startServer() {
     sql`ALTER TABLE "budget_categories" ADD COLUMN IF NOT EXISTS "cost_kind" text NOT NULL DEFAULT 'cogs'`,
   );
   logger.info("Category cost kind is ready");
+  // The time of day on M-Pesa entries (lib/mpesa-times): every entry query selects it.
+  await db.execute(
+    sql`ALTER TABLE "joint_account_transactions" ADD COLUMN IF NOT EXISTS "time_of_day" text`,
+  );
+  logger.info("Entry time of day is ready");
 
   app.listen(port, (err) => {
   if (err) {
@@ -105,6 +111,7 @@ async function startServer() {
   void ensurePayeeRules();
   void ensureImportCorrections();
   void ensureGroupMpesaSource();
+  void ensureMpesaTimes();
   void ensureBudgetKnowledge();
   void ensureStandardCategories();
   void ensureEveryBudgetHasAnAccount();

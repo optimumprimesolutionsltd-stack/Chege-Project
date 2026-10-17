@@ -26,6 +26,7 @@ const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { markReturning } from '@/lib/lastRoute';
 import { isNotSure } from '@/lib/entriesToSort';
+import { shownTime } from '@/lib/mpesaTimes';
 import { offerReview } from '@/lib/reviewChanges';
 import { LISTS_AN_EDIT_CHANGES, withSavedRow } from '@/lib/showSavedEdit';
 import { PassThroughPair, type PairEntry } from '@/components/PassThroughPair';
@@ -3900,6 +3901,8 @@ export default function BankScreen() {
                   testID={`transaction-date-${item.id}`}
                 >
                   {formatBankDate(item.date)}
+                  {/* The time M-Pesa printed for it (lib/mpesaTimes, 17 Oct 2026). */}
+                  {shownTime((item as { timeOfDay?: string | null }).timeOfDay) ? ` · ${shownTime((item as { timeOfDay?: string | null }).timeOfDay)}` : ''}
                 </Text>
                 {typeof item.runningBalance === 'number' && (
                    <Text

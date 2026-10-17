@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { db } from "@workspace/db";
 import { sql } from "drizzle-orm";
 import { logger } from "./logger";
+import { fillMpesaTimes } from "./mpesa-times";
 import { RouteRefusal, saveItem, SIGNED_OUT, type ItemResult, type JobItem, type RouteCall } from "./import-save-posting";
 
 export type { ItemResult, JobItem } from "./import-save-posting";
@@ -228,6 +229,8 @@ export async function runJob(jobId: number, callFor: (sessionId: string) => Rout
       UPDATE "import_save_jobs"
          SET "status" = 'done', "finished_at" = now(), "updated_at" = now(), "session_id" = NULL, "lease_owner" = NULL, "lease_until" = NULL
        WHERE "id" = ${jobId} AND "lease_owner" = ${ME}`);
+    // The times read with these entries, kept before they were saved (lib/mpesa-times).
+    void fillMpesaTimes(job.group_id).catch(() => {});
   } catch (err) {
     // Left running with its lease to run out: the next look takes it on again.
     logger.warn({ err, jobId }, "An import save job stopped part way; it is carried on shortly");
