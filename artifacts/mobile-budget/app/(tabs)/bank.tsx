@@ -2785,7 +2785,8 @@ export default function BankScreen() {
   const shownTransactions = period ? transactions.filter((tx) => inPeriod(tx, period)) : transactions;
   // Search narrows the list only; the period's figures stay the period's
   // (lib/bankSearch, "put a search button", 7 Oct 2026).
-  const [searchOpen, setSearchOpen] = useState(false);
+  // Always there, not behind a Search button: "i prefer the search button being
+  // permanently there" (17 Oct 2026).
   const [search, setSearch] = useState('');
   const searched = useDeferredValue(search.trim());
   const listedTransactions = useMemo(
@@ -3613,22 +3614,9 @@ export default function BankScreen() {
                   <Text style={{ color: colors.primary, fontSize: 12, fontFamily: 'Inter_600SemiBold' }}>Move a day</Text>
                 </TouchableOpacity>
               ) : null}
-              {!txEditor.editing ? (
-                <TouchableOpacity
-                  onPress={() => { if (searchOpen) setSearch(''); setSearchOpen((open) => !open); }}
-                  hitSlop={8}
-                  testID="bank-search-toggle"
-                  accessibilityRole="button"
-                  accessibilityLabel={searchOpen ? 'Close search' : 'Search transactions'}
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 6, marginLeft: 'auto' }}
-                >
-                  <Feather name={searchOpen ? 'x' : 'search'} size={13} color={colors.primary} />
-                  <Text style={{ color: colors.primary, fontSize: 12, fontFamily: 'Inter_600SemiBold' }}>{searchOpen ? 'Close' : 'Search'}</Text>
-                </TouchableOpacity>
-              ) : null}
             </View>
           ) : null}
-          {searchOpen && transactions.length > 0 ? (
+          {transactions.length > 0 ? (
             <View style={{ gap: 4, marginBottom: 8 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 10, backgroundColor: colors.card }}>
                 <Feather name="search" size={15} color={colors.mutedForeground} />
