@@ -1,5 +1,5 @@
-import React, { useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -11,9 +11,10 @@ import { cellText, yearGrid, yearMonths, type BreakdownRow, type GridMonth, type
 
 type YearAnswer = { year: number; months: Array<{ year: number; month: number; breakdown: BreakdownRow[]; income: IncomeMonth }> };
 
-const NAME_WIDTH = 132;
-const CELL_WIDTH = 78;
+const NAME_WIDTH = 120;
 const ROW_HEIGHT = 40;
+/** Months shown at once, beside the names and the Year column. */
+const PAGE = 4;
 
 /**
  * The year at a glance: every income stream and every spending category, a
@@ -21,8 +22,8 @@ const ROW_HEIGHT = 40;
  * compare which months did what" (9 Oct 2026), the whole year by default.
  *
  * Each month comes from the same reports Reports shows for it, under the same
- * query keys, so a month already opened there is not fetched again. The names
- * stay put while the months scroll sideways; a cell opens that month's entries.
+ * query keys, so a month already opened there is not fetched again. Four
+ * months a page, the Year column always beside them; a cell opens that month's entries.
  */
 export default function YearReportScreen() {
   const colors = useColors();
@@ -31,9 +32,6 @@ export default function YearReportScreen() {
   const today = { year: now.getFullYear(), month: now.getMonth() + 1 };
   const [year, setYear] = useState(today.year);
   const [opened, setOpened] = useState<Set<string>>(new Set());
-  // The frozen month row follows the figures sideways (see the grid below):
-  // moved by the figures' own scroll, on the native side, so it cannot lag.
-  const scrollX = useRef(new Animated.Value(0)).current;
   const months = useMemo(() => yearMonths(year, today), [year, today.year, today.month]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The whole year in one request (api-server /dashboard/year): every month from
@@ -53,6 +51,14 @@ export default function YearReportScreen() {
       months.map(({ month }) => byMonth.get(month)?.income),
     );
   }, [months, yearQuery.data]);
+
+  // Four months a page; null until chosen, which shows the page with the latest month.
+  const [page, setPage] = useState<number | null>(null);
+  const pages = Math.max(1, Math.ceil(grid.months.length / PAGE));
+  const shownPage = Math.min(pages - 1, page ?? pages - 1);
+  const shownMonths = grid.months
+    .map((month, index) => ({ month, index }))
+    .slice(shownPage * PAGE, shownPage * PAGE + PAGE);
 
   const toggle = (name: string) => setOpened((current) => {
     const next = new Set(current);
@@ -108,11 +114,11 @@ export default function YearReportScreen() {
       </View>
 
       <View style={styles.yearRow}>
-        <Pressable onPress={() => setYear((y) => y - 1)} hitSlop={10} accessibilityRole="button" accessibilityLabel="Previous year" testID="year-report-prev">
+        <Pressable onPress={() => { setYear((y) => y - 1); setPage(null); }} hitSlop={10} accessibilityRole="button" accessibilityLabel="Previous year" testID="year-report-prev">
           <Feather name="chevron-left" size={22} color={colors.foreground} />
         </Pressable>
         <Text style={[styles.year, { color: colors.foreground }]} testID="year-report-year">{year}</Text>
-        <Pressable onPress={() => setYear((y) => Math.min(today.year, y + 1))} disabled={year >= today.year} hitSlop={10} accessibilityRole="button" accessibilityLabel="Next year" testID="year-report-next">
+        <Pressable onPress={() => { setYear((y) => Math.min(today.year, y + 1)); setPage(null); }} disabled={year >= today.year} hitSlop={10} accessibilityRole="button" accessibilityLabel="Next year" testID="year-report-next">
           <Feather name="chevron-right" size={22} color={year >= today.year ? colors.border : colors.foreground} />
         </Pressable>
       </View>
@@ -129,122 +135,114 @@ export default function YearReportScreen() {
             <Text style={{ color: colors.destructive, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>The year did not load. Tap to try again.</Text>
           </Pressable>
         ) : null}
-        {/* The month row is frozen at the top while the rows scroll down ("freeze the
-            months so scrolling we know which month we are on", 9 Oct 2026), and moves
-            sideways with the figures. */}
-        <ScrollView stickyHeaderIndices={[0]} contentContainerStyle={{ paddingBottom: insets.bottom + 32 }} testID="year-report-grid">
-          <View style={{ flexDirection: 'row', backgroundColor: colors.background }} testID="year-report-months">
-            <View style={[styles.cell, styles.headCell, { width: NAME_WIDTH, alignItems: 'flex-start', paddingLeft: 16, borderColor: colors.border }]}>
-              <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold', fontSize: 12 }}>{year}</Text>
-            </View>
-            {/* A second ScrollView kept in step by scrollTo fell a column behind
-                after a fling on Android and drew over the names, so October's
-                figures sat under "Year" (16 Oct 2026). Now the row slides with the
-                figures' scroll position and is clipped to its own space. */}
-            <View style={{ flex: 1, overflow: 'hidden' }}>
-              <Animated.View style={{ flexDirection: 'row', transform: [{ translateX: Animated.multiply(scrollX, -1) }] }}>
-                {grid.months.map((month) => (
-                  <View key={month.month} style={[styles.cell, styles.headCell, { borderColor: colors.border }]}>
-                    <Text style={{ color: colors.foreground, fontFamily: 'Inter_700Bold', fontSize: 13 }}>{month.label}</Text>
-                    {month.soFar ? <Text style={{ color: colors.mutedForeground, fontSize: 10 }}>so far</Text> : null}
-                  </View>
-                ))}
-                <View style={[styles.cell, styles.headCell, { borderColor: colors.border, width: CELL_WIDTH + 12 }]}>
-                  <Text style={{ color: colors.foreground, fontFamily: 'Inter_700Bold', fontSize: 13 }}>Year</Text>
-                </View>
-              </Animated.View>
-            </View>
-          </View>
-          <View style={{ flexDirection: 'row' }}>
-            {/* Names stay put while the months scroll. */}
-            <View style={{ width: NAME_WIDTH }}>
-              {lines.map((line) => (
+        {/* Four months a page, the Year column always there, and no sideways
+            scroll: a frozen month row moved alongside scrolled figures drifted out
+            of line, and the months showed twice ("the year at a glance is still not
+            ok. we have two rows of months and are not aligned", 17 Oct 2026). Name,
+            months and Year are one row each, so they cannot part. */}
+        <View style={styles.pageRow} testID="year-report-pages">
+          <Pressable onPress={() => setPage(Math.max(0, shownPage - 1))} disabled={shownPage === 0} hitSlop={10} accessibilityRole="button" accessibilityLabel="Earlier months" testID="year-report-page-prev">
+            <Feather name="chevron-left" size={20} color={shownPage === 0 ? colors.border : colors.foreground} />
+          </Pressable>
+          <View style={{ flexDirection: 'row', gap: 6 }}>
+            {Array.from({ length: pages }, (_, index) => {
+              const first = grid.months[index * PAGE];
+              const last = grid.months[Math.min(grid.months.length, (index + 1) * PAGE) - 1];
+              const on = index === shownPage;
+              return (
                 <Pressable
-                  key={line.key}
-                  onPress={line.kind === 'heading' ? () => toggle(line.key) : undefined}
-                  disabled={line.kind !== 'heading'}
-                  accessibilityRole={line.kind === 'heading' ? 'button' : undefined}
-                  accessibilityState={line.kind === 'heading' ? { expanded: line.open } : undefined}
-                  testID={`year-report-name-${line.key}`}
-                  style={[styles.nameCell, { borderColor: colors.border, backgroundColor: line.kind === 'section' ? colors.muted : line.kind === 'total' ? colors.card : 'transparent' }]}
+                  key={index}
+                  onPress={() => setPage(index)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: on }}
+                  testID={`year-report-page-${index}`}
+                  style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, borderWidth: 1, borderColor: on ? colors.primary : colors.border, backgroundColor: on ? `${colors.primary}22` : 'transparent' }}
                 >
-                  {line.kind === 'heading' ? <Feather name={line.open ? 'chevron-down' : 'chevron-right'} size={14} color={colors.mutedForeground} /> : null}
-                  <Text
-                    numberOfLines={2}
-                    style={{
-                      flex: 1,
-                      paddingLeft: line.kind === 'child' ? 14 : 0,
-                      color: line.kind === 'section' ? colors.mutedForeground : colors.foreground,
-                      fontFamily: line.kind === 'row' || line.kind === 'child' ? 'Inter_400Regular' : 'Inter_700Bold',
-                      fontSize: line.kind === 'section' ? 11 : 13,
-                      textTransform: line.kind === 'section' ? 'uppercase' : 'none',
-                    }}
-                  >
-                    {line.name}
+                  <Text style={{ color: on ? colors.primary : colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 12 }}>
+                    {first && last ? (first.month === last.month ? first.label : `${first.label}–${last.label}`) : ''}
                   </Text>
                 </Pressable>
-              ))}
-            </View>
-            <Animated.ScrollView
-              horizontal
-              showsHorizontalScrollIndicator
-              // No stretch or bounce past either end: Android stretched the figures
-              // while the month row above stood still, and the columns looked
-              // skewed ("the year at a glance columns are skewed and cant tell the
-              // figures are for which month", 17 Oct 2026).
-              overScrollMode="never"
-              bounces={false}
-              scrollEventThrottle={16}
-              onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], { useNativeDriver: true })}
-            >
-              <View>
-                {lines.map((line) => (
-                  <View key={line.key} style={{ flexDirection: 'row', backgroundColor: line.kind === 'section' ? colors.muted : line.kind === 'total' ? colors.card : 'transparent' }}>
-                    {grid.months.map((month, index) => {
-                      const amount = line.amounts[index] ?? 0;
-                      const peak = line.peak === index;
-                      return (
-                        <Pressable
-                          key={month.month}
-                          onPress={() => openMonth(line, month)}
-                          disabled={line.kind === 'section' || amount === 0}
-                          accessibilityRole="button"
-                          accessibilityLabel={line.kind === 'section' ? undefined : `${line.name}, ${month.label} ${month.year}: KES ${amount.toLocaleString('en-KE')}${peak ? ', the most this year' : ''}`}
-                          testID={line.kind === 'section' ? undefined : `year-report-cell-${line.key}-${month.month}`}
-                          style={[styles.cell, { borderColor: colors.border, backgroundColor: peak ? `${colors.primary}1f` : 'transparent' }]}
-                        >
-                          {line.kind === 'section' ? (
-                            // The months again in each band (Income, Spending), moving with
-                            // the figures, so every column is named where it is read.
-                            <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_700Bold', fontSize: 11 }} testID={`year-report-band-month-${line.key}-${month.month}`}>
-                              {month.label}
-                            </Text>
-                          ) : (
-                            <Text
-                              numberOfLines={1}
-                              adjustsFontSizeToFit
-                              style={{ color: amount === 0 ? colors.mutedForeground : amountColor(line, amount), fontSize: 12, fontFamily: peak || line.kind === 'total' || line.kind === 'heading' ? 'Inter_700Bold' : 'Inter_400Regular', fontStyle: month.soFar ? 'italic' : 'normal' }}
-                            >
-                              {cellText(amount)}
-                            </Text>
-                          )}
-                        </Pressable>
-                      );
-                    })}
-                    <View style={[styles.cell, { borderColor: colors.border, width: CELL_WIDTH + 12 }]}>
-                      {line.kind === 'section' ? (
-                        <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_700Bold', fontSize: 11 }}>Year</Text>
-                      ) : (
-                        <Text numberOfLines={1} adjustsFontSizeToFit style={{ color: amountColor(line, line.total), fontSize: 12, fontFamily: 'Inter_700Bold' }}>
-                          {cellText(line.total)}
-                        </Text>
-                      )}
-                    </View>
-                  </View>
-                ))}
-              </View>
-            </Animated.ScrollView>
+              );
+            })}
           </View>
+          <Pressable onPress={() => setPage(Math.min(pages - 1, shownPage + 1))} disabled={shownPage >= pages - 1} hitSlop={10} accessibilityRole="button" accessibilityLabel="Later months" testID="year-report-page-next">
+            <Feather name="chevron-right" size={20} color={shownPage >= pages - 1 ? colors.border : colors.foreground} />
+          </Pressable>
+        </View>
+        <ScrollView stickyHeaderIndices={[0]} contentContainerStyle={{ paddingBottom: insets.bottom + 32 }} testID="year-report-grid">
+          <View style={{ flexDirection: 'row', backgroundColor: colors.background }} testID="year-report-months">
+            <View style={[styles.nameCell, { borderColor: colors.border }]}>
+              <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold', fontSize: 12 }}>{year}</Text>
+            </View>
+            {shownMonths.map(({ month }) => (
+              <View key={month.month} style={[styles.cell, { borderColor: colors.border }]}>
+                <Text style={{ color: colors.foreground, fontFamily: 'Inter_700Bold', fontSize: 13 }}>{month.label}</Text>
+                {month.soFar ? <Text style={{ color: colors.mutedForeground, fontSize: 10 }}>so far</Text> : null}
+              </View>
+            ))}
+            <View style={[styles.cell, styles.yearCell, { borderColor: colors.border }]}>
+              <Text style={{ color: colors.foreground, fontFamily: 'Inter_700Bold', fontSize: 13 }}>Year</Text>
+            </View>
+          </View>
+          {lines.map((line) => (
+            <View key={line.key} style={{ flexDirection: 'row', backgroundColor: line.kind === 'section' ? colors.muted : line.kind === 'total' ? colors.card : 'transparent' }}>
+              <Pressable
+                onPress={line.kind === 'heading' ? () => toggle(line.key) : undefined}
+                disabled={line.kind !== 'heading'}
+                accessibilityRole={line.kind === 'heading' ? 'button' : undefined}
+                accessibilityState={line.kind === 'heading' ? { expanded: line.open } : undefined}
+                testID={`year-report-name-${line.key}`}
+                style={[styles.nameCell, { borderColor: colors.border }]}
+              >
+                {line.kind === 'heading' ? <Feather name={line.open ? 'chevron-down' : 'chevron-right'} size={14} color={colors.mutedForeground} /> : null}
+                <Text
+                  numberOfLines={2}
+                  style={{
+                    flex: 1,
+                    paddingLeft: line.kind === 'child' ? 14 : 0,
+                    color: line.kind === 'section' ? colors.mutedForeground : colors.foreground,
+                    fontFamily: line.kind === 'row' || line.kind === 'child' ? 'Inter_400Regular' : 'Inter_700Bold',
+                    fontSize: line.kind === 'section' ? 11 : 13,
+                    textTransform: line.kind === 'section' ? 'uppercase' : 'none',
+                  }}
+                >
+                  {line.name}
+                </Text>
+              </Pressable>
+              {shownMonths.map(({ month, index }) => {
+                const amount = line.amounts[index] ?? 0;
+                const peak = line.peak === index;
+                return (
+                  <Pressable
+                    key={month.month}
+                    onPress={() => openMonth(line, month)}
+                    disabled={line.kind === 'section' || amount === 0}
+                    accessibilityRole="button"
+                    accessibilityLabel={line.kind === 'section' ? undefined : `${line.name}, ${month.label} ${month.year}: KES ${amount.toLocaleString('en-KE')}${peak ? ', the most this year' : ''}`}
+                    testID={line.kind === 'section' ? undefined : `year-report-cell-${line.key}-${month.month}`}
+                    style={[styles.cell, { borderColor: colors.border, backgroundColor: peak ? `${colors.primary}1f` : 'transparent' }]}
+                  >
+                    {line.kind === 'section' ? null : (
+                      <Text
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                        style={{ color: amount === 0 ? colors.mutedForeground : amountColor(line, amount), fontSize: 12, fontFamily: peak || line.kind === 'total' || line.kind === 'heading' ? 'Inter_700Bold' : 'Inter_400Regular', fontStyle: month.soFar ? 'italic' : 'normal' }}
+                      >
+                        {cellText(amount)}
+                      </Text>
+                    )}
+                  </Pressable>
+                );
+              })}
+              <View style={[styles.cell, styles.yearCell, { borderColor: colors.border }]}>
+                {line.kind === 'section' ? null : (
+                  <Text numberOfLines={1} adjustsFontSizeToFit style={{ color: amountColor(line, line.total), fontSize: 12, fontFamily: 'Inter_700Bold' }}>
+                    {cellText(line.total)}
+                  </Text>
+                )}
+              </View>
+            </View>
+          ))}
           {grid.income.length === 0 && grid.spending.length === 0 ? (
             <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 20 }]}>Nothing recorded in {year} yet.</Text>
           ) : null}
@@ -264,7 +262,8 @@ const styles = StyleSheet.create({
   year: { fontSize: 16, fontFamily: 'Inter_700Bold' },
   hint: { fontSize: 12, fontFamily: 'Inter_400Regular', paddingHorizontal: 16, paddingVertical: 8, lineHeight: 17 },
   failed: { paddingHorizontal: 16, paddingVertical: 8 },
-  cell: { width: CELL_WIDTH, height: ROW_HEIGHT, justifyContent: 'center', alignItems: 'flex-end', paddingHorizontal: 8, borderBottomWidth: StyleSheet.hairlineWidth },
-  headCell: { alignItems: 'flex-end' },
-  nameCell: { height: ROW_HEIGHT, flexDirection: 'row', alignItems: 'center', gap: 4, paddingLeft: 16, paddingRight: 6, borderBottomWidth: StyleSheet.hairlineWidth },
+  cell: { flex: 1, minWidth: 0, height: ROW_HEIGHT, justifyContent: 'center', alignItems: 'flex-end', paddingHorizontal: 6, borderBottomWidth: StyleSheet.hairlineWidth },
+  yearCell: { flex: 1.2 },
+  nameCell: { width: NAME_WIDTH, height: ROW_HEIGHT, flexDirection: 'row', alignItems: 'center', gap: 4, paddingLeft: 16, paddingRight: 6, borderBottomWidth: StyleSheet.hairlineWidth },
+  pageRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 8 },
 });
