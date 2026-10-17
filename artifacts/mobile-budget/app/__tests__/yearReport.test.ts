@@ -30,11 +30,6 @@ describe('Year at a glance', () => {
 
   it('the month row stays frozen at the top while the rows scroll (9 Oct 2026)', () => {
     expect(phone).toContain('stickyHeaderIndices={[0]}');
-    // The month row slides with the figures' own scroll, natively, clipped -
-    // never a second ScrollView chasing it (it fell a column behind, 16 Oct 2026).
-    expect(phone).toContain("onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], { useNativeDriver: true })}");
-    expect(phone).toContain("transform: [{ translateX: Animated.multiply(scrollX, -1) }]");
-    expect(phone).toContain("<View style={{ flex: 1, overflow: 'hidden' }}>");
     expect(phone).not.toContain('monthRow');
     expect(web).toContain('<thead className="sticky top-0 z-20 bg-card">');
   });
@@ -53,16 +48,24 @@ describe('the year request gives the same figures as Reports', () => {
   });
 });
 
-// "the year at a glance columns are skewed and cant tell the figures are for which month" (17 Oct 2026).
-describe('Year at a glance keeps its months with the figures', () => {
-  const screen = phone;
-
-  it('does not stretch or bounce the figures past either end', () => {
-    expect(screen).toContain('overScrollMode="never"');
-    expect(screen).toContain('bounces={false}');
+// "the year at a glance columns are skewed and cant tell the figures are for which
+// month" / "still not ok. we have two rows of months and are not aligned" (17 Oct 2026).
+describe('Year at a glance: four months a page, one month row', () => {
+  it('has no sideways scroll for a month row to drift from', () => {
+    expect(phone).not.toContain('horizontal');
+    expect(phone).not.toContain('Animated');
+    expect(phone).not.toContain('year-report-band-month');
   });
 
-  it('names the months again in each band, moving with the figures', () => {
-    expect(screen).toContain('testID={`year-report-band-month-${line.key}-${month.month}`}');
+  it('shows four months a page with the Year column, the latest page first', () => {
+    expect(phone).toContain('const PAGE = 4;');
+    expect(phone).toContain('const shownPage = Math.min(pages - 1, page ?? pages - 1);');
+    expect(phone).toContain('testID="year-report-pages"');
+    expect(phone).toContain('{shownMonths.map(({ month }) => (');
+  });
+
+  it('keeps each line one row: name, the months shown, Year', () => {
+    expect(phone).toContain('{shownMonths.map(({ month, index }) => {');
+    expect(phone).toContain('const amount = line.amounts[index] ?? 0;');
   });
 });
