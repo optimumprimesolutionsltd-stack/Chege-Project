@@ -314,19 +314,23 @@ export default function BusinessScreen() {
         ) : null}
       </View>
 
+      {/* The month stays in view while the page scrolls under it, so it is always
+          clear which month this is ("make the month to freeze", 17 Oct 2026). */}
+        <View style={[styles.monthRow, { paddingHorizontal: 16, paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border, backgroundColor: colors.background }]} testID="business-month-bar">
+        <Pressable onPress={() => step(-1)} hitSlop={10} accessibilityRole="button" accessibilityLabel="Previous month" testID="business-prev">
+          <Feather name="chevron-left" size={22} color={colors.foreground} />
+        </Pressable>
+        <Text style={[styles.month, { color: colors.foreground }]}>{MONTHS[month - 1]} {year}</Text>
+        <Pressable onPress={() => step(1)} disabled={isCurrentMonth} hitSlop={10} accessibilityRole="button" accessibilityLabel="Next month" testID="business-next">
+          <Feather name="chevron-right" size={22} color={isCurrentMonth ? colors.muted : colors.foreground} />
+        </Pressable>
+      </View>
       <ScrollerScrollView scroller={{ top: 8, bottom: insets.bottom + 16 }} contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 32 }]} showsVerticalScrollIndicator={false}>
-        <View style={styles.monthRow}>
-          <Pressable onPress={() => step(-1)} hitSlop={10} accessibilityRole="button" accessibilityLabel="Previous month" testID="business-prev">
-            <Feather name="chevron-left" size={22} color={colors.foreground} />
-          </Pressable>
-          <Text style={[styles.month, { color: colors.foreground }]}>{MONTHS[month - 1]} {year}</Text>
-          <Pressable onPress={() => step(1)} disabled={isCurrentMonth} hitSlop={10} accessibilityRole="button" accessibilityLabel="Next month" testID="business-next">
-            <Feather name="chevron-right" size={22} color={isCurrentMonth ? colors.muted : colors.foreground} />
-          </Pressable>
-        </View>
 
         {/* The business's own bank accounts, kept out of personal (api-server lib/business-accounts). */}
-        {((data as { businessAccounts?: BusinessAccount[] } | undefined)?.businessAccounts ?? []).map((account) => (
+        {/* Only accounts that moved this month: a card of KES 0s says nothing ("not
+            sure significance of this part", 17 Oct 2026). */}
+        {((data as { businessAccounts?: BusinessAccount[] } | undefined)?.businessAccounts ?? []).filter((account) => account.moneyIn !== 0 || account.moneyOut !== 0).map((account) => (
           <View key={account.accountId} style={[styles.note, { borderColor: colors.border, gap: 6 }]} testID={`business-account-${account.accountId}`}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <Feather name="briefcase" size={14} color={colors.primary} />

@@ -1666,6 +1666,7 @@ export default function BudgetScreen() {
       </Modal>
 
       <PageScrollView scroller={{ top: 12, bottom: insets.bottom + 110, findCategory: openCategoryFind }}
+        stickyHeaderIndices={[1]}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.secondary} />}
         contentContainerStyle={{ paddingBottom: Platform.OS === 'web' ? 100 : insets.bottom + 110 }}
@@ -1679,15 +1680,6 @@ export default function BudgetScreen() {
             <View style={styles.headerRight}>
               <HeaderSearchButton color="#FBF7EC" testID="budget-search" />
               <HelpButton about="category" />
-              <View style={styles.monthNav}>
-                <Pressable onPress={prevMonth} style={styles.navBtn} hitSlop={8}>
-                  <Feather name="chevron-left" size={20} color="rgba(247,250,246,0.7)" />
-                </Pressable>
-                <Text style={styles.monthLabel}>{MONTHS_SHORT[month - 1]} {year}</Text>
-                <Pressable onPress={nextMonth} style={styles.navBtn} hitSlop={8} disabled={isCurrentMonth}>
-                  <Feather name="chevron-right" size={20} color={isCurrentMonth ? 'rgba(247,250,246,0.2)' : 'rgba(247,250,246,0.7)'} />
-                </Pressable>
-              </View>
               <View style={styles.reportActions}>
                 <Pressable onPress={() => openManage()} style={styles.manageBtn} hitSlop={4}>
                   <Feather name="edit-2" size={14} color="#FBF7EC" />
@@ -1751,6 +1743,19 @@ export default function BudgetScreen() {
             </Pressable>
           ) : <ActivityIndicator color="#E9B949" style={{ marginVertical: 16 }} />}
         </LinearGradient>
+        {/* The month, pinned to the top once the header scrolls away ("make the month
+            to freeze ... so i know which month i am dealing with", 17 Oct 2026). */}
+        <View style={{ backgroundColor: colors.brandBlue, paddingHorizontal: 16, paddingVertical: 6, alignItems: 'center' }} testID="budget-month-bar">
+          <View style={styles.monthNav}>
+                <Pressable onPress={prevMonth} style={styles.navBtn} hitSlop={8}>
+                  <Feather name="chevron-left" size={20} color="rgba(247,250,246,0.7)" />
+                </Pressable>
+                <Text style={styles.monthLabel}>{MONTHS_SHORT[month - 1]} {year}</Text>
+                <Pressable onPress={nextMonth} style={styles.navBtn} hitSlop={8} disabled={isCurrentMonth}>
+                  <Feather name="chevron-right" size={20} color={isCurrentMonth ? 'rgba(247,250,246,0.2)' : 'rgba(247,250,246,0.7)'} />
+                </Pressable>
+              </View>
+        </View>
 
         {/* Income first: what the budget has to spend, before what it is spent on
             ("make income streams come before anything else", 9 Oct 2026). */}

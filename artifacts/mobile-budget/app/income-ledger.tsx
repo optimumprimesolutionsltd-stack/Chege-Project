@@ -265,6 +265,11 @@ export default function IncomeLedgerScreen() {
         </Pressable>
       </View>
 
+      {/* The month stays in view while the list scrolls under it ("make the month to
+          freeze ... so i know which month i am dealing with", 17 Oct 2026). */}
+      <View style={{ paddingHorizontal: 16, paddingVertical: 6, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border, backgroundColor: colors.background }} testID="income-ledger-month-bar">
+        <MonthStepper from={from} to={to} onChange={(nextFrom, nextTo) => { setFrom(nextFrom); setTo(nextTo); }} testID="income-ledger-month" />
+      </View>
       <ScrollerScrollView scroller={{ top: 8, bottom: insets.bottom + 16, beforeEnd: paged.showAll }}
         onScroll={paged.onScroll}
         contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 32 }]}
@@ -290,7 +295,6 @@ export default function IncomeLedgerScreen() {
           ) : null}
         </View>
 
-        <MonthStepper from={from} to={to} onChange={(nextFrom, nextTo) => { setFrom(nextFrom); setTo(nextTo); }} testID="income-ledger-month" />
         <View style={styles.dateRow}>
           {(['from', 'to'] as const).map((which) => (
             <Pressable

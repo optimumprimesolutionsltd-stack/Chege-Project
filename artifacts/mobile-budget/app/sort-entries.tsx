@@ -457,6 +457,10 @@ export default function SortEntriesScreen() {
           keyboardShouldPersistTaps="handled"
           initialNumToRender={12}
           windowSize={7}
+          // A swipe stops soon after the finger lifts, not a long glide past
+          // the entry you were on ("in sorting out the scrolling is too fast
+          // and doesnt stop", 17 Oct 2026).
+          decelerationRate="fast"
           ListHeaderComponent={(
             <View style={{ gap: 10 }}>
             {suggestedShown.length > 0 ? (
