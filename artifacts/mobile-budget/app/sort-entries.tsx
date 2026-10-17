@@ -39,6 +39,7 @@ import DateTimePicker, { type DateTimePickerEvent } from '@react-native-communit
 import { isoDay, longDay, monthStartIso, orderedRange } from '@/lib/dayRange';
 import { parseStoredRules, rulesStorageKey, type PayeeRules } from '@/lib/payeeLearning';
 import { plainSaveError } from '@/lib/saveRetry';
+import { offerReview } from '@/lib/reviewChanges';
 import { FAMILY_CATEGORY, familyCategories, withFamily } from '@/lib/family';
 import { saveRules } from '@/lib/rulesStore';
 import { formatDisplayDate } from '@/lib/displayFormat';
@@ -166,9 +167,21 @@ export default function SortEntriesScreen() {
         setLastChange({
           text: `${changed.length === 1 ? changed[0].description : `${changed.length} entries`} put under ${label}`,
           undo: async () => { for (const one of changed) await putBack(one); },
+          // The payer's others, one by one with a tick box each: only the ticked ones
+          // are sorted the same (lib/reviewChanges, 17 Oct 2026).
           ...(others.length > 0 ? { more: {
             label: `Same for ${others.length} more`,
-            run: () => { setLastChange(null); void sortEach(others, change, label); },
+            run: () => {
+              setLastChange(null);
+              offerReview({
+                title: `Which go under ${label}?`,
+                message: `Ticked ones are put under ${label} too. Unticked ones stay here to sort.`,
+                rows: others.map((one) => ({ id: one.id, date: one.date, amount: one.amount, description: one.description })),
+                actionLabel: (count) => `Put ${count} under ${label}`,
+                change: (ids) => sortEach(others.filter((one) => ids.includes(one.id)), change, label),
+              });
+              router.push('/review-changes');
+            },
           } } : {}),
         });
       }
