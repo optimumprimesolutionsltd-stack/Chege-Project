@@ -15,7 +15,8 @@ const NORMALISE = (text: string) =>
     .replace(/\.\/(mpesaProducts|mpesa-products)/g, './mpesa-products')
     .replace(/\.\/(statementTable|statement-table)/g, './statement-table')
     .replace(/\.\/(knownPayees|known-payees)/g, './known-payees')
-    .replace(/\.\/(entriesToSort|entries-to-sort)/g, './entries-to-sort');
+    .replace(/\.\/(entriesToSort|entries-to-sort)/g, './entries-to-sort')
+    .replace(/\.\/(businessEarns|business-earns)/g, './business-earns');
 
 const PAIRS: Array<[string, string]> = [
   ['lib/mpesaImport.ts', '../family-budget/src/lib/mpesa-import.ts'],
@@ -35,6 +36,7 @@ const PAIRS: Array<[string, string]> = [
   ['lib/teachJamvi.ts', '../family-budget/src/lib/teach-jamvi.ts'],
   ['lib/family.ts', '../family-budget/src/lib/family.ts'],
   ['lib/businessSalary.ts', '../family-budget/src/lib/business-salary.ts'],
+  ['lib/businessEarns.ts', '../family-budget/src/lib/business-earns.ts'],
   ['lib/paymentPatterns.ts', '../family-budget/src/lib/paymentPatterns.ts'],
 ];
 

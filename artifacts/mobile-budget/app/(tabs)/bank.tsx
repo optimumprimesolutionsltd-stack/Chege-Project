@@ -27,6 +27,7 @@ import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { markReturning } from '@/lib/lastRoute';
 import { isNotSure } from '@/lib/entriesToSort';
 import { shownTime } from '@/lib/mpesaTimes';
+import { earnsOf, earnsWord, salesChipLabel, salesRowHeading } from '@/lib/businessEarns';
 import { offerReview } from '@/lib/reviewChanges';
 import { LISTS_AN_EDIT_CHANGES, withSavedRow } from '@/lib/showSavedEdit';
 import { PassThroughPair, type PairEntry } from '@/components/PassThroughPair';
@@ -712,7 +713,7 @@ export default function BankScreen() {
   ), [categories, businesses.ids]);
   // My businesses only - an income stream is never one (hooks/useBusinesses).
   const whoForBusinesses = useMemo(() => {
-    const listed = businesses.list.map((one) => ({ id: one.id, name: one.name, countsProfit: one.countsProfit }));
+    const listed = businesses.list.map((one) => ({ id: one.id, name: one.name, countsProfit: one.countsProfit, earnsFrom: one.earnsFrom }));
     const added = allIncomeSources.filter((src) => addedBusinessIds.includes(src.id) && !businesses.ids.has(src.id)).map((src) => ({ id: src.id, name: src.name }));
     return [...listed, ...added];
   }, [allIncomeSources, addedBusinessIds, businesses.list, businesses.ids]);
@@ -726,6 +727,8 @@ export default function BankScreen() {
   const otherIncomeStreams = depositSources.filter((src) => !businesses.ids.has(src.id) && !salaryBusinesses.some((one) => one.salaryStreamId === src.id));
   const incomeChosen = salaryChosen ? null : otherIncomeStreams.find((src) => src.id === incomeSourceId) ?? null;
   /** A marked entry's business by name; the one set up first when it has none. */
+  /** A business by id, for whether its money in is sales or rent (lib/businessEarns). */
+  const businessEarner = (id: number | null | undefined) => (id == null ? undefined : businesses.list.find((one) => one.id === id));
   const businessNameOf = (id: number | undefined): string =>
     (id === undefined ? undefined : whoForBusinesses.find((one) => one.id === id)?.name) ?? ownerBusiness.business.name;
   const whoForCosts = useMemo(
@@ -1077,6 +1080,7 @@ export default function BankScreen() {
       row.bankTransferId == null && row.savingsGoalId == null && !!who && samePayeeName(row.description) === who);
     if (others.length === 0) return false;
     const business = incomeSourceNames.get(entry.business) ?? 'the business';
+    const theirs = earnsOf(business, businessEarner(entry.business));
     const fileOthers = async (chosen: typeof others) => {
       let moved = 0;
       try {
@@ -1085,7 +1089,7 @@ export default function BankScreen() {
           if (saved?.id != null) queryClient.setQueriesData({ queryKey: getGetJointAccountQueryKey() }, (cached: unknown) => withSavedRow(cached, saved));
           moved += 1;
         }
-        Alert.alert('Filed', `${moved} from ${label} filed as ${business}'s sales.`);
+        Alert.alert('Filed', `${moved} from ${label} filed as ${theirs}.`);
       } catch (error) {
         Alert.alert('Could not file them all', `${moved} of ${chosen.length} filed. ${error instanceof Error ? error.message : ''}`.trim());
       } finally {
@@ -1094,7 +1098,7 @@ export default function BankScreen() {
     };
     Alert.alert(
       `More from ${label}`,
-      `${others.length} other money in from ${label} has no source. File ${others.length === 1 ? 'it' : 'them'} as ${business}'s sales too?`,
+      `${others.length} other money in from ${label} has no source. File ${others.length === 1 ? 'it' : 'them'} as ${theirs} too?`,
       [
         { text: 'Just this one', style: 'cancel' },
         // One by one with a tick box each, so only the ticked ones are filed (lib/reviewChanges, 17 Oct 2026).
@@ -1102,10 +1106,10 @@ export default function BankScreen() {
           text: `Show the ${others.length}`,
           onPress: () => {
             offerReview({
-              title: `${label}: which are ${business}'s sales?`,
-              message: `Ticked ones are filed as ${business}'s sales. Unticked ones stay with no source.`,
+              title: `${label}: which are ${theirs}?`,
+              message: `Ticked ones are filed as ${theirs}. Unticked ones stay with no source.`,
               rows: others.map((row) => ({ id: row.id, date: row.date, amount: Number(row.amount), description: row.description ?? label, now: 'no source' })),
-              actionLabel: (count) => `File ${count} as ${business}'s sales`,
+              actionLabel: (count) => `File ${count} as ${theirs}`,
               change: (ids) => fileOthers(others.filter((row) => ids.includes(row.id))),
             });
             router.push('/review-changes');
@@ -4934,7 +4938,7 @@ export default function BankScreen() {
                         : salaryChosen
                         ? `Salary from ${salaryChosen.name}`
                         : forBusinessId !== null
-                        ? `${businessNameOf(forBusinessId)} - its sales`
+                        ? `${businessNameOf(forBusinessId)} - its ${earnsWord(businessEarner(forBusinessId))}`
                         : !isSharedWorkspace && incomeChosen
                         ? `Income from ${incomeChosen.name}`
                         : !isSharedWorkspace && depositSourceKind === 'other'
@@ -5051,7 +5055,7 @@ export default function BankScreen() {
                       ) : null}
                       {whoForBusinesses.length > 0 ? (
                         <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, paddingTop: 8, marginTop: 4, paddingHorizontal: 10, gap: 6 }} testID="bank-deposit-sales-row">
-                          <Text style={{ color: colors.foreground, fontFamily: 'Inter_700Bold', fontSize: 13, letterSpacing: 0.3 }}>BUSINESS SALES FOR</Text>
+                          <Text style={{ color: colors.foreground, fontFamily: 'Inter_700Bold', fontSize: 13, letterSpacing: 0.3 }}>{salesRowHeading(whoForBusinesses)}</Text>
                           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
                             {whoForBusinesses.map((business) => (
                               <TouchableOpacity
@@ -5066,7 +5070,7 @@ export default function BankScreen() {
                                 }}
                                 testID={`bank-deposit-sales-for-${business.id}`}
                               >
-                                <Text style={[styles.memberPillText, { color: colors.foreground }]}>{business.name}</Text>
+                                <Text style={[styles.memberPillText, { color: colors.foreground }]}>{salesChipLabel(business, whoForBusinesses)}</Text>
                               </TouchableOpacity>
                             ))}
                           </View>

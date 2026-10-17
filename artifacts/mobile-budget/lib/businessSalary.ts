@@ -1,3 +1,5 @@
+import { earnsWord, type EarnsFrom } from './businessEarns';
+
 /**
  * "Do you pay yourself a salary from it?" - asked once for each business,
  * during Teach Jamvi and on My businesses. Every business, profit counted or
@@ -14,7 +16,7 @@
  * salary and the profit it came out of never happens (api-server
  * lib/business-streams ownerIncomeBusinessIds).
  */
-export type SalaryBusiness = { id: number; name: string; countsProfit: boolean; paysSalary?: boolean | null };
+export type SalaryBusiness = { id: number; name: string; countsProfit: boolean; paysSalary?: boolean | null; earnsFrom?: EarnsFrom };
 
 export const SALARY_ANSWERS: ReadonlyArray<{ label: string; paysSalary: boolean }> = [
   { label: 'Yes, a salary', paysSalary: true },
@@ -41,6 +43,6 @@ export function salaryAnswerHint(business: SalaryBusiness): string {
     return `Until you say, nothing from ${business.name} counts as your income.`;
   }
   if (business.paysSalary === true) return `Your salary is your income - file your pay under your ${business.name} salary. ${business.name}'s profit stays in its Business report.`;
-  if (business.paysSalary === false) return `${business.name}'s profit - sales less costs - counts as your income.`;
+  if (business.paysSalary === false) return `${business.name}'s profit - ${earnsWord(business)} less costs - counts as your income.`;
   return `Until you say, ${business.name}'s profit stays in its Business report and out of your income.`;
 }
