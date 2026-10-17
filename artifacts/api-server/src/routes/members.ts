@@ -11,6 +11,7 @@ import {
 } from "../lib/activeGroup";
 import { memberMayJoinGroups, subscriptionRequiredMessage } from "../lib/membership-limits";
 import { inheritedMonthlyTarget } from "../lib/contribution-targets";
+import { notifyNewOwner } from "../lib/ownership-notice";
 
 const router = Router();
 
@@ -186,6 +187,9 @@ router.post("/members/:userId/transfer-ownership", async (req, res): Promise<voi
   if (outcome === "missing-group") { res.status(404).json({ error: "Group not found" }); return; }
   if (outcome === "missing-member") { res.status(404).json({ error: "That person is not a member of this group." }); return; }
 
+  // Not awaited into the response: the handover is done whether or not the
+  // email goes out, and the person handing over should not wait on a mailer.
+  void notifyNewOwner({ groupId, newOwnerId: userId, previousOwnerId: req.user!.id });
   res.json(await getGroupMembersWithNames(groupId));
 });
 

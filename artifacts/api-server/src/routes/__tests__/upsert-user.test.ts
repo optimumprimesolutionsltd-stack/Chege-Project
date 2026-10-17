@@ -22,6 +22,15 @@ vi.mock('../../lib/subscription-catalog', () => ({
   ensureTrialSubscription: vi.fn(async () => undefined),
 }));
 
+// Whether this Google identity's account has moved to another email. False
+// for every claim-mapping test below; the moved-away path has its own test.
+vi.mock('../../lib/email-change', () => ({
+  hasMovedAwayFrom: vi.fn(async () => false),
+  confirmEmailChange: vi.fn(),
+  requestEmailChangeCode: vi.fn(),
+  EmailChangeError: class extends Error {},
+}));
+
 vi.mock('@workspace/db', () => {
   const makeTable = (name: string) =>
     new Proxy({}, { get: (_, prop) => ({ _table: name, _col: String(prop) }) });
@@ -59,6 +68,7 @@ vi.mock('@workspace/db', () => {
 // Import after mock registration.
 import { db } from '@workspace/db';
 import { upsertUser } from '../auth.js';
+import { hasMovedAwayFrom } from '../../lib/email-change';
 
 // ---------------------------------------------------------------------------
 // Helper — reset mocks and configure what db.insert().values()…returning()
@@ -428,5 +438,31 @@ describe('upsertUser — OIDC claim mapping', () => {
       // updatedAt is added by the upsert path; it should be present.
       expect(set.updatedAt).toBeInstanceOf(Date);
     });
+  });
+});
+
+describe('upsertUser — an account that moved to another email', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('does not pull it back: the old address starts a fresh account', async () => {
+    vi.mocked(hasMovedAwayFrom).mockResolvedValueOnce(true);
+    const fresh = { id: 'fresh-uuid', email: 'old@example.com' };
+    const returning = vi.fn().mockResolvedValue([fresh]);
+    const onConflictDoUpdate = vi.fn();
+    const values = vi.fn().mockReturnValue({ returning, onConflictDoUpdate });
+    (db.insert as AnyMock).mockReturnValue({ values });
+
+    const result = await upsertUser({ sub: 'google-uid-moved', email: 'Old@Example.com' });
+
+    expect(hasMovedAwayFrom).toHaveBeenCalledWith('google-uid-moved', 'old@example.com');
+    expect(result).toEqual(fresh);
+    const inserted = values.mock.calls[0][0] as Record<string, unknown>;
+    // No id: the database gives the fresh account its own, so it can never
+    // collide with - and overwrite - the account that moved.
+    expect(inserted).not.toHaveProperty('id');
+    expect(inserted.email).toBe('old@example.com');
+    expect(onConflictDoUpdate).not.toHaveBeenCalled();
   });
 });
