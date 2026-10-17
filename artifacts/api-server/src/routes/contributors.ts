@@ -31,7 +31,7 @@ import { createContributionStatementPdf } from "../lib/contribution-statement-pd
 import { groupVerifyCode } from "../lib/contribution-verification";
 import { nairobiNow } from "../lib/nairobiTime";
 import { notAReversal } from "../lib/reversal-links";
-import { workOutBalances } from "../lib/who-owes-who";
+import { entryEffect, workOutBalances } from "../lib/who-owes-who";
 import { FULIZA_PARTY_NAME, renameFormerFulizaParty } from "../lib/lenders";
 import {
   CONTRIBUTOR_NAME_MAX,
@@ -510,6 +510,72 @@ router.post("/contributors/worked-out", async (req, res): Promise<void> => {
     }
   });
   res.json({ updated: changes.length, linked: fulizaLinks.length });
+});
+
+/**
+ * Where a person's balance comes from: every entry linked to them, oldest
+ * first, with what each did to the balance and the running figure - and what
+ * of the balance as it stands no entry explains (typed in, or added by an
+ * offer accepted twice). "check on who owes who why judys money is 680,100-
+ * where isit coming from" (17 Oct 2026).
+ */
+router.get("/contributors/:id/breakdown", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) { res.status(400).json({ error: "Invalid person." }); return; }
+  const [party] = await db.select({
+    id: groupContributorsTable.id,
+    name: groupContributorsTable.name,
+    owedToUs: groupContributorsTable.owedToUs,
+    owedByUs: groupContributorsTable.owedByUs,
+  }).from(groupContributorsTable)
+    .where(and(eq(groupContributorsTable.id, id), eq(groupContributorsTable.groupId, groupId)))
+    .limit(1);
+  if (!party) { res.status(404).json({ error: "Not found" }); return; }
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Nairobi", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  const rows = (await db.execute(sql`
+    SELECT tx.id, tx.date::text AS date, tx.description, tx.account_id AS "accountId", tx.type, tx.amount::float8 AS amount,
+           tx.is_lending AS "isLending", tx.is_borrowing AS "isBorrowing", tx.settles_contributor_id AS "settlesContributorId",
+           link.party_id AS "linkPartyId", link.kind AS "linkKind"
+    FROM joint_account_transactions tx
+    LEFT JOIN debt_entry_links link ON link.transaction_id = tx.id AND link.group_id = tx.group_id
+    WHERE tx.group_id = ${groupId}
+      AND tx.date <= ${today}
+      AND (link.party_id = ${id} OR (link.party_id IS NULL AND tx.settles_contributor_id = ${id}))
+    ORDER BY tx.date ASC, tx.id ASC
+  `)).rows as Array<{ id: number; date: string; description: string; accountId: number | null; type: string; amount: number; isLending: boolean | null; isBorrowing: boolean | null; settlesContributorId: number | null; linkPartyId: number | null; linkKind: string | null }>;
+  const cents = (value: number) => Math.round(value * 100) / 100;
+  let owedByUs = 0;
+  let owedToUs = 0;
+  const entries = rows.flatMap((row) => {
+    const effect = entryEffect(row);
+    if (!effect || effect.partyId !== id) return [];
+    owedByUs = cents(owedByUs + effect.owedByUs);
+    owedToUs = cents(owedToUs + effect.owedToUs);
+    return [{
+      id: Number(row.id),
+      date: row.date,
+      description: row.description,
+      accountId: row.accountId == null ? null : Number(row.accountId),
+      amount: Number(row.amount),
+      kind: effect.kind,
+      owedByUs: effect.owedByUs,
+      owedToUs: effect.owedToUs,
+      runningOwedByUs: owedByUs,
+      runningOwedToUs: owedToUs,
+    }];
+  });
+  const now = { owedToUs: Number(party.owedToUs ?? 0), owedByUs: Number(party.owedByUs ?? 0) };
+  const fromEntries = { owedToUs: Math.max(0, owedToUs), owedByUs: Math.max(0, owedByUs) };
+  res.json({
+    id: party.id,
+    name: party.name,
+    now,
+    fromEntries,
+    notFromEntries: { owedToUs: cents(now.owedToUs - fromEntries.owedToUs), owedByUs: cents(now.owedByUs - fromEntries.owedByUs) },
+    entries,
+  });
 });
 
 router.patch("/contributors/:id", async (req, res): Promise<void> => {

@@ -72,7 +72,7 @@ describe('it cannot be both at once', () => {
     // my businesses, and salary from one of them (16 Oct 2026).
     // Seven since money in names a business's sales there too (16 Oct 2026).
     // Nine since a Personal budget's income streams are a choice there too (17 Oct 2026).
-    expect((bank.match(/setBorrowTarget\(null\);/g) ?? []).length).toBe(10);
+    expect((bank.match(/setBorrowTarget\(null\);/g) ?? []).length).toBe(11);
   });
 });
 

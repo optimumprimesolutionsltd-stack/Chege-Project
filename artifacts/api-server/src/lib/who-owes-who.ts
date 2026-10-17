@@ -61,3 +61,23 @@ export function workOutBalances(rows: readonly DebtEntryRow[]): WorkedOut {
   }
   return totals;
 }
+
+export type DebtKind = "borrowed" | "pay-back" | "lend" | "repaid";
+
+/**
+ * One entry's part in a person's balance, for "where does this come from?"
+ * on Who owes who ("check on who owes who why judys money is 680,100- where
+ * is it coming from", 17 Oct 2026): which way it moved which balance. The
+ * same rules as workOutBalances, so the list adds up to its worked-out figure.
+ */
+export function entryEffect(row: DebtEntryRow): { partyId: number; kind: DebtKind; owedByUs: number; owedToUs: number } | null {
+  const found = kindOf(row);
+  if (!found) return null;
+  const amount = Number(row.amount) || 0;
+  return {
+    partyId: found.partyId,
+    kind: found.kind,
+    owedByUs: found.kind === "borrowed" ? amount : found.kind === "pay-back" ? -amount : 0,
+    owedToUs: found.kind === "lend" ? amount : found.kind === "repaid" ? -amount : 0,
+  };
+}

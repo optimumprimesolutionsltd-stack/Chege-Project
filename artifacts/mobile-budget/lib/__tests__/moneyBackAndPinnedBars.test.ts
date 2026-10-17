@@ -12,7 +12,7 @@ const bank = read('app/(tabs)/bank.tsx');
 describe('Money back for a category', () => {
   it('is a kind of money in, offered on new entries', () => {
     expect(bank).toContain('testID="bank-deposit-money-back"');
-    expect(bank).toContain('MONEY BACK FOR A CATEGORY');
+    expect(bank).toContain('>MONEY BACK FOR</Text>');
     expect(bank).toContain("setMoneyBackFor('')");
   });
 
