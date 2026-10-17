@@ -24,6 +24,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
 import { PageScrollView } from '@/components/PageScrollReset';
 import { useBusinesses } from '@/hooks/useBusinesses';
+import { EARNS_FROM_ANSWERS, earnsHint, earnsWord, type EarnsFrom } from '@/lib/businessEarns';
 import { BusinessCostCategories } from '@/components/BusinessCostCategories';
 import { salaryAnswers, salaryAnswerHint } from '@/lib/businessSalary';
 import { businessSuggestions } from '@/lib/businessSuggestions';
@@ -77,6 +78,11 @@ export default function BusinessesScreen() {
 
   const setSalary = (id: number, pays: boolean) => {
     void businesses.setPaysSalary(id, pays).catch((error) =>
+      Alert.alert('Could not change it', error instanceof Error ? error.message : 'Please try again.'));
+  };
+
+  const setEarns = (id: number, earnsFrom: EarnsFrom) => {
+    void businesses.setEarnsFrom(id, earnsFrom).catch((error) =>
       Alert.alert('Could not change it', error instanceof Error ? error.message : 'Please try again.'));
   };
 
@@ -154,11 +160,35 @@ export default function BusinessesScreen() {
                 <Text style={{ color: colors.foreground, fontSize: 13, fontFamily: 'Inter_600SemiBold' }}>Count its profit</Text>
                 <Text style={{ color: colors.mutedForeground, fontSize: 12, lineHeight: 17 }}>
                   {business.countsProfit
-                    ? 'Tracked wholly here: sales, costs and profit in the Business report.'
+                    ? `Tracked wholly here: ${earnsWord(business)}, costs and profit in the Business report.`
                     : 'Its money only passes through your phone. No Business report.'}
                 </Text>
               </View>
               <Switch value={business.countsProfit} onValueChange={(on) => setCounts(business.id, on)} testID={`business-counts-profit-${business.id}`} />
+            </View>
+            {/* Sales or rent: a business that earns only from rent says rental income
+                everywhere ("why not change the name from dahanak sales to rental
+                income", 17 Oct 2026). */}
+            <View style={{ gap: 6 }} testID={`business-earns-from-${business.id}`}>
+              <Text style={{ color: colors.foreground, fontSize: 13, fontFamily: 'Inter_600SemiBold' }}>What does it earn from?</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                {EARNS_FROM_ANSWERS.map((answer) => {
+                  const on = (business.earnsFrom ?? 'sales') === answer.earnsFrom;
+                  return (
+                    <Pressable
+                      key={answer.earnsFrom}
+                      onPress={() => setEarns(business.id, answer.earnsFrom)}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: on }}
+                      testID={`business-earns-from-${business.id}-${answer.earnsFrom}`}
+                      style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, borderWidth: 1, borderColor: on ? colors.primary : colors.border, backgroundColor: on ? `${colors.primary}22` : colors.muted }}
+                    >
+                      <Text style={{ color: on ? colors.primary : colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>{answer.label}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              <Text style={{ color: colors.mutedForeground, fontSize: 12, lineHeight: 17 }}>{earnsHint(business)}</Text>
             </View>
             {/* Every business, profit counted or not: one whose money only passes
                 through can still pay you a salary ("optimum and ujenzi dont have

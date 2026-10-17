@@ -8,6 +8,8 @@ import { autoLinkReversals, getGetDashboardBusinessQueryKey, useGetDashboardBusi
 import { useQueryClient } from '@tanstack/react-query';
 import { BusinessCostCategories } from '@/components/BusinessCostCategories';
 import { useColors } from '@/hooks/useColors';
+import { useBusinesses } from '@/hooks/useBusinesses';
+import { earnsLabel } from '@/lib/businessEarns';
 import { getExpenseEditHref } from '@/lib/expenseEditLink';
 import { ScrollerScrollView } from '@/components/PageScrollReset';
 
@@ -102,6 +104,9 @@ export default function BusinessScreen() {
     query: { queryKey: getGetDashboardBusinessQueryKey(params) },
   });
   const businesses = (data?.businesses ?? []) as Statement[];
+  // Sales, or rental income for a business that earns from rent (lib/businessEarns).
+  const named = useBusinesses();
+  const earnerOf = (id: number) => named.list.find((one) => one.id === id);
   // Its cost categories, ticked here on the business itself (components/BusinessCostCategories).
   const [costsFor, setCostsFor] = useState<{ id: number; name: string } | null>(null);
   const changeCosts = (incomeSourceId: number, name: string) => setCostsFor({ id: incomeSourceId, name });
@@ -251,7 +256,7 @@ export default function BusinessScreen() {
     return (
       <View style={[styles.compare, { borderColor: colors.border }]} testID={`business-compare-${business.incomeSourceId}`}>
         <Text style={[styles.compareTitle, { color: colors.foreground }]}>Compared with {monthName}</Text>
-        {changeRow('Sales', business.sales, previous.sales)}
+        {changeRow(earnsLabel(earnerOf(business.incomeSourceId)), business.sales, previous.sales)}
         {changeRow('Cost of goods sold', business.costOfGoodsSold, previous.costOfGoodsSold)}
         {changeRow('Gross profit', business.grossProfit, previous.grossProfit)}
         {changeRow('Expenses', business.expenses, previous.expenses)}
@@ -276,7 +281,7 @@ export default function BusinessScreen() {
         {withDetails && salesEntries.length > 0 ? (
           <>
             <Pressable onPress={() => toggle(salesKey)} accessibilityRole="button" accessibilityState={{ expanded: salesOpen }} style={styles.row} testID={`business-${salesKey}`}>
-              <Text style={[styles.label, { color: colors.mutedForeground }]}>Sales ({salesEntries.length + (business.moreSalesEntries ?? 0)})</Text>
+              <Text style={[styles.label, { color: colors.mutedForeground }]}>{earnsLabel(earnerOf(business.incomeSourceId))} ({salesEntries.length + (business.moreSalesEntries ?? 0)})</Text>
               <View style={styles.rowRight}>
                 <Text style={[styles.amount, { color: amountColor(business.sales) }]}>{kes(business.sales)}</Text>
                 <Feather name={salesOpen ? 'chevron-up' : 'chevron-down'} size={14} color={colors.mutedForeground} />
@@ -284,7 +289,7 @@ export default function BusinessScreen() {
             </Pressable>
             {salesOpen ? entryRows(salesKey, salesEntries, business.moreSalesEntries ?? 0) : null}
           </>
-        ) : row('Sales', business.sales)}
+        ) : row(earnsLabel(earnerOf(business.incomeSourceId)), business.sales)}
         {costRows(`${business.incomeSourceId}-cogs`, 'Cost of goods sold', business.costOfGoodsSold, business.costOfGoodsSoldLines, withDetails)}
         <View style={[styles.rule, { backgroundColor: colors.border }]} />
         {row('Gross profit', business.grossProfit, { strong: true, share: margin(business.grossProfit, business.sales) })}

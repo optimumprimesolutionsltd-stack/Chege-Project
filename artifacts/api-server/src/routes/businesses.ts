@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { getActiveGroupId, requireGroupManager } from "../lib/activeGroup";
-import { businessStreams, businessStreamsReady, setBusinessStream } from "../lib/business-streams";
+import { businessStreams, businessStreamsReady, EARNS_FROM, setBusinessStream, type EarnsFrom } from "../lib/business-streams";
 import { findOrMakeSalaryStream, foldDuplicateSalaryStreams } from "../lib/salary-streams";
 import { combineIncomeSources } from "../lib/combine-income-sources";
 
@@ -26,7 +26,8 @@ router.get("/businesses", async (req, res): Promise<void> => {
 });
 
 // paysSalary: "Do you pay yourself a salary from it?" - null puts it back to not asked.
-const flagSchema = z.object({ business: z.boolean(), countsProfit: z.boolean().optional(), paysSalary: z.boolean().nullable().optional() });
+// earnsFrom: its money in is sales, or rent (rental income).
+const flagSchema = z.object({ business: z.boolean(), countsProfit: z.boolean().optional(), paysSalary: z.boolean().nullable().optional(), earnsFrom: z.enum(EARNS_FROM as [EarnsFrom, ...EarnsFrom[]]).optional() });
 
 /** A business, or back to an ordinary income stream. */
 router.put("/businesses/:incomeSourceId", async (req, res): Promise<void> => {
@@ -43,7 +44,7 @@ router.put("/businesses/:incomeSourceId", async (req, res): Promise<void> => {
     res.status(400).json({ error: "Say whether it is a business." });
     return;
   }
-  if (!(await setBusinessStream(groupId, incomeSourceId, parsed.data.business, parsed.data.countsProfit, parsed.data.paysSalary))) {
+  if (!(await setBusinessStream(groupId, incomeSourceId, parsed.data.business, parsed.data.countsProfit, parsed.data.paysSalary, parsed.data.earnsFrom))) {
     res.status(404).json({ error: "Income stream not found" });
     return;
   }
@@ -55,6 +56,7 @@ router.put("/businesses/:incomeSourceId", async (req, res): Promise<void> => {
     business: parsed.data.business,
     ...(parsed.data.countsProfit === undefined ? {} : { countsProfit: parsed.data.countsProfit }),
     ...(parsed.data.paysSalary === undefined ? {} : { paysSalary: parsed.data.paysSalary }),
+    ...(parsed.data.earnsFrom === undefined ? {} : { earnsFrom: parsed.data.earnsFrom }),
   });
 });
 

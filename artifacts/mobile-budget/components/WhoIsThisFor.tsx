@@ -15,6 +15,7 @@ import React, { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
+import { earnsOf } from '@/lib/businessEarns';
 
 /** countsProfit false: its money only passes through your phone - no Business report (My businesses). */
 export type Business = { id: number; name: string; countsProfit?: boolean };
@@ -146,7 +147,7 @@ export function WhoIsThisFor({
         <Text style={{ color: colors.mutedForeground, fontSize: 12, lineHeight: 17 }}>
           {chosen.countsProfit === false
             ? `${chosen.name}'s money, not your income. Money in from this payer goes to ${chosen.name} from now on.`
-            : `${chosen.name}'s sales - in the Business report. Money in from this payer goes to ${chosen.name} from now on.`}
+            : `${earnsOf(chosen.name, chosen)} - in the Business report. Money in from this payer goes to ${chosen.name} from now on.`}
         </Text>
       ) : null}
       {chosen ? (
