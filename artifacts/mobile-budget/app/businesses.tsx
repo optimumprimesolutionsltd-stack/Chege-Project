@@ -24,7 +24,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
 import { PageScrollView } from '@/components/PageScrollReset';
 import { useBusinesses } from '@/hooks/useBusinesses';
-import { EARNS_FROM_ANSWERS, earnsHint, earnsWord, type EarnsFrom } from '@/lib/businessEarns';
+import { EARNS_FROM_MAX, earnsChoices, earnsHint, earnsKey, earnsWord, sameEarns, type EarnsFrom } from '@/lib/businessEarns';
 import { BusinessCostCategories } from '@/components/BusinessCostCategories';
 import { salaryAnswers, salaryAnswerHint } from '@/lib/businessSalary';
 import { businessSuggestions } from '@/lib/businessSuggestions';
@@ -81,6 +81,9 @@ export default function BusinessesScreen() {
       Alert.alert('Could not change it', error instanceof Error ? error.message : 'Please try again.'));
   };
 
+  // "Other…": the business whose own words are being typed, and the words.
+  const [otherFor, setOtherFor] = useState<number | null>(null);
+  const [otherText, setOtherText] = useState('');
   const setEarns = (id: number, earnsFrom: EarnsFrom) => {
     void businesses.setEarnsFrom(id, earnsFrom).catch((error) =>
       Alert.alert('Could not change it', error instanceof Error ? error.message : 'Please try again.'));
@@ -166,14 +169,13 @@ export default function BusinessesScreen() {
               </View>
               <Switch value={business.countsProfit} onValueChange={(on) => setCounts(business.id, on)} testID={`business-counts-profit-${business.id}`} />
             </View>
-            {/* Sales or rent: a business that earns only from rent says rental income
-                everywhere ("why not change the name from dahanak sales to rental
-                income", 17 Oct 2026). */}
+            {/* Sales, rent, or the person's own words, for this business only ("we
+                need to have an option to add more..not just sales and rent", 17 Oct 2026). */}
             <View style={{ gap: 6 }} testID={`business-earns-from-${business.id}`}>
               <Text style={{ color: colors.foreground, fontSize: 13, fontFamily: 'Inter_600SemiBold' }}>What does it earn from?</Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                {EARNS_FROM_ANSWERS.map((answer) => {
-                  const on = (business.earnsFrom ?? 'sales') === answer.earnsFrom;
+                {earnsChoices(businesses.list).map((answer) => {
+                  const on = sameEarns(earnsKey(business), answer.earnsFrom);
                   return (
                     <Pressable
                       key={answer.earnsFrom}
@@ -187,7 +189,41 @@ export default function BusinessesScreen() {
                     </Pressable>
                   );
                 })}
+                <Pressable
+                  onPress={() => { setOtherFor(otherFor === business.id ? null : business.id); setOtherText(''); }}
+                  accessibilityRole="button"
+                  testID={`business-earns-from-${business.id}-other`}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, borderWidth: 1, borderStyle: 'dashed', borderColor: colors.border }}
+                >
+                  <Feather name="plus" size={13} color={colors.foreground} />
+                  <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>Other…</Text>
+                </Pressable>
               </View>
+              {otherFor === business.id ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <TextInput
+                    value={otherText}
+                    onChangeText={setOtherText}
+                    onSubmitEditing={() => { if (otherText.trim()) { setOtherFor(null); setEarns(business.id, otherText.trim()); } }}
+                    placeholder="e.g. Commission, Consulting fees"
+                    placeholderTextColor={colors.mutedForeground}
+                    maxLength={EARNS_FROM_MAX}
+                    autoFocus
+                    returnKeyType="done"
+                    testID={`business-earns-from-${business.id}-other-input`}
+                    style={{ flex: 1, borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, color: colors.foreground }}
+                  />
+                  <Pressable
+                    onPress={() => { if (otherText.trim()) { setOtherFor(null); setEarns(business.id, otherText.trim()); } }}
+                    disabled={!otherText.trim()}
+                    accessibilityRole="button"
+                    testID={`business-earns-from-${business.id}-other-save`}
+                    style={{ paddingHorizontal: 14, paddingVertical: 9, borderRadius: 8, backgroundColor: otherText.trim() ? colors.primary : colors.muted }}
+                  >
+                    <Text style={{ color: otherText.trim() ? colors.primaryForeground : colors.mutedForeground, fontFamily: 'Inter_600SemiBold' }}>Save</Text>
+                  </Pressable>
+                </View>
+              ) : null}
               <Text style={{ color: colors.mutedForeground, fontSize: 12, lineHeight: 17 }}>{earnsHint(business)}</Text>
             </View>
             {/* Every business, profit counted or not: one whose money only passes

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { getActiveGroupId, requireGroupManager } from "../lib/activeGroup";
-import { businessStreams, businessStreamsReady, EARNS_FROM, setBusinessStream, type EarnsFrom } from "../lib/business-streams";
+import { businessStreams, businessStreamsReady, cleanEarnsFrom, EARNS_FROM_MAX, setBusinessStream } from "../lib/business-streams";
 import { findOrMakeSalaryStream, foldDuplicateSalaryStreams } from "../lib/salary-streams";
 import { combineIncomeSources } from "../lib/combine-income-sources";
 
@@ -26,8 +26,8 @@ router.get("/businesses", async (req, res): Promise<void> => {
 });
 
 // paysSalary: "Do you pay yourself a salary from it?" - null puts it back to not asked.
-// earnsFrom: its money in is sales, or rent (rental income).
-const flagSchema = z.object({ business: z.boolean(), countsProfit: z.boolean().optional(), paysSalary: z.boolean().nullable().optional(), earnsFrom: z.enum(EARNS_FROM as [EarnsFrom, ...EarnsFrom[]]).optional() });
+// earnsFrom: its money in is sales, rent (rental income), or the person's own words.
+const flagSchema = z.object({ business: z.boolean(), countsProfit: z.boolean().optional(), paysSalary: z.boolean().nullable().optional(), earnsFrom: z.string().trim().min(1).max(EARNS_FROM_MAX).transform(cleanEarnsFrom).optional() });
 
 /** A business, or back to an ordinary income stream. */
 router.put("/businesses/:incomeSourceId", async (req, res): Promise<void> => {

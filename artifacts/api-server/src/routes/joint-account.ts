@@ -1546,6 +1546,70 @@ router.post("/joint-account/transfers/bank-to-bank/:transferId/unpair", async (r
 });
 
 // PUT /joint-account/:id — edit a transaction without changing its type.
+const MoneyBackInput = z.object({ expenseCategory: z.string().trim().min(1).max(80) });
+
+/**
+ * A saved money in that was somebody paying you back their share of a bill:
+ * the same entry, kept where it is - same amount, day, account, M-Pesa receipt
+ * and time - becomes a refund in that category (lib/refunds), so the
+ * category's spending falls and the balance does not move ("where is the
+ * category logic in money in. i cant see it", 17 Oct 2026: Money back for a
+ * category was only offered on new money in, never on an M-Pesa one already saved).
+ */
+router.post("/joint-account/:id/money-back", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  const params = IdParam.safeParse(req.params);
+  const parsed = MoneyBackInput.safeParse(req.body);
+  if (!params.success || !parsed.success) { res.status(400).json({ error: "Choose the category it comes off." }); return; }
+  // Changing what an entry is: the budget's managers, or the owner of a Personal budget.
+  if (!isGroupManager(req) && !req.group?.isPrivate) {
+    res.status(403).json({ error: "Only the budget's managers can change what an entry is." });
+    return;
+  }
+  const [existing] = await db
+    .select()
+    .from(jointAccountTxTable)
+    .where(and(eq(jointAccountTxTable.id, params.data.id), eq(jointAccountTxTable.groupId, groupId)))
+    .limit(1);
+  if (!existing) { res.status(404).json({ error: "Not found" }); return; }
+  if (existing.type !== "deposit") { res.status(409).json({ error: "Only money in can be money back." }); return; }
+  if (existing.bankTransferId !== null || existing.savingsGoalId !== null) {
+    res.status(409).json({ error: "A move between your own accounts or savings cannot be money back. Undo the move first." });
+    return;
+  }
+  const reversed = await refuseWhileReversed(existing.id, groupId);
+  if (reversed) { res.status(409).json({ error: reversed }); return; }
+  const expenseCategory = canonicalExpenseCategoryName(parsed.data.expenseCategory);
+  const heading = await headingAmong(groupId, [expenseCategory]);
+  if (heading) { res.status(400).json({ error: postingToHeadingError(heading) }); return; }
+
+  // Your own money from your business no more (lib/owner-business-money); outside the
+  // transaction, as the table may not be there yet and a failure there would end it.
+  await db.execute(sql`DELETE FROM "owner_business_money" WHERE "transaction_id" = ${existing.id} AND "group_id" = ${groupId}`).catch(() => undefined);
+  const updated = await db.transaction(async (transaction) => {
+    // What made it money in goes: its split between people or streams, a debt it
+    // settled, being your own money from your business.
+    await transaction.delete(jointAccountDepositSplitsTable)
+      .where(and(eq(jointAccountDepositSplitsTable.transactionId, existing.id), eq(jointAccountDepositSplitsTable.groupId, groupId)));
+    await transaction.delete(debtEntryLinksTable).where(eq(debtEntryLinksTable.transactionId, existing.id));
+    const [row] = await transaction
+      .update(jointAccountTxTable)
+      .set({
+        type: "disbursement",
+        amount: -Math.abs(Number(existing.amount)),
+        expenseCategory,
+        incomeSourceId: null,
+        isBorrowing: false,
+        settlesContributorId: null,
+      })
+      .where(and(eq(jointAccountTxTable.id, existing.id), eq(jointAccountTxTable.groupId, groupId)))
+      .returning();
+    return row;
+  });
+  res.json(await enrichTx(updated, groupId));
+});
+
 router.put("/joint-account/:id", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
